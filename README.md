@@ -1,3 +1,5 @@
-# Goldrush
+# Scala Chopsticks
 
-Scala libraries for production-grade functional reactive stream systems.
+Essential Scala libraries for everyday use.
+
+Designed for high performance, production-grade functional reactive stream systems.

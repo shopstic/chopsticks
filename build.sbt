@@ -54,6 +54,6 @@ lazy val dstream = Build
 lazy val root = (project in file("."))
   .enablePlugins(SymlinkTargetPlugin)
   .settings(
-    name := "goldrush"
+    name := "chopsticks"
   )
   .aggregate(common, testkit, fp, stream, dstream)
