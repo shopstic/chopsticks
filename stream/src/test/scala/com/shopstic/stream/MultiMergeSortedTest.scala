@@ -1,4 +1,4 @@
-package com.shopstic.stream
+package dev.chopsticks.stream
 
 import java.time.LocalDateTime
 
@@ -6,7 +6,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
-import com.shopstic.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
+import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.{Matchers, WordSpecLike}
 
 class MultiMergeSortedTest

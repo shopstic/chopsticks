@@ -7,14 +7,14 @@ import sbt.Keys._
 //noinspection TypeAnnotation
 object Build {
   val buildVersion = "0.1.0"
-  
+
   lazy val ITest = config("it") extend Test
 
-  val ItTagName = "com.shopstic.test.tags.IntegrationTest"
+  val ItTagName = "dev.chopsticks.test.tags.IntegrationTest"
 
   val forkTests = sys.env.get("FORK_TESTS").forall(_ == "true")
 
-  val symlinkTargetRoot = file(sys.env("HOME")) / ".sbt-targets" / "shopstic" / "goldrush"
+  val symlinkTargetRoot = file(sys.env("HOME")) / ".sbt-targets" / "shopstic" / "chopsticks"
 
   val scalacLintingOptions = Seq(
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
