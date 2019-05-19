@@ -1,0 +1,185 @@
+package dev.chopsticks.db
+
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.LongAdder
+
+import akka.actor.{Actor, ActorRef, ActorSystem, Props, SupervisorStrategy, Terminated}
+import akka.stream.Materializer
+import akka.stream.scaladsl.Source
+import com.google.protobuf.{ByteString => ProtoByteString}
+import com.typesafe.scalalogging.StrictLogging
+import dev.chopsticks.db.RocksdbInterface.ColumnFamily
+import dev.chopsticks.grpc_akka.server.GrpcAkkaServerOneToStreamCallStateActor
+import dev.chopsticks.grpc_akka.server.GrpcAkkaServerOneToStreamCallStateActor.{ClientCallCanceled, ClientCallCompleted, ClientCallHasDemand}
+import dev.chopsticks.proto.db._
+import dev.chopsticks.util.RocksdbUtils.InvalidDbColumnFamilyException
+import dev.chopsticks.util.SchedulerUtils.IOScheduler
+
+import io.grpc.internal.ServerImpl
+import io.grpc.netty.NettyServerBuilder
+import io.grpc.stub.{ServerCalls, StreamObserver}
+import io.grpc.{Metadata, ServerCall, ServerServiceDefinition}
+import monix.execution.Scheduler.{global => globalScheduler}
+import monix.execution.atomic.Atomic
+import org.slf4j.bridge.SLF4JBridgeHandler
+
+import scala.concurrent.duration._
+import scala.language.higherKinds
+
+object RocksdbGrpcServer extends StrictLogging {
+
+  object CallStateSupervisor {
+    def props(childName: String, childProps: Props) = Props(new CallStateSupervisor(childName, childProps))
+  }
+
+  class CallStateSupervisor(childName: String, childProps: Props) extends Actor {
+    override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
+
+    private val stateActor = context.actorOf(childProps, childName)
+
+    override def preStart(): Unit = {
+      context.watch(stateActor)
+    }
+
+    def receive: Receive = {
+      case Terminated(`stateActor`) => context.stop(self)
+      case m => stateActor.forward(m)
+    }
+  }
+
+  private lazy val installJulToSlf4j = {
+    SLF4JBridgeHandler.removeHandlersForRootLogger()
+    SLF4JBridgeHandler.install()
+  }
+
+  private def iterateListenerForActor[Req](callStateActor: ActorRef) = new ServerCall.Listener[Req] {
+    override def onComplete(): Unit = callStateActor ! ClientCallCompleted
+
+    override def onCancel(): Unit = callStateActor ! ClientCallCanceled
+
+    override def onMessage(message: Req): Unit = callStateActor ! message
+
+    override def onHalfClose(): Unit = {}
+
+    override def onReady(): Unit = callStateActor ! ClientCallHasDemand
+  }
+
+  private val callCounter = Atomic(0L)
+  private val messagesCounter = new LongAdder()
+
+  def apply[Col <: ColumnFamily](db: RocksdbLocalDb[Col], port: Int)
+    (implicit system: ActorSystem, mat: Materializer, ios: IOScheduler): ServerImpl = {
+    RocksdbGrpcServer.installJulToSlf4j
+
+    val serverDefinition = ServerServiceDefinition
+      .builder("gr.proto.db.RocksdbService")
+      .addMethod(
+        RocksdbServiceGrpc.METHOD_GET,
+        ServerCalls.asyncUnaryCall(new ServerCalls.UnaryMethod[RocksdbGetRequest, RocksdbGetResult] {
+          override def invoke(request: RocksdbGetRequest, observer: StreamObserver[RocksdbGetResult]): Unit = {
+            val columnId = request.columnId
+            db.columnFamilyWithId(columnId)
+              .map { col =>
+                db.getTask(col, request.key.toByteArray)
+                  .map { bytesOption =>
+                    RocksdbGetResult(
+                      bytesOption
+                        .map { bytes =>
+                          RocksdbItemValue(ProtoByteString.copyFrom(bytes))
+                        }
+                    )
+                  }
+                  .runOnCompleteIO(com.trueaccord.scalapb.grpc.Grpc.completeObserver(observer))
+              }
+              .getOrElse(observer.onError(InvalidDbColumnFamilyException(s"Column family with id '$columnId' doesn't exist in this database '${db.getClass.getName}'")))
+          }
+        })
+      )
+      .addMethod(
+        RocksdbServiceGrpc.METHOD_ITERATE,
+        (call: ServerCall[RocksdbIterateRequest, RocksdbItem], _: Metadata) => {
+          val callStateActor = system.actorOf(CallStateSupervisor.props(
+            s"iterate-${callCounter.incrementAndGet()}",
+            GrpcAkkaServerOneToStreamCallStateActor.props[RocksdbIterateRequest, RocksdbItem](call, (request) => {
+              val columnId = request.columnId
+
+              db
+                .columnFamilyWithId(columnId)
+                .map { col =>
+                  db.iterateSource(col, request.initialPrefix, request.subsequentPrefix)
+                    .map { pair =>
+                      messagesCounter.increment()
+                      RocksdbItem(key = ProtoByteString.copyFrom(pair._1), value = ProtoByteString.copyFrom(pair._2))
+                    }
+                }
+                .getOrElse(Source.failed[RocksdbItem](InvalidDbColumnFamilyException(s"Column family with id '$columnId' doesn't exist in this database '${db.getClass.getName}'")))
+            })
+          ))
+
+          iterateListenerForActor[RocksdbIterateRequest](callStateActor)
+        }
+      )
+      .addMethod(
+        RocksdbServiceGrpc.METHOD_ITERATE_VALUES,
+        (call: ServerCall[RocksdbIterateValuesRequest, RocksdbItemValue], _: Metadata) => {
+          val callStateActor = system.actorOf(CallStateSupervisor.props(
+            s"iterate-values-${callCounter.incrementAndGet()}",
+            GrpcAkkaServerOneToStreamCallStateActor.props[RocksdbIterateValuesRequest, RocksdbItemValue](call, (request) => {
+              val columnId = request.columnId
+
+              db
+                .columnFamilyWithId(columnId)
+                .map { col =>
+                  db.iterateValuesSource(col, request.initialPrefix, request.subsequentPrefix)
+                    .map { value =>
+                      RocksdbItemValue(ProtoByteString.copyFrom(value))
+                    }
+
+                }
+                .getOrElse(Source.failed[RocksdbItemValue](InvalidDbColumnFamilyException(s"Column family with id '$columnId' doesn't exist in this database '${db.getClass.getName}'")))
+            })
+          ))
+
+          iterateListenerForActor[RocksdbIterateValuesRequest](callStateActor)
+        }
+      )
+      .addMethod(
+        RocksdbServiceGrpc.METHOD_TAIL,
+        (call: ServerCall[RocksdbTailRequest, RocksdbItem], _: Metadata) => {
+          val callStateActor = system.actorOf(CallStateSupervisor.props(
+            s"tail-${callCounter.incrementAndGet()}",
+            GrpcAkkaServerOneToStreamCallStateActor.props[RocksdbTailRequest, RocksdbItem](call, (request) => {
+              val columnId = request.columnId
+
+              db
+                .columnFamilyWithId(columnId)
+                .map { col =>
+                  db.tailSource(col, request.initialPrefix, request.subsequentPrefix, request.pollingInterval)
+                    .map { pair =>
+                      RocksdbItem(key = ProtoByteString.copyFrom(pair._1), value = ProtoByteString.copyFrom(pair._2))
+                    }
+                }
+                .getOrElse(Source.failed[RocksdbItem](InvalidDbColumnFamilyException(s"Column family with id '$columnId' doesn't exist in this database '${db.getClass.getName}'")))
+            })
+          ))
+
+          iterateListenerForActor[RocksdbTailRequest](callStateActor)
+        }
+      )
+      .build()
+
+    globalScheduler.scheduleAtFixedRate(0.second, 1.second) {
+      logger.info(s"message = ${messagesCounter.longValue()}")
+    }
+
+    NettyServerBuilder
+      .forPort(port)
+      .addService(serverDefinition)
+      .keepAliveTime(5, TimeUnit.SECONDS)
+      .permitKeepAliveTime(10, TimeUnit.SECONDS)
+      .keepAliveTimeout(10, TimeUnit.SECONDS)
+      //      .flowControlWindow(1024) // 128KiB
+      .build
+  }
+
+}

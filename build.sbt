@@ -51,6 +51,24 @@ lazy val dstream = Build
   )
   .dependsOn(fp)
 
+lazy val kvdb = Build
+  .defineProject("kvdb")
+  .settings(
+    libraryDependencies ++= akkaHttpDeps ++ rocksdbDeps ++ lmdbDeps ++
+      shapelessDeps ++ scalapbRuntimeDeps ++ enumeratumDeps ++ chimneyDeps ++
+      snappyDeps ++ pureconfigDeps ++ kamonCoreDeps ++ betterFilesDeps ++
+      refinedDeps ++ silencerDeps,
+    Compile / PB.targets := Seq(
+      scalapb
+        .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (sourceManaged in Compile).value
+    ),
+    scalacOptions ++= Seq(
+      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
+      "-P:silencer:pathFilters=dev/chopsticks/proto"
+    )
+  )
+  .dependsOn(common, fp, stream, testkit % "test->compile")
+
 lazy val root = (project in file("."))
   .enablePlugins(SymlinkTargetPlugin)
   .settings(

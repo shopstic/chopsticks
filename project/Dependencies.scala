@@ -4,6 +4,7 @@ import sbt._
 object Dependencies {
   val SCALA_VERSION = "2.12.8"
   val AKKA_VERSION = "2.5.23"
+  val AKKA_HTTP_VERSION = "10.1.8"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -22,6 +23,8 @@ object Dependencies {
   ).map { p =>
     "com.typesafe.akka" %% p % AKKA_VERSION
   }
+
+  val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
   val zioDeps = Seq(
     "org.scalaz" %% "scalaz-zio" % "1.0-RC5"
@@ -89,17 +92,17 @@ object Dependencies {
     "org.rocksdb" % "rocksdbjni" % "6.0.1"
   )
 
-  val nettyDeps = Seq(
-    "io.netty" % "netty-all" % "4.1.36.Final"
+  val lmdbDeps = Seq(
+    "org.lmdbjava" % "lmdbjava" % "0.6.3"
   )
 
-  val chSmppDeps = Seq(
-    "com.fizzed" % "ch-smpp" % "6.0.0-netty4-beta-3"
+  val shapelessDeps = Seq(
+    "com.chuusai" %% "shapeless" % "2.3.3"
   )
 
-  val shopsticDeps = Seq(
-    "gr" %% "stream" % "0.0.6",
-    "gr" %% "app-base" % "0.0.5"
+  val scalapbRuntimeDeps = Seq(
+    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion,
+    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
   )
 
   val enumeratumDeps = Seq(
@@ -109,5 +112,22 @@ object Dependencies {
   val refinedDeps = Seq(
     "eu.timepit" %% "refined" % "0.9.8",
     "eu.timepit" %% "refined-pureconfig" % "0.9.8"
+  )
+
+  val chimneyDeps = Seq(
+    "io.scalaland" %% "chimney" % "0.3.1"
+  )
+
+  val snappyDeps = Seq(
+    "org.xerial.snappy" % "snappy-java" % "1.1.7.3"
+  )
+
+  val betterFilesDeps = Seq(
+    "com.github.pathikrit" %% "better-files" % "3.7.1"
+  )
+
+  val silencerDeps = Seq(
+    compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.1"),
+    "com.github.ghik" %% "silencer-lib" % "1.4.1" % Provided
   )
 }

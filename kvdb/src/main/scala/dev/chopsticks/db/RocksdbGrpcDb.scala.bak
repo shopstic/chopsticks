@@ -1,0 +1,125 @@
+package dev.chopsticks.db
+
+import java.util.concurrent.TimeUnit
+
+import akka.NotUsed
+import akka.stream.Materializer
+import akka.stream.scaladsl.Source
+import com.google.protobuf.{ByteString => ProtoByteString}
+import dev.chopsticks.db.RocksdbInterface.ColumnFamily
+import dev.chopsticks.grpc_akka.client.GrpcAkkaClientOneToStreamCallSource
+import dev.chopsticks.proto.db.RocksdbServiceGrpc.RocksdbServiceStub
+import dev.chopsticks.proto.db._
+import dev.chopsticks.util.RocksdbUtils.RecordPair
+import io.grpc.netty.NettyChannelBuilder
+import io.grpc.{ClientCall, ManagedChannel, Metadata}
+import scalaz.zio.Task
+
+import scala.concurrent.blocking
+import scala.concurrent.duration.FiniteDuration
+import scala.language.higherKinds
+
+object RocksdbGrpcDb {
+  def apply[Col <: ColumnFamily](host: String, port: Int): RocksdbGrpcDb[Col] = new RocksdbGrpcDb[Col](host, port)
+}
+
+class RocksdbGrpcDb[Col <: ColumnFamily](host: String, port: Int) extends RocksdbInterface[Col] {
+  private val channel: ManagedChannel = NettyChannelBuilder
+    .forAddress(host, port)
+    .usePlaintext(true)
+//    .flowControlWindow(1024) // 128KiB
+    .build()
+
+  private val client = new RocksdbServiceStub(channel)
+
+  def seekAndGetNextTask(column: Col, prefix: String): Task[Option[RecordPair]] = Task.raiseError(new UnsupportedOperationException("TBD"))
+
+  def estimateCount(column: Col): Task[Long] = Task.raiseError(new UnsupportedOperationException("TBD"))
+
+  def getTask(column: Col, key: Array[Byte]): Task[Option[Array[Byte]]] = {
+    Task
+      .deferFuture(client.get(RocksdbGetRequest(
+        columnId = column.id,
+        key = ProtoByteString.copyFrom(key)
+      )))
+      .map { r =>
+        r.value.map(_.toByteArray)
+      }
+  }
+
+  def batchGetTask(column: Col, keys: Array[Array[Byte]]): Task[Array[Option[Array[Byte]]]] = {
+    Task.raiseError(new UnsupportedOperationException("TBD"))
+  }
+
+  def putTask(column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
+    Task
+      .deferFuture {
+        client
+          .put(RocksdbPutRequest(
+            columnId = column.id,
+            key = ProtoByteString.copyFrom(key),
+            value = ProtoByteString.copyFrom(value)
+          ))
+      }
+      .map(_ => ())
+  }
+
+  def iterateValuesSource(column: Col, initialPrefix: String, subsequentPrefix: String): Source[Array[Byte], NotUsed] = {
+    val call: ClientCall[RocksdbIterateValuesRequest, RocksdbItemValue] = channel.newCall(RocksdbServiceGrpc.METHOD_ITERATE_VALUES, io.grpc.CallOptions.DEFAULT)
+    val request = RocksdbIterateValuesRequest(
+      columnId = column.id,
+      initialPrefix = initialPrefix,
+      subsequentPrefix = subsequentPrefix
+    )
+    val metadata = new Metadata()
+
+    Source
+      .fromGraph(new GrpcAkkaClientOneToStreamCallSource[RocksdbIterateValuesRequest, RocksdbItemValue](call, request, metadata))
+      .map(i => i.value.toByteArray)
+  }
+
+  def iterateSource(column: Col, initialPrefix: String, subsequentPrefix: String): Source[RecordPair, NotUsed] = {
+    val call: ClientCall[RocksdbIterateRequest, RocksdbItem] = channel.newCall(RocksdbServiceGrpc.METHOD_ITERATE, io.grpc.CallOptions.DEFAULT)
+    val request = RocksdbIterateRequest(
+      columnId = column.id,
+      initialPrefix = initialPrefix,
+      subsequentPrefix = subsequentPrefix
+    )
+    val metadata = new Metadata()
+
+    Source
+      .fromGraph(new GrpcAkkaClientOneToStreamCallSource[RocksdbIterateRequest, RocksdbItem](call, request, metadata))
+      .map(i => (i.key.toByteArray, i.value.toByteArray))
+  }
+
+  def writeBatchTask(items: Source[(Col, Array[Byte], Array[Byte]), _])(implicit mat: Materializer): Task[Int] = {
+    Task.raiseError(new UnsupportedOperationException("Remote writeBatch is TBD"))
+  }
+
+  // no-op for remote client
+  def openTask(): Task[Unit] = Task.unit
+
+  def closeTask(): Task[Unit] = Task {
+    blocking {
+      channel.shutdown()
+      channel.awaitTermination(10, TimeUnit.SECONDS)
+    }
+  }
+
+  def tailSource(column: Col, initialPrefix: String, subsequentPrefix: String, pollingInterval: FiniteDuration): Source[RecordPair, NotUsed] = {
+    val call: ClientCall[RocksdbTailRequest, RocksdbItem] = channel.newCall(RocksdbServiceGrpc.METHOD_TAIL, io.grpc.CallOptions.DEFAULT)
+    val request = RocksdbTailRequest(
+      columnId = column.id,
+      initialPrefix = initialPrefix,
+      subsequentPrefix = subsequentPrefix,
+      pollingInterval = pollingInterval
+    )
+    val metadata = new Metadata()
+
+    Source
+      .fromGraph(new GrpcAkkaClientOneToStreamCallSource[RocksdbTailRequest, RocksdbItem](call, request, metadata))
+      .map(i => (i.key.toByteArray, i.value.toByteArray))
+  }
+
+  def compactTask(): Task[Unit] = Task.raiseError(new UnsupportedOperationException("Triggering compaction from a remote client is not supported for now"))
+}

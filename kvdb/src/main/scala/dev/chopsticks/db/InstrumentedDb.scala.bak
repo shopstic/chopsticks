@@ -1,0 +1,291 @@
+package dev.chopsticks.db
+
+import akka.NotUsed
+import akka.actor.{Actor, ActorRef}
+import akka.stream.Materializer
+import akka.stream.scaladsl.Source
+import com.github.dwickern.macros.NameOf._
+import com.typesafe.scalalogging.StrictLogging
+import dev.chopsticks.db.DbInterface.{ColumnFamily, DbDefinition}
+import dev.chopsticks.proto.db.DbGet
+import dev.chopsticks.util.CommonUtils.byteArrayToString
+import dev.chopsticks.util.RocksdbUtils.RecordPair
+import dev.chopsticks.util.TopK
+import io.prometheus.client.{Counter, Histogram}
+import scalaz.zio.Task
+import monix.execution.atomic.Atomic
+
+import scala.collection.mutable
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
+import scala.language.higherKinds
+
+object InstrumentedDb {
+
+  trait DbServiceMetrics {
+    protected val dbServicePrefix: String = "db_"
+
+    private val ENDPOINT_LABEL = "endpoint"
+    private val COLUMN_LABEL = "column"
+
+    lazy val dbCallCounter: Counter = Counter
+      .build()
+      .name(dbServicePrefix + "call_count")
+      .help("Call Count")
+      .labelNames(ENDPOINT_LABEL, COLUMN_LABEL)
+      .register()
+
+    lazy val dbCallDurationHistogram: Histogram = Histogram
+      .build()
+      .name(dbServicePrefix + "call_duration_histogram")
+      .help("Duration Histogram")
+      .labelNames(ENDPOINT_LABEL, COLUMN_LABEL)
+      .register()
+
+    lazy val dbCallOutputCounter: Counter = Counter
+      .build()
+      .name(dbServicePrefix + "call_output_count")
+      .help("Output Count")
+      .labelNames(ENDPOINT_LABEL, COLUMN_LABEL)
+      .register()
+  }
+
+  final case class TopKItem(group: String, metric: String, params: Map[String, String], value: Double)
+
+  implicit val topItemOrdering: Ordering[TopKItem] = Ordering.fromLessThan[TopKItem]((a, b) => a.value < b.value)
+
+  final case class ChangeTopK(topK: Int)
+
+  object GetTopKItems
+
+  //noinspection ActorMutableStateInspection
+  class TopKActor(limit: Int) extends Actor {
+    private var currentLimit = limit
+
+    private val map = mutable.Map.empty[(String, String), TopK[TopKItem]]
+
+    def receive: Receive = {
+      case ChangeTopK(v) =>
+        map.clear()
+        currentLimit = v
+
+      case item: TopKItem =>
+        val list = map.getOrElseUpdate((item.group, item.metric), TopK.empty[TopKItem](currentLimit))
+        list += item
+
+      case GetTopKItems =>
+        sender() ! map.values.flatten.toVector
+    }
+  }
+
+  val OUTPUT_RATE_METRIC = "outputRate"
+  val DURATION_METRIC = "duration"
+
+  def apply[Col <: ColumnFamily](
+    localDb: DbInterface[Col],
+    metrics: DbServiceMetrics,
+    topKActor: Option[ActorRef]
+  )(implicit ec: ExecutionContext): InstrumentedDb[Col] = {
+    new InstrumentedDb(localDb, metrics, topKActor)
+  }
+}
+
+final class InstrumentedDb[Col <: ColumnFamily](
+  localDb: DbInterface[Col],
+  metrics: InstrumentedDb.DbServiceMetrics,
+  topKActor: Option[ActorRef]
+)(implicit ec: ExecutionContext)
+    extends DbInterface[Col]
+    with StrictLogging {
+
+  import InstrumentedDb._
+
+  val isLocal: Boolean = localDb.isLocal
+
+  val definition: DbDefinition[Col] = localDb.definition
+
+  private def recordTopKItem(item: TopKItem): Unit = {
+    topKActor.foreach(_ ! item)
+  }
+
+  private def instrumentSingle[V](name: String, column: Col, params: Map[String, String])(task: Task[V]) = {
+    Task
+      .defer {
+        val columnName = column.entryName
+        metrics.dbCallCounter.labels(name, columnName).inc()
+        val durationHistogram = metrics.dbCallDurationHistogram.labels(name, columnName)
+        val timer = durationHistogram.startTimer()
+
+        task
+          .doOnFinish { _ =>
+            Task.now {
+              val elapsed = timer.observeDuration()
+              recordTopKItem(TopKItem(group = name, metric = DURATION_METRIC, params = params, value = elapsed))
+            }
+          }
+      }
+  }
+
+  private def instrumentArray[V](name: String, column: Col, params: Map[String, String])(task: Task[Seq[V]]) = {
+    Task
+      .defer {
+        val columnName = column.entryName
+        metrics.dbCallCounter.labels(name, columnName).inc()
+        val durationHistogram = metrics.dbCallDurationHistogram.labels(name, columnName)
+        val callRecordCounter = metrics.dbCallOutputCounter.labels(name, columnName)
+        val recordCounter = Atomic(0.0d)
+        val timer = durationHistogram.startTimer()
+
+        task
+          .map { a =>
+            recordCounter.set(a.size.toDouble)
+            a
+          }
+          .doOnFinish { _ =>
+            Task.now {
+              val elapsed = timer.observeDuration()
+              callRecordCounter.inc(recordCounter.get)
+              recordTopKItem(TopKItem(group = name, metric = OUTPUT_RATE_METRIC, params = params, value = recordCounter.get / elapsed * 1000))
+              recordTopKItem(TopKItem(group = name, metric = DURATION_METRIC, params = params, value = elapsed))
+            }
+          }
+      }
+  }
+
+  private def instrumentSource[V](name: String, column: Col, params: Map[String, String])(source: Source[V, NotUsed]): Source[V, NotUsed] = {
+    val columnName = column.entryName
+    metrics.dbCallCounter.labels(name, columnName).inc()
+    val durationHistogram = metrics.dbCallDurationHistogram.labels(name, columnName)
+    val callRecordCounter = metrics.dbCallOutputCounter.labels(name, columnName)
+    var recordCounter = 0.0d
+    val timer = durationHistogram.startTimer()
+
+    source
+      .map { v =>
+        recordCounter += 1
+        v
+      }
+      .watchTermination() {
+        case (_, f) =>
+          f.andThen {
+            case _ =>
+              val elapsed = timer.observeDuration()
+              callRecordCounter.inc(recordCounter)
+              recordTopKItem(TopKItem(group = name, metric = OUTPUT_RATE_METRIC, params = params, value = recordCounter / elapsed * 1000))
+              recordTopKItem(TopKItem(group = name, metric = DURATION_METRIC, params = params, value = elapsed))
+          }
+      }
+      .mapMaterializedValue(_ => NotUsed)
+  }
+
+  def openTask(): Task[Unit] = {
+    localDb.openTask()
+  }
+
+  def getTask(column: Col, get: DbGet): Task[Option[RecordPair]] = {
+    instrumentSingle(nameOf(getTask _), column, Map.empty) {
+      localDb.getTask(column, get)
+    }
+  }
+
+  def batchGetTask(column: Col, get: Seq[DbGet]): Task[Seq[Option[RecordPair]]] = {
+    instrumentArray(nameOf(batchGetTask _), column, Map.empty) {
+      localDb.batchGetTask(column, get)
+    }
+  }
+
+  def statsTask: Task[Map[String, Double]] = {
+    localDb.statsTask
+  }
+
+  def estimateCount(column: Col): Task[Long] = {
+    instrumentSingle(nameOf(estimateCount _), column, Map.empty) {
+      localDb.estimateCount(column)
+    }
+  }
+
+  def iterateSource(column: Col, initialPrefix: Array[Byte], subsequentPrefix: Array[Byte], seekForPrev: Boolean): Source[RecordPair, NotUsed] = {
+    val params = Map(
+      nameOf(initialPrefix) -> byteArrayToString(initialPrefix),
+      nameOf(subsequentPrefix) -> byteArrayToString(subsequentPrefix),
+      nameOf(seekForPrev) -> seekForPrev.toString
+    )
+
+    instrumentSource(nameOf(iterateSource _), column, params) {
+      localDb.iterateSource(column, initialPrefix, subsequentPrefix, seekForPrev)
+    }
+  }
+
+  def iterateValuesSource(column: Col, initialPrefix: Array[Byte], subsequentPrefix: Array[Byte], seekForPrev: Boolean): Source[Array[Byte], NotUsed] = {
+    val params = Map(
+      nameOf(initialPrefix) -> byteArrayToString(initialPrefix),
+      nameOf(subsequentPrefix) -> byteArrayToString(subsequentPrefix),
+      nameOf(seekForPrev) -> seekForPrev.toString
+    )
+
+    instrumentSource(nameOf(iterateValuesSource _), column, params) {
+      localDb.iterateValuesSource(column, initialPrefix, subsequentPrefix, seekForPrev)
+    }
+  }
+
+  def putTask(column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
+    localDb.putTask(column, key, value)
+  }
+
+  def deleteTask(column: Col, key: Array[Byte]): Task[Unit] = {
+    localDb.deleteTask(column, key)
+  }
+
+  def deletePrefixTask(column: Col, prefix: Array[Byte]): Task[Long] = {
+    localDb.deletePrefixTask(column, prefix)
+  }
+
+  def batchPutTask(items: Seq[(Col, Array[Byte], Array[Byte])])(implicit mat: Materializer): Task[Int] = {
+    localDb.batchPutTask(items)
+  }
+
+  def tailSource(column: Col, initialPrefix: Array[Byte], subsequentPrefix: Array[Byte], pollingInterval: FiniteDuration): Source[RecordPair, NotUsed] = {
+    val params = Map(
+      nameOf(initialPrefix) -> byteArrayToString(initialPrefix),
+      nameOf(subsequentPrefix) -> byteArrayToString(subsequentPrefix),
+      nameOf(pollingInterval) -> pollingInterval.toString
+    )
+
+    instrumentSource(nameOf(tailSource _), column, params) {
+      localDb.tailSource(column, initialPrefix, subsequentPrefix, pollingInterval)
+    }
+  }
+
+  def tailValuesSource(
+    column: Col,
+    initialPrefix: Array[Byte],
+    subsequentPrefix: Array[Byte],
+    pollingInterval: FiniteDuration
+  ): Source[Array[Byte], NotUsed] = {
+    val params = Map(
+      nameOf(initialPrefix) -> byteArrayToString(initialPrefix),
+      nameOf(subsequentPrefix) -> byteArrayToString(subsequentPrefix),
+      nameOf(pollingInterval) -> pollingInterval.toString
+    )
+
+    instrumentSource(nameOf(tailValuesSource _), column, params) {
+      localDb.tailValuesSource(column, initialPrefix, subsequentPrefix, pollingInterval)
+    }
+  }
+
+  def closeTask(): Task[Unit] = {
+    localDb.closeTask()
+  }
+
+  def compactTask(): Task[Unit] = {
+    localDb.compactTask()
+  }
+
+  def transactionTask(actions: Seq[DbInterface.RawTransactionAction[Col]]): Task[Unit] = {
+    localDb.transactionTask(actions)
+  }
+
+  def startBulkInsertsTask(): Task[Unit] = ???
+
+  def endBulkInsertsTask(): Task[Unit] = ???
+}
