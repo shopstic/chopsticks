@@ -40,7 +40,7 @@ lazy val fp = Build
 lazy val stream = Build
   .defineProject("stream")
   .settings(
-    libraryDependencies ++= catsCoreDeps ++ hamstersDeps.map(_ % "test")
+    libraryDependencies ++= catsCoreDeps ++ hamstersDeps.map(_ % Test)
   )
   .dependsOn(fp, testkit % "test->compile")
 
@@ -60,7 +60,7 @@ lazy val kvdb = Build
       refinedDeps ++ silencerDeps,
     Compile / PB.targets := Seq(
       scalapb
-        .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (sourceManaged in Compile).value
+        .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value
     ),
     scalacOptions ++= Seq(
       s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",

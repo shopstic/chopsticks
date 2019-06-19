@@ -1,4 +1,5 @@
 import sbt._
+import scalapb.compiler.Version.scalapbVersion
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
@@ -66,7 +67,7 @@ object Dependencies {
   )
 
   val nameofDeps = Seq(
-    "com.github.dwickern" %% "scala-nameof" % "1.0.3" % "provided"
+    "com.github.dwickern" %% "scala-nameof" % "1.0.3" % Provided
   )
 
   val loggingDeps = Seq(
@@ -101,8 +102,8 @@ object Dependencies {
   )
 
   val scalapbRuntimeDeps = Seq(
-    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion,
-    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapbVersion,
+    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapbVersion % "protobuf"
   )
 
   val enumeratumDeps = Seq(
