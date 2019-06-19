@@ -74,4 +74,4 @@ lazy val root = (project in file("."))
   .settings(
     name := "chopsticks"
   )
-  .aggregate(common, testkit, fp, stream, dstream)
+  .aggregate(common, testkit, fp, stream, dstream, kvdb)

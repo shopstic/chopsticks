@@ -44,7 +44,7 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.6.1"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.6.2"
   )
 
   val catsCoreDeps = Seq(
@@ -52,7 +52,7 @@ object Dependencies {
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.11.0")
+    .map(p => "com.github.pureconfig" %% p % "0.11.1")
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
@@ -93,7 +93,7 @@ object Dependencies {
   )
 
   val lmdbDeps = Seq(
-    "org.lmdbjava" % "lmdbjava" % "0.6.3"
+    "org.lmdbjava" % "lmdbjava" % "0.7.0"
   )
 
   val shapelessDeps = Seq(
@@ -115,7 +115,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.3.1"
+    "io.scalaland" %% "chimney" % "0.3.2"
   )
 
   val snappyDeps = Seq(
@@ -123,7 +123,7 @@ object Dependencies {
   )
 
   val betterFilesDeps = Seq(
-    "com.github.pathikrit" %% "better-files" % "3.7.1"
+    "com.github.pathikrit" %% "better-files" % "3.8.0"
   )
 
   val silencerDeps = Seq(
