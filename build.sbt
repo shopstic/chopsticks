@@ -1,6 +1,6 @@
 import Dependencies._
 
-ThisBuild / organization := "com.shopstic"
+ThisBuild / organization := "dev.chopsticks"
 ThisBuild / scalaVersion := SCALA_VERSION
 ThisBuild / javacOptions ++= Build.javacOptions
 ThisBuild / scalacOptions ++= Build.scalacOptions
@@ -16,26 +16,30 @@ Global / concurrentRestrictions ++= (if (!Build.forkTests) Seq(Tags.limit(Tags.T
 
 ThisBuild / symlinkTargetRoot := Build.symlinkTargetRoot
 
+ThisBuild / licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
+
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
-lazy val common = Build
-  .defineProject("common")
+lazy val util = Build
+  .defineProject("util")
   .settings(
-    libraryDependencies ++= akkaSlf4jDeps
+    libraryDependencies ++= akkaSlf4jDeps ++ kamonCoreDeps ++ kamonProdDeps
+      ++ squantsDeps ++ loggingDeps ++ pureconfigDeps ++ microlibsDeps
   )
 
 lazy val testkit = Build
   .defineProject("testkit")
   .settings(
-    libraryDependencies ++= akkaTestDeps ++ pureconfigDeps ++ scalatestDeps
+    libraryDependencies ++= akkaTestDeps ++ scalatestDeps
   )
-  .dependsOn(common)
+  .dependsOn(util)
 
 lazy val fp = Build
   .defineProject("fp")
   .settings(
-    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ squantsDeps ++ loggingDeps
+    libraryDependencies ++= akkaStreamDeps ++ zioDeps
   )
+  .dependsOn(util)
 
 lazy val stream = Build
   .defineProject("stream")
@@ -47,7 +51,7 @@ lazy val stream = Build
 lazy val dstream = Build
   .defineProject("dstream")
   .settings(
-    libraryDependencies ++= akkaGrpcRuntimeDeps ++ kamonCoreDeps
+    libraryDependencies ++= akkaGrpcRuntimeDeps
   )
   .dependsOn(fp)
 
@@ -67,11 +71,12 @@ lazy val kvdb = Build
       "-P:silencer:pathFilters=dev/chopsticks/proto"
     )
   )
-  .dependsOn(common, fp, stream, testkit % "test->compile")
+  .dependsOn(util, fp, stream, testkit % "test->compile")
 
 lazy val root = (project in file("."))
   .enablePlugins(SymlinkTargetPlugin)
   .settings(
-    name := "chopsticks"
+    name := "chopsticks",
+    publish / skip := true
   )
-  .aggregate(common, testkit, fp, stream, dstream, kvdb)
+  .aggregate(util, testkit, fp, stream, dstream, kvdb)

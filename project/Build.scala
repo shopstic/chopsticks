@@ -6,7 +6,7 @@ import sbt.Keys._
 
 //noinspection TypeAnnotation
 object Build {
-  val buildVersion = "0.1.0"
+  val buildVersion = "0.1.7"
 
   lazy val ITest = config("it") extend Test
 
@@ -55,10 +55,10 @@ object Build {
   lazy val fmt = taskKey[Unit]("Code formatting")
 
   def defineProject(projectName: String) = {
-    Project(projectName, file(projectName))
+    Project(projectName, file(s"chopsticks-$projectName"))
       .enablePlugins(SymlinkTargetPlugin)
       .settings(
-        name := projectName,
+        name := s"chopsticks-$projectName",
         version := buildVersion,
         Build.cq := {
           (Compile / scalafmtCheck).value

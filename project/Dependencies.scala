@@ -127,6 +127,10 @@ object Dependencies {
     "com.github.pathikrit" %% "better-files" % "3.8.0"
   )
 
+  val microlibsDeps = Seq(
+    "com.github.japgolly.microlibs" %% "utils" % "1.20"
+  )
+
   val silencerDeps = Seq(
     compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.1"),
     "com.github.ghik" %% "silencer-lib" % "1.4.1" % Provided
