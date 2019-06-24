@@ -6,7 +6,7 @@ import sbt.Keys._
 
 //noinspection TypeAnnotation
 object Build {
-  val buildVersion = "0.1.10"
+  val buildVersion = "0.1.16"
 
   lazy val ITest = config("it") extend Test
 
@@ -82,7 +82,9 @@ object Build {
           Wart.Product
         ),
         wartremoverExcluded += sourceManaged.value,
-        libraryDependencies ++= Dependencies.scalatestDeps
+        libraryDependencies ++= Dependencies.scalatestDeps,
+        Compile / doc / sources := Seq.empty,
+        Compile / packageDoc / publishArtifact := false
       )
   }
 }

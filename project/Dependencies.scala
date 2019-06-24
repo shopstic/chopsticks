@@ -40,7 +40,7 @@ object Dependencies {
   )
 
   val kamonProdDeps = Seq(
-    "io.kamon" %% "kamon-prometheus" % "1.1.1",
+    "io.kamon" %% "kamon-prometheus" % "1.1.2",
     "io.kamon" %% "kamon-system-metrics" % "1.0.1"
   )
 
@@ -78,14 +78,14 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.0.12"
+    "org.codehaus.janino" % "janino" % "3.0.13"
   )
 
   val scalatestDeps = Seq(
     "org.scalactic" %% "scalactic" % "3.0.8",
     "org.scalatest" %% "scalatest" % "3.0.8",
     "org.scalacheck" %% "scalacheck" % "1.14.0",
-    "org.scalamock" %% "scalamock" % "4.2.0"
+    "org.scalamock" %% "scalamock" % "4.3.0"
   )
 
   val hamstersDeps = Seq(
