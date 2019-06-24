@@ -17,7 +17,7 @@ import akka.{Done, NotUsed}
 import cats.syntax.show._
 import com.google.protobuf.{CodedInputStream, ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.codec.DbKeyConstraints.Implicits._
+import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
 import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.kvdb.DbWebSocketClientResponseByteStringHandler.UpstreamCompletedBeforeExplicitCompletionSignalException
 import dev.chopsticks.kvdb.HttpDbServer.VALIDATION_REJECTION_REASON_HEADER_NAME
@@ -25,9 +25,9 @@ import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.proto.db.DbTailItemValueBatch.Value
 import dev.chopsticks.proto.db._
 import dev.chopsticks.stream.{AkkaStreamUtils, LastStateFlow}
-import dev.chopsticks.util.DbUtils._
-import dev.chopsticks.util.AkkaHttpProtobufSupport._
-import dev.chopsticks.util.DbUtils
+import dev.chopsticks.kvdb.util.DbUtils._
+import dev.chopsticks.kvdb.util.AkkaHttpProtobufSupport._
+import dev.chopsticks.kvdb.util.DbUtils
 import org.xerial.snappy.{SnappyCodec, SnappyInputStream}
 import scalaz.zio.blocking.Blocking
 import scalaz.zio.clock.Clock

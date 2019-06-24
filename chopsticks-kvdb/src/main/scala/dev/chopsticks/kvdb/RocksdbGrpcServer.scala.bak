@@ -12,8 +12,8 @@ import dev.chopsticks.db.RocksdbInterface.ColumnFamily
 import dev.chopsticks.grpc_akka.server.GrpcAkkaServerOneToStreamCallStateActor
 import dev.chopsticks.grpc_akka.server.GrpcAkkaServerOneToStreamCallStateActor.{ClientCallCanceled, ClientCallCompleted, ClientCallHasDemand}
 import dev.chopsticks.proto.db._
-import dev.chopsticks.util.RocksdbUtils.InvalidDbColumnFamilyException
-import dev.chopsticks.util.SchedulerUtils.IOScheduler
+import dev.chopsticks.kvdb.util.RocksdbUtils.InvalidDbColumnFamilyException
+import dev.chopsticks.kvdb.util.SchedulerUtils.IOScheduler
 
 import io.grpc.internal.ServerImpl
 import io.grpc.netty.NettyServerBuilder

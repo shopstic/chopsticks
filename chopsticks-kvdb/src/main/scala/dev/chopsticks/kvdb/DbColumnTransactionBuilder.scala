@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb
 
-import dev.chopsticks.codec.DbKeyTransformer
+import dev.chopsticks.kvdb.codec.DbKeyTransformer
 import dev.chopsticks.kvdb.DbClient.{TransactionAction, TransactionDelete, TransactionDeletePrefix, TransactionPut}
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
 import dev.chopsticks.proto.db.DbTransactionAction

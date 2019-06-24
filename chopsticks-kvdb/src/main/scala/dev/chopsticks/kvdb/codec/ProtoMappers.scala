@@ -1,4 +1,4 @@
-package dev.chopsticks.codec
+package dev.chopsticks.kvdb.codec
 
 import java.nio.ByteBuffer
 import java.time.{Duration => _, _}
@@ -13,21 +13,6 @@ import scala.concurrent.duration._
 import scalapb.TypeMapper
 
 object ProtoMappers {
-
-  private val NANOS_IN_A_SECOND = 1000000000
-
-  def instantToEpochNanos(value: Instant): BigInt = {
-    val seconds = BigInt(value.getEpochSecond)
-    val nanoSeconds = value.getNano
-    seconds * NANOS_IN_A_SECOND + nanoSeconds
-  }
-
-  def epochNanosToInstant(value: BigInt): Instant = {
-    val nanoSeconds = (value % NANOS_IN_A_SECOND).toLong
-    val seconds = (value / NANOS_IN_A_SECOND).toLong
-    Instant.ofEpochSecond(seconds, nanoSeconds)
-  }
-
   private[codec] def combine[A, B, C](implicit m1: TypeMapper[A, B], m2: TypeMapper[B, C]): TypeMapper[A, C] = {
     TypeMapper[A, C](m1.toCustom _ andThen m2.toCustom)(m2.toBase _ andThen m1.toBase)
   }

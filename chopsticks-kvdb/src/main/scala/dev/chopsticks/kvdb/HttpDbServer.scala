@@ -16,8 +16,8 @@ import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.kvdb.DbWebsocketServerRequestHandlerFlow.ClientTerminatedPrematurelyException
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.proto.db._
-import dev.chopsticks.util.DbUtils.Implicits.defaultDbClientOptions
-import dev.chopsticks.util.DbUtils._
+import dev.chopsticks.kvdb.util.DbUtils.Implicits.defaultDbClientOptions
+import dev.chopsticks.kvdb.util.DbUtils._
 import kamon.Kamon
 import kamon.metric.{CounterMetric, MeasurementUnit}
 import org.xerial.snappy.SnappyOutputStream
@@ -435,7 +435,7 @@ final class HttpDbServer[DbDef <: DbDefinition](
   private def route: Route = {
     // scalastyle:on method.length
     import Directives._
-    import dev.chopsticks.util.AkkaHttpProtobufSupport._
+    import dev.chopsticks.kvdb.util.AkkaHttpProtobufSupport._
 
     def checkVersion(serverVersion: String): Directive0 = {
       headerValueByName(API_VERSION_HEADER_NAME).flatMap { clientVersion =>

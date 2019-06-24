@@ -23,21 +23,21 @@ lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 lazy val util = Build
   .defineProject("util")
   .settings(
-    libraryDependencies ++= akkaSlf4jDeps ++ kamonCoreDeps ++ kamonProdDeps
+    libraryDependencies ++= akkaSlf4jDeps ++ kamonCoreDeps
       ++ squantsDeps ++ loggingDeps ++ pureconfigDeps ++ microlibsDeps
   )
 
 lazy val testkit = Build
   .defineProject("testkit")
   .settings(
-    libraryDependencies ++= akkaTestDeps ++ scalatestDeps
+    libraryDependencies ++= akkaTestDeps ++ scalatestDeps ++ janinoDeps
   )
   .dependsOn(util)
 
 lazy val fp = Build
   .defineProject("fp")
   .settings(
-    libraryDependencies ++= akkaStreamDeps ++ zioDeps
+    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ kamonProdDeps
   )
   .dependsOn(util)
 
@@ -60,8 +60,7 @@ lazy val kvdb = Build
   .settings(
     libraryDependencies ++= akkaHttpDeps ++ rocksdbDeps ++ lmdbDeps ++
       shapelessDeps ++ scalapbRuntimeDeps ++ enumeratumDeps ++ chimneyDeps ++
-      snappyDeps ++ pureconfigDeps ++ kamonCoreDeps ++ betterFilesDeps ++
-      refinedDeps ++ silencerDeps,
+      snappyDeps ++ betterFilesDeps ++ refinedDeps ++ silencerDeps,
     Compile / PB.targets := Seq(
       scalapb
         .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value

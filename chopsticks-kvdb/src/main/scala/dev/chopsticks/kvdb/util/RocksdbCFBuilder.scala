@@ -1,24 +1,27 @@
-package dev.chopsticks.util
+package dev.chopsticks.kvdb.util
 
 import org.rocksdb._
+import squants.information.Information
 import squants.information.InformationConversions._
 
 import scala.collection.JavaConverters._
 
 object RocksdbCFBuilder {
-  final case class RocksdbCFOptions(memoryBudget: Long, blockCache: Long, minPrefixLength: Int)
+  final case class RocksdbCFOptions(memoryBudget: Information, blockCache: Information, minPrefixLength: Int)
 
-  def apply(memoryBudget: Long, blockCache: Long): RocksdbCFBuilder = {
+  def apply(memoryBudget: Information, blockCache: Information): RocksdbCFBuilder = {
     new RocksdbCFBuilder(memoryBudget, blockCache)
   }
 }
 
-class RocksdbCFBuilder(memoryBudget: Long, blockCache: Long) {
+class RocksdbCFBuilder(memoryBudget: Information, blockCache: Information) {
   private val MEMTABLE_PREFIX_BLOOM_SIZE_RATIO = 0.1
+  private val memoryBudgetBytes = memoryBudget.toBytes.toLong
+  private val blockCacheBytes = blockCache.toBytes.toLong
 
   //  private val writeBufferSize = memoryBudget / 4
   private val columnOptions = {
-    val writeBufferSize = memoryBudget / 4
+    val writeBufferSize = memoryBudgetBytes / 4
 
     val cf = new ColumnFamilyOptions()
       .setWriteBufferSize(writeBufferSize)
@@ -41,10 +44,10 @@ class RocksdbCFBuilder(memoryBudget: Long, blockCache: Long) {
       .setCompressionPerLevel((0 to numLevels).map(_ => CompressionType.NO_COMPRESSION).asJava)
   }
 
-  private val tableFormat = if (blockCache > 0) {
+  private val tableFormat = if (blockCacheBytes > 0) {
     new BlockBasedTableConfig()
       .setBlockSize(128.kib.toBytes.toLong)
-      .setBlockCache(new ClockCache(blockCache))
+      .setBlockCache(new ClockCache(blockCacheBytes))
       .setCacheIndexAndFilterBlocks(true)
       .setPinL0FilterAndIndexBlocksInCache(true)
   }

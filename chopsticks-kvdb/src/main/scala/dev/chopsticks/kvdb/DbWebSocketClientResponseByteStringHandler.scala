@@ -3,9 +3,16 @@ package dev.chopsticks.kvdb
 import akka.stream.stage._
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
 import akka.util.ByteString
+import dev.chopsticks.kvdb.util.DbUtils.{
+  DbAlreadyClosedException,
+  InvalidDbArgumentException,
+  InvalidDbColumnFamilyException,
+  SeekFailure,
+  UnoptimizedDbOperationException,
+  UnsupportedDbOperationException
+}
 import dev.chopsticks.proto.db.DbOperationException.ExceptionType
 import dev.chopsticks.proto.db.DbOperationPossibleException
-import dev.chopsticks.util.DbUtils._
 
 import scala.util.control.NoStackTrace
 import scala.util.{Failure, Success, Try}

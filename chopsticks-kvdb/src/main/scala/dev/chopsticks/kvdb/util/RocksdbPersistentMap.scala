@@ -1,4 +1,4 @@
-package dev.chopsticks.util
+package dev.chopsticks.kvdb.util
 
 import org.rocksdb._
 import squants.information.Information

@@ -5,14 +5,14 @@ import java.time.Instant
 import akka.NotUsed
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
-import dev.chopsticks.codec.DbKeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
-import dev.chopsticks.codec.{DbKeyConstraints, DbKeyTransformer}
+import dev.chopsticks.kvdb.codec.DbKeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
+import dev.chopsticks.kvdb.codec.{DbKeyConstraints, DbKeyTransformer}
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
 import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.util.DbUtils.{DbClientOptions, DbTailBatch}
 import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
 import dev.chopsticks.stream.AkkaStreamUtils
-import dev.chopsticks.util.DbUtils.{DbClientOptions, DbTailBatch}
 import scalaz.zio.Task
 
 import scala.collection.immutable.Queue

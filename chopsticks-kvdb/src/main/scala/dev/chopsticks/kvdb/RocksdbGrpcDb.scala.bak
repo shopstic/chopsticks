@@ -10,7 +10,7 @@ import dev.chopsticks.db.RocksdbInterface.ColumnFamily
 import dev.chopsticks.grpc_akka.client.GrpcAkkaClientOneToStreamCallSource
 import dev.chopsticks.proto.db.RocksdbServiceGrpc.RocksdbServiceStub
 import dev.chopsticks.proto.db._
-import dev.chopsticks.util.RocksdbUtils.RecordPair
+import dev.chopsticks.kvdb.util.RocksdbUtils.RecordPair
 import io.grpc.netty.NettyChannelBuilder
 import io.grpc.{ClientCall, ManagedChannel, Metadata}
 import scalaz.zio.Task

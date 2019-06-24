@@ -1,4 +1,4 @@
-package dev.chopsticks.codec
+package dev.chopsticks.kvdb.codec
 
 import scala.util.control.NoStackTrace
 

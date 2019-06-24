@@ -1,8 +1,9 @@
-package dev.chopsticks.codec
+package dev.chopsticks.kvdb.codec
 
 import java.time.Instant
 
-import dev.chopsticks.codec.DbValueCodecs.{DbValueDecodeResult, FromDbValue, GenericDecodingException, ToDbValue}
+import dev.chopsticks.kvdb.codec.DbValueCodecs.{DbValueDecodeResult, FromDbValue, GenericDecodingException, ToDbValue}
+import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import scalapb._
 
 import scala.util.control.NonFatal
@@ -64,8 +65,8 @@ object DbValue {
   }
 
   implicit val instantDbValue: DbValue[Instant] = create[Instant](v => {
-    ProtoMappers.instantToEpochNanos(v).toByteArray
+    KvdbSerdesUtils.instantToEpochNanos(v).toByteArray
   }, v => {
-    Right(ProtoMappers.epochNanosToInstant(BigInt(v)))
+    Right(KvdbSerdesUtils.epochNanosToInstant(BigInt(v)))
   })
 }

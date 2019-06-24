@@ -10,13 +10,13 @@ import akka.stream.scaladsl.{Merge, Source}
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.codec.DbKey
-import dev.chopsticks.codec.DbKeyConstraints.Implicits._
+import dev.chopsticks.kvdb.codec.DbKey
+import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
 import dev.chopsticks.kvdb.DbInterface.{keySatisfies, DbDefinition}
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
-import dev.chopsticks.util.DbUtils._
+import dev.chopsticks.kvdb.util.DbUtils._
 import org.lmdbjava._
 import scalaz.zio.blocking._
 import scalaz.zio.clock.Clock

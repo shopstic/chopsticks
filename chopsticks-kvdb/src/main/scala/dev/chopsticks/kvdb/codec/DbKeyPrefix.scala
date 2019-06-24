@@ -1,11 +1,12 @@
-package dev.chopsticks.codec
+package dev.chopsticks.kvdb.codec
 
 import com.sleepycat.bind.tuple.TupleOutput
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.codec.DbKeyCodecs.ToDbKey
+import dev.chopsticks.kvdb.codec.DbKeyCodecs.ToDbKey
 import shapeless.ops.hlist.{IsHCons, Length, Take}
 import shapeless.{Generic, HList, Nat}
 import UnusedImplicits._
+import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 
 import scala.annotation.implicitNotFound
 
@@ -86,4 +87,7 @@ trait DbKeyPrefixPriority1Implicits extends DbKeyPrefixPriority2Implicits {
 
 object DbKeyPrefix extends DbKeyPrefixPriority1Implicits {
   def apply[A, B](implicit e: DbKeyPrefix[A, B]): DbKeyPrefix[A, B] = e
+
+  implicit val literalStringDbKeyPrefix: DbKeyPrefix[String, String] = (a: String) =>
+    KvdbSerdesUtils.stringToByteArray(a)
 }

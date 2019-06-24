@@ -4,14 +4,22 @@ import akka.NotUsed
 import akka.stream.scaladsl.Source
 import enumeratum.EnumEntry
 import enumeratum.EnumEntry.Snakecase
-import dev.chopsticks.codec.DbKeyCodecs.DbKeyDecodeResult
-import dev.chopsticks.codec.DbValueCodecs.DbValueDecodeResult
-import dev.chopsticks.codec.{DbKey, DbValue}
+import dev.chopsticks.kvdb.codec.DbKeyCodecs.DbKeyDecodeResult
+import dev.chopsticks.kvdb.codec.DbValueCodecs.DbValueDecodeResult
+import dev.chopsticks.kvdb.codec.{DbKey, DbValue}
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
+import dev.chopsticks.kvdb.util.DbUtils.{
+  DbBatch,
+  DbClientOptions,
+  DbIndexedTailBatch,
+  DbPair,
+  DbTailBatch,
+  DbTailValueBatch,
+  DbValueBatch
+}
+import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
-import dev.chopsticks.util.DbUtils._
-import dev.chopsticks.util.RocksdbCFBuilder.RocksdbCFOptions
 import scalaz.zio.blocking.Blocking
 import scalaz.zio.clock.Clock
 import scalaz.zio.{Task, TaskR}

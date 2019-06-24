@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb
 
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.util.RocksdbCFBuilder.RocksdbCFOptions
+import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import pureconfig.generic.FieldCoproductHint
 import pureconfig.{KebabCase, PascalCase}
 import squants.information.Information
@@ -88,8 +88,8 @@ object DbFactory {
             (
               definition.columns.withName(k).asInstanceOf[DbDef#BaseCol[_, _]],
               RocksdbCFOptions(
-                memoryBudget = v.memoryBudget.toBytes.toLong,
-                blockCache = v.blockCache.toBytes.toLong,
+                memoryBudget = v.memoryBudget,
+                blockCache = v.blockCache,
                 minPrefixLength = 0
               )
             )

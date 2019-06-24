@@ -1,9 +1,10 @@
-package dev.chopsticks.codec
+package dev.chopsticks.kvdb.codec
 
 import java.time._
 
 import com.sleepycat.bind.tuple.{TupleInput, TupleOutput}
 import com.typesafe.scalalogging.StrictLogging
+import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import shapeless._
 
@@ -43,8 +44,11 @@ object DbKeyCodecs extends StrictLogging {
     implicit val ldToDbKey: ToDbKey[LocalDate] = create(
       (o, v) => longToDbKey.encode(o, ProtoMappers.localDateLongMapper.toBase(v))
     )
+    implicit val ldtToDbKey: ToDbKey[LocalDateTime] = create { (o, v) =>
+      o.writeBigInteger(KvdbSerdesUtils.localDateTimeToEpochNanos(v).underlying)
+    }
     implicit val instantToDbKey: ToDbKey[Instant] = create { (o, v) =>
-      o.writeBigInteger(ProtoMappers.instantToEpochNanos(v).underlying)
+      o.writeBigInteger(KvdbSerdesUtils.instantToEpochNanos(v).underlying)
     }
     implicit val ltToDbKey: ToDbKey[LocalTime] = create(
       (o, v) => longToDbKey.encode(o, ProtoMappers.localTimeMapper.toBase(v))
@@ -100,7 +104,7 @@ object DbKeyCodecs extends StrictLogging {
   }
 
   object FromDbKey extends ProductTypeClassCompanion[FromDbKey] {
-    import dev.chopsticks.codec.ProtoMappers._
+    import dev.chopsticks.kvdb.codec.ProtoMappers._
 
     def apply[V](implicit f: FromDbKey[V]): FromDbKey[V] = f
 
@@ -121,11 +125,14 @@ object DbKeyCodecs extends StrictLogging {
     implicit val booleanFromDbKey: FromDbKey[Boolean] = createTry(_.readBoolean)
 
     implicit val ldFromDbKey: FromDbKey[LocalDate] = protobufValueWithMapperFromDbKey[Long, LocalDate]
+    implicit val ldtFromDbKey: FromDbKey[LocalDateTime] = createTry { in: TupleInput =>
+      KvdbSerdesUtils.epochNanosToLocalDateTime(BigInt(in.readBigInteger()))
+    }
     implicit val ltFromDbKey: FromDbKey[LocalTime] = protobufValueWithMapperFromDbKey[Long, LocalTime]
     implicit val ymFromDbKey: FromDbKey[YearMonth] = protobufValueWithMapperFromDbKey[Long, YearMonth]
 
     implicit val instantFromDbKey: FromDbKey[Instant] = createTry { in: TupleInput =>
-      epochNanosToInstant(BigInt(in.readBigInteger()))
+      KvdbSerdesUtils.epochNanosToInstant(BigInt(in.readBigInteger()))
     }
 
     implicit val bigDecimalFromDbKey: FromDbKey[BigDecimal] = createTry(in => BigDecimal(in.readSortedBigDecimal))

@@ -1,4 +1,4 @@
-package dev.chopsticks.util
+package dev.chopsticks.kvdb.util
 
 import akka.http.scaladsl.marshalling.{Marshaller, PredefinedToEntityMarshallers, ToEntityMarshaller}
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity}

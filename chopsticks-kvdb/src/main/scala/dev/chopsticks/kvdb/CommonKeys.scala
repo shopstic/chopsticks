@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb
 
-import dev.chopsticks.codec.DbKey
+import dev.chopsticks.kvdb.codec.DbKey
 
 //noinspection TypeAnnotation
 object CommonKeys {

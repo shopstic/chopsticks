@@ -6,7 +6,7 @@ import "google/protobuf/wrappers.proto";
 package dev.chopsticks.proto.db;
 
 option (scalapb.options) = {
-  import: "dev.chopsticks.codec.ProtoMappers._"
+  import: "dev.chopsticks.kvdb.codec.ProtoMappers._"
 };
 
 message DbStats {

@@ -8,9 +8,9 @@ import com.github.dwickern.macros.NameOf._
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.db.DbInterface.{ColumnFamily, DbDefinition}
 import dev.chopsticks.proto.db.DbGet
-import dev.chopsticks.util.CommonUtils.byteArrayToString
-import dev.chopsticks.util.RocksdbUtils.RecordPair
-import dev.chopsticks.util.TopK
+import dev.chopsticks.kvdb.util.CommonUtils.byteArrayToString
+import dev.chopsticks.kvdb.util.RocksdbUtils.RecordPair
+import dev.chopsticks.kvdb.util.TopK
 import io.prometheus.client.{Counter, Histogram}
 import scalaz.zio.Task
 import monix.execution.atomic.Atomic

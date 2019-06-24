@@ -13,16 +13,16 @@ import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import enumeratum.EnumEntry.Snakecase
 import enumeratum.{Enum, EnumEntry}
-import dev.chopsticks.codec.DbKey
-import dev.chopsticks.codec.DbKeyConstraints.Implicits._
+import dev.chopsticks.kvdb.codec.DbKey
+import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
 import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
-import dev.chopsticks.util.DbUtils._
-import dev.chopsticks.util.RocksdbCFBuilder.RocksdbCFOptions
-import dev.chopsticks.util.RocksdbUtils._
-import dev.chopsticks.util.{RocksdbCFBuilder, RocksdbUtils}
+import dev.chopsticks.kvdb.util.DbUtils._
+import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
+import dev.chopsticks.kvdb.util.RocksdbUtils._
+import dev.chopsticks.kvdb.util.{RocksdbCFBuilder, RocksdbUtils}
 import org.rocksdb._
 import scalaz.zio.blocking._
 import scalaz.zio.clock.Clock
