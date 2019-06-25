@@ -72,6 +72,14 @@ lazy val kvdb = Build
   )
   .dependsOn(util, fp, stream, testkit % "test->compile")
 
+lazy val sample = Build
+  .defineProject("sample")
+  .settings(
+    libraryDependencies ++= janinoDeps,
+    publish / skip := true
+  )
+  .dependsOn(kvdb)
+
 lazy val root = (project in file("."))
   .enablePlugins(SymlinkTargetPlugin)
   .settings(

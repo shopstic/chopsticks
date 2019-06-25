@@ -29,4 +29,11 @@ object PureconfigLoader {
       case Right(cfg) => Right(cfg)
     }
   }
+
+  def unsafeLoad[Cfg: ConfigReader](config: Config, namespace: String): Cfg = {
+    load(config, namespace) match {
+      case Right(cfg) => cfg
+      case Left(error) => throw new IllegalArgumentException("\n" + error)
+    }
+  }
 }

@@ -187,13 +187,15 @@ final class RocksdbDb[DbDef <: DbDefinition](
     (col, b1.build())
   }.toMap
 
+  private val coreCount: Int = Runtime.getRuntime.availableProcessors() / 2
   private lazy val dbOptions: DBOptions = {
     val options = new DBOptions()
 
     val totalWriteBufferSize = columnOptions.values.map(_.writeBufferSize()).sum
 
     options
-      .setMaxBackgroundCompactions(Runtime.getRuntime.availableProcessors() / 2)
+      .setIncreaseParallelism(coreCount)
+      .setMaxBackgroundCompactions(coreCount)
       .setMaxOpenFiles(-1)
       .setKeepLogFileNum(3)
       .setMaxTotalWalSize(totalWriteBufferSize * 8)
@@ -776,7 +778,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  def closeTask(): TaskR[Blocking with Clock, Unit] = {
+  def closeTask(): TaskR[Clock, Unit] = {
     import scalaz.zio.duration._
 
     for {
@@ -788,7 +790,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
       _ <- Task(dbCloseSignal.tryComplete(Failure(DbClosedException)))
       _ <- Task(dbCloseSignal.hasNoListeners)
         .repeat(ZSchedule.fixed(100.millis).untilInput[Boolean](identity))
-      _ <- blocking(Task {
+      _ <- ioTask(Task {
         val DbReferences(db, columnHandleMap, _, stats) = refs
         stats.close()
         columnHandleMap.values.foreach { c =>

@@ -10,15 +10,14 @@ import akka.stream.scaladsl.{Merge, Source}
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
+import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.DbInterface.{keySatisfies, DbDefinition}
 import dev.chopsticks.kvdb.codec.DbKey
 import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
-import dev.chopsticks.kvdb.DbInterface.{keySatisfies, DbDefinition}
-import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
-import dev.chopsticks.kvdb.util.DbUtils._
 import org.lmdbjava._
-import scalaz.zio.blocking._
 import scalaz.zio.clock.Clock
 import scalaz.zio.internal.Executor
 import scalaz.zio.{Task, TaskR, ZSchedule}
@@ -681,7 +680,7 @@ final class LmdbDb[DbDef <: DbDefinition](
     } yield ())
   }
 
-  def closeTask(): TaskR[Blocking with Clock, Unit] = {
+  def closeTask(): TaskR[Clock, Unit] = {
     import scalaz.zio.duration._
 
     val task = for {
@@ -690,14 +689,14 @@ final class LmdbDb[DbDef <: DbDefinition](
         if (isClosed) Task.unit
         else Task.fail(DbClosedException)
       }
-      _ <- blocking(Task {
+      _ <- readTask(Task {
         writeExecutor.shutdown()
         writeExecutor.awaitTermination(10, TimeUnit.SECONDS)
       })
       _ <- Task(dbCloseSignal.tryComplete(Failure(DbClosedException)))
       _ <- Task(dbCloseSignal.hasNoListeners)
         .repeat(ZSchedule.fixed(100.millis).untilInput[Boolean](identity))
-      _ <- blocking(Task {
+      _ <- readTask(Task {
         refs.dbiMap.foreach(_._2.close())
         refs.env.close()
       })

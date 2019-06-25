@@ -1,17 +1,18 @@
-<configuration debug="true">
+<configuration>
+  <jmxConfigurator />
   <appender name="STDOUT_AKKA" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>%X{akkaTimestamp} [%.-1level] [%logger] [%.15thread] [%X{akkaSource}] %msg%n</pattern>
+      <pattern>%X{akkaTimestamp} [%.-1level] [%logger{15}] [%.15thread] [%X{akkaSource}] %msg%n</pattern>
     </encoder>
-<!--    <filter class="ch.qos.logback.core.filter.EvaluatorFilter">-->
-<!--      <evaluator>-->
-<!--        <expression>-->
-<!--          return logger == "akka.util.ManifestInfo" &amp;&amp; message.contains("Detected possible incompatible versions on the classpath");-->
-<!--        </expression>-->
-<!--      </evaluator>-->
-<!--      <OnMismatch>NEUTRAL</OnMismatch>-->
-<!--      <OnMatch>DENY</OnMatch>-->
-<!--    </filter>-->
+    <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+      <evaluator>
+        <expression>
+          return logger == "akka.util.ManifestInfo" &amp;&amp; message.contains("Detected possible incompatible versions on the classpath");
+        </expression>
+      </evaluator>
+      <OnMismatch>NEUTRAL</OnMismatch>
+      <OnMatch>DENY</OnMatch>
+    </filter>
     <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
       <evaluator>
         <expression>
@@ -25,7 +26,7 @@
 
   <appender name="STDOUT_NONAKKA" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>%date{ISO8601} [%.-1level] [%logger] [%.15thread] %msg%n</pattern>
+      <pattern>%date{ISO8601} [%.-1level] [%logger{15}] [%.15thread] %msg%n</pattern>
     </encoder>
   </appender>
 
@@ -33,6 +34,8 @@
     <appender-ref ref="STDOUT_NONAKKA"/>
   </root>
 
+  <logger name="io.netty" level="${log.netty:-inherited}"/>
+  <logger name="io.grpc.netty" level="${log.netty:-inherited}"/>
   <logger name="akka" level="${log.akka:-inherited}" additivity="false">
     <appender-ref ref="STDOUT_AKKA"/>
   </logger>

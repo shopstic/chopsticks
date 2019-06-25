@@ -5,10 +5,9 @@ import java.nio.charset.StandardCharsets
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.ByteString
-import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.proto.db.{DbDeletePrefixRequest, DbDeleteRequest, DbPutRequest, DbTransactionAction}
-import scalaz.zio.blocking.Blocking
 import scalaz.zio.clock.Clock
 import scalaz.zio.{Task, TaskR}
 
@@ -116,7 +115,7 @@ final class DbClient[DbDef <: DbDefinition] private (val db: DbInterface[DbDef])
 
   def statsTask: Task[Map[String, Double]] = db.statsTask
 
-  def closeTask(): TaskR[Blocking with Clock, Unit] = db.closeTask()
+  def closeTask(): TaskR[Clock, Unit] = db.closeTask()
 
   def compactTask(): Task[Unit] = db.compactTask()
 

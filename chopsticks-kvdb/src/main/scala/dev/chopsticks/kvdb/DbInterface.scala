@@ -2,25 +2,16 @@ package dev.chopsticks.kvdb
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import enumeratum.EnumEntry
-import enumeratum.EnumEntry.Snakecase
+import dev.chopsticks.kvdb.DbInterface.DbDefinition
 import dev.chopsticks.kvdb.codec.DbKeyCodecs.DbKeyDecodeResult
 import dev.chopsticks.kvdb.codec.DbValueCodecs.DbValueDecodeResult
 import dev.chopsticks.kvdb.codec.{DbKey, DbValue}
-import dev.chopsticks.kvdb.DbInterface.DbDefinition
-import dev.chopsticks.kvdb.util.DbUtils.{
-  DbBatch,
-  DbClientOptions,
-  DbIndexedTailBatch,
-  DbPair,
-  DbTailBatch,
-  DbTailValueBatch,
-  DbValueBatch
-}
+import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
-import scalaz.zio.blocking.Blocking
+import enumeratum.EnumEntry
+import enumeratum.EnumEntry.Snakecase
 import scalaz.zio.clock.Clock
 import scalaz.zio.{Task, TaskR}
 
@@ -152,7 +143,7 @@ trait DbInterface[DbDef <: DbDefinition] {
 
   def dropColumnFamily[Col <: DbDef#BaseCol[_, _]](column: Col): Task[Unit]
 
-  def closeTask(): TaskR[Blocking with Clock, Unit]
+  def closeTask(): TaskR[Clock, Unit]
 
   def compactTask(): Task[Unit]
 

@@ -10,6 +10,7 @@ import squants.information.Information
 import scala.concurrent.duration._
 
 object DbFactory {
+  private val DEFAULT_DB_IO_DISPATCHER = "dev.chopsticks.kvdb.db-io-dispatcher"
 
   sealed trait DbClientConfig
 
@@ -35,14 +36,14 @@ object DbFactory {
     readOnly: Boolean = false,
     startWithBulkInserts: Boolean = false,
     columns: Map[String, RocksdbColumnFamilyConfig] = Map.empty[String, RocksdbColumnFamilyConfig],
-    ioDispatcher: String = "gr.db-io-dispatcher"
+    ioDispatcher: String = DEFAULT_DB_IO_DISPATCHER
   ) extends DbClientConfig
 
   final case class LmdbDbClientConfig(
     path: String,
     maxSize: Information,
     noSync: Boolean = false,
-    ioDispatcher: String = "gr.db-io-dispatcher"
+    ioDispatcher: String = DEFAULT_DB_IO_DISPATCHER
   ) extends DbClientConfig
 
   final case class RemoteDbClientConfig(

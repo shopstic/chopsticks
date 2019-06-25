@@ -8,7 +8,7 @@ import akka.http.scaladsl.coding.{Deflate, Gzip}
 import akka.http.scaladsl.marshalling.{Marshal, ToEntityMarshaller}
 import akka.http.scaladsl.model.headers.{`Content-Encoding`, HttpEncodings, RawHeader}
 import akka.http.scaladsl.model.ws._
-import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse, RequestEntity, StatusCode, Uri}
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshal}
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.stream.{Materializer, OverflowStrategy, QueueOfferResult, StreamTcpException}
@@ -17,19 +17,18 @@ import akka.{Done, NotUsed}
 import cats.syntax.show._
 import com.google.protobuf.{CodedInputStream, ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
+import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.kvdb.DbWebSocketClientResponseByteStringHandler.UpstreamCompletedBeforeExplicitCompletionSignalException
 import dev.chopsticks.kvdb.HttpDbServer.VALIDATION_REJECTION_REASON_HEADER_NAME
-import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
+import dev.chopsticks.kvdb.util.AkkaHttpProtobufSupport._
+import dev.chopsticks.kvdb.util.DbUtils
+import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.proto.db.DbTailItemValueBatch.Value
 import dev.chopsticks.proto.db._
 import dev.chopsticks.stream.{AkkaStreamUtils, LastStateFlow}
-import dev.chopsticks.kvdb.util.DbUtils._
-import dev.chopsticks.kvdb.util.AkkaHttpProtobufSupport._
-import dev.chopsticks.kvdb.util.DbUtils
 import org.xerial.snappy.{SnappyCodec, SnappyInputStream}
-import scalaz.zio.blocking.Blocking
 import scalaz.zio.clock.Clock
 import scalaz.zio.{Task, TaskR, ZIO}
 
@@ -702,7 +701,7 @@ final class HttpDb[DbDef <: DbDefinition](
       .map { case DbPingResponse(pong) => assert(pong == uuid) }
   }
 
-  def closeTask(): TaskR[Blocking with Clock, Unit] = ZIO.unit
+  def closeTask(): TaskR[Clock, Unit] = ZIO.unit
 
   type TailLastState = Option[Either[Exception, MaybeLastKey]]
 

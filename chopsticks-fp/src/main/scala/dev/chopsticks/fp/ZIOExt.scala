@@ -22,17 +22,17 @@ object ZIOExt {
       scalaz.zio.duration.Duration.fromScala(d)
 
     implicit final class TaskExtensions[A](io: Task[A]) {
-      def withResultLogging(name: String, result: A => String)(implicit ctx: LogCtx): TaskR[MeasuredLogging, A] = {
-        new ZIOExtensions(io).withResultLogging(name, result)
+      def resultTimed(name: String, result: A => String)(implicit ctx: LogCtx): TaskR[MeasuredLogging, A] = {
+        new ZIOExtensions(io).resultTimed(name, result)
       }
 
-      def withLogging(name: String)(implicit ctx: LogCtx): TaskR[MeasuredLogging, A] = {
-        new ZIOExtensions(io).withLogging(name)
+      def timed(name: String)(implicit ctx: LogCtx): TaskR[MeasuredLogging, A] = {
+        new ZIOExtensions(io).timed(name)
       }
     }
 
     implicit final class ZIOExtensions[R >: Nothing, E <: Any, A](io: ZIO[R, E, A]) {
-      def withResultLogging(name: String, result: A => String)(
+      def resultTimed(name: String, result: A => String)(
         implicit ctx: LogCtx
       ): ZIO[R with MeasuredLogging, E, A] = {
         val start: ZIO[R with MeasuredLogging, E, Long] = nanoTime <* ZLogger.info(s"[$name] started")
@@ -55,8 +55,8 @@ object ZIOExt {
         }((_: Long) => io)
       }
 
-      def withLogging(name: String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
-        withResultLogging(name, _ => "completed")
+      def timed(name: String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
+        resultTimed(name, _ => "completed")
       }
     }
   }
