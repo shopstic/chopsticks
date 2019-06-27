@@ -1,17 +1,18 @@
 package dev.chopsticks.util.config
 
-import java.time.{LocalDate, LocalDateTime, LocalTime, Duration => JavaDuration}
 import java.time.format.DateTimeFormatter
+import java.time.{LocalDate, LocalDateTime, LocalTime, Duration => JavaDuration}
 
 import akka.actor.ActorPath
 import akka.util.{ByteString, Timeout}
-import pureconfig.ConfigConvert
 import pureconfig.ConfigConvert.{viaNonEmptyString, viaNonEmptyStringTry, viaString}
 import pureconfig.ConvertHelpers.catchReadError
-import pureconfig.generic.ProductHint
+import pureconfig.generic.{ExportMacros, ProductHint}
+import pureconfig.{ConfigConvert, ConfigReader, ConfigWriter, Exported}
 import squants.information.Information
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.language.experimental.macros
 
 object PureconfigConverters {
   import pureconfig.configurable.{localDateConfigConvert, localTimeConfigConvert}
@@ -50,4 +51,6 @@ object PureconfigConverters {
   implicit val intMapConfigConverter: ConfigConvert[Map[Int, Int]] = {
     ConfigConvert[Map[String, Int]].xmap(_.map(p => (p._1.toInt, p._2)), _.map(p => (p._1.toString, p._2)))
   }
+  implicit def exportReader[A]: Exported[ConfigReader[A]] = macro ExportMacros.exportDerivedReader[A]
+  implicit def exportWriter[A]: Exported[ConfigWriter[A]] = macro ExportMacros.exportDerivedWriter[A]
 }

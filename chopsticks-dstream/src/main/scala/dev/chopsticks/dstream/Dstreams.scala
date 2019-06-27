@@ -55,11 +55,11 @@ object Dstreams extends LoggingContext {
 
     ZManaged.make(
       acquire
-        .resultTimed("dstream server startup", b => s"Dstream server bound: ${b.localAddress}")
+        .logResult("dstream server startup", b => s"Dstream server bound: ${b.localAddress}")
     ) { binding =>
       Task
         .fromFuture(_ => binding.terminate(10.seconds))
-        .timed("dstream server teardown")
+        .log("dstream server teardown")
         .map(_ => ())
         .catchAll(e => ZLogger.error("Failed unbinding dstream server", e))
     }
@@ -81,11 +81,11 @@ object Dstreams extends LoggingContext {
 //            )
         }
         .flatMap(make)
-        .resultTimed("dstream client Startup", _ => s"dstream client created")
+        .logResult("dstream client Startup", _ => s"dstream client created")
     ) { client =>
       Task
         .fromFuture(_ => client.close())
-        .timed("dstream client teardown")
+        .log("dstream client teardown")
         .map(_ => ())
         .catchAll(e => ZLogger.error("Failed closing dstream client", e))
     }
@@ -96,11 +96,11 @@ object Dstreams extends LoggingContext {
   ): ZManaged[R with MeasuredLogging, E, Client] = {
     ZManaged.make(
       make
-        .resultTimed("dstream client Startup", _ => s"dstream client created")
+        .logResult("dstream client Startup", _ => s"dstream client created")
     ) { client =>
       Task
         .fromFuture(_ => client.close())
-        .timed("dstream client teardown")
+        .log("dstream client teardown")
         .map(_ => ())
         .catchAll(e => ZLogger.error("Failed closing dstream client", e))
     }
@@ -153,7 +153,7 @@ object Dstreams extends LoggingContext {
       .foreachPar(1 to config.poolSize) { id =>
         work(requestBuilder.addHeader(WORKER_ID_HEADER, id.toString).addHeader(WORKER_NODE_HEADER, config.nodeId))(
           makeSource
-        ).resultTimed(s"dstream-worker-$id", _.toString)
+        ).logResult(s"dstream-worker-$id", _.toString)
           .forever
           .retry(retrySchedule)
       }

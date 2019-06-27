@@ -27,7 +27,7 @@ object KvdbTestSampleApp extends AkkaApp {
   type Env = AkkaApp.Env with CfgEnv with DummyTestKvdbEnv
 
   protected def createEnv(untypedConfig: Config): ZManaged[AkkaApp.Env, Nothing, Env] = {
-    import pureconfig.generic.auto._
+//    import pureconfig.generic.auto._
     import dev.chopsticks.util.config.PureconfigConverters._
 
     val envR = for {
@@ -35,7 +35,7 @@ object KvdbTestSampleApp extends AkkaApp {
       typedConfig = PureconfigLoader.unsafeLoad[AppConfig](untypedConfig, "app")
       db <- createManagedKvdbClient(DummyTestKvdb, typedConfig.db)
     } yield new AkkaApp.LiveEnv with CfgEnv with DummyTestKvdbEnv {
-      implicit lazy val actorSystem: ActorSystem = akkaEnv.actorSystem
+      implicit val actorSystem: ActorSystem = akkaEnv.actorSystem
       val dummyTestKvdb: DbClient[DummyTestKvdb.type] = db
       val config: AppConfig = typedConfig
     }
@@ -52,10 +52,10 @@ object KvdbTestSampleApp extends AkkaApp {
         dbClient <- ZIO.access[Clock with LogEnv with AkkaEnv] { implicit env =>
           DbClient[DbDef](DbFactory[DbDef](definition, dbClientConfig))
         }
-        _ <- dbClient.open().timed("Open db")
+        _ <- dbClient.open().log("Open db")
       } yield dbClient
     } { dbClient =>
-      dbClient.closeTask().timed("Close db").catchAll(e => ZLogger.error(s"Failed closing database", e))
+      dbClient.closeTask().log("Close db").catchAll(e => ZLogger.error(s"Failed closing database", e))
     }
   }
 

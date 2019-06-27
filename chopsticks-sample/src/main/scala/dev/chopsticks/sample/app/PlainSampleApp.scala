@@ -13,7 +13,7 @@ object PlainSampleApp extends AkkaApp {
   type Env = AkkaApp.Env with Cfg
 
   protected def createEnv(rawConfig: Config): ZManaged[AkkaApp.Env, Nothing, Env] = {
-    import pureconfig.generic.auto._
+    import dev.chopsticks.util.config.PureconfigConverters._
 
     ZManaged
       .environment[AkkaApp.Env]
