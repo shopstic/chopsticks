@@ -13,7 +13,7 @@ import dev.chopsticks.proto.db._
 import dev.chopsticks.kvdb.util.RocksdbUtils.RecordPair
 import io.grpc.netty.NettyChannelBuilder
 import io.grpc.{ClientCall, ManagedChannel, Metadata}
-import scalaz.zio.Task
+import zio.Task
 
 import scala.concurrent.blocking
 import scala.concurrent.duration.FiniteDuration

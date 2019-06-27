@@ -13,7 +13,7 @@ import dev.chopsticks.kvdb.util.DbUtils.{DbClientOptions, DbTailBatch}
 import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
 import dev.chopsticks.stream.AkkaStreamUtils
-import scalaz.zio.Task
+import zio.Task
 
 import scala.collection.immutable.Queue
 import scala.collection.{breakOut, mutable}

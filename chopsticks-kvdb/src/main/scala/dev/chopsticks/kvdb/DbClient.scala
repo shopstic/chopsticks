@@ -8,8 +8,8 @@ import com.google.protobuf.ByteString
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.proto.db.{DbDeletePrefixRequest, DbDeleteRequest, DbPutRequest, DbTransactionAction}
-import scalaz.zio.clock.Clock
-import scalaz.zio.{Task, TaskR}
+import zio.clock.Clock
+import zio.{Task, TaskR}
 
 import scala.concurrent.Future
 import scala.language.higherKinds

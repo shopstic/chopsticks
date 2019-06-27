@@ -3,7 +3,7 @@ package dev.chopsticks.kvdb
 import dev.chopsticks.kvdb.DbTest.{DbTest, TestDb}
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv}
 import org.scalatest.Assertion
-import scalaz.zio.{Task, TaskR, UIO, ZIO}
+import zio.{Task, TaskR, UIO, ZIO}
 
 class LmdbDbTest extends DbTest {
   protected val runTest: (DbInterface[DbTest.TestDb.type] => Task[Assertion]) => TaskR[AkkaApp.Env, Assertion] =

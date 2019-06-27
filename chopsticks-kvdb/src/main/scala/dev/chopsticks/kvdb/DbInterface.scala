@@ -12,8 +12,8 @@ import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
 import enumeratum.EnumEntry
 import enumeratum.EnumEntry.Snakecase
-import scalaz.zio.clock.Clock
-import scalaz.zio.{Task, TaskR}
+import zio.clock.Clock
+import zio.{Task, TaskR}
 
 import scala.concurrent.Future
 import scala.language.higherKinds

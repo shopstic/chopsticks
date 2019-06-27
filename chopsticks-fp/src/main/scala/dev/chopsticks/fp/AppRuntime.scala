@@ -1,7 +1,7 @@
 package dev.chopsticks.fp
-import scalaz.zio.{IO, ZIO}
+import zio.{IO, ZIO}
 
-trait AppRuntime[R] extends scalaz.zio.Runtime[R] {
+trait AppRuntime[R] extends zio.Runtime[R] {
 
   /**
     * The main function of the application, which will be passed the command-line

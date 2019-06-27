@@ -18,9 +18,9 @@ import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.proto.db.DbKeyConstraint.Operator
 import dev.chopsticks.proto.db._
 import org.lmdbjava._
-import scalaz.zio.clock.Clock
-import scalaz.zio.internal.Executor
-import scalaz.zio.{Task, TaskR, ZSchedule}
+import zio.clock.Clock
+import zio.internal.Executor
+import zio.{Task, TaskR, ZSchedule}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
@@ -681,7 +681,7 @@ final class LmdbDb[DbDef <: DbDefinition](
   }
 
   def closeTask(): TaskR[Clock, Unit] = {
-    import scalaz.zio.duration._
+    import zio.duration._
 
     val task = for {
       refs <- references

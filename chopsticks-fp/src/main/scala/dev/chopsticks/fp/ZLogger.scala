@@ -1,6 +1,6 @@
 package dev.chopsticks.fp
 
-import scalaz.zio.ZIO
+import zio.ZIO
 
 object ZLogger {
   def debug(message: String)(implicit ctx: LogCtx): ZIO[LogEnv, Nothing, Unit] = {

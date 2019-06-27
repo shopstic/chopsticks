@@ -29,8 +29,8 @@ import dev.chopsticks.proto.db.DbTailItemValueBatch.Value
 import dev.chopsticks.proto.db._
 import dev.chopsticks.stream.{AkkaStreamUtils, LastStateFlow}
 import org.xerial.snappy.{SnappyCodec, SnappyInputStream}
-import scalaz.zio.clock.Clock
-import scalaz.zio.{Task, TaskR, ZIO}
+import zio.clock.Clock
+import zio.{Task, TaskR, ZIO}
 
 import scala.collection.mutable
 import scala.concurrent.duration.{Duration, FiniteDuration}

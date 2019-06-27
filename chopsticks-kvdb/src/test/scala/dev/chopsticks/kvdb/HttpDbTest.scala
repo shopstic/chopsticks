@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import dev.chopsticks.kvdb.DbTest.{DbTest, TestDb}
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv}
 import org.scalatest.Assertion
-import scalaz.zio.{Task, TaskR, UIO, ZIO}
+import zio.{Task, TaskR, UIO, ZIO}
 
 import scala.concurrent.TimeoutException
 
@@ -52,6 +52,6 @@ class HttpDbTest extends DbTest {
               }
           } yield ret
         }
-      }.timeoutFail(new TimeoutException("Test timed out"))(scalaz.zio.duration.Duration(15, TimeUnit.SECONDS))
+      }.timeoutFail(new TimeoutException("Test timed out"))(zio.duration.Duration(15, TimeUnit.SECONDS))
   }
 }

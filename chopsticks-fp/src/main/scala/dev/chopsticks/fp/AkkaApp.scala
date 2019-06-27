@@ -4,15 +4,14 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigRes
 import kamon.Kamon
 import kamon.system.SystemMetrics
 import pureconfig.{KebabCase, PascalCase}
-import scalaz.zio
-import scalaz.zio.Exit.Cause.Traced
-import scalaz.zio.blocking.Blocking
-import scalaz.zio.clock.Clock
-import scalaz.zio.console.Console
-import scalaz.zio.internal.{Platform, PlatformLive}
-import scalaz.zio.random.Random
-import scalaz.zio.system.System
-import scalaz.zio.{FiberFailure, IO, TaskR, UIO, ZManaged, system}
+import zio.Exit.Cause.Traced
+import zio.blocking.Blocking
+import zio.clock.Clock
+import zio.console.Console
+import zio.internal.{Platform, PlatformLive}
+import zio.random.Random
+import zio.system.System
+import zio.{FiberFailure, IO, TaskR, UIO, ZManaged, system}
 
 import scala.util.Try
 

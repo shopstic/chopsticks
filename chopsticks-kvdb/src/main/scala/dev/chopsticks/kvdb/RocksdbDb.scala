@@ -24,10 +24,10 @@ import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import dev.chopsticks.kvdb.util.RocksdbUtils._
 import dev.chopsticks.kvdb.util.{RocksdbCFBuilder, RocksdbUtils}
 import org.rocksdb._
-import scalaz.zio.blocking._
-import scalaz.zio.clock.Clock
-import scalaz.zio.internal.Executor
-import scalaz.zio.{Task, TaskR, UIO, ZIO, ZSchedule}
+import zio.blocking._
+import zio.clock.Clock
+import zio.internal.Executor
+import zio.{Task, TaskR, UIO, ZIO, ZSchedule}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -779,7 +779,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
   }
 
   def closeTask(): TaskR[Clock, Unit] = {
-    import scalaz.zio.duration._
+    import zio.duration._
 
     for {
       refs <- references

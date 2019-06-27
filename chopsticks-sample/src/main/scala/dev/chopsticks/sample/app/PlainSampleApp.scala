@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import com.typesafe.config.Config
 import dev.chopsticks.fp.{AkkaApp, ConfigEnv, ZLogger}
 import dev.chopsticks.util.config.PureconfigLoader
-import scalaz.zio.{ZIO, ZManaged}
+import zio.{ZIO, ZManaged}
 
 object PlainSampleApp extends AkkaApp {
   final case class AppConfig(foo: Int, bar: String)

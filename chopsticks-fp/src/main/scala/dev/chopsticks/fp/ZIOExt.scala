@@ -4,8 +4,8 @@ import akka.NotUsed
 import akka.stream.scaladsl.{Flow, RunnableGraph}
 import akka.stream.{Attributes, UniqueKillSwitch}
 import dev.chopsticks.util.implicits.SquantsImplicits._
-import scalaz.zio._
-import scalaz.zio.clock.Clock
+import zio._
+import zio.clock.Clock
 import squants.time.Nanoseconds
 
 import scala.concurrent.duration.Duration
@@ -18,8 +18,8 @@ object ZIOExt {
   type MeasuredLogging = LogEnv with Clock
 
   object Implicits {
-    implicit def scalaToZioDuration(d: Duration): scalaz.zio.duration.Duration =
-      scalaz.zio.duration.Duration.fromScala(d)
+    implicit def scalaToZioDuration(d: Duration): zio.duration.Duration =
+      zio.duration.Duration.fromScala(d)
 
     implicit final class TaskExtensions[A](io: Task[A]) {
       def logResult(name: String, result: A => String)(implicit ctx: LogCtx): TaskR[MeasuredLogging, A] = {

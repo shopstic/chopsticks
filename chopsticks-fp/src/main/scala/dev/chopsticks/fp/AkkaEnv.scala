@@ -2,8 +2,8 @@ package dev.chopsticks.fp
 
 import akka.actor.ActorSystem
 import akka.stream.{ActorMaterializer, Materializer}
-import scalaz.zio.internal.PlatformLive
-import scalaz.zio.{Exit, IO, Runtime, Task, ZIO}
+import zio.internal.PlatformLive
+import zio.{Exit, IO, Runtime, Task, ZIO}
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
 

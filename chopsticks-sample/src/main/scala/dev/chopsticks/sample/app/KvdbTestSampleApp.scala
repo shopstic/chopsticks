@@ -14,8 +14,8 @@ import dev.chopsticks.kvdb.util.DbUtils.Implicits._
 import dev.chopsticks.kvdb.{DbClient, DbFactory}
 import dev.chopsticks.sample.kvdb.{DummyTestKvdb, DummyTestKvdbEnv}
 import dev.chopsticks.util.config.PureconfigLoader
-import scalaz.zio.clock.Clock
-import scalaz.zio.{TaskR, ZIO, ZManaged}
+import zio.clock.Clock
+import zio.{TaskR, ZIO, ZManaged}
 
 object KvdbTestSampleApp extends AkkaApp {
 

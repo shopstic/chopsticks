@@ -21,7 +21,7 @@ import dev.chopsticks.kvdb.util.DbUtils._
 import kamon.Kamon
 import kamon.metric.{CounterMetric, MeasurementUnit}
 import org.xerial.snappy.SnappyOutputStream
-import scalaz.zio.Task
+import zio.Task
 
 import scala.concurrent.Future
 

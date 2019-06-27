@@ -12,7 +12,7 @@ import dev.chopsticks.kvdb.util.CommonUtils.byteArrayToString
 import dev.chopsticks.kvdb.util.RocksdbUtils.RecordPair
 import dev.chopsticks.kvdb.util.TopK
 import io.prometheus.client.{Counter, Histogram}
-import scalaz.zio.Task
+import zio.Task
 import monix.execution.atomic.Atomic
 
 import scala.collection.mutable

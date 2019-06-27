@@ -5,8 +5,8 @@ import akka.grpc.scaladsl.Metadata
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import kamon.Kamon
-import scalaz.zio.stm.{STM, TRef}
-import scalaz.zio.{IO, Task, UIO}
+import zio.stm.{STM, TRef}
+import zio.{IO, Task, UIO}
 
 import scala.collection.immutable.Queue
 import scala.concurrent.ExecutionContext
@@ -26,7 +26,7 @@ object DstreamEnv {
     def report(assignment: Req): IO[InvalidAssignment[Req], Unit]
   }
 
-  abstract class LiveService[Req, Res](rt: scalaz.zio.Runtime[Any])(implicit mat: Materializer, ec: ExecutionContext)
+  abstract class LiveService[Req, Res](rt: zio.Runtime[Any])(implicit mat: Materializer, ec: ExecutionContext)
       extends Service[Req, Res] {
     protected val workerGauge = Kamon.gauge("dstream.server.workers")
     protected val attemptCounter = Kamon.counter("dstream.server.attempts")

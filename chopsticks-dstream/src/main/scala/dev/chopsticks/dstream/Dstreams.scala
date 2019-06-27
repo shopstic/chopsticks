@@ -13,8 +13,8 @@ import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.fp.ZIOExt.MeasuredLogging
 import dev.chopsticks.fp.ZIOExt.Implicits._
 import dev.chopsticks.fp.{AkkaEnv, LoggingContext, ZIOExt, ZLogger}
-import scalaz.zio.clock.Clock
-import scalaz.zio.{Task, TaskR, ZIO, ZManaged, ZSchedule}
+import zio.clock.Clock
+import zio.{Task, TaskR, ZIO, ZManaged, ZSchedule}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}

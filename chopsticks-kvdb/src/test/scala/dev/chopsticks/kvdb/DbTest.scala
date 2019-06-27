@@ -18,9 +18,9 @@ import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import dev.chopsticks.proto.db.{DbKeyConstraintList, DbKeyRange}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest._
-import scalaz.zio.blocking._
-import scalaz.zio.clock.Clock
-import scalaz.zio.{Task, TaskR, UIO}
+import zio.blocking._
+import zio.clock.Clock
+import zio.{Task, TaskR, UIO}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
 
 import scala.concurrent.Future
