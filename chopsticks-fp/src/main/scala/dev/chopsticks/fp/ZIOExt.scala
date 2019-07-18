@@ -97,10 +97,17 @@ object ZIOExt {
             }
           )(Task.fromTry(_))
 
-        task.onInterrupt(UIO {
-          if (graceful) ks.shutdown()
-          else ks.abort(new InterruptedException("Stream (interruptableGraph) was interrupted"))
-        } *> task.fold(e => env.logger.error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}", e), _ => ()))
+        task.onInterrupt(
+          UIO {
+            if (graceful) ks.shutdown()
+            else ks.abort(new InterruptedException("Stream (interruptableGraph) was interrupted"))
+          } *> task.fold(
+            e =>
+              env.logger
+                .error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}", e),
+            _ => ()
+          )
+        )
       }
     }
   }

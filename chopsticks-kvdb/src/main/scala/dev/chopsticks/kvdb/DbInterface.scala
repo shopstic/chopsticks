@@ -4,7 +4,7 @@ import akka.NotUsed
 import akka.stream.scaladsl.Source
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
 import dev.chopsticks.kvdb.codec.DbKeyDecoder.DbKeyDecodeResult
-import dev.chopsticks.kvdb.codec.DbValueCodecs.DbValueDecodeResult
+import dev.chopsticks.kvdb.codec.DbValueDecoder.DbValueDecodeResult
 import dev.chopsticks.kvdb.codec.{DbKey, DbValue}
 import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
@@ -21,8 +21,7 @@ import scala.language.higherKinds
 object DbInterface {
 
   abstract class DbColumn[K: DbKey, V: DbValue] extends EnumEntry with Snakecase {
-    // TODO Temporary override until migration is complete
-    lazy val id: String = this.getClass.getName.replaceAllLiterally("gr.db_def.", "gr.srv.db.")
+    lazy val id: String = this.getClass.getName
 
     def dbKey: DbKey[K] = implicitly[DbKey[K]]
     def dbValue: DbValue[V] = implicitly[DbValue[V]]

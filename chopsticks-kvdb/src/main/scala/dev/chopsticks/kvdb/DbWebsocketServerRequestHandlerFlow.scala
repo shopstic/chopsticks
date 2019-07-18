@@ -20,8 +20,8 @@ final class DbWebsocketServerRequestHandlerFlow extends GraphStage[FlowShape[Mes
 
   import DbWebsocketServerRequestHandlerFlow._
 
-  val inlet: Inlet[Message] = Inlet[Message]("RocksdbWebsocketServerRequestHandlerFlow.in")
-  val outlet: Outlet[Message] = Outlet[Message]("RocksdbWebsocketServerRequestHandlerFlow.out")
+  val inlet: Inlet[Message] = Inlet[Message]("DbWebsocketServerRequestHandlerFlow.in")
+  val outlet: Outlet[Message] = Outlet[Message]("DbWebsocketServerRequestHandlerFlow.out")
 
   override val shape = FlowShape(inlet, outlet)
 

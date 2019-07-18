@@ -10,9 +10,10 @@ import shapeless.{::, HList, HNil, ProductTypeClass, ProductTypeClassCompanion, 
 
 import scala.annotation.implicitNotFound
 import scala.util.control.NonFatal
-
-
-@implicitNotFound(msg = "Implicit BerkeleydbKeyDecoder[${T}] not found. Try supplying an implicit instance of BerkeleydbKeyDecoder[${T}]")
+@implicitNotFound(
+  msg =
+    "Implicit BerkeleydbKeyDecoder[${T}] not found. Try supplying an implicit instance of BerkeleydbKeyDecoder[${T}]"
+)
 trait BerkeleydbKeyDecoder[T] {
   def decode(in: TupleInput): DbKeyDecodeResult[T]
 }
@@ -22,12 +23,13 @@ object BerkeleydbKeyDecoder extends ProductTypeClassCompanion[BerkeleydbKeyDecod
 
   def apply[V](implicit f: BerkeleydbKeyDecoder[V]): BerkeleydbKeyDecoder[V] = f
 
-  private def createTry[T](f: TupleInput => T)(implicit typ: Typeable[T]): BerkeleydbKeyDecoder[T] = (in: TupleInput) => {
-    try Right(f(in))
-    catch {
-      case NonFatal(e) => Left(GenericDecodingException(s"Failed decoding to ${typ.describe}: ${e.toString}", e))
+  private def createTry[T](f: TupleInput => T)(implicit typ: Typeable[T]): BerkeleydbKeyDecoder[T] =
+    (in: TupleInput) => {
+      try Right(f(in))
+      catch {
+        case NonFatal(e) => Left(GenericDecodingException(s"Failed decoding to ${typ.describe}: ${e.toString}", e))
+      }
     }
-  }
 
   implicit val stringBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[String] = createTry(_.readString)
   implicit val intBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[Int] = createTry(_.readInt)
@@ -38,18 +40,23 @@ object BerkeleydbKeyDecoder extends ProductTypeClassCompanion[BerkeleydbKeyDecod
   implicit val floatBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[Float] = createTry(_.readSortedFloat)
   implicit val booleanBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[Boolean] = createTry(_.readBoolean)
 
-  implicit val ldBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[LocalDate] = protobufValueWithMapperBerkeleydbKeyDecoder[Long, LocalDate]
+  implicit val ldBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[LocalDate] =
+    protobufValueWithMapperBerkeleydbKeyDecoder[Long, LocalDate]
   implicit val ldtBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[LocalDateTime] = createTry { in: TupleInput =>
     KvdbSerdesUtils.epochNanosToLocalDateTime(BigInt(in.readBigInteger()))
   }
-  implicit val ltBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[LocalTime] = protobufValueWithMapperBerkeleydbKeyDecoder[Long, LocalTime]
-  implicit val ymBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[YearMonth] = protobufValueWithMapperBerkeleydbKeyDecoder[Long, YearMonth]
+  implicit val ltBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[LocalTime] =
+    protobufValueWithMapperBerkeleydbKeyDecoder[Long, LocalTime]
+  implicit val ymBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[YearMonth] =
+    protobufValueWithMapperBerkeleydbKeyDecoder[Long, YearMonth]
 
   implicit val instantBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[Instant] = createTry { in: TupleInput =>
     KvdbSerdesUtils.epochNanosToInstant(BigInt(in.readBigInteger()))
   }
 
-  implicit val bigDecimalBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[BigDecimal] = createTry(in => BigDecimal(in.readSortedBigDecimal))
+  implicit val bigDecimalBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[BigDecimal] = createTry(
+    in => BigDecimal(in.readSortedBigDecimal)
+  )
 
   def protobufValueWithMapperBerkeleydbKeyDecoder[U, V](
     implicit underlyingDecoder: BerkeleydbKeyDecoder[U],

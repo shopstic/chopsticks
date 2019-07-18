@@ -18,7 +18,8 @@ final private class DbKeyPrefixWithEncoder[A, B](encoder: DbKeyEncoder[A]) exten
 }
 
 trait DbKeyPrefixPriority3Implicits extends StrictLogging {
-  implicit def selfDbKeyPrefix[A](implicit encoder: DbKeyEncoder[A]): DbKeyPrefix[A, A] = new DbKeyPrefixWithEncoder(encoder)
+  implicit def selfDbKeyPrefix[A](implicit encoder: DbKeyEncoder[A]): DbKeyPrefix[A, A] =
+    new DbKeyPrefixWithEncoder(encoder)
 }
 
 trait DbKeyPrefixPriority2Implicits extends DbKeyPrefixPriority3Implicits {

@@ -24,8 +24,8 @@ object DbWebSocketClientResponseByteStringHandler {
 final class DbWebSocketClientResponseByteStringHandler extends GraphStage[FlowShape[ByteString, ByteString]] {
   import DbWebSocketClientResponseByteStringHandler._
 
-  val inlet: Inlet[ByteString] = Inlet[ByteString]("RocksdbWebSocketClientResponseHandler.in")
-  val outlet: Outlet[ByteString] = Outlet[ByteString]("RocksdbWebSocketClientResponseHandler.out")
+  val inlet: Inlet[ByteString] = Inlet[ByteString]("DbWebSocketClientResponseByteStringHandler.in")
+  val outlet: Outlet[ByteString] = Outlet[ByteString]("DbWebSocketClientResponseByteStringHandler.out")
 
   override val shape = FlowShape(inlet, outlet)
 

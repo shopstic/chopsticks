@@ -23,6 +23,7 @@ import zio.clock.Clock
 import zio.{Task, TaskR, UIO}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
 import dev.chopsticks.kvdb.codec.berkeleydb_key._
+import dev.chopsticks.kvdb.codec.protobuf_value._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
