@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package dev.chopsticks.sample.app.proto.dstream_sample_app;
+
+service DstreamSampleApp {
+  rpc Work (stream Result) returns (stream Assignment) {
+  }
+}
+
+message Assignment {
+  int32 valueIn = 1;
+}
+
+message Result {
+  int32 valueOut = 1;
+}
