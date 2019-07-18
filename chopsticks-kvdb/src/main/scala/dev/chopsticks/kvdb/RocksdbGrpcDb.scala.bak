@@ -8,8 +8,8 @@ import akka.stream.scaladsl.Source
 import com.google.protobuf.{ByteString => ProtoByteString}
 import dev.chopsticks.db.RocksdbInterface.ColumnFamily
 import dev.chopsticks.grpc_akka.client.GrpcAkkaClientOneToStreamCallSource
-import dev.chopsticks.proto.db.RocksdbServiceGrpc.RocksdbServiceStub
-import dev.chopsticks.proto.db._
+import dev.chopsticks.kvdb.proto.RocksdbServiceGrpc.RocksdbServiceStub
+import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.RocksdbUtils.RecordPair
 import io.grpc.netty.NettyChannelBuilder
 import io.grpc.{ClientCall, ManagedChannel, Metadata}

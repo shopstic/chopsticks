@@ -3,7 +3,7 @@ syntax = "proto3";
 import "scalapb/scalapb.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
-package dev.chopsticks.proto.db;
+package dev.chopsticks.kvdb.proto;
 
 option (scalapb.options) = {
   import: "dev.chopsticks.kvdb.codec.ProtoMappers._"

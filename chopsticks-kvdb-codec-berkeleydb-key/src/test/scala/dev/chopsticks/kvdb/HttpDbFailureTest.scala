@@ -19,7 +19,7 @@ import dev.chopsticks.kvdb.DbTest.TestDb
 import dev.chopsticks.kvdb.util.DbUtils.Implicits._
 import dev.chopsticks.kvdb.util.DbUtils.{DbIndexedTailBatch, DbPair, DbTailBatch}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
-import dev.chopsticks.proto.db._
+import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.{Assertion, AsyncWordSpecLike, Inside, Matchers}
 

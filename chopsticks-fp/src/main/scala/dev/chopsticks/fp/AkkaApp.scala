@@ -1,22 +1,23 @@
 package dev.chopsticks.fp
-import akka.actor.ActorSystem
+import akka.Done
+import akka.actor.CoordinatedShutdown.JvmExitReason
+import akka.actor.{ActorSystem, CoordinatedShutdown}
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
-import kamon.Kamon
-import kamon.system.SystemMetrics
 import pureconfig.{KebabCase, PascalCase}
-import zio.Exit.Cause.Traced
+import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.console.Console
-import zio.internal.{Platform, PlatformLive}
+import zio.internal.PlatformLive
+import zio.internal.tracing.TracingConfig
 import zio.random.Random
 import zio.system.System
-import zio.{FiberFailure, IO, TaskR, UIO, ZManaged, system}
 
 import scala.util.Try
+import scala.util.control.NonFatal
 
 object AkkaApp {
-  type Env = Clock with Console with system.System with Random with Blocking with AkkaEnv with LogEnv
+  type Env = Clock with Console with system.System with Random with Blocking with AkkaEnv with LogEnv with MonEnv
   trait LiveEnv
       extends Clock.Live
       with Console.Live
@@ -24,6 +25,7 @@ object AkkaApp {
       with Random.Live
       with Blocking.Live
       with LogEnv.Live
+      with MonEnv.Live
       with AkkaEnv {
 //    override val blocking: Blocking.Service[Any] = new Blocking.Service[Any] {
 //      lazy val blockingExecutor: ZIO[Any, Nothing, Executor] = UIO(
@@ -44,12 +46,6 @@ trait AkkaApp extends LoggingContext {
 
   protected def run: TaskR[Env, Unit]
 
-  protected def setupMetrics(config: Config): Unit = {
-    Kamon.reconfigure(config)
-    Kamon.loadReportersFromConfig()
-    SystemMetrics.startCollecting()
-  }
-
   def main(args: Array[String]): Unit = {
     val appName = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replaceAllLiterally("$", "")))
     val appConfigName = this.getClass.getPackage.getName.replaceAllLiterally(".", "/") + "/" + appName
@@ -58,53 +54,50 @@ trait AkkaApp extends LoggingContext {
       ConfigParseOptions.defaults.setAllowMissing(false),
       ConfigResolveOptions.defaults
     )
-
-    setupMetrics(config)
-
     val as = createActorSystem(appName, config)
     val managedEnv: ZManaged[AkkaApp.Env, Nothing, Env] = createEnv(config)
+    val zioTracingEnabled = Try(config.getBoolean("zio.trace")).recover { case _ => true }.getOrElse(true)
+    val shutdown: CoordinatedShutdown = CoordinatedShutdown(as)
     val runtime: zio.Runtime[AkkaApp.Env] = new zio.Runtime[AkkaApp.Env] {
       val Environment: AkkaApp.Env = new AkkaApp.LiveEnv {
         implicit val actorSystem: ActorSystem = as
       }
-      val Platform: Platform = PlatformLive.fromExecutionContext(as.dispatcher)
+      val Platform: zio.internal.Platform = new zio.internal.Platform.Proxy(
+        PlatformLive
+          .fromExecutionContext(as.dispatcher)
+          .withTracingConfig(if (zioTracingEnabled) TracingConfig.enabled else TracingConfig.disabled)
+      ) {
+        override def reportFailure(cause: Cause[_]): Unit = {
+          if (shutdown.shutdownReason.isEmpty) {
+            super.reportFailure(cause)
+            val _ = shutdown.run(JvmExitReason)
+          }
+        }
+      }
     }
 
-    val app = managedEnv
-      .use { e =>
-        run.provide(e) *> UIO(0)
-      }
-      .catchAll { e =>
-        ZLogger.error(s"App failed: ${e.getMessage}", e) *> UIO(1)
-      }
-
-    val exitCode = Try {
-      runtime.unsafeRun(
+    val main = for {
+      appFib <- managedEnv.use { e: Env =>
         for {
-          fiber <- app.fork
-          _ <- IO.effectTotal(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
-            override def run(): Unit = {
-              val _ = runtime.unsafeRunSync(fiber.interrupt)
-            }
-          }))
-          result <- fiber.join
-        } yield result
-      )
-    }.recover {
-        case FiberFailure(Traced(cause, trace)) =>
-          println(s"Main thread failed with FiberFailure: $cause")
-          println(trace.prettyPrint)
-          1
-        case FiberFailure(cause) =>
-          println(s"Main thread failed with FiberFailure")
-          println(cause.prettyPrint)
-          1
-        case e =>
-          println(s"Main thread failed with: $e")
-          1
+          monFib <- e.monitor(config).fork
+          ret <- run.provide(e)
+          _ <- monFib.interrupt
+        } yield ret
+      }.fork
+      _ <- UIO {
+        shutdown.addTask(CoordinatedShutdown.PhaseBeforeServiceUnbind, "interrupt app") { () =>
+          runtime.unsafeRunToFuture(appFib.interrupt.ignore *> UIO(Done))
+        }
       }
-      .getOrElse(1)
+      result <- appFib.join
+    } yield result
 
-    sys.exit(exitCode)
+    try {
+      runtime.unsafeRun(main)
+      sys.exit(0)
+    } catch {
+      case NonFatal(_) =>
+        sys.exit(1)
+    }
   }
 }

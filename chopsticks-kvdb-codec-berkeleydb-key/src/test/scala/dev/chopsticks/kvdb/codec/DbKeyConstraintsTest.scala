@@ -3,6 +3,7 @@ package dev.chopsticks.kvdb.codec
 import org.scalatest.{Matchers, WordSpecLike}
 import shapeless._
 import cats.syntax.show._
+import dev.chopsticks.kvdb.codec.berkeleydb_key._
 
 object DbKeyConstraintsTest {
   final case class StockDbKeyTest(symbol: String, year: Int, month: Int)

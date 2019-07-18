@@ -1,20 +1,19 @@
 package dev.chopsticks.dstream
 
-import akka.{Done, NotUsed}
 import akka.grpc.GrpcClientSettings
 import akka.grpc.scaladsl.{AkkaGrpcClient, Metadata, StreamResponseRequestBuilder}
-import akka.http.scaladsl.UseHttp2.Always
-import akka.http.scaladsl.{Http, HttpConnectionContext}
+import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
+import akka.{Done, NotUsed}
 import dev.chopsticks.dstream.DstreamEnv.WorkResult
-import dev.chopsticks.fp.ZIOExt.MeasuredLogging
 import dev.chopsticks.fp.ZIOExt.Implicits._
-import dev.chopsticks.fp.{AkkaEnv, LoggingContext, ZIOExt, ZLogger}
+import dev.chopsticks.fp.ZIOExt.MeasuredLogging
+import dev.chopsticks.fp._
+import zio._
 import zio.clock.Clock
-import zio.{Task, TaskR, ZIO, ZManaged, ZSchedule}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
@@ -44,7 +43,6 @@ object Dstreams extends LoggingContext {
               service,
               interface = "0.0.0.0",
               port = config.port,
-              connectionContext = HttpConnectionContext(http2 = Always),
               settings = settings
                 .withTimeouts(settings.timeouts.withIdleTimeout(config.idleTimeout))
                 .withPreviewServerSettings(settings.previewServerSettings.withEnableHttp2(true))
@@ -119,14 +117,14 @@ object Dstreams extends LoggingContext {
           _ <- ZIO.accessM[DstreamEnv[Req, Res]](_.dstreamService.report(assignment))
         } yield ()
 
-        cleanup.catchAll(ZIO.die)
+        cleanup.orDie
       }(run)
   }
 
-  def work[Req, Res, R <: AkkaEnv](
+  def work[Req, Res, R >: Nothing](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
-  )(makeSource: Req => TaskR[R, Source[Res, NotUsed]]): TaskR[R, Done] = {
-    val graph = ZIO.access[R] { implicit env =>
+  )(makeSource: Req => TaskR[R, Source[Res, NotUsed]]): TaskR[R with AkkaEnv with LogEnv, Done] = {
+    val graph = ZIO.access[R with AkkaEnv] { implicit env =>
       val promise = Promise[Source[Res, NotUsed]]()
 
       requestBuilder
@@ -138,7 +136,7 @@ object Dstreams extends LoggingContext {
         .toMat(Sink.ignore)(Keep.both)
     }
 
-    ZIOExt.interruptableGraph(graph, graceful = false)
+    ZIOExt.interruptableGraph(graph, graceful = true)
   }
 
   def workPool[Req, Res, R <: AkkaEnv](

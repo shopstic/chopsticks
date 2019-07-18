@@ -2,11 +2,11 @@ package dev.chopsticks.fp
 
 import akka.NotUsed
 import akka.stream.scaladsl.{Flow, RunnableGraph}
-import akka.stream.{Attributes, UniqueKillSwitch}
+import akka.stream.{Attributes, KillSwitch}
 import dev.chopsticks.util.implicits.SquantsImplicits._
+import squants.time.Nanoseconds
 import zio._
 import zio.clock.Clock
-import squants.time.Nanoseconds
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future, Promise}
@@ -80,15 +80,14 @@ object ZIOExt {
     }
   }
 
-  def interruptableGraph[R <: AkkaEnv, A](
-    make: => TaskR[R, RunnableGraph[(UniqueKillSwitch, Future[A])]],
+  def interruptableGraph[R >: Nothing, A](
+    make: => TaskR[R, RunnableGraph[(KillSwitch, Future[A])]],
     graceful: Boolean
-  ): TaskR[R, A] = {
-    ZIO.accessM[R] { env =>
+  )(implicit ctx: LogCtx): TaskR[R with AkkaEnv with LogEnv, A] = {
+    ZIO.accessM[R with AkkaEnv with LogEnv] { env =>
       make.flatMap { graph =>
         val (ks, f) = graph.run()(env.materializer)
-
-        f.value
+        val task = f.value
           .fold(
             Task.effectAsync { cb: (Task[A] => Unit) =>
               f.onComplete {
@@ -97,10 +96,11 @@ object ZIOExt {
               }(env.dispatcher)
             }
           )(Task.fromTry(_))
-          .onInterrupt(UIO {
-            if (graceful) ks.shutdown()
-            else ks.abort(new InterruptedException("Stream (interruptableGraph) was interrupted"))
-          })
+
+        task.onInterrupt(UIO {
+          if (graceful) ks.shutdown()
+          else ks.abort(new InterruptedException("Stream (interruptableGraph) was interrupted"))
+        } *> task.fold(e => env.logger.error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}", e), _ => ()))
       }
     }
   }

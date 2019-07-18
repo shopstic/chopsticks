@@ -5,7 +5,7 @@ import scalapb.compiler.Version.scalapbVersion
 object Dependencies {
   val SCALA_VERSION = "2.12.8"
   val AKKA_VERSION = "2.5.23"
-  val AKKA_HTTP_VERSION = "10.1.8"
+  val AKKA_HTTP_VERSION = "10.1.9"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -28,7 +28,7 @@ object Dependencies {
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
   val zioDeps = Seq(
-    "dev.zio" %% "zio" % "1.0.0-RC9"
+    "dev.zio" %% "zio" % "1.0.0-RC10-1"
   )
 
   val squantsDeps = Seq(
@@ -45,7 +45,7 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.6.2"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.7.0"
   )
 
   val catsCoreDeps = Seq(
@@ -78,7 +78,7 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.0.13"
+    "org.codehaus.janino" % "janino" % "3.0.14"
   )
 
   val scalatestDeps = Seq(
@@ -131,11 +131,15 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "1.20"
+    "com.github.japgolly.microlibs" %% "utils" % "1.22"
   )
 
   val silencerDeps = Seq(
     compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.1"),
     "com.github.ghik" %% "silencer-lib" % "1.4.1" % Provided
+  )
+  
+  val berkeleyDbDeps = Seq(
+    "com.sleepycat" % "je" % "18.3.12"
   )
 }

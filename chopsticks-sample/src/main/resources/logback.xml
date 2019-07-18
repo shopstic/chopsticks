@@ -35,6 +35,7 @@
   </root>
 
   <logger name="io.netty" level="${log.netty:-inherited}"/>
+  <logger name="akka.actor.CoordinatedShutdown" level="DEBUG"/>
   <logger name="io.grpc.netty" level="${log.netty:-inherited}"/>
   <logger name="akka" level="${log.akka:-inherited}" additivity="false">
     <appender-ref ref="STDOUT_AKKA"/>

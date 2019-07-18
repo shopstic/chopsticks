@@ -1,12 +1,10 @@
 package dev.chopsticks.kvdb.codec
 
-import com.sleepycat.bind.tuple.TupleOutput
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.kvdb.codec.DbKeyCodecs.ToDbKey
+import dev.chopsticks.kvdb.codec.UnusedImplicits._
+import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import shapeless.ops.hlist.{IsHCons, Length, Take}
 import shapeless.{Generic, HList, Nat}
-import UnusedImplicits._
-import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 
 import scala.annotation.implicitNotFound
 
@@ -15,12 +13,12 @@ trait DbKeyPrefix[A, B] {
   def encode(a: A): Array[Byte]
 }
 
-final private class DbKeyPrefixWithEncoder[A, B](encoder: ToDbKey[A]) extends DbKeyPrefix[A, B] {
-  def encode(a: A): Array[Byte] = encoder.encode(new TupleOutput(), a).toByteArray
+final private class DbKeyPrefixWithEncoder[A, B](encoder: DbKeyEncoder[A]) extends DbKeyPrefix[A, B] {
+  def encode(a: A): Array[Byte] = encoder.encode(a)
 }
 
 trait DbKeyPrefixPriority3Implicits extends StrictLogging {
-  implicit def selfDbKeyPrefix[A](implicit encoder: ToDbKey[A]): DbKeyPrefix[A, A] = new DbKeyPrefixWithEncoder(encoder)
+  implicit def selfDbKeyPrefix[A](implicit encoder: DbKeyEncoder[A]): DbKeyPrefix[A, A] = new DbKeyPrefixWithEncoder(encoder)
 }
 
 trait DbKeyPrefixPriority2Implicits extends DbKeyPrefixPriority3Implicits {
@@ -31,7 +29,7 @@ trait DbKeyPrefixPriority2Implicits extends DbKeyPrefixPriority3Implicits {
     implicit
     f: DbKey.Aux[B, F],
     t: IsHCons.Aux[F, A, T],
-    encoder: ToDbKey[A]
+    encoder: DbKeyEncoder[A]
   ): DbKeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][anyToDbKeyPrefixOfProduct] ${f.describe}")
     t.unused()
@@ -54,7 +52,7 @@ trait DbKeyPrefixPriority1Implicits extends DbKeyPrefixPriority2Implicits {
     f: DbKey.Aux[B, F],
     t: Take.Aux[F, N, T],
     e: P =:= T,
-    encoder: ToDbKey[A]
+    encoder: DbKeyEncoder[A]
   ): DbKeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${f.describe}")
     //    n.unused()
@@ -75,7 +73,7 @@ trait DbKeyPrefixPriority1Implicits extends DbKeyPrefixPriority2Implicits {
     f: DbKey.Aux[B, F],
     t: Take.Aux[F, N, T],
     e: A =:= T,
-    encoder: ToDbKey[A]
+    encoder: DbKeyEncoder[A]
   ): DbKeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][hlistToDbKeyPrefix] ${f.describe}")
     l.unused()

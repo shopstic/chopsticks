@@ -11,8 +11,8 @@ import dev.chopsticks.kvdb.util.DbUtils.{
   UnoptimizedDbOperationException,
   UnsupportedDbOperationException
 }
-import dev.chopsticks.proto.db.DbOperationException.ExceptionType
-import dev.chopsticks.proto.db.DbOperationPossibleException
+import dev.chopsticks.kvdb.proto.DbOperationException.ExceptionType
+import dev.chopsticks.kvdb.proto.DbOperationPossibleException
 
 import scala.util.control.NoStackTrace
 import scala.util.{Failure, Success, Try}

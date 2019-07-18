@@ -12,11 +12,12 @@ ThisBuild / Test / fork := Build.forkTests
 ThisBuild / Test / javaOptions += "-Xmx768m"
 ThisBuild / Build.ITest / fork := Build.forkTests
 ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
-Global / concurrentRestrictions ++= (if (!Build.forkTests) Seq(Tags.limit(Tags.Test, 2)) else Seq.empty[Tags.Rule])
+//Global / concurrentRestrictions ++= (if (!Build.forkTests) Seq(Tags.limit(Tags.Test, 2)) else Seq.empty[Tags.Rule])
 
 ThisBuild / symlinkTargetRoot := Build.symlinkTargetRoot
 
 ThisBuild / licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
+ThisBuild / bintrayReleaseOnPublish := false
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
@@ -67,23 +68,43 @@ lazy val kvdb = Build
     ),
     scalacOptions ++= Seq(
       s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
-      "-P:silencer:pathFilters=dev/chopsticks/proto"
+      "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
     )
   )
-  .dependsOn(util, fp, stream, testkit % "test->compile")
+  .dependsOn(util, fp, stream)
+
+lazy val kvdbCodecBerkeleydbKey = Build
+  .defineProject("kvdb-codec-berkeleydb-key")
+  .settings(
+    libraryDependencies ++= berkeleyDbDeps
+  )
+  .dependsOn(kvdb, testkit % "test->compile")
+
+lazy val kvdbCodecProtobufValue = Build
+  .defineProject("kvdb-codec-protobuf-value")
+  .settings()
+  .dependsOn(kvdb, testkit % "test->compile")
 
 lazy val sample = Build
   .defineProject("sample")
+  .enablePlugins(AkkaGrpcPlugin)
   .settings(
-    libraryDependencies ++= janinoDeps,
-    publish / skip := true
+    libraryDependencies ++= janinoDeps ++ silencerDeps,
+    publish / skip := true,
+    akkaGrpcCodeGeneratorSettings += "server_power_apis",
+    scalacOptions ++= Seq(
+      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
+      "-P:silencer:pathFilters=dev/chopsticks/sample/app/proto"
+    )
   )
-  .dependsOn(kvdb)
+  .dependsOn(kvdb, dstream)
 
 lazy val root = (project in file("."))
   .enablePlugins(SymlinkTargetPlugin)
   .settings(
     name := "chopsticks",
-    publish / skip := true
+    publish / skip := true,
+    bintrayRelease := {},
+    dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
   )
-  .aggregate(util, testkit, fp, stream, dstream, kvdb)
+  .aggregate(util, testkit, fp, stream, dstream, kvdb, kvdbCodecBerkeleydbKey)

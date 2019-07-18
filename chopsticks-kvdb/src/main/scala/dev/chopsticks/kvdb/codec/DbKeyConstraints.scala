@@ -3,8 +3,8 @@ package dev.chopsticks.kvdb.codec
 import cats.Show
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
-import dev.chopsticks.proto.db.DbKeyConstraint.Operator
-import dev.chopsticks.proto.db.{DbKeyConstraint, DbKeyConstraintList, DbKeyRange}
+import dev.chopsticks.kvdb.proto.DbKeyConstraint.Operator
+import dev.chopsticks.kvdb.proto.{DbKeyConstraint, DbKeyConstraintList, DbKeyRange}
 
 import scala.collection.immutable.Queue
 

@@ -13,8 +13,8 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import dev.chopsticks.kvdb.codec.DbKeyConstraints
-import dev.chopsticks.proto.db.DbKeyConstraint.Operator
-import dev.chopsticks.proto.db.{DbKeyConstraint, DbKeyRange, DbOperationException}
+import dev.chopsticks.kvdb.proto.DbKeyConstraint.Operator
+import dev.chopsticks.kvdb.proto.{DbKeyConstraint, DbKeyRange, DbOperationException}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable

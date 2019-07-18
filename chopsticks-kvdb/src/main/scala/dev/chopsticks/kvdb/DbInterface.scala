@@ -3,13 +3,13 @@ package dev.chopsticks.kvdb
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
-import dev.chopsticks.kvdb.codec.DbKeyCodecs.DbKeyDecodeResult
+import dev.chopsticks.kvdb.codec.DbKeyDecoder.DbKeyDecodeResult
 import dev.chopsticks.kvdb.codec.DbValueCodecs.DbValueDecodeResult
 import dev.chopsticks.kvdb.codec.{DbKey, DbValue}
 import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
-import dev.chopsticks.proto.db.DbKeyConstraint.Operator
-import dev.chopsticks.proto.db._
+import dev.chopsticks.kvdb.proto.DbKeyConstraint.Operator
+import dev.chopsticks.kvdb.proto._
 import enumeratum.EnumEntry
 import enumeratum.EnumEntry.Snakecase
 import zio.clock.Clock

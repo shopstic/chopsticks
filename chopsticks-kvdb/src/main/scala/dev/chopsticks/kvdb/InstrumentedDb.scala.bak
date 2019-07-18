@@ -7,7 +7,7 @@ import akka.stream.scaladsl.Source
 import com.github.dwickern.macros.NameOf._
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.db.DbInterface.{ColumnFamily, DbDefinition}
-import dev.chopsticks.proto.db.DbGet
+import dev.chopsticks.kvdb.proto.DbGet
 import dev.chopsticks.kvdb.util.CommonUtils.byteArrayToString
 import dev.chopsticks.kvdb.util.RocksdbUtils.RecordPair
 import dev.chopsticks.kvdb.util.TopK

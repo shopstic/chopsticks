@@ -15,13 +15,14 @@ import dev.chopsticks.kvdb.codec.{DbKey, DbKeyConstraints, DbValue}
 import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
-import dev.chopsticks.proto.db.{DbKeyConstraintList, DbKeyRange}
+import dev.chopsticks.kvdb.proto.{DbKeyConstraintList, DbKeyRange}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest._
 import zio.blocking._
 import zio.clock.Clock
 import zio.{Task, TaskR, UIO}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
+import dev.chopsticks.kvdb.codec.berkeleydb_key._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -62,9 +63,6 @@ object DbTest extends StrictLogging {
         block(tempDir)
       }
   }
-
-  //noinspection TypeAnnotation
-  implicit val legacyStringDbKey = DbKey.literalStringDbKey
 
   private def flattenFlow[T] = Flow[Array[T]].mapConcat { b =>
     new scala.collection.immutable.Iterable[T] {

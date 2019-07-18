@@ -6,6 +6,7 @@ import dev.chopsticks.testkit.ArbitraryTime._
 import org.scalactic.anyvals.{PosInt, PosZDouble}
 import org.scalatest.{Assertions, WordSpecLike}
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
+import dev.chopsticks.kvdb.codec.berkeleydb_key._
 
 //noinspection TypeAnnotation
 class DbKeyTest extends WordSpecLike with Assertions with ScalaCheckDrivenPropertyChecks {

@@ -7,7 +7,7 @@ import akka.stream.scaladsl.Flow
 import com.google.protobuf.ByteString
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.DbInterface._
-import dev.chopsticks.proto.db.{DbDeletePrefixRequest, DbDeleteRequest, DbPutRequest, DbTransactionAction}
+import dev.chopsticks.kvdb.proto.{DbDeletePrefixRequest, DbDeleteRequest, DbPutRequest, DbTransactionAction}
 import zio.clock.Clock
 import zio.{Task, TaskR}
 

@@ -25,8 +25,8 @@ import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
 import dev.chopsticks.kvdb.util.AkkaHttpProtobufSupport._
 import dev.chopsticks.kvdb.util.DbUtils
 import dev.chopsticks.kvdb.util.DbUtils._
-import dev.chopsticks.proto.db.DbTailItemValueBatch.Value
-import dev.chopsticks.proto.db._
+import dev.chopsticks.kvdb.proto.DbTailItemValueBatch.Value
+import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.stream.{AkkaStreamUtils, LastStateFlow}
 import org.xerial.snappy.{SnappyCodec, SnappyInputStream}
 import zio.clock.Clock

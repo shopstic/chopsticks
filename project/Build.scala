@@ -1,4 +1,5 @@
 import com.shopstic.sbt.SymlinkTargetPlugin
+import com.timushev.sbt.updates.UpdatesPlugin.autoImport._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
 import wartremover.WartRemover.autoImport._
 import sbt._
@@ -6,7 +7,7 @@ import sbt.Keys._
 
 //noinspection TypeAnnotation
 object Build {
-  val buildVersion = "0.3.0"
+  val buildVersion = "0.4.2"
 
   lazy val ITest = config("it") extend Test
 
@@ -82,6 +83,7 @@ object Build {
           Wart.Product
         ),
         wartremoverExcluded += sourceManaged.value,
+        dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
         libraryDependencies ++= Dependencies.scalatestDeps,
         Compile / doc / sources := Seq.empty,
         Compile / packageDoc / publishArtifact := false

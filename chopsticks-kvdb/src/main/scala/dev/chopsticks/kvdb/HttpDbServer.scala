@@ -15,7 +15,7 @@ import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.kvdb.DbWebsocketServerRequestHandlerFlow.ClientTerminatedPrematurelyException
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.proto.db._
+import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.DbUtils.Implicits.defaultDbClientOptions
 import dev.chopsticks.kvdb.util.DbUtils._
 import kamon.Kamon
@@ -64,7 +64,7 @@ object HttpDbServer extends StrictLogging {
 //
     lazy val dbCompressedByteCounter: CounterMetric =
       Kamon.counter(dbServerPrefix + "compressed_bytes", MeasurementUnit.information.bytes)
-//
+
 //    lazy val dbWrappedCompressedByteCounter: Counter =
 //      Counter.build().name(dbServerPrefix + "wrapped_compressed_bytes").help("Wrapped Compressed Bytes").register()
 

@@ -17,8 +17,8 @@ import dev.chopsticks.kvdb.codec.DbKey
 import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
 import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.proto.db.DbKeyConstraint.Operator
-import dev.chopsticks.proto.db._
+import dev.chopsticks.kvdb.proto.DbKeyConstraint.Operator
+import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import dev.chopsticks.kvdb.util.RocksdbUtils._
