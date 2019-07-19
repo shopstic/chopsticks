@@ -87,7 +87,8 @@ lazy val kvdbCodecProtobufValue = Build
 lazy val kvdbTest = Build
   .defineProject("kvdb-test")
   .settings(
-    publish / skip := true
+    publish / skip := true,
+    bintrayRelease := {},
   )
   .dependsOn(kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, testkit % "test->compile")
 
@@ -97,6 +98,7 @@ lazy val sample = Build
   .settings(
     libraryDependencies ++= janinoDeps ++ silencerDeps,
     publish / skip := true,
+    bintrayRelease := {},
     akkaGrpcCodeGeneratorSettings += "server_power_apis",
     scalacOptions ++= Seq(
       s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
@@ -113,4 +115,4 @@ lazy val root = (project in file("."))
     bintrayRelease := {},
     dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
   )
-  .aggregate(util, testkit, fp, stream, dstream, kvdb, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, kvdbTest)
+  .aggregate(util, testkit, fp, stream, dstream, kvdb, sample, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, kvdbTest)
