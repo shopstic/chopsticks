@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.codec
 
-import dev.chopsticks.kvdb.codec.DbValueDecoder.{DbValueDecodeResult, DbValueGenericDecodingException}
+import dev.chopsticks.kvdb.codec.DbValueDecoder.DbValueDecodeResult
 
 trait DbValue[T] extends DbValueEncoder[T] with DbValueDecoder[T]
 
@@ -22,12 +22,4 @@ object DbValue {
   def decode[T](bytes: Array[Byte])(implicit decoder: DbValueDecoder[T]): DbValueDecodeResult[T] = {
     decoder.decode(bytes)
   }
-
-  implicit def dbKeyToDbValue[T](implicit dbKey: DbKey[T]): DbValue[T] = new DbValue[T] {
-    import cats.syntax.either._
-    def decode(bytes: Array[Byte]): DbValueDecodeResult[T] =
-      dbKey.decode(bytes).leftMap(e => DbValueGenericDecodingException(e.getMessage, e))
-    def encode(value: T): Array[Byte] = dbKey.encode(value)
-  }
-
 }

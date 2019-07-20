@@ -5,6 +5,7 @@ import dev.chopsticks.kvdb.DbInterface.{DbColumn, DbColumns, DbDefinitionOf}
 import dev.chopsticks.kvdb.codec.{DbKey, DbValue}
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
+import dev.chopsticks.kvdb.codec.primitive._
 
 sealed abstract class DummyTestKvdbColumn[K: DbKey, V: DbValue] extends DbColumn[K, V]
 

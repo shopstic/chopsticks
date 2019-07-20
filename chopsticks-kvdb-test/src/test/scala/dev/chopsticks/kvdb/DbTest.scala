@@ -1,7 +1,6 @@
 package dev.chopsticks.kvdb
 
 import java.nio.charset.StandardCharsets.UTF_8
-import java.time.LocalDateTime
 
 import akka.actor.ActorSystem
 import akka.stream.KillSwitches
@@ -10,51 +9,23 @@ import akka.testkit.{ImplicitSender, TestProbe}
 import better.files.File
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaApp
-import dev.chopsticks.kvdb.DbInterface.{DbColumn, DbColumns, DbDefinitionOf}
-import dev.chopsticks.kvdb.codec.{DbKey, DbKeyConstraints, DbValue}
+import dev.chopsticks.kvdb.codec.DbKeyConstraints
+import dev.chopsticks.kvdb.proto.{DbKeyConstraintList, DbKeyRange}
 import dev.chopsticks.kvdb.util.DbUtils._
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
-import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
-import dev.chopsticks.kvdb.proto.{DbKeyConstraintList, DbKeyRange}
+import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest._
 import zio.blocking._
 import zio.clock.Clock
 import zio.{Task, TaskR, UIO}
-import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
-import dev.chopsticks.kvdb.codec.berkeleydb_key._
-import dev.chopsticks.kvdb.codec.protobuf_value._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.implicitConversions
+import dev.chopsticks.kvdb.codec.primitive._
 
 object DbTest extends StrictLogging {
-
-  sealed abstract class TestDbColumn[K: DbKey, V: DbValue] extends DbColumn[K, V]
-
-  object TestDbColumns extends DbColumns[TestDbColumn[_, _]] {
-
-    import squants.information.InformationConversions._
-
-    //noinspection TypeAnnotation
-    val values = findValues
-
-    case object Default extends TestDbColumn[String, String] {
-      val rocksdbOptions: RocksdbCFOptions = RocksdbCFOptions(64.mib, 64.mib, 1)
-    }
-
-    case object Lookup extends TestDbColumn[String, String] {
-      val rocksdbOptions: RocksdbCFOptions = RocksdbCFOptions(64.mib, 64.mib, 0)
-    }
-
-    case object Checkpoint extends TestDbColumn[String, LocalDateTime] {
-      val rocksdbOptions: RocksdbCFOptions = RocksdbCFOptions(64.mib, 64.mib, 0)
-    }
-
-  }
-
-  object TestDb extends DbDefinitionOf[TestDbColumn, TestDbColumns.type](TestDbColumns)
 
   final case class Fixture(db: DbInterface[TestDb.type])
 
@@ -122,7 +93,7 @@ object DbTest extends StrictLogging {
 
     import Environment.{materializer, unsafeRunToFuture}
 
-    protected def runTest: (DbInterface[DbTest.TestDb.type] => Task[Assertion]) => TaskR[AkkaApp.Env, Assertion]
+    protected def runTest: (DbInterface[TestDb.type] => Task[Assertion]) => TaskR[AkkaApp.Env, Assertion]
 
     private def withFixture(testCode: Fixture => Task[Assertion]): Future[Assertion] = {
       unsafeRunToFuture(runTest { db =>

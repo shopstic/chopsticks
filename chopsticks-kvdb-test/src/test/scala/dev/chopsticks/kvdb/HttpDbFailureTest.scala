@@ -15,7 +15,6 @@ import akka.util.ByteString
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaApp
 import dev.chopsticks.kvdb.DbFactory.RemoteDbClientConfig
-import dev.chopsticks.kvdb.DbTest.TestDb
 import dev.chopsticks.kvdb.util.DbUtils.Implicits._
 import dev.chopsticks.kvdb.util.DbUtils.{DbIndexedTailBatch, DbPair, DbTailBatch}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils

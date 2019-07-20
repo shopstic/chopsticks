@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb
 
 import java.util.concurrent.TimeUnit
 
-import dev.chopsticks.kvdb.DbTest.{DbTest, TestDb}
+import dev.chopsticks.kvdb.DbTest.DbTest
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv}
 import org.scalatest.Assertion
 import zio.{Task, TaskR, UIO, ZIO}
@@ -10,7 +10,7 @@ import zio.{Task, TaskR, UIO, ZIO}
 import scala.concurrent.TimeoutException
 
 class HttpDbTest extends DbTest {
-  protected def runTest: (DbInterface[DbTest.TestDb.type] => Task[Assertion]) => TaskR[AkkaApp.Env, Assertion] = {
+  protected def runTest: (DbInterface[TestDb.type] => Task[Assertion]) => TaskR[AkkaApp.Env, Assertion] = {
     (test: DbInterface[TestDb.type] => Task[Assertion]) =>
       {
         DbTest.withTempDir { dir =>

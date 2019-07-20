@@ -1,13 +1,13 @@
 package dev.chopsticks.kvdb
 
-import dev.chopsticks.kvdb.DbTest.{DbTest, TestDb, TestDbColumn}
+import dev.chopsticks.kvdb.DbTest.DbTest
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv}
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import org.scalatest.Assertion
 import zio.{Task, TaskR, UIO, ZIO}
 
 class RocksdbLocalDbTest extends DbTest {
-  protected val runTest: (DbInterface[DbTest.TestDb.type] => Task[Assertion]) => TaskR[AkkaApp.Env, Assertion] =
+  protected val runTest: (DbInterface[TestDb.type] => Task[Assertion]) => TaskR[AkkaApp.Env, Assertion] =
     (test: DbInterface[TestDb.type] => Task[Assertion]) => {
       DbTest.withTempDir { dir =>
         ZIO
