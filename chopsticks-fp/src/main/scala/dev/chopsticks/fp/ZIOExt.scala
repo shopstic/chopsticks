@@ -22,11 +22,11 @@ object ZIOExt {
       zio.duration.Duration.fromScala(d)
 
     implicit final class TaskExtensions[A](io: Task[A]) {
-      def logResult(name: String, result: A => String)(implicit ctx: LogCtx): TaskR[MeasuredLogging, A] = {
+      def logResult(name: String, result: A => String)(implicit ctx: LogCtx): RIO[MeasuredLogging, A] = {
         new ZIOExtensions(io).logResult(name, result)
       }
 
-      def log(name: String)(implicit ctx: LogCtx): TaskR[MeasuredLogging, A] = {
+      def log(name: String)(implicit ctx: LogCtx): RIO[MeasuredLogging, A] = {
         new ZIOExtensions(io).log(name)
       }
     }
@@ -61,11 +61,11 @@ object ZIOExt {
     }
   }
 
-  def fromFutureWithEnv[R >: Nothing, A](make: (R, ExecutionContext) => Future[A]): TaskR[R, A] = {
+  def fromFutureWithEnv[R >: Nothing, A](make: (R, ExecutionContext) => Future[A]): RIO[R, A] = {
     ZIO.accessM((env: R) => ZIO.fromFuture(ec => make(env, ec)))
   }
 
-  def fromAkkaFuture[A](make: AkkaEnv => Future[A]): TaskR[AkkaEnv, A] = {
+  def fromAkkaFuture[A](make: AkkaEnv => Future[A]): RIO[AkkaEnv, A] = {
     ZIO.accessM[AkkaEnv] { env =>
       val f = make(env)
       f.value
@@ -80,10 +80,29 @@ object ZIOExt {
     }
   }
 
+  def graph[R >: Nothing, A](
+    make: => RIO[R, RunnableGraph[Future[A]]]
+  ): RIO[R with AkkaEnv with LogEnv, A] = {
+    ZIO.accessM[R with AkkaEnv with LogEnv] { env =>
+      make.flatMap { graph =>
+        val f = graph.run()(env.materializer)
+        f.value
+          .fold(
+            Task.effectAsync { cb: (Task[A] => Unit) =>
+              f.onComplete {
+                case Success(a) => cb(Task.succeed(a))
+                case Failure(t) => cb(Task.fail(t))
+              }(env.dispatcher)
+            }
+          )(Task.fromTry(_))
+      }
+    }
+  }
+
   def interruptableGraph[R >: Nothing, A](
-    make: => TaskR[R, RunnableGraph[(KillSwitch, Future[A])]],
+    make: => RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
     graceful: Boolean
-  )(implicit ctx: LogCtx): TaskR[R with AkkaEnv with LogEnv, A] = {
+  )(implicit ctx: LogCtx): RIO[R with AkkaEnv with LogEnv, A] = {
     ZIO.accessM[R with AkkaEnv with LogEnv] { env =>
       make.flatMap { graph =>
         val (ks, f) = graph.run()(env.materializer)
@@ -114,7 +133,7 @@ object ZIOExt {
 
   def interruptableMapAsync[A, B, Env <: AkkaEnv](
     parallelism: Int
-  )(runTask: A => TaskR[Env, B])(implicit env: Env): Flow[A, B, Future[NotUsed]] = {
+  )(runTask: A => RIO[Env, B])(implicit env: Env): Flow[A, B, Future[NotUsed]] = {
     import env._
 
     Flow
@@ -145,7 +164,7 @@ object ZIOExt {
   def interruptableMapAsyncUnordered[R <: AkkaEnv, A, B](
     parallelism: Int,
     attributes: Option[Attributes] = None
-  )(runTask: A => TaskR[R, B])(implicit env: R): Flow[A, B, Future[NotUsed]] = {
+  )(runTask: A => RIO[R, B])(implicit env: R): Flow[A, B, Future[NotUsed]] = {
     import env._
 
     Flow
@@ -179,7 +198,7 @@ object ZIOExt {
 
   def mapAsync[A, B, E <: AkkaEnv](
     parallelism: Int
-  )(runTask: A => TaskR[E, B])(implicit env: E): Flow[A, B, NotUsed] = {
+  )(runTask: A => RIO[E, B])(implicit env: E): Flow[A, B, NotUsed] = {
     import env._
 
     Flow[A]
@@ -190,11 +209,11 @@ object ZIOExt {
 
   def mapAsyncUnordered[A, B, E <: AkkaEnv](
     parallelism: Int
-  )(runTask: A => TaskR[E, B])(implicit env: E): Flow[A, B, NotUsed] = {
+  )(runTask: A => RIO[E, B])(implicit env: E): Flow[A, B, NotUsed] = {
     import env._
 
     Flow[A]
-      .mapAsyncUnordered(parallelism) { a =>
+      .mapAsyncUnordered(parallelism) { a: A =>
         unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(env)).flatten
       }
   }

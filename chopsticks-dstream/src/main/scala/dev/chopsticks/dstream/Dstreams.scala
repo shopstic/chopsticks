@@ -106,7 +106,7 @@ object Dstreams extends LoggingContext {
 
   def distribute[Req, Res, R <: AkkaEnv, A](
     assignment: Req
-  )(run: WorkResult[Res] => TaskR[R, A]): TaskR[R with DstreamEnv[Req, Res], A] = {
+  )(run: WorkResult[Res] => RIO[R, A]): RIO[R with DstreamEnv[Req, Res], A] = {
     ZIO
       .bracket {
         ZIO
@@ -123,7 +123,7 @@ object Dstreams extends LoggingContext {
 
   def work[Req, Res, R >: Nothing](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
-  )(makeSource: Req => TaskR[R, Source[Res, NotUsed]]): TaskR[R with AkkaEnv with LogEnv, Done] = {
+  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[R with AkkaEnv with LogEnv, Done] = {
     val graph = ZIO.access[R with AkkaEnv] { implicit env =>
       val promise = Promise[Source[Res, NotUsed]]()
 
@@ -143,7 +143,7 @@ object Dstreams extends LoggingContext {
     config: DstreamWorkerConfig,
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(
-    makeSource: Req => TaskR[R, Source[Res, NotUsed]]
+    makeSource: Req => RIO[R, Source[Res, NotUsed]]
   ): ZIO[R with MeasuredLogging with Clock, Throwable, Unit] = {
     val retrySchedule: ZSchedule[Clock, Throwable, Any] = ZSchedule.exponential(100.millis) || ZSchedule.fixed(1.second)
 

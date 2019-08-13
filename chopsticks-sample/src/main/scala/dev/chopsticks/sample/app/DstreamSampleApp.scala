@@ -9,9 +9,9 @@ import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream.{DstreamEnv, Dstreams}
 import dev.chopsticks.fp.ZIOExt.Implicits._
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZIOExt}
+import dev.chopsticks.fp.ZIOExt.MeasuredLogging
+import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZIOExt, ZLogger}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
-import zio.clock.Clock
 import zio._
 
 import scala.concurrent.duration._
@@ -34,7 +34,7 @@ object DstreamSampleApp extends AkkaApp {
   }
 
   private val runServer = {
-    val graphTask = ZIO.access[AkkaEnv with DsEnv with Clock] { implicit env =>
+    val graphTask = ZIO.access[AkkaEnv with DsEnv with MeasuredLogging] { implicit env =>
       import env._
 
       val ks = KillSwitches.shared("server shared killswitch")
@@ -53,6 +53,7 @@ object DstreamSampleApp extends AkkaApp {
                   }
               }
             }
+            .retry(ZSchedule.logInput((e: Throwable) => ZLogger.error("Distribute failed", e)))
         })
         .via(ks.flow)
         //        .wireTap(a => println(s"Server < completed $a"))
@@ -97,10 +98,11 @@ object DstreamSampleApp extends AkkaApp {
         GrpcClientSettings
           .connectToServiceAt("localhost", port)
           .withTls(false)
-          .withChannelBuilderOverrides(
-            _.eventLoopGroup(new io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoopGroup(2))
-              .executor(env.dispatcher)
-          )
+//          .withChannelBuilderOverrides(
+//            _.eventLoopGroup(new io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoopGroup(4))
+//              .channelType(classOf[io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel])
+//              .executor(env.dispatcher)
+//          )
       )
     })
     val resources = managedServer zip managedClient
@@ -112,10 +114,8 @@ object DstreamSampleApp extends AkkaApp {
             .log("server graph")
             .fork
           _ <- ZIO.forkAll_ {
-            (1 to 12).map { id =>
-              runWorker(client, id) /*.either*/
-              //                .withResultLogging(s"client $id", _.toString)
-              //                .timeoutFail(new TimeoutException("timed out"))(1.second)
+            (1 to 2).map { id =>
+              runWorker(client, id).either
                 .repeat(ZSchedule.forever)
             }
           }

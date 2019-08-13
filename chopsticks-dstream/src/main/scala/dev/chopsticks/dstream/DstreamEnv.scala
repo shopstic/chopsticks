@@ -5,6 +5,7 @@ import akka.grpc.scaladsl.Metadata
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import kamon.Kamon
+import kamon.metric.Gauge
 import zio.stm.{STM, TRef}
 import zio.{IO, Task, UIO}
 
@@ -28,10 +29,10 @@ object DstreamEnv {
 
   abstract class LiveService[Req, Res](rt: zio.Runtime[Any])(implicit mat: Materializer, ec: ExecutionContext)
       extends Service[Req, Res] {
-    protected val workerGauge = Kamon.gauge("dstream.server.workers")
-    protected val attemptCounter = Kamon.counter("dstream.server.attempts")
-    protected val queueGauge = Kamon.gauge("dstream.server.queue")
-    protected val mapGauge = Kamon.gauge("dstream.server.map")
+    protected val workerGauge = Kamon.gauge("dstream.server.workers").withoutTags()
+    protected val attemptCounter = Kamon.counter("dstream.server.attempts").withoutTags()
+    protected val queueGauge: Gauge = Kamon.gauge("dstream.server.queue").withoutTags()
+    protected val mapGauge = Kamon.gauge("dstream.server.map").withoutTags()
     protected lazy val assignmentQueueRefBox = rt.unsafeRun(TRef.makeCommit(Queue.empty[Req]).memoize)
     protected lazy val workResultMapRefBox =
       rt.unsafeRun(TRef.makeCommit(Map.empty[Req, Option[WorkResult[Res]]]).memoize)
@@ -43,7 +44,7 @@ object DstreamEnv {
         assignmentQueueRef.get <*> workResultMapRef.get
       }
       (queue, map) = state
-      _ <- UIO(queueGauge.set(queue.size.toLong)) *> UIO(mapGauge.set(map.size.toLong))
+      _ <- UIO(queueGauge.update(queue.size.toDouble)) *> UIO(mapGauge.update(map.size.toDouble))
       _ <- UIO(println(s"Map: ${map
         .map {
           case (k, v) =>

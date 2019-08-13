@@ -3,8 +3,8 @@ import scalapb.compiler.Version.scalapbVersion
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
-  val SCALA_VERSION = "2.12.8"
-  val AKKA_VERSION = "2.5.23"
+  val SCALA_VERSION = "2.12.9"
+  val AKKA_VERSION = "2.5.24"
   val AKKA_HTTP_VERSION = "10.1.9"
 
   val akkaSlf4jDeps = Seq(
@@ -28,7 +28,7 @@ object Dependencies {
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
   val zioDeps = Seq(
-    "dev.zio" %% "zio" % "1.0.0-RC10-1"
+    "dev.zio" %% "zio" % "1.0.0-RC11-1"
   )
 
   val squantsDeps = Seq(
@@ -36,16 +36,16 @@ object Dependencies {
   )
 
   val kamonCoreDeps = Seq(
-    "io.kamon" %% "kamon-core" % "1.1.6"
+    "io.kamon" %% "kamon-core" % "2.0.0"
   )
 
   val kamonProdDeps = Seq(
-    "io.kamon" %% "kamon-prometheus" % "1.1.2",
-    "io.kamon" %% "kamon-system-metrics" % "1.0.1"
+    "io.kamon" %% "kamon-prometheus" % "2.0.0",
+    "io.kamon" %% "kamon-status-page" % "2.0.0"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.7.0"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.7.1"
   )
 
   val catsCoreDeps = Seq(
@@ -73,12 +73,12 @@ object Dependencies {
   val loggingDeps = Seq(
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
     "ch.qos.logback" % "logback-classic" % "1.2.3",
-    "org.slf4j" % "log4j-over-slf4j" % "1.7.26",
-    "org.slf4j" % "jul-to-slf4j" % "1.7.26"
+    "org.slf4j" % "log4j-over-slf4j" % "1.7.28",
+    "org.slf4j" % "jul-to-slf4j" % "1.7.28"
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.0.14"
+    "org.codehaus.janino" % "janino" % "3.0.15"
   )
 
   val scalatestDeps = Seq(
@@ -93,7 +93,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.0.1"
+    "org.rocksdb" % "rocksdbjni" % "6.2.2"
   )
 
   val lmdbDeps = Seq(
@@ -114,8 +114,8 @@ object Dependencies {
   )
 
   val refinedDeps = Seq(
-    "eu.timepit" %% "refined" % "0.9.8",
-    "eu.timepit" %% "refined-pureconfig" % "0.9.8"
+    "eu.timepit" %% "refined" % "0.9.9",
+    "eu.timepit" %% "refined-pureconfig" % "0.9.9"
   )
 
   val chimneyDeps = Seq(
@@ -135,8 +135,8 @@ object Dependencies {
   )
 
   val silencerDeps = Seq(
-    compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.1"),
-    "com.github.ghik" %% "silencer-lib" % "1.4.1" % Provided
+    compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.2"),
+    "com.github.ghik" %% "silencer-lib" % "1.4.2" % Provided
   )
   
   val berkeleyDbDeps = Seq(
