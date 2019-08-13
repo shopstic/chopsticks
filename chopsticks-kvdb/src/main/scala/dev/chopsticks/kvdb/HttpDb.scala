@@ -30,7 +30,7 @@ import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.stream.{AkkaStreamUtils, LastStateFlow}
 import org.xerial.snappy.{SnappyCodec, SnappyInputStream}
 import zio.clock.Clock
-import zio.{Task, TaskR, ZIO}
+import zio.{Task, RIO, ZIO}
 
 import scala.collection.mutable
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -701,7 +701,7 @@ final class HttpDb[DbDef <: DbDefinition](
       .map { case DbPingResponse(pong) => assert(pong == uuid) }
   }
 
-  def closeTask(): TaskR[Clock, Unit] = ZIO.unit
+  def closeTask(): RIO[Clock, Unit] = ZIO.unit
 
   type TailLastState = Option[Either[Exception, MaybeLastKey]]
 

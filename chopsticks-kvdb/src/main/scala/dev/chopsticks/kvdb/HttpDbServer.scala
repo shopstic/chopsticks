@@ -19,7 +19,7 @@ import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.DbUtils.Implicits.defaultDbClientOptions
 import dev.chopsticks.kvdb.util.DbUtils._
 import kamon.Kamon
-import kamon.metric.{CounterMetric, MeasurementUnit}
+import kamon.metric.{Counter, MeasurementUnit}
 import org.xerial.snappy.SnappyOutputStream
 import zio.Task
 
@@ -59,16 +59,16 @@ object HttpDbServer extends StrictLogging {
   trait HttpDbServerMetrics {
     protected val dbServerPrefix: String = "db_"
 
-    lazy val dbByteCounter: CounterMetric =
-      Kamon.counter(dbServerPrefix + "uncompressed_bytes", MeasurementUnit.information.bytes)
+    lazy val dbByteCounter: Counter =
+      Kamon.counter(dbServerPrefix + "uncompressed_bytes", MeasurementUnit.information.bytes).withoutTags()
 //
-    lazy val dbCompressedByteCounter: CounterMetric =
-      Kamon.counter(dbServerPrefix + "compressed_bytes", MeasurementUnit.information.bytes)
+    lazy val dbCompressedByteCounter: Counter =
+      Kamon.counter(dbServerPrefix + "compressed_bytes", MeasurementUnit.information.bytes).withoutTags()
 
 //    lazy val dbWrappedCompressedByteCounter: Counter =
 //      Counter.build().name(dbServerPrefix + "wrapped_compressed_bytes").help("Wrapped Compressed Bytes").register()
 
-    lazy val dbBatchCounter: CounterMetric = Kamon.counter(dbServerPrefix + "batches")
+    lazy val dbBatchCounter: Counter = Kamon.counter(dbServerPrefix + "batches").withoutTags()
   }
 
   private val exceptionHandler: Flow[Array[Byte], Message, NotUsed] = Flow[Array[Byte]]
@@ -206,8 +206,10 @@ final class HttpDbServer[DbDef <: DbDefinition](
   private val measureUncompressedSink = metrics
     .map { m =>
       Sink.foreach[Array[Byte]] { b =>
-        m.dbByteCounter.increment(b.length.toLong)
-        m.dbBatchCounter.increment()
+        {
+          val _ = m.dbByteCounter.increment(b.length.toLong)
+        }
+        val _ = m.dbBatchCounter.increment()
       }
     }
     .getOrElse(Sink.ignore)
@@ -215,7 +217,7 @@ final class HttpDbServer[DbDef <: DbDefinition](
   private val measureCompressedSink = metrics
     .map { m =>
       Sink.foreach[Array[Byte]] { b =>
-        m.dbCompressedByteCounter.increment(b.length.toLong)
+        val _ = m.dbCompressedByteCounter.increment(b.length.toLong)
       }
     }
     .getOrElse(Sink.ignore)

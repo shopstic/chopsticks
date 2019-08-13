@@ -1,5 +1,6 @@
 package dev.chopsticks.kvdb.util
 
+import eu.timepit.refined.types.numeric.PosInt
 import org.rocksdb._
 import squants.information.Information
 import squants.information.InformationConversions._
@@ -7,15 +8,29 @@ import squants.information.InformationConversions._
 import scala.collection.JavaConverters._
 
 object RocksdbCFBuilder {
-  final case class RocksdbCFOptions(memoryBudget: Information, blockCache: Information, minPrefixLength: Int)
+  sealed trait ReadPattern
 
-  def apply(memoryBudget: Information, blockCache: Information): RocksdbCFBuilder = {
-    new RocksdbCFBuilder(memoryBudget, blockCache)
+  object PointLookupPattern extends ReadPattern
+  object TotalOrderScanPattern extends ReadPattern
+  final case class PrefixedScanPattern(minPrefixLength: PosInt) extends ReadPattern
+
+  final case class RocksdbCFOptions(
+    memoryBudget: Information,
+    blockCache: Information,
+    readPattern: ReadPattern,
+    compression: CompressionType = CompressionType.NO_COMPRESSION
+  )
+
+  def apply(
+    memoryBudget: Information,
+    blockCache: Information,
+    compression: CompressionType
+  ): RocksdbCFBuilder = {
+    new RocksdbCFBuilder(memoryBudget, blockCache, compression)
   }
 }
 
-class RocksdbCFBuilder(memoryBudget: Information, blockCache: Information) {
-  private val MEMTABLE_PREFIX_BLOOM_SIZE_RATIO = 0.1
+class RocksdbCFBuilder(memoryBudget: Information, blockCache: Information, compression: CompressionType) {
   private val memoryBudgetBytes = memoryBudget.toBytes.toLong
   private val blockCacheBytes = blockCache.toBytes.toLong
 
@@ -40,8 +55,10 @@ class RocksdbCFBuilder(memoryBudget: Information, blockCache: Information) {
       .setSoftPendingCompactionBytesLimit(0)
       .setHardPendingCompactionBytesLimit(0)
       .setMaxCompactionBytes(Long.MaxValue)
-      .setCompressionType(CompressionType.NO_COMPRESSION)
-      .setCompressionPerLevel((0 to numLevels).map(_ => CompressionType.NO_COMPRESSION).asJava)
+      .setCompressionType(compression)
+      .setCompressionPerLevel(
+        ((0 to 1).map(_ => CompressionType.NO_COMPRESSION) ++ (2 to numLevels).map(_ => compression)).asJava
+      )
   }
 
   private val tableFormat = if (blockCacheBytes > 0) {
@@ -69,9 +86,11 @@ class RocksdbCFBuilder(memoryBudget: Information, blockCache: Information) {
     {
       val _ = columnOptions
         .optimizeForPointLookup(1)
-        .setMemtablePrefixBloomSizeRatio(MEMTABLE_PREFIX_BLOOM_SIZE_RATIO)
     }
-    val _ = tableFormat.setIndexType(IndexType.kHashSearch)
+    val _ = tableFormat
+      .setDataBlockIndexType(DataBlockIndexType.kDataBlockBinaryAndHash)
+      .setDataBlockHashTableUtilRatio(0.75)
+      .setFilterPolicy(new BloomFilter(10))
     this
   }
 

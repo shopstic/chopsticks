@@ -1,68 +1,64 @@
 package dev.chopsticks.kvdb
 
-import java.nio.charset.StandardCharsets
-
-import akka.NotUsed
-import akka.stream.scaladsl.Flow
-import com.google.protobuf.ByteString
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.DbInterface._
-import dev.chopsticks.kvdb.proto.{DbDeletePrefixRequest, DbDeleteRequest, DbPutRequest, DbTransactionAction}
+import dev.chopsticks.kvdb.proto.DbTransactionAction
 import zio.clock.Clock
-import zio.{Task, TaskR}
+import zio.{Task, RIO}
 
-import scala.concurrent.Future
 import scala.language.higherKinds
 
 object DbClient {
-  sealed trait TransactionAction[+CF <: DbColumn[_, _]] {
-    val column: CF
-  }
-
-  final case class TransactionPut[+CF <: DbColumn[K, V], K, V](column: CF, key: K, value: V)
-      extends TransactionAction[CF]
-
-  final case class TransactionDelete[+CF <: DbColumn[K, _], K](column: CF, key: K) extends TransactionAction[CF]
-
-  final case class TransactionDeletePrefix[+CF <: DbColumn[_, _]](column: CF, prefix: String)
-      extends TransactionAction[CF]
-
-  final case class Transaction[KV <: DbColumn[K, V], K, V](kv: KV, k: K, v: V)
-
-  def encodeTransaction[CF[A, B] <: DbColumn[A, B], K, V](txn: TransactionAction[CF[K, V]]): DbTransactionAction = {
-    txn match {
-      case TransactionPut(column, key, value) =>
-        DbTransactionAction(
-          DbTransactionAction.Action.Put(
-            DbPutRequest(
-              columnId = column.id,
-              key = ByteString.copyFrom(column.encodeKey(key.asInstanceOf[K])),
-              value = ByteString.copyFrom(column.encodeValue(value.asInstanceOf[V]))
-            )
-          )
-        )
-
-      case TransactionDelete(column, key) =>
-        DbTransactionAction(
-          DbTransactionAction.Action.Delete(
-            DbDeleteRequest(
-              columnId = column.id,
-              key = ByteString.copyFrom(column.encodeKey(key.asInstanceOf[K]))
-            )
-          )
-        )
-
-      case TransactionDeletePrefix(column, prefix) =>
-        DbTransactionAction(
-          DbTransactionAction.Action.DeletePrefix(
-            DbDeletePrefixRequest(
-              columnId = column.id,
-              prefix = ByteString.copyFrom(prefix, StandardCharsets.UTF_8)
-            )
-          )
-        )
-    }
-  }
+//  sealed trait TransactionAction[+CF <: DbColumn[_, _]] {
+//    val column: CF
+//  }
+//
+//  final case class TransactionPut[+CF <: DbColumn[K, V], K, V](column: CF, key: K, value: V)
+//      extends TransactionAction[CF]
+//
+//  final case class TransactionDelete[+CF <: DbColumn[K, _], K](column: CF, key: K) extends TransactionAction[CF]
+//
+//  final case class TransactionDeletePrefix[+CF <: DbColumn[_, _]](column: CF, prefix: String)
+//      extends TransactionAction[CF]
+//
+//  final case class Transaction[KV <: DbColumn[K, V], K, V](kv: KV, k: K, v: V)
+//
+//  def encodeTransaction[CF[A, B] <: DbColumn[A, B], K, V](
+//    txn: TransactionAction[CF[K, V]]
+//  )(implicit codec: DbColumnCodec[K, V]): DbTransactionAction = {
+//    txn match {
+//      case TransactionPut(column, key, value) =>
+//        DbTransactionAction(
+//          DbTransactionAction.Action.Put(
+//            DbPutRequest(
+//              columnId = column.id,
+//              key = ByteString.copyFrom(codec.encodeKey(key.asInstanceOf[K])),
+//              value = ByteString.copyFrom(codec.encodeValue(value.asInstanceOf[V]))
+//            )
+//          )
+//        )
+//
+//      case TransactionDelete(column, key) =>
+//        DbTransactionAction(
+//          DbTransactionAction.Action.Delete(
+//            DbDeleteRequest(
+//              columnId = column.id,
+//              key = ByteString.copyFrom(codec.encodeKey(key.asInstanceOf[K]))
+//            )
+//          )
+//        )
+//
+//      case TransactionDeletePrefix(column, prefix) =>
+//        DbTransactionAction(
+//          DbTransactionAction.Action.DeletePrefix(
+//            DbDeletePrefixRequest(
+//              columnId = column.id,
+//              prefix = ByteString.copyFrom(prefix, StandardCharsets.UTF_8)
+//            )
+//          )
+//        )
+//    }
+//  }
 
   def apply[DbDef <: DbDefinition](
     db: DbInterface[DbDef]
@@ -83,18 +79,15 @@ final class DbClient[DbDef <: DbDefinition] private (val db: DbInterface[DbDef])
   implicit akkaEnv: AkkaEnv
 ) {
 
-  import DbClient._
-  import akkaEnv._
-
-  type Txn = TransactionAction[DbDef#BaseCol[Any, Any]]
-
   def column[Col[A, B] <: DbDef#BaseCol[A, B], K, V](
     col: DbDef#Columns => Col[K, V]
   ): DbColumnClient[DbDef, Col, K, V] = {
     new DbColumnClient[DbDef, Col, K, V](db, col(db.definition.columns))
   }
 
-  def column[Col[A, B] <: DbDef#BaseCol[A, B], K, V](col: Col[K, V]): DbColumnClient[DbDef, Col, K, V] = {
+  def column[Col[A, B] <: DbDef#BaseCol[A, B], K, V](
+    col: Col[K, V]
+  ): DbColumnClient[DbDef, Col, K, V] = {
     new DbColumnClient[DbDef, Col, K, V](db, col)
   }
 
@@ -115,32 +108,28 @@ final class DbClient[DbDef <: DbDefinition] private (val db: DbInterface[DbDef])
 
   def statsTask: Task[Map[String, Double]] = db.statsTask
 
-  def closeTask(): TaskR[Clock, Unit] = db.closeTask()
+  def closeTask(): RIO[Clock, Unit] = db.closeTask()
 
   def compactTask(): Task[Unit] = db.compactTask()
 
-  def transactionTask(actions: Seq[Txn]): Task[Seq[Txn]] = {
-    Task {
-      actions.map { a =>
-        encodeTransaction(a)
-      }
-    }.flatMap(db.transactionTask)
+  def transactionTask(actions: Seq[DbTransactionAction]): Task[Seq[DbTransactionAction]] = {
+    db.transactionTask(actions)
       .map(_ => actions)
   }
 
-  def transactionFlow(parallelism: Int = 1): Flow[Seq[Txn], Seq[Txn], NotUsed] = {
-    Flow[Seq[Txn]]
-      .mapAsync(parallelism) { b =>
-        Future((b, b.map(a => encodeTransaction(a))))
-      }
-      .mapAsync(parallelism) {
-        case (b, encoded) =>
-          unsafeRunToFuture(
-            db.transactionTask(encoded)
-              .map(_ => b)
-          )
-      }
-  }
+//  def transactionFlow(parallelism: Int = 1): Flow[Seq[DbTransactionAction], Seq[DbTransactionAction], NotUsed] = {
+//    Flow[Seq[DbTransactionAction]]
+//      .mapAsync(parallelism) { b =>
+//        Future((b, b.map(a => encodeTransaction(a))))
+//      }
+//      .mapAsync(parallelism) {
+//        case (b, encoded) =>
+//          unsafeRunToFuture(
+//            db.transactionTask(encoded)
+//              .map(_ => b)
+//          )
+//      }
+//  }
 
   def transactionBuilder: DbColumnTransactionBuilder[DbDef] = {
     new DbColumnTransactionBuilder[DbDef](db.definition)

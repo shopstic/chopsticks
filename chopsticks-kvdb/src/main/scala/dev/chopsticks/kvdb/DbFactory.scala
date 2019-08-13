@@ -1,10 +1,13 @@
 package dev.chopsticks.kvdb
 
-import dev.chopsticks.kvdb.DbInterface.DbDefinition
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
+import dev.chopsticks.kvdb.DbInterface.DbDefinition
+import dev.chopsticks.kvdb.util.RocksdbCFBuilder.{RocksdbCFOptions, TotalOrderScanPattern}
+import org.rocksdb.CompressionType
+import pureconfig.ConfigConvert.viaNonEmptyString
+import pureconfig.error.FailureReason
 import pureconfig.generic.FieldCoproductHint
-import pureconfig.{KebabCase, PascalCase}
+import pureconfig.{ConfigConvert, KebabCase, PascalCase}
 import squants.information.Information
 
 import scala.concurrent.duration._
@@ -29,7 +32,32 @@ object DbFactory {
     }
   }
 
-  final case class RocksdbColumnFamilyConfig(memoryBudget: Information, blockCache: Information)
+  final case class RocksdbColumnFamilyConfig(
+    memoryBudget: Information,
+    blockCache: Information,
+    compression: CompressionType
+  )
+
+  object RocksdbColumnFamilyConfig {
+    import dev.chopsticks.util.config.PureconfigConverters._
+    final case class InvalidCompressionType(given: String) extends FailureReason {
+      def description: String =
+        s"Invalid RocksDB compression type '$given', valid types are: " +
+          s"${(CompressionType.values.map(_.getLibraryName).collect { case c if c ne null => s"'$c'" } :+ "'none'").mkString(", ")}"
+    }
+
+    implicit val compressionTypeConverter: ConfigConvert[CompressionType] = viaNonEmptyString[CompressionType](
+      {
+        case "none" => Right(CompressionType.NO_COMPRESSION)
+        case s =>
+          CompressionType.values.find(_.getLibraryName == s).map(Right(_)).getOrElse(Left(InvalidCompressionType(s)))
+      },
+      _.getLibraryName
+    )
+
+    //noinspection TypeAnnotation
+    implicit val converter = ConfigConvert[RocksdbColumnFamilyConfig]
+  }
 
   final case class RocksdbDbClientConfig(
     path: String,
@@ -91,7 +119,8 @@ object DbFactory {
               RocksdbCFOptions(
                 memoryBudget = v.memoryBudget,
                 blockCache = v.blockCache,
-                minPrefixLength = 0
+                readPattern = TotalOrderScanPattern,
+                compression = v.compression
               )
             )
         }.toMap

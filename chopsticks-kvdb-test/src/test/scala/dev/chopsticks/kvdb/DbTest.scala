@@ -18,7 +18,7 @@ import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest._
 import zio.blocking._
 import zio.clock.Clock
-import zio.{Task, TaskR, UIO}
+import zio.{Task, RIO, UIO}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -29,7 +29,7 @@ object DbTest extends StrictLogging {
 
   final case class Fixture(db: DbInterface[TestDb.type])
 
-  def withTempDir[R, A](block: File => TaskR[R, A]): TaskR[R with Blocking, A] = {
+  def withTempDir[R, A](block: File => RIO[R, A]): RIO[R with Blocking, A] = {
     blocking(Task(File.newTemporaryDirectory().deleteOnExit()))
       .bracket(f => blocking(UIO(f.delete()))) { tempDir =>
         block(tempDir)
@@ -69,7 +69,7 @@ object DbTest extends StrictLogging {
         case (tx, (k, v)) =>
           tx.put(column, k, v)
       }
-      .encodedResult
+      .result
     db.transactionTask(batch)
   }
 
@@ -93,7 +93,7 @@ object DbTest extends StrictLogging {
 
     import Environment.{materializer, unsafeRunToFuture}
 
-    protected def runTest: (DbInterface[TestDb.type] => Task[Assertion]) => TaskR[AkkaApp.Env, Assertion]
+    protected def runTest: (DbInterface[TestDb.type] => Task[Assertion]) => RIO[AkkaApp.Env, Assertion]
 
     private def withFixture(testCode: Fixture => Task[Assertion]): Future[Assertion] = {
       unsafeRunToFuture(runTest { db =>
@@ -649,7 +649,7 @@ object DbTest extends StrictLogging {
                   val padded = s"%0${pad}d".format(i)
                   tx.put(_.Default, padded, padded)
                 }
-                .encodedResult
+                .result
             }
             _ <- db.transactionTask(tx)
             batches <- Task.fromFuture { _ =>
@@ -868,7 +868,7 @@ object DbTest extends StrictLogging {
                   val padded = s"%0${pad}d".format(i)
                   tx.put(_.Default, padded, padded)
                 }
-                .encodedResult
+                .result
             }
             _ <- db.transactionTask(tx)
             batches <- Task.fromFuture { _ =>
@@ -1078,7 +1078,7 @@ object DbTest extends StrictLogging {
                 .delete(_.Lookup, "bbbb1")
                 .put(_.Default, "cccc1", "cccc1")
                 .deletePrefix(_.Default, "pppp")
-                .encodedResult
+                .result
             )
             allDefault <- Task.fromFuture { _ =>
               db.iterateSource(TestDb.columns.Default, $$(_.first, _.last))
@@ -1117,7 +1117,7 @@ object DbTest extends StrictLogging {
 
       "throw DbAlreadyClosedException if the (local) db is already closed" in withFixture {
         case Fixture(db) =>
-          val task: TaskR[Blocking with Clock, Assertion] = for {
+          val task: RIO[Blocking with Clock, Assertion] = for {
             _ <- db.closeTask()
             correctBehavior <- db.statsTask
               .map(_ => !db.isLocal)

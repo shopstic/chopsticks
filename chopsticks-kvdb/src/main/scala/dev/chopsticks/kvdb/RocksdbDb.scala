@@ -27,7 +27,7 @@ import org.rocksdb._
 import zio.blocking._
 import zio.clock.Clock
 import zio.internal.Executor
-import zio.{Task, TaskR, UIO, ZIO, ZSchedule}
+import zio.{RIO, Task, UIO, ZIO, ZSchedule}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -117,7 +117,7 @@ object RocksdbDb extends StrictLogging {
     }
   }
 
-  private def readColumnFamilyOptionsFromDisk(dbPath: String): TaskR[Blocking, Map[String, Map[String, String]]] = {
+  private def readColumnFamilyOptionsFromDisk(dbPath: String): RIO[Blocking, Map[String, Map[String, String]]] = {
     blocking(Task {
       val fileList = File(dbPath).list
       val prefix = "OPTIONS-"
@@ -179,11 +179,14 @@ final class RocksdbDb[DbDef <: DbDefinition](
     val defaultOptions = col.rocksdbOptions
     val o: RocksdbCFOptions = options.getOrElse(col, defaultOptions)
 
-    val b = RocksdbCFBuilder(o.memoryBudget, o.blockCache)
-    val b1 =
-      if (defaultOptions.minPrefixLength > 0) b.withCappedPrefixExtractor(defaultOptions.minPrefixLength)
-      else b.withPointLookup()
-
+    val b = RocksdbCFBuilder(o.memoryBudget, o.blockCache, o.compression)
+    val b1 = defaultOptions.readPattern match {
+      case RocksdbCFBuilder.PointLookupPattern =>
+        b.withPointLookup()
+      case RocksdbCFBuilder.PrefixedScanPattern(minPrefixLength) =>
+        b.withCappedPrefixExtractor(minPrefixLength.value)
+      case RocksdbCFBuilder.TotalOrderScanPattern => b
+    }
     (col, b1.build())
   }.toMap
 
@@ -778,7 +781,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  def closeTask(): TaskR[Clock, Unit] = {
+  def closeTask(): RIO[Clock, Unit] = {
     import zio.duration._
 
     for {
@@ -797,7 +800,8 @@ final class RocksdbDb[DbDef <: DbDefinition](
           db.flush(new FlushOptions().setWaitForFlush(true), c)
         }
         columnHandleMap.foreach(_._2.close())
-        db.close()
+        db.flushWal(true)
+        db.closeE()
       })
     } yield ()
   }

@@ -15,7 +15,7 @@ import dev.chopsticks.kvdb.{DbClient, DbFactory}
 import dev.chopsticks.sample.kvdb.{DummyTestKvdb, DummyTestKvdbEnv}
 import dev.chopsticks.util.config.PureconfigLoader
 import zio.clock.Clock
-import zio.{TaskR, ZIO, ZManaged}
+import zio.{RIO, ZIO, ZManaged}
 
 object KvdbTestSampleApp extends AkkaApp {
 
@@ -59,7 +59,7 @@ object KvdbTestSampleApp extends AkkaApp {
     }
   }
 
-  protected def run: TaskR[Env, Unit] = {
+  protected def run: RIO[Env, Unit] = {
     val task = for {
       dbClient <- ZIO.access[DummyTestKvdbEnv](_.dummyTestKvdb)
       defaultCol = dbClient.column(_.Default)

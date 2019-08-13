@@ -13,7 +13,7 @@ import dev.chopsticks.kvdb.proto._
 import enumeratum.EnumEntry
 import enumeratum.EnumEntry.Snakecase
 import zio.clock.Clock
-import zio.{Task, TaskR}
+import zio.{Task, RIO}
 
 import scala.concurrent.Future
 import scala.language.higherKinds
@@ -142,7 +142,7 @@ trait DbInterface[DbDef <: DbDefinition] {
 
   def dropColumnFamily[Col <: DbDef#BaseCol[_, _]](column: Col): Task[Unit]
 
-  def closeTask(): TaskR[Clock, Unit]
+  def closeTask(): RIO[Clock, Unit]
 
   def compactTask(): Task[Unit]
 

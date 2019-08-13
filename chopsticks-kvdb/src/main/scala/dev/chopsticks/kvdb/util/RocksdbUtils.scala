@@ -6,7 +6,7 @@ import better.files.File
 import com.typesafe.scalalogging.StrictLogging
 import org.rocksdb._
 import zio.blocking._
-import zio.{Task, TaskR}
+import zio.{Task, RIO}
 
 object RocksdbUtils extends StrictLogging {
   val LOOKUP_COLUMN_FAMILY_NAME: String = "lookup"
@@ -36,7 +36,7 @@ object RocksdbUtils extends StrictLogging {
     else options
   }
 
-  def findLatestOptionsFile(dbPath: String): TaskR[Blocking, File] = {
+  def findLatestOptionsFile(dbPath: String): RIO[Blocking, File] = {
     blocking(Task {
       val fileList = File(dbPath).list
       val prefix = "OPTIONS-"

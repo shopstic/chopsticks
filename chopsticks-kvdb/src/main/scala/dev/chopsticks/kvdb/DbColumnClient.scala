@@ -294,7 +294,7 @@ final class DbColumnClient[DbDef <: DbDefinition, Col[A, B] <: DbDef#BaseCol[A, 
           for ((k, v) <- batch) txn.put(column, k, v)
           for ((ck, cv) <- aggregateCheckpoints(batch)) txn.put(checkpointColumn(db.definition.columns), ck, cv)
 
-          txn.encodedResult
+          txn.result
         }.map(encoded => (batch, encoded))
       }
       .mapAsync(1) {

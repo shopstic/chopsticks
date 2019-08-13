@@ -1,19 +1,28 @@
 package dev.chopsticks.kvdb
 
+import java.nio.charset.StandardCharsets
+
+import com.google.protobuf.ByteString
 import dev.chopsticks.kvdb.codec.DbKeyTransformer
-import dev.chopsticks.kvdb.DbClient.{TransactionAction, TransactionDelete, TransactionDeletePrefix, TransactionPut}
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
-import dev.chopsticks.kvdb.proto.DbTransactionAction
+import dev.chopsticks.kvdb.proto.{DbDeletePrefixRequest, DbDeleteRequest, DbPutRequest, DbTransactionAction}
 
 import scala.collection.mutable
 import scala.language.higherKinds
 
 final class DbColumnTransactionBuilder[DbDef <: DbDefinition](val definition: DbDef) {
-  type Txn = TransactionAction[DbDef#BaseCol[Any, Any]]
-  private val buffer = new mutable.ListBuffer[Txn]
+  private val buffer = new mutable.ListBuffer[DbTransactionAction]
 
   def put[CF[A, B] <: DbDef#BaseCol[A, B], K, V](column: CF[K, V], key: K, value: V): this.type = {
-    val _ = buffer += TransactionPut(column, key, value).asInstanceOf[Txn]
+    val _ = buffer += DbTransactionAction(
+      DbTransactionAction.Action.Put(
+        DbPutRequest(
+          columnId = column.id,
+          key = ByteString.copyFrom(column.encodeKey(key)),
+          value = ByteString.copyFrom(column.encodeValue(value))
+        )
+      )
+    )
     this
   }
 
@@ -39,7 +48,14 @@ final class DbColumnTransactionBuilder[DbDef <: DbDefinition](val definition: Db
   }
 
   def delete[CF[A, B] <: DbDef#BaseCol[A, B], K](column: CF[K, _], key: K): this.type = {
-    val _ = buffer += TransactionDelete(column, key).asInstanceOf[Txn]
+    val _ = buffer += DbTransactionAction(
+      DbTransactionAction.Action.Delete(
+        DbDeleteRequest(
+          columnId = column.id,
+          key = ByteString.copyFrom(column.encodeKey(key))
+        )
+      )
+    )
     this
   }
 
@@ -50,11 +66,16 @@ final class DbColumnTransactionBuilder[DbDef <: DbDefinition](val definition: Db
 
   def deletePrefix[CF[A, B] <: DbDef#BaseCol[A, B]](column: DbDef#Columns => CF[_, _], prefix: String): this.type = {
     val col = column(definition.columns)
-    val _ = buffer += TransactionDeletePrefix(col, prefix).asInstanceOf[Txn]
+    val _ = buffer += DbTransactionAction(
+      DbTransactionAction.Action.DeletePrefix(
+        DbDeletePrefixRequest(
+          columnId = col.id,
+          prefix = ByteString.copyFrom(prefix, StandardCharsets.UTF_8)
+        )
+      )
+    )
     this
   }
 
-  def result: List[Txn] = buffer.result()
-
-  def encodedResult: List[DbTransactionAction] = result.map(v => DbClient.encodeTransaction(v))
+  def result: List[DbTransactionAction] = buffer.result()
 }

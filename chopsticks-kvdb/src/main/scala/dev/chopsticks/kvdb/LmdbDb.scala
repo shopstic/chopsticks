@@ -20,7 +20,7 @@ import dev.chopsticks.kvdb.proto._
 import org.lmdbjava._
 import zio.clock.Clock
 import zio.internal.Executor
-import zio.{Task, TaskR, ZSchedule}
+import zio.{Task, RIO, ZSchedule}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
@@ -680,7 +680,7 @@ final class LmdbDb[DbDef <: DbDefinition](
     } yield ())
   }
 
-  def closeTask(): TaskR[Clock, Unit] = {
+  def closeTask(): RIO[Clock, Unit] = {
     import zio.duration._
 
     val task = for {
