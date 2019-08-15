@@ -39,11 +39,6 @@ object Dependencies {
     "io.kamon" %% "kamon-core" % "2.0.0"
   )
 
-  val kamonProdDeps = Seq(
-    "io.kamon" %% "kamon-prometheus" % "2.0.0",
-    "io.kamon" %% "kamon-status-page" % "2.0.0"
-  )
-
   val akkaGrpcRuntimeDeps = Seq(
     "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.7.1"
   )
