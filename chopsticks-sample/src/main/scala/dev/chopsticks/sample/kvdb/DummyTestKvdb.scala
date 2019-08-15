@@ -19,12 +19,22 @@ object DummyTestKvdbColumns extends DbColumns[DummyTestKvdbColumn[_, _]] {
 
   case object Default extends DummyTestKvdbColumn[String, String] {
     val rocksdbOptions: RocksdbCFOptions =
-      RocksdbCFBuilder.RocksdbCFOptions(memoryBudget = 64.kib, blockCache = 64.kib, PrefixedScanPattern(4))
+      RocksdbCFBuilder.RocksdbCFOptions(
+        memoryBudget = 64.kib,
+        blockCache = 64.kib,
+        blockSize = 16.kib,
+        PrefixedScanPattern(4)
+      )
   }
 
   case object Lookup extends DummyTestKvdbColumn[String, String] {
     val rocksdbOptions: RocksdbCFOptions =
-      RocksdbCFBuilder.RocksdbCFOptions(memoryBudget = 64.kib, blockCache = 64.kib, PointLookupPattern)
+      RocksdbCFBuilder.RocksdbCFOptions(
+        memoryBudget = 64.kib,
+        blockCache = 64.kib,
+        blockSize = 16.kib,
+        PointLookupPattern
+      )
   }
 }
 

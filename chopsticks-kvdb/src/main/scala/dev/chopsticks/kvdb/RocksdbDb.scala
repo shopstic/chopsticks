@@ -179,7 +179,12 @@ final class RocksdbDb[DbDef <: DbDefinition](
     val defaultOptions = col.rocksdbOptions
     val o: RocksdbCFOptions = options.getOrElse(col, defaultOptions)
 
-    val b = RocksdbCFBuilder(o.memoryBudget, o.blockCache, o.compression)
+    val b = RocksdbCFBuilder(
+      memoryBudget = o.memoryBudget,
+      blockCache = o.blockCache,
+      blockSize = o.blockSize,
+      compression = o.compression
+    )
     val b1 = defaultOptions.readPattern match {
       case RocksdbCFBuilder.PointLookupPattern =>
         b.withPointLookup()

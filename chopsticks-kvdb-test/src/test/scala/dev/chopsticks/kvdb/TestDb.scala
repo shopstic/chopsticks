@@ -16,11 +16,11 @@ object TestDbColumns extends DbColumns[TestDbColumn[_, _]] {
   val values = findValues
 
   case object Default extends TestDbColumn[String, String] {
-    val rocksdbOptions: RocksdbCFOptions = RocksdbCFOptions(64.mib, 64.mib, PrefixedScanPattern(1))
+    val rocksdbOptions: RocksdbCFOptions = RocksdbCFOptions(64.mib, 64.mib, 16.kib, PrefixedScanPattern(1))
   }
 
   case object Lookup extends TestDbColumn[String, String] {
-    val rocksdbOptions: RocksdbCFOptions = RocksdbCFOptions(64.mib, 64.mib, PointLookupPattern)
+    val rocksdbOptions: RocksdbCFOptions = RocksdbCFOptions(64.mib, 64.mib, 16.kib, PointLookupPattern)
   }
 
 //  case object Checkpoint extends TestDbColumn[String, LocalDateTime] {

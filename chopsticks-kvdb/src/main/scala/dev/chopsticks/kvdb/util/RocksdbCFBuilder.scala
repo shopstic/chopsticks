@@ -3,7 +3,6 @@ package dev.chopsticks.kvdb.util
 import eu.timepit.refined.types.numeric.PosInt
 import org.rocksdb._
 import squants.information.Information
-import squants.information.InformationConversions._
 
 import scala.collection.JavaConverters._
 
@@ -17,6 +16,7 @@ object RocksdbCFBuilder {
   final case class RocksdbCFOptions(
     memoryBudget: Information,
     blockCache: Information,
+    blockSize: Information,
     readPattern: ReadPattern,
     compression: CompressionType = CompressionType.NO_COMPRESSION
   )
@@ -24,13 +24,19 @@ object RocksdbCFBuilder {
   def apply(
     memoryBudget: Information,
     blockCache: Information,
+    blockSize: Information,
     compression: CompressionType
   ): RocksdbCFBuilder = {
-    new RocksdbCFBuilder(memoryBudget, blockCache, compression)
+    new RocksdbCFBuilder(memoryBudget, blockCache, blockSize, compression)
   }
 }
 
-class RocksdbCFBuilder(memoryBudget: Information, blockCache: Information, compression: CompressionType) {
+final class RocksdbCFBuilder private (
+  memoryBudget: Information,
+  blockCache: Information,
+  blockSize: Information,
+  compression: CompressionType
+) {
   private val memoryBudgetBytes = memoryBudget.toBytes.toLong
   private val blockCacheBytes = blockCache.toBytes.toLong
 
@@ -63,14 +69,14 @@ class RocksdbCFBuilder(memoryBudget: Information, blockCache: Information, compr
 
   private val tableFormat = if (blockCacheBytes > 0) {
     new BlockBasedTableConfig()
-      .setBlockSize(128.kib.toBytes.toLong)
+      .setBlockSize(blockSize.toBytes.toLong)
       .setBlockCache(new ClockCache(blockCacheBytes))
       .setCacheIndexAndFilterBlocks(true)
       .setPinL0FilterAndIndexBlocksInCache(true)
   }
   else {
     new BlockBasedTableConfig()
-      .setBlockSize(128.kib.toBytes.toLong)
+      .setBlockSize(blockSize.toBytes.toLong)
       .setNoBlockCache(true)
   }
 

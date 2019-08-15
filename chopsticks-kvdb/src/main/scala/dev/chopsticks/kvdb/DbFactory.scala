@@ -35,6 +35,7 @@ object DbFactory {
   final case class RocksdbColumnFamilyConfig(
     memoryBudget: Information,
     blockCache: Information,
+    blockSize: Information,
     compression: CompressionType
   )
 
@@ -113,12 +114,13 @@ object DbFactory {
       case RocksdbDbClientConfig(path, readOnly, startWithBulkInserts, columns, ioDispatcher) =>
         //noinspection RedundantCollectionConversion
         val customCfOptions: Map[DbDef#BaseCol[_, _], RocksdbCFOptions] = columns.map {
-          case (k, v) =>
+          case (k, v: RocksdbColumnFamilyConfig) =>
             (
               definition.columns.withName(k).asInstanceOf[DbDef#BaseCol[_, _]],
               RocksdbCFOptions(
                 memoryBudget = v.memoryBudget,
                 blockCache = v.blockCache,
+                blockSize = v.blockSize,
                 readPattern = TotalOrderScanPattern,
                 compression = v.compression
               )
