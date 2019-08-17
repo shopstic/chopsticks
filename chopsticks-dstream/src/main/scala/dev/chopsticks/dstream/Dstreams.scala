@@ -9,9 +9,9 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.{Done, NotUsed}
 import dev.chopsticks.dstream.DstreamEnv.WorkResult
-import dev.chopsticks.fp.ZIOExt.Implicits._
-import dev.chopsticks.fp.ZIOExt.MeasuredLogging
+import dev.chopsticks.fp.zio_logging._
 import dev.chopsticks.fp._
+import dev.chopsticks.fp.zio_logging.MeasuredLogging
 import zio._
 import zio.clock.Clock
 
