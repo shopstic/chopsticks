@@ -1,6 +1,5 @@
 package dev.chopsticks.kvdb
 
-import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{ArrayList => JavaArrayList}
@@ -12,12 +11,10 @@ import better.files.File
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
-import enumeratum.EnumEntry.Snakecase
-import enumeratum.{Enum, EnumEntry}
+import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.kvdb.codec.DbKey
 import dev.chopsticks.kvdb.codec.DbKeyConstraints.Implicits._
-import dev.chopsticks.kvdb.DbInterface._
-import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.proto.DbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.DbUtils._
@@ -33,7 +30,7 @@ import zio.{RIO, Task, UIO, ZIO, ZSchedule}
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.language.higherKinds
-import scala.util.{Failure, Success, Try}
+import scala.util.Failure
 
 object RocksdbDb extends StrictLogging {
   private def byteArrayToString(bytes: Array[Byte]): String = {
