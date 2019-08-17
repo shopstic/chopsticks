@@ -1,6 +1,7 @@
 package dev.chopsticks.kvdb.codec
 
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, YearMonth}
+import java.util.UUID
 
 import com.sleepycat.bind.tuple.TupleInput
 import dev.chopsticks.kvdb.codec.DbKeyDecoder.{DbKeyDecodeResult, GenericDecodingException}
@@ -56,6 +57,9 @@ object BerkeleydbKeyDecoder extends ProductTypeClassCompanion[BerkeleydbKeyDecod
 
   implicit val bigDecimalBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[BigDecimal] = createTry(
     in => BigDecimal(in.readSortedBigDecimal)
+  )
+  implicit val uuidBerkeleydbKeyDecoder: BerkeleydbKeyDecoder[UUID] = createTry(
+    in => new UUID(in.readLong(), in.readLong())
   )
 
   def protobufValueWithMapperBerkeleydbKeyDecoder[U, V](

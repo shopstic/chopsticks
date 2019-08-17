@@ -1,6 +1,7 @@
 package dev.chopsticks.kvdb.codec
 
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, YearMonth}
+import java.util.UUID
 
 import com.sleepycat.bind.tuple.TupleOutput
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
@@ -45,6 +46,9 @@ object BerkeleydbKeyEncoder extends ProductTypeClassCompanion[BerkeleydbKeyEncod
   )
   implicit val bigDecimalBerkeleydbKeyEncoder: BerkeleydbKeyEncoder[BigDecimal] = create(
     (o, v) => o.writeSortedBigDecimal(v.underlying)
+  )
+  implicit val uuidBerkeleydbKeyEncoder: BerkeleydbKeyEncoder[UUID] = create(
+    (o, v) => o.writeLong(v.getMostSignificantBits).writeLong(v.getLeastSignificantBits)
   )
 
   def protobufValueWithMapperBerkeleydbKeyEncoder[U, V](

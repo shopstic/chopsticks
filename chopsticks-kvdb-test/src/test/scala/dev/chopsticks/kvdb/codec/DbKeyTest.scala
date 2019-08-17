@@ -1,15 +1,16 @@
 package dev.chopsticks.kvdb.codec
 
 import java.time._
+import java.util.UUID
 
 import dev.chopsticks.testkit.ArbitraryTime._
 import org.scalactic.anyvals.{PosInt, PosZDouble}
-import org.scalatest.{Assertions, WordSpecLike}
+import org.scalatest.{Assertions, Matchers, WordSpecLike}
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import dev.chopsticks.kvdb.codec.berkeleydb_key._
 
 //noinspection TypeAnnotation
-class DbKeyTest extends WordSpecLike with Assertions with ScalaCheckDrivenPropertyChecks {
+class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaCheckDrivenPropertyChecks {
   "Scala tuple" should {
     type TupleKey = (Boolean, Option[Int], String)
     implicit val tupleDbKey = DbKey[TupleKey]
@@ -339,6 +340,19 @@ class DbKeyTest extends WordSpecLike with Assertions with ScalaCheckDrivenProper
         assert(DbKey.compare(DbKey.encode(BooleanKey(false)), DbKey.encode(BooleanKey(true))) < 0)
         assert(DbKey.compare(DbKey.encode(BooleanKey(true)), DbKey.encode(BooleanKey(true))) == 0)
         assert(DbKey.compare(DbKey.encode(BooleanKey(false)), DbKey.encode(BooleanKey(false))) == 0)
+      }
+    }
+
+    "UUID" should {
+      case class UuidKey(value: UUID, foo: Boolean)
+      object UuidKey {
+        implicit val dbKey = DbKey[UuidKey]
+      }
+      "encode / decode" in {
+        forAll { (uuid: UUID, foo: Boolean) =>
+          val key = UuidKey(uuid, foo)
+          DbKey.decode[UuidKey](DbKey.encode(key)) should equal(Right(key))
+        }
       }
     }
   }
