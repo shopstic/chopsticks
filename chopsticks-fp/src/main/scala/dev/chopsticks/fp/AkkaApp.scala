@@ -1,4 +1,6 @@
 package dev.chopsticks.fp
+import java.util.concurrent.atomic.AtomicBoolean
+
 import akka.Done
 import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.{ActorSystem, CoordinatedShutdown}
@@ -67,8 +69,9 @@ trait AkkaApp extends LoggingContext {
           .fromExecutionContext(as.dispatcher)
           .withTracingConfig(if (zioTracingEnabled) TracingConfig.enabled else TracingConfig.disabled)
       ) {
+        private val isShuttingDown = new AtomicBoolean(false)
         override def reportFailure(cause: Cause[_]): Unit = {
-          if (shutdown.shutdownReason.isEmpty) {
+          if (!cause.interrupted && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
             super.reportFailure(cause)
             val _ = shutdown.run(JvmExitReason)
           }
