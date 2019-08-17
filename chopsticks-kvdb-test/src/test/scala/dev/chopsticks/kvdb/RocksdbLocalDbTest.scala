@@ -4,7 +4,7 @@ import dev.chopsticks.kvdb.DbTest.DbTest
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv}
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import org.scalatest.Assertion
-import zio.{Task, RIO, UIO, ZIO}
+import zio.{RIO, Task, UIO, ZIO}
 
 class RocksdbLocalDbTest extends DbTest {
   protected val runTest: (DbInterface[TestDb.type] => Task[Assertion]) => RIO[AkkaApp.Env, Assertion] =

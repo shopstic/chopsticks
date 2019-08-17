@@ -6,7 +6,7 @@ import better.files.File
 import com.typesafe.scalalogging.StrictLogging
 import org.rocksdb._
 import zio.blocking._
-import zio.{Task, RIO}
+import zio.{RIO, Task}
 
 object RocksdbUtils extends StrictLogging {
   val LOOKUP_COLUMN_FAMILY_NAME: String = "lookup"

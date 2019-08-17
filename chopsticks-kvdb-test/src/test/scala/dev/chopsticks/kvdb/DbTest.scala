@@ -18,7 +18,7 @@ import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest._
 import zio.blocking._
 import zio.clock.Clock
-import zio.{Task, RIO, UIO}
+import zio.{RIO, Task, UIO}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._

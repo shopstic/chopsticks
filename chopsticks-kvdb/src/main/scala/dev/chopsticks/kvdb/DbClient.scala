@@ -4,7 +4,7 @@ import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.DbInterface._
 import dev.chopsticks.kvdb.proto.DbTransactionAction
 import zio.clock.Clock
-import zio.{Task, RIO}
+import zio.{RIO, Task}
 
 import scala.language.higherKinds
 
@@ -106,7 +106,7 @@ final class DbClient[DbDef <: DbDefinition] private (val db: DbInterface[DbDef])
       .map(_ => this)
   }
 
-  def statsTask: Task[Map[String, Double]] = db.statsTask
+  def statsTask: Task[Map[(String, Map[String, String]), Double]] = db.statsTask
 
   def closeTask(): RIO[Clock, Unit] = db.closeTask()
 

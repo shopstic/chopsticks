@@ -360,7 +360,12 @@ final class HttpDbServer[DbDef <: DbDefinition](
   private def stats: Future[DbStats] = {
     unsafeRunToFuture(
       db.statsTask
-        .map(DbStats.apply)
+        .map { stats =>
+          DbStats(stats.map {
+            case ((name, labels), value) =>
+              DbStatItem(name, labels, value)
+          }.toList)
+        }
     )
   }
 
@@ -479,7 +484,7 @@ final class HttpDbServer[DbDef <: DbDefinition](
         },
         path(STATS_PATH) {
           get {
-            checkVersion("20180130") {
+            checkVersion("20190817") {
               complete(stats)
             }
           }

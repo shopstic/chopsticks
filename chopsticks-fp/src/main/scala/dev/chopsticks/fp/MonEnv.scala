@@ -3,7 +3,7 @@ package dev.chopsticks.fp
 import com.typesafe.config.Config
 import dev.chopsticks.fp.AkkaApp.Env
 import kamon.Kamon
-import zio.{Task, RIO}
+import zio.{RIO, Task}
 
 trait MonEnv {
   def monitor(config: Config): RIO[AkkaApp.Env, Unit]

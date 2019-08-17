@@ -100,7 +100,7 @@ lazy val sample = Build
   .defineProject("sample")
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
-    libraryDependencies ++= janinoDeps ++ silencerDeps,
+    libraryDependencies ++= janinoDeps ++ silencerDeps ++ pprintDeps,
     publish / skip := true,
     bintrayRelease := {},
     akkaGrpcCodeGeneratorSettings += "server_power_apis",

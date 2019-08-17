@@ -30,7 +30,7 @@ import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.stream.{AkkaStreamUtils, LastStateFlow}
 import org.xerial.snappy.{SnappyCodec, SnappyInputStream}
 import zio.clock.Clock
-import zio.{Task, RIO, ZIO}
+import zio.{RIO, Task, ZIO}
 
 import scala.collection.mutable
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -296,15 +296,21 @@ final class HttpDb[DbDef <: DbDefinition](
       }
   }
 
-  def statsTask: Task[Map[String, Double]] = {
+  def statsTask: Task[Map[(String, Map[String, String]), Double]] = {
     val request = HttpRequest(
       method = HttpMethods.GET,
       uri = uriWithPath(HttpDbServer.STATS_PATH),
-      headers = Vector(apiVersionHeader("20180130"))
+      headers = Vector(apiVersionHeader("20190817"))
     )
 
     httpRequestTask[Unit, DbStats](request, ())
-      .map { case DbStats(stats) => stats }
+      .map {
+        case DbStats(items) =>
+          items.map {
+            case DbStatItem(name, labels, value) =>
+              (name, labels) -> value
+          }.toMap
+      }
   }
 
   def estimateCount[Col <: DbDef#BaseCol[_, _]](column: Col): Task[Long] = {

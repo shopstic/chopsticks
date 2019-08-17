@@ -62,6 +62,13 @@ object KvdbTestSampleApp extends AkkaApp {
   protected def run: RIO[Env, Unit] = {
     val task = for {
       dbClient <- ZIO.access[DummyTestKvdbEnv](_.dummyTestKvdb)
+      stats <- dbClient.statsTask
+      _ <- ZLogger.info(
+        stats.toVector
+          .sortBy(_._1._1)
+          .map(t => s"${t._1._1} (${t._1._2.map(l => s"${l._1}=${l._2}").mkString(" ")}): ${t._2}")
+          .mkString("\n")
+      )
       defaultCol = dbClient.column(_.Default)
       tailFiber <- ZIOExt
         .interruptableGraph(

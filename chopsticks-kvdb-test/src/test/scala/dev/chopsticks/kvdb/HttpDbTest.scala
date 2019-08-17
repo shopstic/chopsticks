@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import dev.chopsticks.kvdb.DbTest.DbTest
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv}
 import org.scalatest.Assertion
-import zio.{Task, RIO, UIO, ZIO}
+import zio.{RIO, Task, UIO, ZIO}
 
 import scala.concurrent.TimeoutException
 

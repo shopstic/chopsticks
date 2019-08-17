@@ -13,7 +13,7 @@ import dev.chopsticks.kvdb.proto._
 import enumeratum.EnumEntry
 import enumeratum.EnumEntry.Snakecase
 import zio.clock.Clock
-import zio.{Task, RIO}
+import zio.{RIO, Task}
 
 import scala.concurrent.Future
 import scala.language.higherKinds
@@ -92,7 +92,7 @@ trait DbInterface[DbDef <: DbDefinition] {
     new DbColumnTransactionBuilder[DbDef](definition)
   }
 
-  def statsTask: Task[Map[String, Double]]
+  def statsTask: Task[Map[(String, Map[String, String]), Double]]
 
   def definition: DbDef
 

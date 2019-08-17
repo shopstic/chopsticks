@@ -9,8 +9,14 @@ option (scalapb.options) = {
   import: "dev.chopsticks.kvdb.codec.ProtoMappers._"
 };
 
+message DbStatItem {
+  string name = 1;
+  map<string, string> labels = 2;
+  double value = 3;
+}
+
 message DbStats {
-  map<string, double> stats = 1;
+  repeated DbStatItem items = 1;
 }
 
 message DbKeyConstraintList {

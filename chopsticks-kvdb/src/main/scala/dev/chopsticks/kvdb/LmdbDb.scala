@@ -20,7 +20,7 @@ import dev.chopsticks.kvdb.proto._
 import org.lmdbjava._
 import zio.clock.Clock
 import zio.internal.Executor
-import zio.{Task, RIO, ZSchedule}
+import zio.{RIO, Task, ZSchedule}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
@@ -319,8 +319,9 @@ final class LmdbDb[DbDef <: DbDefinition](
   }
 
   val isLocal: Boolean = true
+  private val emptyLabels = Map.empty[String, String]
 
-  def statsTask: Task[Map[String, Double]] = {
+  def statsTask: Task[Map[(String, Map[String, String]), Double]] = {
     readTask(references.map { refs =>
       val info = refs.env.info()
 
@@ -329,24 +330,24 @@ final class LmdbDb[DbDef <: DbDefinition](
         val allStats = refs.dbiMap.values.map(_.stat(txn))
 
         Map(
-          "lmdb_branch_pages" -> allStats.map(_.branchPages.toDouble).sum,
-          "lmdb_depth" -> allStats.map(_.depth.toDouble).sum,
-          "lmdb_leaf_pages" -> allStats.map(_.leafPages.toDouble).sum,
-          "lmdb_overflow_pages" -> allStats.map(_.overflowPages.toDouble).sum,
-          "lmdb_page_size" -> allStats.map(_.pageSize.toDouble).sum,
-          "lmdb_entries" -> allStats.map(_.entries.toDouble).sum
+          ("lmdb_branch_pages", emptyLabels) -> allStats.map(_.branchPages.toDouble).sum,
+          ("lmdb_depth", emptyLabels) -> allStats.map(_.depth.toDouble).sum,
+          ("lmdb_leaf_pages", emptyLabels) -> allStats.map(_.leafPages.toDouble).sum,
+          ("lmdb_overflow_pages", emptyLabels) -> allStats.map(_.overflowPages.toDouble).sum,
+          ("lmdb_page_size", emptyLabels) -> allStats.map(_.pageSize.toDouble).sum,
+          ("lmdb_entries", emptyLabels) -> allStats.map(_.entries.toDouble).sum
         )
       } finally closeTxn(txn)
 
       Map(
-        "lmdb_last_page_number" -> info.lastPageNumber.toDouble,
-        "lmdb_last_transaction_id" -> info.lastTransactionId.toDouble,
-        "lmdb_map_address" -> info.mapAddress.toDouble,
-        "lmdb_map_size" -> info.mapSize.toDouble,
-        "lmdb_max_readers" -> info.maxReaders.toDouble,
-        "lmdb_num_readers" -> info.numReaders.toDouble,
-        "lmdb_active_cursors" -> activeCursorCounter.doubleValue(),
-        "lmdb_active_txns" -> activeTxnCounter.doubleValue()
+        ("lmdb_last_page_number", emptyLabels) -> info.lastPageNumber.toDouble,
+        ("lmdb_last_transaction_id", emptyLabels) -> info.lastTransactionId.toDouble,
+        ("lmdb_map_address", emptyLabels) -> info.mapAddress.toDouble,
+        ("lmdb_map_size", emptyLabels) -> info.mapSize.toDouble,
+        ("lmdb_max_readers", emptyLabels) -> info.maxReaders.toDouble,
+        ("lmdb_num_readers", emptyLabels) -> info.numReaders.toDouble,
+        ("lmdb_active_cursors", emptyLabels) -> activeCursorCounter.doubleValue(),
+        ("lmdb_active_txns", emptyLabels) -> activeTxnCounter.doubleValue()
       ) ++ statsMap
     })
   }

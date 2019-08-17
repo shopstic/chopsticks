@@ -1,5 +1,6 @@
 package dev.chopsticks.kvdb
 
+import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{ArrayList => JavaArrayList}
@@ -32,7 +33,7 @@ import zio.{RIO, Task, UIO, ZIO, ZSchedule}
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.language.higherKinds
-import scala.util.Failure
+import scala.util.{Failure, Success, Try}
 
 object RocksdbDb extends StrictLogging {
   private def byteArrayToString(bytes: Array[Byte]): String = {
@@ -40,35 +41,6 @@ object RocksdbDb extends StrictLogging {
   }
 
   private val ESTIMATE_NUM_KEYS = "rocksdb.estimate-num-keys"
-
-  sealed trait MemoryUsageType extends EnumEntry with Snakecase
-
-  object MemoryUsageType extends Enum[MemoryUsageType] {
-    //noinspection TypeAnnotation
-    val values = findValues
-
-    case object ActiveMemTables extends MemoryUsageType
-
-    case object NumEntriesActiveMemTable extends MemoryUsageType
-
-    case object UnflushedMemTables extends MemoryUsageType
-
-    case object PinnedMemTables extends MemoryUsageType
-
-    case object TableReaders extends MemoryUsageType
-
-    case object EstimateTableReadersMem extends MemoryUsageType
-
-    case object EstimateLiveDataSize extends MemoryUsageType
-  }
-
-  final case class RocksdbLocalDbHistogram(median: Double, p95: Double, p99: Double, average: Double, stdDev: Double)
-
-  final case class RocksdbLocalDbStats(
-    tickers: Map[TickerType, Long],
-    histograms: Map[HistogramType, RocksdbLocalDbHistogram],
-    memoryUsage: Map[MemoryUsageType, Long]
-  )
 
   final case class DbReferences[BaseCol[K, V] <: DbColumn[K, V]](
     db: RocksDB,
@@ -369,8 +341,6 @@ final class RocksdbDb[DbDef <: DbDefinition](
     else {
       _references.value.fold(Task.fromFuture(_ => _references))(Task.fromTry(_))
     }
-//    else if (_references.isCompleted) Task.fromTry(_references.value.get)
-//    else Task.fromFuture(_ => _references)
   }
 
   def openTask(): Task[Unit] = references.map(_ => ())
@@ -383,76 +353,96 @@ final class RocksdbDb[DbDef <: DbDefinition](
     })
   }
 
-  def typedStatsTask(): Task[RocksdbLocalDbStats] = references.map { refs =>
-    val stats = refs.stats
+  private val cfMetrics = List(
+    "num-immutable-mem-table",
+    "num-immutable-mem-table-flushed",
+    "mem-table-flush-pending",
+    "num-running-flushes",
+    "compaction-pending",
+    "num-running-compactions",
+    "background-errors",
+    "oldest-snapshot-time",
+    "num-snapshots",
+    "num-live-versions",
+    "min-log-number-to-keep",
+    "min-obsolete-sst-number-to-keep",
+    "cur-size-active-mem-table",
+    "cur-size-all-mem-tables",
+    "size-all-mem-tables",
+    "estimate-table-readers-mem",
+    "estimate-table-readers-mem",
+    "estimate-live-data-size",
+    "num-entries-active-mem-table",
+    "num-entries-imm-mem-tables",
+    "num-deletes-active-mem-table",
+    "num-deletes-imm-mem-tables",
+    "estimate-num-keys",
+    "estimate-pending-compaction-bytes",
+    "actual-delayed-write-rate",
+    "is-write-stopped",
+    "block-cache-capacity",
+    "block-cache-usage",
+    "block-cache-pinned-usage"
+  ).map(n => (n, "rocksdb_cf_" + n.replaceAllLiterally("-", "_")))
+
+  def statsTask: Task[Map[(String, Map[String, String]), Double]] = references.map { refs =>
     val tickers = TickerType
       .values()
       .filter(_ != TickerType.TICKER_ENUM_MAX)
       .map { t =>
-        (t, stats.getTickerCount(t))
+        (("rocksdb_ticker_" + t.toString.toLowerCase, Map.empty[String, String]), refs.stats.getTickerCount(t).toDouble)
       }
       .toMap
 
     val histograms = HistogramType
       .values()
       .filter(_ != HistogramType.HISTOGRAM_ENUM_MAX)
-      .map { h =>
-        val hist = stats.getHistogramData(h)
-        (
-          h,
-          RocksdbLocalDbHistogram(
-            median = hist.getMedian,
-            p95 = hist.getPercentile95,
-            p99 = hist.getPercentile99,
-            average = hist.getAverage,
-            stdDev = hist.getStandardDeviation
-          )
+      .flatMap { h =>
+        val hist = refs.stats.getHistogramData(h)
+        val name = "rocksdb_hist_" + h.toString.toLowerCase
+        List(
+          ((name, Map("component" -> "sum")), hist.getSum.toDouble),
+          ((name, Map("component" -> "count")), hist.getCount.toDouble),
+          ((name, Map("component" -> "max")), hist.getMax),
+          ((name, Map("component" -> "min")), hist.getMin),
+          ((name, Map("component" -> "median")), hist.getMedian),
+          ((name, Map("component" -> "p95")), hist.getPercentile95),
+          ((name, Map("component" -> "p99")), hist.getPercentile99),
+          ((name, Map("component" -> "mean")), hist.getAverage),
+          ((name, Map("component" -> "stddev")), hist.getStandardDeviation)
         )
       }
       .toMap
 
-    val activeMemTables = refs.db.getProperty("rocksdb.cur-size-active-mem-table").toLong
-    val unflushedMemTables = refs.db.getProperty("rocksdb.cur-size-all-mem-tables").toLong - activeMemTables
-    val pinnedMemTables = refs.db
-      .getProperty("rocksdb.size-all-mem-tables")
-      .toLong - activeMemTables - unflushedMemTables
-    val tableReadersMem = refs.db.getProperty("rocksdb.estimate-table-readers-mem").toLong
-    val numEntriesActiveMemTable = refs.db.getProperty("rocksdb.num-entries-active-mem-table").toLong
-    val estimateTableReadersMem = refs.db.getProperty("rocksdb.estimate-table-readers-mem").toLong
-    val estimateLiveDataSize = refs.db.getProperty("rocksdb.estimate-live-data-size").toLong
+    val dbRef = refs.db
 
-    val memoryUsage = Map[MemoryUsageType, Long](
-      MemoryUsageType.ActiveMemTables -> activeMemTables,
-      MemoryUsageType.NumEntriesActiveMemTable -> numEntriesActiveMemTable,
-      MemoryUsageType.UnflushedMemTables -> unflushedMemTables,
-      MemoryUsageType.PinnedMemTables -> pinnedMemTables,
-      MemoryUsageType.TableReaders -> tableReadersMem,
-      MemoryUsageType.EstimateTableReadersMem -> estimateTableReadersMem,
-      MemoryUsageType.EstimateLiveDataSize -> estimateLiveDataSize
-    )
+    val metrics = refs.columnHandleMap.flatMap {
+      case (cf, cfHandle) =>
+        val cfName = cf.entryName
+        val numLevels = columnOptions(cf).numLevels()
+        val numFilesAtLevels = (0 until numLevels)
+          .map { i =>
+            (
+              ("rocksdb_cf_num_files_at_level", Map("cf" -> cfName, "level" -> i.toString)),
+              dbRef.getProperty(cfHandle, s"rocksdb.num-files-at-level$i").toDouble
+            )
+          }
 
-    RocksdbLocalDbStats(tickers, histograms, memoryUsage)
-  }
+        val compressionRatioAtLevels = (0 until numLevels)
+          .map { i =>
+            (
+              ("rocksdb_cf_compression_ratio_at_level", Map("cf" -> cfName, "level" -> i.toString)),
+              dbRef.getProperty(cfHandle, s"rocksdb.compression-ratio-at-level$i").toDouble
+            )
+          }
 
-  def statsTask: Task[Map[String, Double]] = {
-    typedStatsTask().map { stats =>
-      val tickers = stats.tickers.map {
-        case (k, v) =>
-          ("rocksdb_ticker_" + k.toString.toLowerCase, v.toDouble)
-      }
-
-      val p99Histograms = stats.histograms.map {
-        case (k, v) =>
-          ("rocksdb_p99_" + k.toString.toLowerCase, v.p99)
-      }
-
-      val memoryUsage = stats.memoryUsage.map {
-        case (k, v) =>
-          ("rocksdb_mem_" + k.entryName, v.toDouble)
-      }
-
-      tickers ++ p99Histograms ++ memoryUsage
+        numFilesAtLevels ++ compressionRatioAtLevels ++ cfMetrics.map {
+          case (propertyName, metricName) =>
+            ((metricName, Map("cf" -> cfName)), dbRef.getProperty(cfHandle, s"rocksdb.$propertyName").toDouble)
+        }
     }
+
+    tickers ++ histograms ++ metrics
   }
 
   private val InvalidIterator = Left(Array.emptyByteArray)
