@@ -73,14 +73,14 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.0.15"
+    "org.codehaus.janino" % "janino" % "3.1.0"
   )
 
   val scalatestDeps = Seq(
     "org.scalactic" %% "scalactic" % "3.0.8",
     "org.scalatest" %% "scalatest" % "3.0.8",
     "org.scalacheck" %% "scalacheck" % "1.14.0",
-    "org.scalamock" %% "scalamock" % "4.3.0"
+    "org.scalamock" %% "scalamock" % "4.4.0"
   )
 
   val hamstersDeps = Seq(
