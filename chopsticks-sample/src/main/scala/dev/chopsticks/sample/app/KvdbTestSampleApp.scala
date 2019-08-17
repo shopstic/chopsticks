@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink}
 import com.typesafe.config.Config
-import dev.chopsticks.fp.ZIOExt.Implicits._
+import dev.chopsticks.fp.zio_logging._
 import dev.chopsticks.fp._
 import dev.chopsticks.kvdb.DbFactory.DbClientConfig
 import dev.chopsticks.kvdb.DbInterface.DbDefinition

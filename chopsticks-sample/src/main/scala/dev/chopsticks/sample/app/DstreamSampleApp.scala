@@ -8,8 +8,8 @@ import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream.{DstreamEnv, Dstreams}
-import dev.chopsticks.fp.ZIOExt.Implicits._
-import dev.chopsticks.fp.ZIOExt.MeasuredLogging
+import dev.chopsticks.fp.zio_logging._
+import dev.chopsticks.fp.zio_logging.MeasuredLogging
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZIOExt, ZLogger}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
 import zio._

@@ -6,6 +6,9 @@ import dev.chopsticks.fp.{AkkaApp, ConfigEnv, ZLogger}
 import dev.chopsticks.util.config.PureconfigLoader
 import zio.{ZIO, ZManaged}
 
+import scala.concurrent.TimeoutException
+import zio.duration._
+
 object PlainSampleApp extends AkkaApp {
   final case class AppConfig(foo: Int, bar: String)
 
@@ -25,10 +28,12 @@ object PlainSampleApp extends AkkaApp {
       }
   }
 
-  protected def run: ZIO[Env, Nothing, Unit] = {
+  protected def run: ZIO[Env, Throwable, Unit] = {
     for {
       config <- ZIO.access[Cfg](_.config)
       _ <- ZLogger.info(s"Works config=$config")
+      _ <- ZIO.unit.delay(10.seconds).timeoutFail(new TimeoutException("ya die"))(2.seconds)
+//      _ <- ZIO.never.timeoutFail(new TimeoutException("ya die"))(2.seconds)
     } yield ()
   }
 }
