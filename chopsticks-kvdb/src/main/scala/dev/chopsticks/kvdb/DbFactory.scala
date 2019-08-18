@@ -64,6 +64,7 @@ object DbFactory {
     path: String,
     readOnly: Boolean = false,
     startWithBulkInserts: Boolean = false,
+    checksumOnRead: Boolean = true,
     columns: Map[String, RocksdbColumnFamilyConfig] = Map.empty[String, RocksdbColumnFamilyConfig],
     ioDispatcher: String = DEFAULT_DB_IO_DISPATCHER
   ) extends DbClientConfig
@@ -111,7 +112,7 @@ object DbFactory {
     config: DbClientConfig
   )(implicit akkaEnv: AkkaEnv): DbInterface[DbDef] = {
     config match {
-      case RocksdbDbClientConfig(path, readOnly, startWithBulkInserts, columns, ioDispatcher) =>
+      case RocksdbDbClientConfig(path, readOnly, startWithBulkInserts, checksumOnRead, columns, ioDispatcher) =>
         //noinspection RedundantCollectionConversion
         val customCfOptions: Map[DbDef#BaseCol[_, _], RocksdbCFOptions] = columns.map {
           case (k, v: RocksdbColumnFamilyConfig) =>
@@ -127,7 +128,15 @@ object DbFactory {
             )
         }.toMap
 
-        RocksdbDb[DbDef](definition, path, customCfOptions, readOnly, startWithBulkInserts, ioDispatcher)
+        RocksdbDb[DbDef](
+          definition = definition,
+          path = path,
+          options = customCfOptions,
+          readOnly = readOnly,
+          startWithBulkInserts = startWithBulkInserts,
+          checksumOnRead = checksumOnRead,
+          ioDispatcher = ioDispatcher
+        )
 
       case LmdbDbClientConfig(path, maxSize, noSync, ioDispatcher) =>
         LmdbDb[DbDef](definition, path, maxSize.toBytes.toLong, noSync, ioDispatcher)

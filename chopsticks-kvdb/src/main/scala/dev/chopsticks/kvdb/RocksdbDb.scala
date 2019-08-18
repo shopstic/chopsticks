@@ -120,9 +120,10 @@ object RocksdbDb extends StrictLogging {
     options: Map[DbDef#BaseCol[_, _], RocksdbCFOptions],
     readOnly: Boolean,
     startWithBulkInserts: Boolean,
+    checksumOnRead: Boolean,
     ioDispatcher: String
   )(implicit akkaEnv: AkkaEnv): RocksdbDb[DbDef] = {
-    new RocksdbDb[DbDef](definition, path, options, readOnly, startWithBulkInserts, ioDispatcher)
+    new RocksdbDb[DbDef](definition, path, options, readOnly, startWithBulkInserts, checksumOnRead, ioDispatcher)
   }
 }
 
@@ -132,6 +133,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
   options: Map[DbDef#BaseCol[_, _], RocksdbCFOptions],
   readOnly: Boolean,
   startWithBulkInserts: Boolean,
+  checksumOnRead: Boolean,
   ioDispatcher: String
 )(implicit akkaEnv: AkkaEnv)
     extends DbInterface[DbDef]
@@ -185,7 +187,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
 
   private def newReadOptions(): ReadOptions = {
     // ZFS already takes care of checksumming
-    new ReadOptions().setVerifyChecksums(false)
+    new ReadOptions().setVerifyChecksums(checksumOnRead)
   }
 
   private def syncColumnFamilies(descriptors: List[ColumnFamilyDescriptor], existingColumnNames: Set[String]): Unit = {

@@ -18,6 +18,7 @@ class RocksdbLocalDbTest extends DbTest {
               Map.empty[TestDbColumn[_, _], RocksdbCFOptions],
               readOnly = false,
               startWithBulkInserts = false,
+              checksumOnRead = true,
               ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
             )
           }
