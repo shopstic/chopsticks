@@ -70,8 +70,10 @@ final class RocksdbCFBuilder private (
   private val tableFormat = if (blockCacheBytes > 0) {
     new BlockBasedTableConfig()
       .setBlockSize(blockSize.toBytes.toLong)
-      .setBlockCache(new ClockCache(blockCacheBytes))
+      // TODO: ClockCache does not work, file an issue
+      .setBlockCache(new LRUCache(blockCacheBytes, -1, true, 0.5))
       .setCacheIndexAndFilterBlocks(true)
+      .setCacheIndexAndFilterBlocksWithHighPriority(true)
       .setPinL0FilterAndIndexBlocksInCache(true)
   }
   else {
