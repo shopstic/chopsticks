@@ -416,7 +416,15 @@ final class RocksdbDb[DbDef <: DbDefinition](
     val metrics = refs.columnHandleMap.flatMap {
       case (cf, cfHandle) =>
         val cfName = cf.entryName
-        val numLevels = columnOptions(cf).numLevels()
+        val cfOptions = columnOptions(cf)
+        val numLevels = cfOptions.numLevels()
+        val blockSize = cfOptions.tableFormatConfig() match {
+          case tableConfig: BlockBasedTableConfig =>
+            tableConfig.blockSize().toDouble
+          case _ =>
+            0.0d
+        }
+
         val numFilesAtLevels = (0 until numLevels)
           .map { i =>
             (
@@ -433,9 +441,11 @@ final class RocksdbDb[DbDef <: DbDefinition](
             )
           }
 
-        numFilesAtLevels ++ compressionRatioAtLevels ++ cfMetrics.map {
+        List(
+          ("rocksdb_cf_block_based_table_block_size", Map("cf" -> cfName)) -> blockSize
+        ) ++ numFilesAtLevels ++ compressionRatioAtLevels ++ cfMetrics.map {
           case (propertyName, metricName) =>
-            ((metricName, Map("cf" -> cfName)), dbRef.getProperty(cfHandle, s"rocksdb.$propertyName").toDouble)
+            (metricName, Map("cf" -> cfName)) -> dbRef.getProperty(cfHandle, s"rocksdb.$propertyName").toDouble
         }
     }
 
