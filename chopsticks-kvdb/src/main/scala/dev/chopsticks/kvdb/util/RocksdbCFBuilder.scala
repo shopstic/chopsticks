@@ -86,7 +86,8 @@ final class RocksdbCFBuilder private (
     {
       val _ = columnOptions.useCappedPrefixExtractor(length)
     }
-    val _ = tableFormat.setIndexType(IndexType.kHashSearch)
+    val _ = tableFormat
+      .setIndexType(IndexType.kHashSearch)
     this
   }
 

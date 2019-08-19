@@ -166,7 +166,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
     (col, b1.build())
   }.toMap
 
-  private val coreCount: Int = Runtime.getRuntime.availableProcessors() / 2
+  private val coreCount: Int = Runtime.getRuntime.availableProcessors()
   private lazy val dbOptions: DBOptions = {
     val options = new DBOptions()
 
@@ -175,6 +175,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
     options
       .setIncreaseParallelism(coreCount)
       .setMaxBackgroundCompactions(coreCount)
+      .setMaxSubcompactions(coreCount)
       .setMaxOpenFiles(-1)
       .setKeepLogFileNum(3)
       .setMaxTotalWalSize(totalWriteBufferSize * 8)
