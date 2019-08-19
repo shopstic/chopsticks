@@ -210,8 +210,13 @@ final class RocksdbDb[DbDef <: DbDefinition](
     definition.columns.withNameOption(name).asInstanceOf[Option[AnyCol]]
 
   private def newReadOptions(): ReadOptions = {
-    // ZFS already takes care of checksumming
-    new ReadOptions().setVerifyChecksums(checksumOnRead)
+    val o = new ReadOptions()
+    if (checksumOnRead) o.setVerifyChecksums(checksumOnRead) else o
+  }
+
+  private def newWriteOptions(): WriteOptions = {
+    val o = new WriteOptions()
+    if (syncWriteBatch) o.setSync(true) else o
   }
 
   private def syncColumnFamilies(descriptors: List[ColumnFamilyDescriptor], existingColumnNames: Set[String]): Unit = {
@@ -687,10 +692,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
 
       try {
         if (count > 0) {
-          val writeOptions = {
-            val o = new WriteOptions()
-            if (syncWriteBatch) o.setSync(true) else o
-          }
+          val writeOptions = newWriteOptions()
 
           try {
             db.write(writeOptions, writeBatch)
@@ -1015,10 +1017,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
           }
         }
 
-        val writeOptions = {
-          val o = new WriteOptions()
-          if (syncWriteBatch) o.setSync(true) else o
-        }
+        val writeOptions = newWriteOptions()
 
         try {
           db.write(writeOptions, writeBatch)
