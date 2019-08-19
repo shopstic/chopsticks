@@ -19,6 +19,7 @@ class RocksdbLocalDbTest extends DbTest {
               readOnly = false,
               startWithBulkInserts = false,
               checksumOnRead = true,
+              syncWriteBatch = true,
               ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
             )
           }

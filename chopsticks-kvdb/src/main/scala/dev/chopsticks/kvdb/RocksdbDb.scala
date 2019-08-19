@@ -121,9 +121,10 @@ object RocksdbDb extends StrictLogging {
     readOnly: Boolean,
     startWithBulkInserts: Boolean,
     checksumOnRead: Boolean,
+    syncWriteBatch: Boolean,
     ioDispatcher: String
   )(implicit akkaEnv: AkkaEnv): RocksdbDb[DbDef] = {
-    new RocksdbDb[DbDef](definition, path, options, readOnly, startWithBulkInserts, checksumOnRead, ioDispatcher)
+    new RocksdbDb[DbDef](definition, path, options, readOnly, startWithBulkInserts, checksumOnRead, syncWriteBatch, ioDispatcher)
   }
 }
 
@@ -134,6 +135,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
   readOnly: Boolean,
   startWithBulkInserts: Boolean,
   checksumOnRead: Boolean,
+  syncWriteBatch: Boolean,
   ioDispatcher: String
 )(implicit akkaEnv: AkkaEnv)
     extends DbInterface[DbDef]
@@ -664,7 +666,10 @@ final class RocksdbDb[DbDef <: DbDefinition](
 
       try {
         if (count > 0) {
-          val writeOptions = new WriteOptions()
+          val writeOptions = {
+            val o = new WriteOptions()
+            if (syncWriteBatch) o.setSync(true) else o
+          }
 
           try {
             db.write(writeOptions, writeBatch)
@@ -989,7 +994,10 @@ final class RocksdbDb[DbDef <: DbDefinition](
           }
         }
 
-        val writeOptions = new WriteOptions()
+        val writeOptions = {
+          val o = new WriteOptions()
+          if (syncWriteBatch) o.setSync(true) else o
+        }
 
         try {
           db.write(writeOptions, writeBatch)
