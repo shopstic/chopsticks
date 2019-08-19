@@ -5,14 +5,10 @@ import dev.chopsticks.kvdb.codec.DbKeyDecoder.DbKeyDecodeResult
 import shapeless._
 import shapeless.ops.hlist.FlatMapper
 
-trait DbKey[P] {
+trait DbKey[P] extends DbKeyEncoder[P] with DbKeyDecoder[P] {
   type Flattened <: HList
 
   def describe: String
-
-  def decode(bytes: Array[Byte]): DbKeyDecodeResult[P]
-
-  def encode(value: P): Array[Byte]
 }
 
 trait DerivedDbKey[P] extends DbKey[P]
