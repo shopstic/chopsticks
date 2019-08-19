@@ -122,9 +122,20 @@ object RocksdbDb extends StrictLogging {
     startWithBulkInserts: Boolean,
     checksumOnRead: Boolean,
     syncWriteBatch: Boolean,
+    useDirectIo: Boolean,
     ioDispatcher: String
   )(implicit akkaEnv: AkkaEnv): RocksdbDb[DbDef] = {
-    new RocksdbDb[DbDef](definition, path, options, readOnly, startWithBulkInserts, checksumOnRead, syncWriteBatch, ioDispatcher)
+    new RocksdbDb[DbDef](
+      definition,
+      path,
+      options,
+      readOnly,
+      startWithBulkInserts,
+      checksumOnRead,
+      syncWriteBatch,
+      useDirectIo,
+      ioDispatcher
+    )
   }
 }
 
@@ -136,6 +147,7 @@ final class RocksdbDb[DbDef <: DbDefinition](
   startWithBulkInserts: Boolean,
   checksumOnRead: Boolean,
   syncWriteBatch: Boolean,
+  useDirectIo: Boolean,
   ioDispatcher: String
 )(implicit akkaEnv: AkkaEnv)
     extends DbInterface[DbDef]
@@ -174,13 +186,22 @@ final class RocksdbDb[DbDef <: DbDefinition](
 
     val totalWriteBufferSize = columnOptions.values.map(_.writeBufferSize()).sum
 
-    options
+    val tunedOptions = options
       .setIncreaseParallelism(coreCount)
       .setMaxBackgroundCompactions(coreCount)
       .setMaxSubcompactions(coreCount)
       .setMaxOpenFiles(-1)
       .setKeepLogFileNum(3)
       .setMaxTotalWalSize(totalWriteBufferSize * 8)
+
+    if (useDirectIo) {
+      tunedOptions
+        .setUseDirectIoForFlushAndCompaction(true)
+        .setUseDirectReads(true)
+        .setCompactionReadaheadSize(2 * 1024 * 1024)
+        .setWritableFileMaxBufferSize(1024 * 1024)
+    }
+    else tunedOptions
   }
 
   protected def logPath: Option[String] = None

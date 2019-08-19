@@ -66,6 +66,7 @@ object DbFactory {
     startWithBulkInserts: Boolean = false,
     checksumOnRead: Boolean = true,
     syncWriteBatch: Boolean = true,
+    useDirectIo: Boolean = false,
     columns: Map[String, RocksdbColumnFamilyConfig] = Map.empty[String, RocksdbColumnFamilyConfig],
     ioDispatcher: String = DEFAULT_DB_IO_DISPATCHER
   ) extends DbClientConfig
@@ -113,7 +114,7 @@ object DbFactory {
     config: DbClientConfig
   )(implicit akkaEnv: AkkaEnv): DbInterface[DbDef] = {
     config match {
-      case RocksdbDbClientConfig(path, readOnly, startWithBulkInserts, checksumOnRead, syncWriteBatch, columns, ioDispatcher) =>
+      case RocksdbDbClientConfig(path, readOnly, startWithBulkInserts, checksumOnRead, syncWriteBatch, useDirectIo, columns, ioDispatcher) =>
         //noinspection RedundantCollectionConversion
         val customCfOptions: Map[DbDef#BaseCol[_, _], RocksdbCFOptions] = columns.map {
           case (k, v: RocksdbColumnFamilyConfig) =>
@@ -137,6 +138,7 @@ object DbFactory {
           startWithBulkInserts = startWithBulkInserts,
           checksumOnRead = checksumOnRead,
           syncWriteBatch = syncWriteBatch,
+          useDirectIo = useDirectIo,
           ioDispatcher = ioDispatcher
         )
 
