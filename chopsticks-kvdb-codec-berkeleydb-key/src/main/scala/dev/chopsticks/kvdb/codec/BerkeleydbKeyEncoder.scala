@@ -81,11 +81,11 @@ object BerkeleydbKeyEncoder extends ProductTypeClassCompanion[BerkeleydbKeyEncod
 
     val emptyProduct: BerkeleydbKeyEncoder[HNil] = hnilBerkeleydbKeyEncoder
 
-    def product[F, T <: HList](
-      hc: BerkeleydbKeyEncoder[F],
+    def product[H, T <: HList](
+      hc: BerkeleydbKeyEncoder[H],
       tc: BerkeleydbKeyEncoder[T]
-    ): BerkeleydbKeyEncoder[F :: T] = {
-      create((out, hlist: F :: T) => {
+    ): BerkeleydbKeyEncoder[H :: T] = {
+      create((out, hlist: H :: T) => {
         tc.encode(hc.encode(out, hlist.head), hlist.tail)
       })
     }

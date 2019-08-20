@@ -7,11 +7,12 @@ import dev.chopsticks.testkit.ArbitraryTime._
 import org.scalactic.anyvals.{PosInt, PosZDouble}
 import org.scalatest.{Assertions, Matchers, WordSpecLike}
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import dev.chopsticks.kvdb.codec.berkeleydb_key._
 
 //noinspection TypeAnnotation
 class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaCheckDrivenPropertyChecks {
   "Scala tuple" should {
+    import berkeleydb_key._
+
     type TupleKey = (Boolean, Option[Int], String)
     implicit val tupleDbKey = DbKey[TupleKey]
 
@@ -48,6 +49,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
       health: Double
     )
     object Person {
+      import berkeleydb_key._
       implicit val dbKey = DbKey[Person]
     }
 
@@ -81,11 +83,13 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
   "prefix" should {
     case class TradeTick(symbol: String, dateTime: LocalDateTime, price: BigDecimal, size: Int)
     object TradeTick {
+      import berkeleydb_key._
       implicit val dbKey = DbKey[TradeTick]
     }
 
     case class Prefix(symbol: String, dateTime: LocalDateTime)
     object Prefix {
+      import berkeleydb_key._
       implicit val dbKeyPrefix = DbKeyPrefix[Prefix, TradeTick]
     }
 
@@ -98,21 +102,36 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     }
   }
 
-//  "legacy as-it string keys" should {
-//    "compile for DbKeyPrefix" in {
-//      implicitly[DbKeyPrefix[String, String]]
-//    }
-//
-//    "compile for DbKey" in {
-//      implicitly[DbKey[String]]
-//    }
-//
-//    "not implicitly compile for Product, we want to enforce it explicitly" in {
-//      assertDoesNotCompile("""
-//          |implicitly[DbKey[Tuple1[String]]]
-//        """.stripMargin)
-//    }
-//  }
+  "legacy literal string keys" should {
+    import dev.chopsticks.kvdb.codec.primitive._
+    "compile for DbKeyPrefix" in {
+      implicitly[DbKeyPrefix[String, String]]
+    }
+
+    "compile for DbKey" in {
+      implicitly[DbKey[String]]
+    }
+
+    "not implicitly compile for Product, we want to enforce it explicitly" in {
+      assertDoesNotCompile("""
+          |implicitly[DbKey[Tuple1[String]]]
+        """.stripMargin)
+    }
+  }
+
+  "different codecs between the key and its prefix" should {
+    final case class TestKey(foo: String)
+    "not compile" in {
+      assertDoesNotCompile("""
+         |implicit val oneDbKey = {
+         |  import dev.chopsticks.kvdb.codec.berkeleydb_key._
+         |  DbKey[TestKey]
+         |}
+         |import dev.chopsticks.kvdb.codec.primitive._
+         |implicitly[DbKeyPrefix[String, TestKey]]
+        """.stripMargin)
+    }
+  }
 
   "compare" when {
     implicit val generatorDrivenConfig =
@@ -121,6 +140,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "LocalDate" should {
       case class DateKey(date: LocalDate)
       object DateKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[DateKey]
       }
 
@@ -150,6 +170,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "LocalDateTime" should {
       case class DateTimeKey(date: LocalDateTime)
       object DateTimeKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[DateTimeKey]
       }
 
@@ -179,6 +200,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "BigDecimal" should {
       case class BigDecimalKey(value: BigDecimal)
       object BigDecimalKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[BigDecimalKey]
       }
 
@@ -208,6 +230,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "LocalTime" should {
       case class LocalTimeKey(value: LocalTime)
       object LocalTimeKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[LocalTimeKey]
       }
 
@@ -237,6 +260,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "Option" should {
       case class LocalTimeKey(value: Option[LocalTime])
       object LocalTimeKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[LocalTimeKey]
       }
 
@@ -258,6 +282,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "YearMonth" should {
       case class YearMonthKey(value: YearMonth)
       object YearMonthKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[YearMonthKey]
       }
 
@@ -287,6 +312,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "Int" should {
       case class IntKey(value: Int)
       object IntKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[IntKey]
       }
 
@@ -310,6 +336,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "Long" should {
       case class LongKey(value: Long)
       object LongKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[LongKey]
       }
 
@@ -333,6 +360,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "Boolean" should {
       case class BooleanKey(value: Boolean)
       object BooleanKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[BooleanKey]
       }
 
@@ -346,6 +374,7 @@ class DbKeyTest extends WordSpecLike with Assertions with Matchers with ScalaChe
     "UUID" should {
       case class UuidKey(value: UUID, foo: Boolean)
       object UuidKey {
+        import berkeleydb_key._
         implicit val dbKey = DbKey[UuidKey]
       }
       "encode / decode" in {

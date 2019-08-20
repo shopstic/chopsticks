@@ -25,6 +25,7 @@ import org.scalatest.{Assertion, AsyncWordSpecLike, Inside, Matchers}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
+import dev.chopsticks.kvdb.codec.primitive._
 
 object HttpDbFailureTest {
   final case class Fixture(dbClient: DbClient[TestDb.type])

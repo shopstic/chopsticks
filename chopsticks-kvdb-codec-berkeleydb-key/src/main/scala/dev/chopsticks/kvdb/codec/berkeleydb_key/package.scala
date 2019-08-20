@@ -16,8 +16,11 @@ package object berkeleydb_key {
 //  implicit val instantDbKey: Aux[Instant, Instant :: HNil] = deriveGeneric[Instant]
 //  implicit val literalStringDbKey: Aux[String, HNil] = literalStringDbKeyFor[String](identity, identity)
 //  implicit val dateTimeDbKey: Aux[LocalDateTime, LocalDateTime :: HNil] = deriveGeneric[LocalDateTime]
-  implicit def berkeleydbKeyEncoder[T](implicit encoder: BerkeleydbKeyEncoder[T]): DbKeyEncoder[T] = { key: T =>
-    encoder.encode(new TupleOutput(), key).toByteArray
+  implicit def berkeleydbKeyEncoder[T](
+    implicit encoder: BerkeleydbKeyEncoder[T]
+  ): DbKeyEncoder.Aux[T, BerkeleyDbKeyCodec] = new DbKeyEncoder[T] {
+    type Codec = BerkeleyDbKeyCodec
+    def encode(key: T): Array[Byte] = encoder.encode(new TupleOutput(), key).toByteArray
   }
 
   implicit def berkeleydbKeyDecoder[T](implicit decoder: BerkeleydbKeyDecoder[T]): DbKeyDecoder[T] = {

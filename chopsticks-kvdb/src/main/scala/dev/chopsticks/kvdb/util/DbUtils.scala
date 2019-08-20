@@ -9,12 +9,11 @@ import akka.stream.stage._
 import akka.stream.{ActorAttributes, Attributes, Outlet, SourceShape}
 import akka.{Done, NotUsed}
 import com.google.protobuf.{ByteString => ProtoByteString}
+import dev.chopsticks.kvdb.proto.DbKeyConstraint.Operator
+import dev.chopsticks.kvdb.proto.{DbKeyConstraint, DbKeyRange, DbOperationException}
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
-import dev.chopsticks.kvdb.codec.DbKeyConstraints
-import dev.chopsticks.kvdb.proto.DbKeyConstraint.Operator
-import dev.chopsticks.kvdb.proto.{DbKeyConstraint, DbKeyRange, DbOperationException}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
@@ -327,10 +326,10 @@ object DbUtils {
     }
   }
 
-  private val STRING_MAX = new String(List[Byte](Byte.MaxValue).toArray, "UTF8")
+//  private val STRING_MAX = new String(List[Byte](Byte.MaxValue).toArray, "UTF8")
 
-  def stringPrefixDbKeyRange(value: String): DbKeyRange = {
-    val end = value + STRING_MAX
-    DbKeyConstraints.range[String](_ >= value < end, _ < end)
-  }
+//  def stringPrefixDbKeyRange(value: String): DbKeyRange = {
+//    val end = value + STRING_MAX
+//    DbKeyConstraints.range[String](_ >= value < end, _ < end)
+//  }
 }

@@ -26,11 +26,11 @@ trait DbKeyPrefixPriority2Implicits extends DbKeyPrefixPriority3Implicits {
   // e.g
   // T as prefix of:
   // case class Bar(one: T, two: Boolean, three: Double)
-  implicit def anyToDbKeyPrefixOfProduct[A, B <: Product, F <: HList, T <: HList](
+  implicit def anyToDbKeyPrefixOfProduct[A, B <: Product, F <: HList, T <: HList, C](
     implicit
-    f: DbKey.Aux[B, F],
+    f: DbKey.Aux[B, F, C],
     t: IsHCons.Aux[F, A, T],
-    encoder: DbKeyEncoder[A]
+    encoder: DbKeyEncoder.Aux[A, C]
   ): DbKeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][anyToDbKeyPrefixOfProduct] ${f.describe}")
     t.unused()
@@ -46,14 +46,14 @@ trait DbKeyPrefixPriority1Implicits extends DbKeyPrefixPriority2Implicits {
   // case class Foo(one: String, two: Boolean)
   //    as prefix of:
   // case class Bar(one: String, two: Boolean, three: Double)
-  implicit def productToDbKeyPrefix[A <: Product, B <: Product, P <: HList, F <: HList, N <: Nat, T <: HList](
+  implicit def productToDbKeyPrefix[A <: Product, B <: Product, P <: HList, F <: HList, N <: Nat, T <: HList, C](
     implicit
     g: Generic.Aux[A, P],
     l: Length.Aux[P, N],
-    f: DbKey.Aux[B, F],
+    f: DbKey.Aux[B, F, C],
     t: Take.Aux[F, N, T],
     e: P =:= T,
-    encoder: DbKeyEncoder[A]
+    encoder: DbKeyEncoder.Aux[A, C]
   ): DbKeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${f.describe}")
     //    n.unused()
@@ -68,13 +68,13 @@ trait DbKeyPrefixPriority1Implicits extends DbKeyPrefixPriority2Implicits {
   // String :: Boolean :: HNil
   //    as prefix of:
   // case class Bar(one: String, two: Boolean, three: Double)
-  implicit def hlistToDbKeyPrefix[A <: HList, B <: Product, F <: HList, N <: Nat, T <: HList](
+  implicit def hlistToDbKeyPrefix[A <: HList, B <: Product, F <: HList, N <: Nat, T <: HList, C](
     implicit
     l: Length.Aux[A, N],
-    f: DbKey.Aux[B, F],
+    f: DbKey.Aux[B, F, C],
     t: Take.Aux[F, N, T],
     e: A =:= T,
-    encoder: DbKeyEncoder[A]
+    encoder: DbKeyEncoder.Aux[A, C]
   ): DbKeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][hlistToDbKeyPrefix] ${f.describe}")
     l.unused()
@@ -87,6 +87,6 @@ trait DbKeyPrefixPriority1Implicits extends DbKeyPrefixPriority2Implicits {
 object DbKeyPrefix extends DbKeyPrefixPriority1Implicits {
   def apply[A, B](implicit e: DbKeyPrefix[A, B]): DbKeyPrefix[A, B] = e
 
-  implicit val literalStringDbKeyPrefix: DbKeyPrefix[String, String] = (a: String) =>
-    KvdbSerdesUtils.stringToByteArray(a)
+//  implicit val literalStringDbKeyPrefix: DbKeyPrefix[String, String] = (a: String) =>
+//    KvdbSerdesUtils.stringToByteArray(a)
 }

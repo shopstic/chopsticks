@@ -16,8 +16,9 @@ trait DerivedDbKey[P] extends DbKey[P]
 object DerivedDbKey extends StrictLogging {
   //noinspection ScalaStyle
   // scalastyle:off
-  type Aux[P, F <: HList] = DerivedDbKey[P] {
+  type Aux[P, F <: HList, C] = DerivedDbKey[P] {
     type Flattened = F
+    type Codec = C
   }
   // scalastyle:on
 
@@ -42,20 +43,22 @@ object DerivedDbKey extends StrictLogging {
     }
   }
 
-  implicit def deriveInstance[P <: Product, R <: HList, F <: HList](
+  implicit def deriveInstance[P <: Product, R <: HList, F <: HList, C](
     implicit
     g: Generic.Aux[P, R],
     f: FlatMapper.Aux[flatten.type, R, F],
-    encoder: Lazy[DbKeyEncoder[P]],
+    encoder: Lazy[DbKeyEncoder.Aux[P, C]],
     decoder: Lazy[DbKeyDecoder[P]],
     typ: Typeable[P]
-  ): Aux[P, F] = {
+  ): Aux[P, F, C] = {
     g.unused()
     f.unused()
     logger.debug(s"[DerivedDbKey][deriveInstance] ${typ.describe}")
 
     new DerivedDbKey[P] {
       type Flattened = F
+      type Codec = C
+
       def describe: String = typ.describe
 
       def decode(bytes: Array[Byte]): DbKeyDecodeResult[P] = {
@@ -72,24 +75,27 @@ object DerivedDbKey extends StrictLogging {
 object DbKey extends StrictLogging {
   //noinspection ScalaStyle
   // scalastyle:off
-  type Aux[P, F <: HList] = DbKey[P] {
+  type Aux[P, F <: HList, C] = DbKey[P] {
     type Flattened = F
+    type Codec = C
   }
   // scalastyle:on
 
-  def apply[A](implicit d: DerivedDbKey[A]): Aux[A, d.Flattened] = d.asInstanceOf[Aux[A, d.Flattened]]
+  def apply[A](implicit d: DerivedDbKey[A]): Aux[A, d.Flattened, d.Codec] = d.asInstanceOf[Aux[A, d.Flattened, d.Codec]]
 
   def ordering[A](implicit dbKey: DbKey[A]): Ordering[A] =
     (x: A, y: A) => DbKey.compare(dbKey.encode(x), dbKey.encode(y))
 
-  def deriveGeneric[V](
+  def deriveGeneric[V, C](
     implicit
-    encoder: Lazy[DbKeyEncoder[V]],
+    encoder: Lazy[DbKeyEncoder.Aux[V, C]],
     decoder: Lazy[DbKeyDecoder[V]],
     typ: Typeable[V]
-  ): Aux[V, V :: HNil] = {
+  ): Aux[V, V :: HNil, C] = {
     new DbKey[V] {
       type Flattened = V :: HNil
+      type Codec = C
+
       def describe: String = typ.describe
 
       def decode(bytes: Array[Byte]): DbKeyDecodeResult[V] = {
