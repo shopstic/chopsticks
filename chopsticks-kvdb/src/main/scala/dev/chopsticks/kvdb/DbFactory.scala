@@ -114,7 +114,16 @@ object DbFactory {
     config: DbClientConfig
   )(implicit akkaEnv: AkkaEnv): DbInterface[DbDef] = {
     config match {
-      case RocksdbDbClientConfig(path, readOnly, startWithBulkInserts, checksumOnRead, syncWriteBatch, useDirectIo, columns, ioDispatcher) =>
+      case RocksdbDbClientConfig(
+          path,
+          readOnly,
+          startWithBulkInserts,
+          checksumOnRead,
+          syncWriteBatch,
+          useDirectIo,
+          columns,
+          ioDispatcher
+          ) =>
         //noinspection RedundantCollectionConversion
         val customCfOptions: Map[DbDef#BaseCol[_, _], RocksdbCFOptions] = columns.map {
           case (k, v: RocksdbColumnFamilyConfig) =>
