@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb
 
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
-import dev.chopsticks.kvdb.util.RocksdbCFBuilder.{RocksdbCFOptions, TotalOrderScanPattern}
+import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import org.rocksdb.CompressionType
 import pureconfig.ConfigConvert.viaNonEmptyString
 import pureconfig.error.FailureReason
@@ -33,10 +33,10 @@ object DbFactory {
   }
 
   final case class RocksdbColumnFamilyConfig(
-    memoryBudget: Information,
-    blockCache: Information,
-    blockSize: Information,
-    compression: CompressionType
+    memoryBudget: Option[Information],
+    blockCache: Option[Information],
+    blockSize: Option[Information],
+    compression: Option[CompressionType]
   )
 
   object RocksdbColumnFamilyConfig {
@@ -126,15 +126,17 @@ object DbFactory {
           ) =>
         //noinspection RedundantCollectionConversion
         val customCfOptions: Map[DbDef#BaseCol[_, _], RocksdbCFOptions] = columns.map {
-          case (k, v: RocksdbColumnFamilyConfig) =>
+          case (k, customOptions: RocksdbColumnFamilyConfig) =>
+            val col = definition.columns.withName(k).asInstanceOf[DbDef#BaseCol[_, _]]
+            val defaultRocksdbOptions = col.rocksdbOptions
             (
-              definition.columns.withName(k).asInstanceOf[DbDef#BaseCol[_, _]],
+              col,
               RocksdbCFOptions(
-                memoryBudget = v.memoryBudget,
-                blockCache = v.blockCache,
-                blockSize = v.blockSize,
-                readPattern = TotalOrderScanPattern,
-                compression = v.compression
+                memoryBudget = customOptions.memoryBudget.getOrElse(defaultRocksdbOptions.memoryBudget),
+                blockCache = customOptions.blockCache.getOrElse(defaultRocksdbOptions.blockCache),
+                blockSize = customOptions.blockSize.getOrElse(defaultRocksdbOptions.blockSize),
+                readPattern = defaultRocksdbOptions.readPattern,
+                compression = customOptions.compression.getOrElse(defaultRocksdbOptions.compression)
               )
             )
         }.toMap

@@ -160,24 +160,24 @@ final class RocksdbDb[DbDef <: DbDefinition](
   val isLocal: Boolean = true
 
   private val columnOptions: Map[AnyCol, ColumnFamilyOptions] = definition.columns.values.map { c =>
-    val col = c.asInstanceOf[AnyCol]
-    val defaultOptions = col.rocksdbOptions
-    val o: RocksdbCFOptions = options.getOrElse(col, defaultOptions)
+    val cf = c.asInstanceOf[AnyCol]
+    val defaultOptions = cf.rocksdbOptions
+    val cfOptions: RocksdbCFOptions = options.getOrElse(cf, defaultOptions)
 
-    val b = RocksdbCFBuilder(
-      memoryBudget = o.memoryBudget,
-      blockCache = o.blockCache,
-      blockSize = o.blockSize,
-      compression = o.compression
+    val cfBuilder = RocksdbCFBuilder(
+      memoryBudget = cfOptions.memoryBudget,
+      blockCache = cfOptions.blockCache,
+      blockSize = cfOptions.blockSize,
+      compression = cfOptions.compression
     )
-    val b1 = defaultOptions.readPattern match {
+    val tunedCfBuilder = cfOptions.readPattern match {
       case RocksdbCFBuilder.PointLookupPattern =>
-        b.withPointLookup()
+        cfBuilder.withPointLookup()
       case RocksdbCFBuilder.PrefixedScanPattern(minPrefixLength) =>
-        b.withCappedPrefixExtractor(minPrefixLength.value)
-      case RocksdbCFBuilder.TotalOrderScanPattern => b
+        cfBuilder.withCappedPrefixExtractor(minPrefixLength.value)
+      case RocksdbCFBuilder.TotalOrderScanPattern => cfBuilder
     }
-    (col, b1.build())
+    (cf, tunedCfBuilder.build())
   }.toMap
 
   private val coreCount: Int = Runtime.getRuntime.availableProcessors()
