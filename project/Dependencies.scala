@@ -4,7 +4,7 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.12.9"
-  val AKKA_VERSION = "2.5.24"
+  val AKKA_VERSION = "2.5.25"
   val AKKA_HTTP_VERSION = "10.1.9"
 
   val akkaSlf4jDeps = Seq(
@@ -45,6 +45,10 @@ object Dependencies {
 
   val catsCoreDeps = Seq(
     "org.typelevel" %% "cats-core" % "1.6.1"
+  )
+
+  val kittensDeps = Seq(
+    "org.typelevel" %% "kittens" % "1.2.1"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")

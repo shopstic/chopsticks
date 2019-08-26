@@ -61,7 +61,7 @@ lazy val kvdb = Build
   .settings(
     libraryDependencies ++= akkaHttpDeps ++ rocksdbDeps ++ lmdbDeps ++
       shapelessDeps ++ scalapbRuntimeDeps ++ enumeratumDeps ++ chimneyDeps ++
-      snappyDeps ++ betterFilesDeps ++ refinedDeps ++ silencerDeps,
+      kittensDeps ++ snappyDeps ++ betterFilesDeps ++ refinedDeps ++ silencerDeps,
     Compile / PB.targets := Seq(
       scalapb
         .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value

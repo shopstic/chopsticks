@@ -1,5 +1,6 @@
 package dev.chopsticks.kvdb
 
+import cats.Show
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
@@ -30,6 +31,14 @@ object DbFactory {
         case _: RemoteDbClientConfig => "remote"
       }
     }
+
+    private implicit val informationShow: Show[Information] = _.toString()
+    private implicit val compressionTypeShow: Show[CompressionType] = (t: CompressionType) => Option(t.getLibraryName).getOrElse("none")
+    implicit val dbClientConfigShow: Show[DbClientConfig] = {
+      import cats.derived.auto.showPretty._
+      import cats.implicits._
+      cats.derived.semi.showPretty
+    }
   }
 
   final case class RocksdbColumnFamilyConfig(
@@ -41,6 +50,7 @@ object DbFactory {
 
   object RocksdbColumnFamilyConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
+
     final case class InvalidCompressionType(given: String) extends FailureReason {
       def description: String =
         s"Invalid RocksDB compression type '$given', valid types are: " +
