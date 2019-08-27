@@ -5,16 +5,15 @@ import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
 import dev.chopsticks.kvdb.util.RocksdbCFBuilder.RocksdbCFOptions
 import org.rocksdb.CompressionType
+import pureconfig.ConfigConvert
 import pureconfig.ConfigConvert.viaNonEmptyString
 import pureconfig.error.FailureReason
 import pureconfig.generic.FieldCoproductHint
-import pureconfig.{ConfigConvert, KebabCase, PascalCase}
 import squants.information.Information
 
 import scala.concurrent.duration._
 
 object DbFactory {
-  private val DEFAULT_DB_IO_DISPATCHER = "dev.chopsticks.kvdb.db-io-dispatcher"
 
   sealed trait DbClientConfig
 
@@ -32,8 +31,9 @@ object DbFactory {
       }
     }
 
-    private implicit val informationShow: Show[Information] = _.toString()
-    private implicit val compressionTypeShow: Show[CompressionType] = (t: CompressionType) => Option(t.getLibraryName).getOrElse("none")
+    implicit private val informationShow: Show[Information] = _.toString()
+    implicit private val compressionTypeShow: Show[CompressionType] = (t: CompressionType) =>
+      Option(t.getLibraryName).getOrElse("none")
     implicit val dbClientConfigShow: Show[DbClientConfig] = {
       import cats.derived.auto.showPretty._
       import cats.implicits._
@@ -72,30 +72,30 @@ object DbFactory {
 
   final case class RocksdbDbClientConfig(
     path: String,
-    readOnly: Boolean = false,
-    startWithBulkInserts: Boolean = false,
-    checksumOnRead: Boolean = true,
-    syncWriteBatch: Boolean = true,
-    useDirectIo: Boolean = false,
-    columns: Map[String, RocksdbColumnFamilyConfig] = Map.empty[String, RocksdbColumnFamilyConfig],
-    ioDispatcher: String = DEFAULT_DB_IO_DISPATCHER
+    readOnly: Boolean,
+    startWithBulkInserts: Boolean,
+    checksumOnRead: Boolean,
+    syncWriteBatch: Boolean,
+    useDirectIo: Boolean,
+    columns: Map[String, RocksdbColumnFamilyConfig],
+    ioDispatcher: String
   ) extends DbClientConfig
 
   final case class LmdbDbClientConfig(
     path: String,
     maxSize: Information,
-    noSync: Boolean = false,
-    ioDispatcher: String = DEFAULT_DB_IO_DISPATCHER
+    noSync: Boolean,
+    ioDispatcher: String
   ) extends DbClientConfig
 
   final case class RemoteDbClientConfig(
     host: String,
     port: Int,
-    useCompression: Boolean = false,
-    keepAliveInterval: FiniteDuration = 30.seconds,
-    iterateFailureDelayIncrement: FiniteDuration = 10.millis,
-    iterateFailureDelayResetAfter: FiniteDuration = 500.millis,
-    iterateFailureMaxDelay: FiniteDuration = 1.second
+    useCompression: Boolean,
+    keepAliveInterval: FiniteDuration,
+    iterateFailureDelayIncrement: FiniteDuration,
+    iterateFailureDelayResetAfter: FiniteDuration,
+    iterateFailureMaxDelay: FiniteDuration
   ) extends DbClientConfig
 
   final case class RocksdbServerConfig(port: Int)
@@ -105,18 +105,6 @@ object DbFactory {
     config: DbClientConfig
   )(implicit akkaEnv: AkkaEnv): DbClient[DbDef] = {
     DbClient[DbDef](apply[DbDef](definition, config))
-  }
-
-  def remoteClient[DbDef <: DbDefinition](
-    definition: DbDef,
-    name: Option[String] = None
-  )(implicit akkaEnv: AkkaEnv): DbClient[DbDef] = {
-    val srvName = name.getOrElse(
-      KebabCase.fromTokens(PascalCase.toTokens(definition.getClass.getSimpleName.replaceAllLiterally("$", "")))
-    )
-    val host = s"$srvName.marathon.l4lb.thisdcos.directory"
-    val config = RemoteDbClientConfig(host = host, port = 80)
-    client(definition, config)
   }
 
   def apply[DbDef <: DbDefinition](

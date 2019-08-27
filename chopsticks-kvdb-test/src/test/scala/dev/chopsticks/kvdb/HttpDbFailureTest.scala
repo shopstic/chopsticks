@@ -74,7 +74,11 @@ class HttpDbFailureTest
           RemoteDbClientConfig(
             host = "localhost",
             port = serverPort,
-            iterateFailureDelayResetAfter = 90.millis
+            useCompression = false,
+            keepAliveInterval = 30.seconds,
+            iterateFailureDelayIncrement = 10.millis,
+            iterateFailureDelayResetAfter = 90.millis,
+            iterateFailureMaxDelay = 1.second
           )
         )
 

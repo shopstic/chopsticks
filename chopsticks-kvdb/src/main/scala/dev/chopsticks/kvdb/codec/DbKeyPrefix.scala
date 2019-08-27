@@ -2,7 +2,6 @@ package dev.chopsticks.kvdb.codec
 
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.codec.UnusedImplicits._
-import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import shapeless.ops.hlist.{IsHCons, Length, Take}
 import shapeless.{Generic, HList, Nat}
 
