@@ -8,9 +8,9 @@ import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream.{DstreamEnv, Dstreams}
-import dev.chopsticks.fp.zio_logging._
-import dev.chopsticks.fp.zio_logging.MeasuredLogging
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZIOExt, ZLogger}
+import dev.chopsticks.fp.zio_ext._
+import dev.chopsticks.fp.zio_ext.MeasuredLogging
+import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZAkka, ZLogger}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
 import zio._
 
@@ -41,7 +41,7 @@ object DstreamSampleApp extends AkkaApp {
 
       Source(1 to Int.MaxValue)
         .map(Assignment(_))
-        .via(ZIOExt.interruptableMapAsyncUnordered(12) { assignment: Assignment =>
+        .via(ZAkka.interruptableMapAsyncUnordered(12) { assignment: Assignment =>
           Dstreams
             .distribute(assignment) { result: WorkResult[Result] =>
               Task.fromFuture { _ =>
@@ -61,7 +61,7 @@ object DstreamSampleApp extends AkkaApp {
         .mapMaterializedValue(f => (ks, f))
     }
 
-    ZIOExt.interruptableGraph(graphTask, graceful = true)
+    ZAkka.interruptableGraph(graphTask, graceful = true)
   }
 
   protected def runWorker(client: DstreamSampleAppClient, id: Int) = {

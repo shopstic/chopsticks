@@ -9,9 +9,9 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.{Done, NotUsed}
 import dev.chopsticks.dstream.DstreamEnv.WorkResult
-import dev.chopsticks.fp.zio_logging._
+import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp._
-import dev.chopsticks.fp.zio_logging.MeasuredLogging
+import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import zio._
 import zio.clock.Clock
 
@@ -130,13 +130,13 @@ object Dstreams extends LoggingContext {
       requestBuilder
         .invoke(Source.fromFutureSource(promise.future).mapMaterializedValue(_ => NotUsed))
         .viaMat(KillSwitches.single)(Keep.right)
-        .via(ZIOExt.interruptableMapAsync(1) { assignment: Req =>
+        .via(ZAkka.interruptableMapAsync(1) { assignment: Req =>
           makeSource(assignment).map(s => promise.success(s)) *> Task.fromFuture(_ => promise.future)
         })
         .toMat(Sink.ignore)(Keep.both)
     }
 
-    ZIOExt.interruptableGraph(graph, graceful = true)
+    ZAkka.interruptableGraph(graph, graceful = true)
   }
 
   def workPool[Req, Res, R <: AkkaEnv](

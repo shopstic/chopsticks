@@ -1,20 +1,21 @@
 package dev.chopsticks.fp
 
-import squants.time.Nanoseconds
-import zio.clock.Clock
-import zio._
 import dev.chopsticks.util.implicits.SquantsImplicits._
+import squants.time.Nanoseconds
+import zio._
+import zio.clock.Clock
+
 import scala.concurrent.duration.Duration
 import scala.language.implicitConversions
 
-package object zio_logging {
+package object zio_ext {
 
   private val nanoTime = ZIO.accessM((e: Clock) => e.clock.nanoTime)
 
-  type MeasuredLogging = LogEnv with Clock
-
   implicit def scalaToZioDuration(d: Duration): zio.duration.Duration =
     zio.duration.Duration.fromScala(d)
+
+  type MeasuredLogging = LogEnv with Clock
 
   implicit final class TaskExtensions[A](io: Task[A]) {
     def logResult(name: String, result: A => String)(implicit ctx: LogCtx): RIO[MeasuredLogging, A] = {

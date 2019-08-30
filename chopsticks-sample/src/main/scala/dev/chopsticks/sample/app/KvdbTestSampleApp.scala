@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink}
 import com.typesafe.config.Config
-import dev.chopsticks.fp.zio_logging._
+import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp._
 import dev.chopsticks.kvdb.DbFactory.DbClientConfig
 import dev.chopsticks.kvdb.DbInterface.DbDefinition
@@ -70,7 +70,7 @@ object KvdbTestSampleApp extends AkkaApp {
           .mkString("\n")
       )
       defaultCol = dbClient.column(_.Default)
-      tailFiber <- ZIOExt
+      tailFiber <- ZAkka
         .interruptableGraph(
           ZIO.access[AkkaEnv with LogEnv] { env =>
             val log = env.logger

@@ -3,7 +3,7 @@ package dev.chopsticks.sample.app
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.typesafe.config.Config
-import dev.chopsticks.fp.{AkkaApp, LogEnv, ZIOExt}
+import dev.chopsticks.fp.{AkkaApp, LogEnv, ZAkka}
 import zio.{ZIO, ZManaged}
 
 import scala.concurrent.duration._
@@ -14,7 +14,7 @@ object AkkaStreamInterruptionSampleApp extends AkkaApp {
   protected def createEnv(untypedConfig: Config) = ZManaged.environment[AkkaApp.Env]
 
   protected def run = {
-    val stream = ZIOExt.interruptableGraph(
+    val stream = ZAkka.interruptableGraph(
       ZIO.access[LogEnv] { env =>
         Source(1 to 10)
           .throttle(1, 1.second)
