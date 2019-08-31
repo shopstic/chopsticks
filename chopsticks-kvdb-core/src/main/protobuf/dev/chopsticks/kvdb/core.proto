@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+import "scalapb/scalapb.proto";
+package dev.chopsticks.kvdb.proto;
+
+message KvdbKeyConstraintList {
+  repeated KvdbKeyConstraint constraints = 1 [(scalapb.field).collection_type="List"];
+}
+
+message KvdbKeyConstraint {
+  enum Operator {
+    EQUAL = 0;
+    GREATER = 1;
+    LESS = 2;
+    GREATER_EQUAL = 3;
+    LESS_EQUAL = 4;
+    PREFIX = 5;
+    FIRST = 6;
+    LAST = 7;
+  }
+
+  Operator operator = 1;
+  bytes operand = 2;
+  string operand_display = 3;
+}
+
+message KvdbKeyRange {
+  repeated KvdbKeyConstraint from = 1 [(scalapb.field).collection_type="List"];
+  repeated KvdbKeyConstraint to = 2 [(scalapb.field).collection_type="List"];
+}
+
+message KvdbPutRequest {
+  string column_id = 1;
+  bytes key = 2;
+  bytes value = 3;
+}
+
+message KvdbPutResult {
+}
+
+message KvdbDeleteRequest {
+  string column_id = 1;
+  bytes key = 2;
+}
+
+message KvdbDeleteResult {
+}
+
+message KvdbDeletePrefixRequest {
+  string column_id = 1;
+  bytes prefix = 2;
+}
+
+message KvdbDeletePrefixResult {
+  uint64 count = 1;
+}
+
+message KvdbTransactionAction {
+  oneof action {
+    KvdbPutRequest put = 1;
+    KvdbDeleteRequest delete = 2;
+    KvdbDeletePrefixRequest delete_prefix = 3;
+  }
+}
+
+message KvdbOperationException {
+  enum ExceptionType {
+    SEEK_FAILURE = 0;
+    //    InitialSeekFailure = 1;
+    UNOPTIMIZED_OPERATION = 2;
+    INVALID_COLUMN_FAMILY = 3;
+    INVALID_ARGUMENT = 4;
+    UNSUPPORTED_OPERATION = 5;
+    ALREADY_CLOSED = 6;
+  }
+  ExceptionType exception_type = 1;
+  string message = 2;
+}
