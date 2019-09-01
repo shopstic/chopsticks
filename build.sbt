@@ -93,45 +93,41 @@ lazy val kvdbRemote = Build
   )
   .dependsOn(kvdbCore)
 
-lazy val kvdb = Build
-  .defineProject("kvdb")
-  .settings(
-    libraryDependencies ++= akkaHttpDeps ++ rocksdbDeps ++ lmdbDeps ++
-      shapelessDeps ++ scalapbRuntimeDeps ++ enumeratumDeps ++ chimneyDeps ++
-      kittensDeps ++ snappyDeps ++ betterFilesDeps ++ refinedDeps ++ silencerDeps,
-    Compile / PB.targets := Seq(
-      scalapb
-        .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value
-    ),
-    scalacOptions ++= Seq(
-      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
-      "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
-    )
-  )
-  .dependsOn(util, fp, stream)
+//lazy val kvdb = Build
+//  .defineProject("kvdb")
+//  .settings(
+//    libraryDependencies ++= akkaHttpDeps ++ rocksdbDeps ++ lmdbDeps ++
+//      shapelessDeps ++ scalapbRuntimeDeps ++ enumeratumDeps ++ chimneyDeps ++
+//      kittensDeps ++ snappyDeps ++ betterFilesDeps ++ refinedDeps ++ silencerDeps,
+//    Compile / PB.targets := Seq(
+//      scalapb
+//        .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value
+//    ),
+//    scalacOptions ++= Seq(
+//      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
+//      "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
+//    )
+//  )
+//  .dependsOn(util, fp, stream)
 
 lazy val kvdbCodecBerkeleydbKey = Build
   .defineProject("kvdb-codec-berkeleydb-key")
   .settings(
     libraryDependencies ++= berkeleyDbDeps
   )
-  .dependsOn(kvdb)
+  .dependsOn(kvdbCore)
 
 lazy val kvdbCodecProtobufValue = Build
   .defineProject("kvdb-codec-protobuf-value")
-  .dependsOn(kvdb)
+  .dependsOn(kvdbCore)
 
-lazy val kvdbCodecPrimitive = Build
-  .defineProject("kvdb-codec-primitive")
-  .dependsOn(kvdb)
-
-lazy val kvdbTest = Build
-  .defineProject("kvdb-test")
-  .settings(
-    publish / skip := true,
-    bintrayRelease := {},
-  )
-  .dependsOn(kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, kvdbCodecPrimitive, testkit % "test->compile")
+//lazy val kvdbTest = Build
+//  .defineProject("kvdb-test")
+//  .settings(
+//    publish / skip := true,
+//    bintrayRelease := {},
+//  )
+//  .dependsOn(kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, kvdbCodecPrimitive, testkit % "test->compile")
 
 lazy val sample = Build
   .defineProject("sample")
@@ -146,7 +142,7 @@ lazy val sample = Build
       "-P:silencer:pathFilters=dev/chopsticks/sample/app/proto"
     )
   )
-  .dependsOn(kvdb, kvdbCodecPrimitive, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, dstream)
+  .dependsOn(kvdbCore, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, dstream)
 
 lazy val root = (project in file("."))
   .enablePlugins(SymlinkTargetPlugin)
@@ -156,4 +152,4 @@ lazy val root = (project in file("."))
     bintrayRelease := {},
     dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
   )
-  .aggregate(util, testkit, fp, stream, dstream, kvdb, sample, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, kvdbCodecPrimitive, kvdbTest)
+  .aggregate(util, testkit, fp, stream, dstream, kvdbCore, kvdbLmdb, kvdbRocksdb/*, sample*/, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue)

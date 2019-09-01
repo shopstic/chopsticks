@@ -62,8 +62,8 @@ object DerivedKeySerdes extends StrictLogging {
         decoder.value.decode(bytes)
       }
 
-      def encode(value: P): Array[Byte] = {
-        encoder.value.encode(value)
+      def serialize(value: P): Array[Byte] = {
+        encoder.value.serialize(value)
       }
     }
   }
@@ -82,7 +82,7 @@ object KeySerdes extends StrictLogging {
     d.asInstanceOf[Aux[A, d.Flattened, d.Codec]]
 
   def ordering[A](implicit dbKey: KeySerdes[A]): Ordering[A] =
-    (x: A, y: A) => KeySerdes.compare(dbKey.encode(x), dbKey.encode(y))
+    (x: A, y: A) => KeySerdes.compare(dbKey.serialize(x), dbKey.serialize(y))
 
   def deriveGeneric[V, C](
     implicit
@@ -100,8 +100,8 @@ object KeySerdes extends StrictLogging {
         decoder.value.decode(bytes)
       }
 
-      def encode(value: V): Array[Byte] = {
-        encoder.value.encode(value)
+      def serialize(value: V): Array[Byte] = {
+        encoder.value.serialize(value)
       }
     }
   }
@@ -110,7 +110,7 @@ object KeySerdes extends StrictLogging {
     decoder.decode(bytes)
   }
 
-  def encode[V](value: V)(implicit encoder: KeySerdes[V]): Array[Byte] = encoder.encode(value)
+  def encode[V](value: V)(implicit encoder: KeySerdes[V]): Array[Byte] = encoder.serialize(value)
 
   def compare(a1: Array[Byte], a2: Array[Byte]): Int = {
     val minLen = Math.min(a1.length, a2.length)

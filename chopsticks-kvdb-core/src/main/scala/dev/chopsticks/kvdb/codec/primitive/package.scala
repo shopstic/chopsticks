@@ -22,7 +22,7 @@ package object primitive {
 
     def describe: String = "literalStringDbKey"
 
-    def encode(value: K): Array[Byte] = KvdbSerdesUtils.stringToByteArray(to(value))
+    def serialize(value: K): Array[Byte] = KvdbSerdesUtils.stringToByteArray(to(value))
 
     def decode(bytes: Array[Byte]): KeyDeserializationResult[K] = Right(from(KvdbSerdesUtils.byteArrayToString(bytes)))
   }

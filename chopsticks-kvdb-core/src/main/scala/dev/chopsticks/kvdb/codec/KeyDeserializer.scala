@@ -12,7 +12,7 @@ object KeyDeserializer {
   sealed trait DecodingFailure extends NoStackTrace
 
   // scalastyle:off null
-  final case class GenericDecodingException(message: String, cause: Throwable = null)
+  final case class GenericKeyDeserializationException(message: String, cause: Throwable = null)
       extends RuntimeException(message, cause)
       with DecodingFailure
 

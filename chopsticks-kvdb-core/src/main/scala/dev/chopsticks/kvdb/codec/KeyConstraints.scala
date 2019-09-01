@@ -87,7 +87,7 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
   }
 
   def is(v: K)(implicit e: KeySerdes[K]): KeyConstraints[K] = {
-    copy(constraints enqueue KvdbKeyConstraint(Operator.EQUAL, ProtoByteString.copyFrom(e.encode(v)), v.toString))
+    copy(constraints enqueue KvdbKeyConstraint(Operator.EQUAL, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
   }
 
   /*def is[A](v: A)(implicit k: KvdbKey.Aux[K, A :#: HNil], e: KvdbKey[A]): KvdbKeyConstraints[K] = {

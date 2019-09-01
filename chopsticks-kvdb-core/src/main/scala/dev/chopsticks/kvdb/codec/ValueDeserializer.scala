@@ -12,7 +12,7 @@ object ValueDeserializer {
   trait ValueDeserializationFailure extends NoStackTrace
 
   // scalastyle:off null
-  final case class ValueGenericDeserializationException(message: String, cause: Throwable = null)
+  final case class GenericValueDeserializationException(message: String, cause: Throwable = null)
       extends RuntimeException(message, cause)
       with ValueDeserializationFailure
 

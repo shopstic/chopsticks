@@ -13,7 +13,7 @@ trait KeyPrefix[A, B] {
 }
 
 final private class KeyPrefixWithSerializer[A, B](serializer: KeySerializer[A]) extends KeyPrefix[A, B] {
-  def encode(a: A): Array[Byte] = serializer.encode(a)
+  def encode(a: A): Array[Byte] = serializer.serialize(a)
 }
 
 trait KeyPrefixPriority3Implicits extends StrictLogging {
