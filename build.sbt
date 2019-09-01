@@ -77,14 +77,14 @@ lazy val kvdbLmdb = Build
   .settings(
     libraryDependencies ++= lmdbDeps
   )
-  .dependsOn(kvdbCore)
+  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->compile")
 
 lazy val kvdbRocksdb = Build
   .defineProject("kvdb-rocksdb")
   .settings(
     libraryDependencies ++= rocksdbDeps
   )
-  .dependsOn(kvdbCore)
+  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->compile")
 
 lazy val kvdbRemote = Build
   .defineProject("kvdb-remote")
@@ -107,15 +107,6 @@ lazy val kvdb = Build
       s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
       "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
     )
-  )
-  .dependsOn(util, fp, stream)
-
-lazy val kvdbNew = Build
-  .defineProject("kvdb-new")
-  .settings(
-    libraryDependencies ++= akkaHttpDeps ++ rocksdbDeps ++ lmdbDeps ++
-      shapelessDeps ++ scalapbRuntimeDeps ++ enumeratumDeps ++ chimneyDeps ++
-      kittensDeps ++ snappyDeps ++ betterFilesDeps ++ refinedDeps ++ silencerDeps
   )
   .dependsOn(util, fp, stream)
 

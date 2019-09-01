@@ -18,14 +18,18 @@ import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilySet, KvdbDatabase}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
-import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyBuilder.RocksdbColumnFamilyOptions
+import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{
+  PointLookupPattern,
+  PrefixedScanPattern,
+  TotalOrderScanPattern
+}
 import dev.chopsticks.kvdb.rocksdb.RocksdbUtils.OptionsFileSection
 import dev.chopsticks.kvdb.util.KvdbUtils.{
-  KvdbAlreadyClosedException,
-  KvdbCloseSignal,
   InvalidKvdbArgumentException,
+  KvdbAlreadyClosedException,
   KvdbBatch,
   KvdbClientOptions,
+  KvdbCloseSignal,
   KvdbIndexedTailBatch,
   KvdbIterateSourceGraph,
   KvdbIterateSourceGraphRefs,
@@ -47,6 +51,7 @@ import zio.{RIO, Task, UIO, ZIO, ZSchedule}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
+import scala.language.higherKinds
 import scala.util.Failure
 
 object RocksdbDatabase extends StrictLogging {
@@ -133,21 +138,21 @@ object RocksdbDatabase extends StrictLogging {
 
   //  private object StreamEndMarker
 
-  def apply[CF <: ColumnFamily[_, _], CFS <: CF](
-    columnFamilySet: ColumnFamilySet[CF, CFS],
+  def apply[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
+    columnFamilySet: ColumnFamilySet[BCF, CFS],
+    columnFamilyConfigMap: RocksdbColumnFamilyConfigMap[BCF, CFS],
     path: String,
-    options: Map[CF, RocksdbColumnFamilyOptions],
     readOnly: Boolean,
     startWithBulkInserts: Boolean,
     checksumOnRead: Boolean,
     syncWriteBatch: Boolean,
     useDirectIo: Boolean,
     ioDispatcher: String
-  )(implicit akkaEnv: AkkaEnv): RocksdbDatabase[CF, CFS] = {
-    new RocksdbDatabase[CF, CFS](
+  )(implicit akkaEnv: AkkaEnv): RocksdbDatabase[BCF, CFS] = {
+    new RocksdbDatabase[BCF, CFS](
       columnFamilySet,
+      columnFamilyConfigMap,
       path,
-      options,
       readOnly,
       startWithBulkInserts,
       checksumOnRead,
@@ -158,10 +163,10 @@ object RocksdbDatabase extends StrictLogging {
   }
 }
 
-final class RocksdbDatabase[CF <: ColumnFamily[_, _], CFS <: CF](
-  val columnFamilySet: ColumnFamilySet[CF, CFS],
+final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
+  val columnFamilySet: ColumnFamilySet[BCF, CFS],
+  columnFamilyConfigMap: RocksdbColumnFamilyConfigMap[BCF, CFS],
   path: String,
-  options: Map[CF, RocksdbColumnFamilyOptions],
   readOnly: Boolean,
   startWithBulkInserts: Boolean,
   checksumOnRead: Boolean,
@@ -169,7 +174,7 @@ final class RocksdbDatabase[CF <: ColumnFamily[_, _], CFS <: CF](
   useDirectIo: Boolean,
   ioDispatcher: String
 )(implicit akkaEnv: AkkaEnv)
-    extends KvdbDatabase[CF, CFS]
+    extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
   import RocksdbDatabase._
@@ -178,21 +183,21 @@ final class RocksdbDatabase[CF <: ColumnFamily[_, _], CFS <: CF](
 
   private val columnOptions: Map[CF, ColumnFamilyOptions] = columnFamilySet.set.map { cf =>
 //    val defaultOptions = cf.rocksdbOptions
-    val cfOptions: RocksdbColumnFamilyOptions = options(cf)
+    val cfOptions: RocksdbColumnFamilyConfig[CF] = columnFamilyConfigMap.map(cf)
 //    val cfOptions: RocksdbCFOptions = options.get(cf, defaultOptions)
 
-    val cfBuilder = RocksdbColumnFamilyBuilder(
+    val cfBuilder = RocksdbColumnFamilyOptionsBuilder(
       memoryBudget = cfOptions.memoryBudget,
       blockCache = cfOptions.blockCache,
       blockSize = cfOptions.blockSize,
       compression = cfOptions.compression
     )
     val tunedCfBuilder = cfOptions.readPattern match {
-      case RocksdbColumnFamilyBuilder.PointLookupPattern =>
+      case PointLookupPattern =>
         cfBuilder.withPointLookup()
-      case RocksdbColumnFamilyBuilder.PrefixedScanPattern(minPrefixLength) =>
+      case PrefixedScanPattern(minPrefixLength) =>
         cfBuilder.withCappedPrefixExtractor(minPrefixLength.value)
-      case RocksdbColumnFamilyBuilder.TotalOrderScanPattern => cfBuilder
+      case TotalOrderScanPattern => cfBuilder
     }
     (cf, tunedCfBuilder.build())
   }.toMap
@@ -358,11 +363,13 @@ final class RocksdbDatabase[CF <: ColumnFamily[_, _], CFS <: CF](
       case (db, columnHandleMap, stats) =>
         readColumnFamilyOptionsFromDisk(path)
           .map { r =>
-            val columnHasPrefixExtractorMap: Map[CF, String] = r.map {
+            val columnHasPrefixExtractorMap: Map[CF, String] = r.iterator.map {
               case (colName, colMap) =>
+                val cf = columnFamilyWithName(colName).get
                 val prefixExtractor = colMap("prefix_extractor")
-                (columnFamilyWithName(colName).get, prefixExtractor)
-            }
+                (cf, prefixExtractor)
+            }.toMap
+
             KvdbReferences[CF](db, columnHandleMap, columnHasPrefixExtractorMap, stats)
           }
     }
@@ -375,7 +382,6 @@ final class RocksdbDatabase[CF <: ColumnFamily[_, _], CFS <: CF](
   }
 
   private val isClosed = new AtomicBoolean(false)
-
 
 //  private val memoizedReferencesTask: ZIO[Any, Nothing, IO[Throwable, KvdbReferences[KvdbDef#BaseCol]]] = Task.fromFuture(_ => _references).memoize
 

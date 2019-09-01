@@ -1,15 +1,17 @@
 package dev.chopsticks.kvdb
 
+import scala.language.higherKinds
+
 object ColumnFamilySet {
-  def apply[CF <: ColumnFamily[_, _]] = new ColumnFamilySet[CF, CF](Set.empty)
+  def apply[CF[A, B] <: ColumnFamily[A, B]] = new ColumnFamilySet[CF, CF[_, _]](Set.empty)
 }
 
-final class ColumnFamilySet[CF <: ColumnFamily[_, _], +A <: CF] private (val set: Set[CF]) {
-  def and[B <: CF](cf: B): ColumnFamilySet[CF, A with B] = {
-    new ColumnFamilySet[CF, A with B](set + cf)
+final class ColumnFamilySet[BCF[A, B] <: ColumnFamily[A, B], +CF <: BCF[_, _]] private (val set: Set[BCF[_, _]]) {
+  def and[B <: BCF[_, _]](cf: B): ColumnFamilySet[BCF, CF with B] = {
+    new ColumnFamilySet[BCF, CF with B](set + cf)
   }
 
-  def of[B <: CF](cf: B): ColumnFamilySet[CF, B] = {
-    new ColumnFamilySet[CF, B](Set(cf))
+  def of[B <: BCF[_, _]](cf: B): ColumnFamilySet[BCF, B] = {
+    new ColumnFamilySet[BCF, B](Set(cf))
   }
 }

@@ -25,6 +25,7 @@ import zio.internal.Executor
 import zio.{RIO, Task, ZSchedule}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.language.higherKinds
 import scala.util.Failure
 import scala.util.control.{ControlThrowable, NonFatal}
 
@@ -70,27 +71,28 @@ object LmdbDatabase extends StrictLogging {
 
   private val KvdbClosedException = KvdbAlreadyClosedException("Database was already closed")
 
-  def apply[CF <: ColumnFamily[_, _], CFS <: CF](
-    columnFamilySet: ColumnFamilySet[CF, CFS],
+  def apply[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
+    columnFamilySet: ColumnFamilySet[BCF, CFS],
     path: String,
     maxSize: Long,
     noSync: Boolean,
     ioDispatcher: String
   )(
     implicit akkaEnv: AkkaEnv
-  ): LmdbDatabase[CF, CFS] = new LmdbDatabase(columnFamilySet, path, maxSize, noSync, ioDispatcher)
+  ): LmdbDatabase[BCF, CFS] = new LmdbDatabase[BCF, CFS](columnFamilySet, path, maxSize, noSync, ioDispatcher)
 }
 
-final class LmdbDatabase[CF <: ColumnFamily[_, _], CFS <: CF](
-  val columnFamilySet: ColumnFamilySet[CF, CFS],
+final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
+  val columnFamilySet: ColumnFamilySet[BCF, CFS],
   path: String,
   maxSize: Long,
   noSync: Boolean,
   ioDispatcher: String
 )(
   implicit akkaEnv: AkkaEnv
-) extends KvdbDatabase[CF, CFS]
+) extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
+
   import LmdbDatabase._
 
   type Refs = KvdbReferences[CF]

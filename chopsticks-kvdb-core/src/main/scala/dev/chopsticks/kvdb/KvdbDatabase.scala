@@ -10,6 +10,7 @@ import zio.clock.Clock
 import zio.{RIO, Task}
 
 import scala.concurrent.Future
+import scala.language.higherKinds
 
 object KvdbDatabase {
 
@@ -31,12 +32,15 @@ object KvdbDatabase {
   }
 }
 
-trait KvdbDatabase[CF <: ColumnFamily[_, _], CFS <: CF] {
+trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
+
+  type CF = BCF[_, _]
+
   def isLocal: Boolean
 
-  def columnFamilySet: ColumnFamilySet[CF, CFS]
+  def columnFamilySet: ColumnFamilySet[BCF, CFS]
 
-  def transactionBuilder(): ColumnFamilyTransactionBuilder[CF] = new ColumnFamilyTransactionBuilder[CF]
+  def transactionBuilder(): ColumnFamilyTransactionBuilder[BCF] = new ColumnFamilyTransactionBuilder[BCF]
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]]
 

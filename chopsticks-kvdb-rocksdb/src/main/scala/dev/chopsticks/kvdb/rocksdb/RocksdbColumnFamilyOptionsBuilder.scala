@@ -1,37 +1,22 @@
 package dev.chopsticks.kvdb.rocksdb
 
-import eu.timepit.refined.types.numeric.PosInt
 import org.rocksdb._
 import squants.information.Information
 
 import scala.collection.JavaConverters._
 
-object RocksdbColumnFamilyBuilder {
-  sealed trait ReadPattern
-
-  object PointLookupPattern extends ReadPattern
-  object TotalOrderScanPattern extends ReadPattern
-  final case class PrefixedScanPattern(minPrefixLength: PosInt) extends ReadPattern
-
-  final case class RocksdbColumnFamilyOptions(
-    memoryBudget: Information,
-    blockCache: Information,
-    blockSize: Information,
-    readPattern: ReadPattern,
-    compression: CompressionType = CompressionType.NO_COMPRESSION
-  )
-
+object RocksdbColumnFamilyOptionsBuilder {
   def apply(
     memoryBudget: Information,
     blockCache: Information,
     blockSize: Information,
     compression: CompressionType
-  ): RocksdbColumnFamilyBuilder = {
-    new RocksdbColumnFamilyBuilder(memoryBudget, blockCache, blockSize, compression)
+  ): RocksdbColumnFamilyOptionsBuilder = {
+    new RocksdbColumnFamilyOptionsBuilder(memoryBudget, blockCache, blockSize, compression)
   }
 }
 
-final class RocksdbColumnFamilyBuilder private (
+final class RocksdbColumnFamilyOptionsBuilder private (
   memoryBudget: Information,
   blockCache: Information,
   blockSize: Information,
@@ -82,7 +67,7 @@ final class RocksdbColumnFamilyBuilder private (
       .setNoBlockCache(true)
   }
 
-  def withCappedPrefixExtractor(length: Int): RocksdbColumnFamilyBuilder = {
+  def withCappedPrefixExtractor(length: Int): RocksdbColumnFamilyOptionsBuilder = {
     {
       val _ = columnOptions.useCappedPrefixExtractor(length)
     }
@@ -91,7 +76,7 @@ final class RocksdbColumnFamilyBuilder private (
     this
   }
 
-  def withPointLookup(): RocksdbColumnFamilyBuilder = {
+  def withPointLookup(): RocksdbColumnFamilyOptionsBuilder = {
     {
       val _ = columnOptions
         .optimizeForPointLookup(1)
@@ -103,7 +88,7 @@ final class RocksdbColumnFamilyBuilder private (
     this
   }
 
-  def withMergeOperatorName(name: String): RocksdbColumnFamilyBuilder = {
+  def withMergeOperatorName(name: String): RocksdbColumnFamilyOptionsBuilder = {
     val _ = columnOptions.setMergeOperatorName(name)
     this
   }

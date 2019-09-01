@@ -8,15 +8,11 @@ import dev.chopsticks.kvdb.proto.{KvdbDeletePrefixRequest, KvdbDeleteRequest, Kv
 
 import scala.collection.mutable
 import scala.language.higherKinds
-import dev.chopsticks.kvdb.util.UnusedImplicits._
 
-final class ColumnFamilyTransactionBuilder[BaseCol <: ColumnFamily[_, _]] {
+final class ColumnFamilyTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
   private val buffer = new mutable.ListBuffer[KvdbTransactionAction]
 
-  def put[CF[A, B] <: ColumnFamily[A, B], K, V](column: CF[K, V], key: K, value: V)(
-    implicit ev: CF[K, V] <:< BaseCol
-  ): this.type = {
-    ev.unused()
+  def put[CF <: BCF[K, V], K, V](column: CF, key: K, value: V): this.type = {
     val _ = buffer += KvdbTransactionAction(
       KvdbTransactionAction.Action.Put(
         KvdbPutRequest(
@@ -29,18 +25,14 @@ final class ColumnFamilyTransactionBuilder[BaseCol <: ColumnFamily[_, _]] {
     this
   }
 
-  def putValue[CF[A, B] <: ColumnFamily[A, B], K, V](column: CF[K, V], value: V)(
-    implicit t: KeyTransformer[V, K],
-    ev: CF[K, V] <:< BaseCol
+  def putValue[CF <: BCF[K, V], K, V](column: CF, value: V)(
+    implicit t: KeyTransformer[V, K]
   ): this.type = {
     val key = t.transform(value)
     put(column, key, value)
   }
 
-  def delete[CF[A, B] <: ColumnFamily[A, B], K](column: CF[K, _], key: K)(
-    implicit ev: CF[K, _] <:< BaseCol
-  ): this.type = {
-    ev.unused()
+  def delete[CF <: BCF[K, _], K](column: CF, key: K): this.type = {
     val _ = buffer += KvdbTransactionAction(
       KvdbTransactionAction.Action.Delete(
         KvdbDeleteRequest(
@@ -52,10 +44,7 @@ final class ColumnFamilyTransactionBuilder[BaseCol <: ColumnFamily[_, _]] {
     this
   }
 
-  def deletePrefix[CF[A, B] <: ColumnFamily[A, B]](col: CF[_, _], prefix: String)(
-    implicit ev: CF[_, _] <:< BaseCol
-  ): this.type = {
-    ev.unused()
+  def deletePrefix[CF <: BCF[_, _]](col: CF, prefix: String): this.type = {
     val _ = buffer += KvdbTransactionAction(
       KvdbTransactionAction.Action.DeletePrefix(
         KvdbDeletePrefixRequest(

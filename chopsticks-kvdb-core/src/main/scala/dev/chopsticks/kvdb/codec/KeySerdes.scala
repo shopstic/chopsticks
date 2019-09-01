@@ -1,9 +1,10 @@
 package dev.chopsticks.kvdb.codec
 
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.kvdb.codec.KeyDeserializer.DbKeyDecodeResult
+import dev.chopsticks.kvdb.codec.KeyDeserializer.KeyDeserializationResult
 import shapeless._
 import shapeless.ops.hlist.FlatMapper
+import dev.chopsticks.kvdb.util.UnusedImplicits._
 
 trait KeySerdes[P] extends KeySerializer[P] with KeyDeserializer[P] {
   type Flattened <: HList
@@ -21,10 +22,6 @@ object DerivedKeySerdes extends StrictLogging {
     type Codec = C
   }
   // scalastyle:on
-
-  implicit final class UnusedOps[A](private val a: A) extends AnyVal {
-    def unused(): Unit = ()
-  }
 
   trait LowPriorityFlatten extends Poly1 {
     implicit def default[T]: Case.Aux[T, T :: HNil] = at[T](v => v :: HNil)
@@ -61,7 +58,7 @@ object DerivedKeySerdes extends StrictLogging {
 
       def describe: String = typ.describe
 
-      def decode(bytes: Array[Byte]): DbKeyDecodeResult[P] = {
+      def decode(bytes: Array[Byte]): KeyDeserializationResult[P] = {
         decoder.value.decode(bytes)
       }
 
@@ -81,7 +78,8 @@ object KeySerdes extends StrictLogging {
   }
   // scalastyle:on
 
-  def apply[A](implicit d: DerivedKeySerdes[A]): Aux[A, d.Flattened, d.Codec] = d.asInstanceOf[Aux[A, d.Flattened, d.Codec]]
+  def apply[A](implicit d: DerivedKeySerdes[A]): Aux[A, d.Flattened, d.Codec] =
+    d.asInstanceOf[Aux[A, d.Flattened, d.Codec]]
 
   def ordering[A](implicit dbKey: KeySerdes[A]): Ordering[A] =
     (x: A, y: A) => KeySerdes.compare(dbKey.encode(x), dbKey.encode(y))
@@ -98,7 +96,7 @@ object KeySerdes extends StrictLogging {
 
       def describe: String = typ.describe
 
-      def decode(bytes: Array[Byte]): DbKeyDecodeResult[V] = {
+      def decode(bytes: Array[Byte]): KeyDeserializationResult[V] = {
         decoder.value.decode(bytes)
       }
 
@@ -108,7 +106,7 @@ object KeySerdes extends StrictLogging {
     }
   }
 
-  def decode[V](bytes: Array[Byte])(implicit decoder: KeySerdes[V]): DbKeyDecodeResult[V] = {
+  def decode[V](bytes: Array[Byte])(implicit decoder: KeySerdes[V]): KeyDeserializationResult[V] = {
     decoder.decode(bytes)
   }
 

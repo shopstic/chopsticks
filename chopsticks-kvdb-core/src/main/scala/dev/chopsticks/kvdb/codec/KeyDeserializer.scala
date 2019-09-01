@@ -1,11 +1,11 @@
 package dev.chopsticks.kvdb.codec
 
-import dev.chopsticks.kvdb.codec.KeyDeserializer.DbKeyDecodeResult
+import dev.chopsticks.kvdb.codec.KeyDeserializer.KeyDeserializationResult
 
 import scala.util.control.NoStackTrace
 
 trait KeyDeserializer[T] {
-  def decode(bytes: Array[Byte]): DbKeyDecodeResult[T]
+  def decode(bytes: Array[Byte]): KeyDeserializationResult[T]
 }
 
 object KeyDeserializer {
@@ -20,6 +20,6 @@ object KeyDeserializer {
       extends RuntimeException(message)
       with DecodingFailure
 
-  type DbKeyDecodeResult[T] = Either[DecodingFailure, T]
+  type KeyDeserializationResult[T] = Either[DecodingFailure, T]
 
 }
