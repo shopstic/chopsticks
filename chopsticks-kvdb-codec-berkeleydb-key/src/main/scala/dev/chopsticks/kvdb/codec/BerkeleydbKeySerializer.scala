@@ -11,8 +11,7 @@ import shapeless.{::, HList, HNil, ProductTypeClass, ProductTypeClassCompanion}
 import scala.annotation.implicitNotFound
 
 @implicitNotFound(
-  msg =
-    "Implicit BerkeleydbKeySerializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeySerializer[${T}]"
+  msg = "Implicit BerkeleydbKeySerializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeySerializer[${T}]"
 )
 trait BerkeleydbKeySerializer[T] {
   def serialize(o: TupleOutput, t: T): TupleOutput

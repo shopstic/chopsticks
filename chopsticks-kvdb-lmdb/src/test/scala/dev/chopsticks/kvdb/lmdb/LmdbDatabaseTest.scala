@@ -1,40 +1,44 @@
 package dev.chopsticks.kvdb.lmdb
 
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv}
-import dev.chopsticks.kvdb.TestDatabase.{DefaultCf, LookupCf, TestCf, TestDb}
+import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.kvdb.TestDatabase.{DefaultCf, LookupCf, TestDb, TestDbCf}
 import dev.chopsticks.kvdb.codec.primitive._
+import dev.chopsticks.kvdb.util.KvdbTestUtils
 import dev.chopsticks.kvdb.util.KvdbUtils.KvdbAlreadyClosedException
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest}
-import org.scalatest.Assertion
-import zio.{RIO, ZIO}
+import zio.{ZIO, ZManaged}
 
-final class LmdbDatabaseTest extends KvdbDatabaseTest {
-  protected object defaultCf extends DefaultCf
-  protected object lookupCf extends LookupCf
-  private val testDbCfs = ColumnFamilySet[TestCf] of defaultCf and lookupCf
-
-  protected val runTest: (TestDb => RIO[AkkaApp.Env, Assertion]) => RIO[AkkaApp.Env, Assertion] =
-    (test: TestDb => RIO[AkkaApp.Env, Assertion]) => {
-      KvdbDatabaseTest.withTempDir { dir =>
+object LmdbDatabaseTest {
+  object defaultCf extends DefaultCf
+  object lookupCf extends LookupCf
+  //noinspection TypeAnnotation
+  private val cfs = ColumnFamilySet[TestDbCf] of defaultCf and lookupCf
+  val managedDb: ZManaged[AkkaApp.Env, Throwable, TestDb] = {
+    for {
+      dir <- KvdbTestUtils.managedTempDir
+      db <- ZManaged.make {
         ZIO
-          .access[AkkaEnv] { implicit env =>
+          .access[AkkaApp.Env] { implicit env =>
             LmdbDatabase(
-              testDbCfs,
+              cfs,
               dir.pathAsString,
               maxSize = 64 << 20,
               noSync = false,
               ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
             )
           }
-          .bracket(
-            db =>
-              db.closeTask().catchAll {
-                case _: KvdbAlreadyClosedException => ZIO.unit
-                case t => ZIO.die(t)
-              }
-          ) { db =>
-            test(db)
-          }
+      } {
+        _.closeTask().catchAll {
+          case _: KvdbAlreadyClosedException => ZIO.unit
+          case t => ZIO.die(t)
+        }
       }
-    }
+    } yield db
+  }
+}
+
+final class LmdbDatabaseTest extends KvdbDatabaseTest {
+  protected val defaultCf = LmdbDatabaseTest.defaultCf
+  protected val lookupCf = LmdbDatabaseTest.lookupCf
+  protected val managedDb = LmdbDatabaseTest.managedDb
 }

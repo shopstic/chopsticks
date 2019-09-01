@@ -1,24 +1,25 @@
 package dev.chopsticks.kvdb.rocksdb
 
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv}
-import dev.chopsticks.kvdb.TestDatabase.{DefaultCf, LookupCf, TestCf, TestDb}
+import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.kvdb.TestDatabase.{DefaultCf, LookupCf, TestDb, TestDbCf}
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern}
+import dev.chopsticks.kvdb.util.KvdbTestUtils
 import dev.chopsticks.kvdb.util.KvdbUtils.KvdbAlreadyClosedException
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest}
-import org.rocksdb.CompressionType
-import org.scalatest.Assertion
-import squants.information.InformationConversions._
-import zio.{RIO, ZIO}
 import eu.timepit.refined.auto._
+import org.rocksdb.CompressionType
+import squants.information.InformationConversions._
+import zio.{ZIO, ZManaged}
 
-final class RocksdbDatabaseTest extends KvdbDatabaseTest {
-  protected object defaultCf extends DefaultCf {
+object RocksdbDatabaseTest {
+  object defaultCf extends DefaultCf {
     override lazy val id: String = "default"
   }
-  protected object lookupCf extends LookupCf
-  private val cfs = ColumnFamilySet[TestCf].of(defaultCf).and(lookupCf)
-  private val cfConfigMap = RocksdbColumnFamilyConfigMap[TestCf] of (
+  object lookupCf extends LookupCf
+
+  private val cfs = ColumnFamilySet[TestDbCf] of defaultCf and lookupCf
+  private val cfConfigMap = RocksdbColumnFamilyConfigMap[TestDbCf] of (
     defaultCf,
     RocksdbColumnFamilyConfig(
       memoryBudget = 1.mib,
@@ -38,11 +39,12 @@ final class RocksdbDatabaseTest extends KvdbDatabaseTest {
     )
   )
 
-  protected val runTest: (TestDb => RIO[AkkaApp.Env, Assertion]) => RIO[AkkaApp.Env, Assertion] =
-    (test: TestDb => RIO[AkkaApp.Env, Assertion]) => {
-      KvdbDatabaseTest.withTempDir { dir =>
+  val managedDb: ZManaged[AkkaApp.Env, Throwable, TestDb] = {
+    for {
+      dir <- KvdbTestUtils.managedTempDir
+      db <- ZManaged.make {
         ZIO
-          .access[AkkaEnv] { implicit env =>
+          .access[AkkaApp.Env] { implicit env =>
             RocksdbDatabase(
               cfs,
               cfConfigMap,
@@ -55,15 +57,18 @@ final class RocksdbDatabaseTest extends KvdbDatabaseTest {
               ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
             )
           }
-          .bracket(
-            db =>
-              db.closeTask().catchAll {
-                case _: KvdbAlreadyClosedException => ZIO.unit
-                case t => ZIO.die(t)
-              }
-          ) { db =>
-            test(db)
-          }
+      } {
+        _.closeTask().catchAll {
+          case _: KvdbAlreadyClosedException => ZIO.unit
+          case e => ZIO.die(e)
+        }
       }
-    }
+    } yield db
+  }
+}
+
+final class RocksdbDatabaseTest extends KvdbDatabaseTest {
+  protected val defaultCf = RocksdbDatabaseTest.defaultCf
+  protected val lookupCf = RocksdbDatabaseTest.lookupCf
+  protected val managedDb = RocksdbDatabaseTest.managedDb
 }

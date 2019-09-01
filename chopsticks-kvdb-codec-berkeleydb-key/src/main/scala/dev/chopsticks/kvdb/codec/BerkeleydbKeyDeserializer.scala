@@ -12,8 +12,7 @@ import shapeless.{::, HList, HNil, ProductTypeClass, ProductTypeClassCompanion, 
 import scala.annotation.implicitNotFound
 import scala.util.control.NonFatal
 @implicitNotFound(
-  msg =
-    "Implicit BerkeleydbKeyDeserializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeyDeserializer[${T}]"
+  msg = "Implicit BerkeleydbKeyDeserializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeyDeserializer[${T}]"
 )
 trait BerkeleydbKeyDeserializer[T] {
   def deserialize(in: TupleInput): KeyDeserializationResult[T]
@@ -108,7 +107,11 @@ object BerkeleydbKeyDeserializer extends ProductTypeClassCompanion[BerkeleydbKey
       } yield head :: tail
     }
 
-    def project[F, G](instance: => BerkeleydbKeyDeserializer[G], to: F => G, from: G => F): BerkeleydbKeyDeserializer[F] = { in =>
+    def project[F, G](
+      instance: => BerkeleydbKeyDeserializer[G],
+      to: F => G,
+      from: G => F
+    ): BerkeleydbKeyDeserializer[F] = { in =>
       instance.deserialize(in).map(from)
     }
   }

@@ -79,7 +79,9 @@ object KeyConstraints {
 // scalastyle:off
 final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue.empty) {
   def >=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
-    copy(constraints enqueue KvdbKeyConstraint(Operator.GREATER_EQUAL, ProtoByteString.copyFrom(e.encode(v)), v.toString))
+    copy(
+      constraints enqueue KvdbKeyConstraint(Operator.GREATER_EQUAL, ProtoByteString.copyFrom(e.encode(v)), v.toString)
+    )
   }
 
   def >[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {

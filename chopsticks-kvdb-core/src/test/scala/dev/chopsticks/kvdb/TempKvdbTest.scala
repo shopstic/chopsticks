@@ -1,10 +1,10 @@
 package dev.chopsticks.kvdb
 
-import dev.chopsticks.kvdb.TestDatabase.{AnotherCf1, AnotherCf2, DefaultCf, LookupCf, TestCf, TestDb}
+import dev.chopsticks.kvdb.TestDatabase.{AnotherCf1, AnotherCf2, DefaultCf, LookupCf, TestDb, TestDbCf}
 import zio.Task
 
 object TempKvdbTest {
-  private def populateColumn[CF <: TestCf[K, V], K, V](
+  private def populateColumn[CF <: TestDbCf[K, V], K, V](
     db: TestDb,
     column: CF,
     pairs: Seq[(K, V)]

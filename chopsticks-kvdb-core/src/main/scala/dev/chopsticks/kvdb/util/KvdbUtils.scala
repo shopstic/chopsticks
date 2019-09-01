@@ -44,7 +44,8 @@ object KvdbUtils {
       extends RuntimeException(msg)
       with NoStackTrace
 
-  final case class SeekFailure(msg: String) extends KvdbException(KvdbOperationException.ExceptionType.SEEK_FAILURE, msg)
+  final case class SeekFailure(msg: String)
+      extends KvdbException(KvdbOperationException.ExceptionType.SEEK_FAILURE, msg)
 
   final case class UnoptimizedKvdbOperationException(msg: String)
       extends KvdbException(KvdbOperationException.ExceptionType.UNOPTIMIZED_OPERATION, msg)
@@ -189,7 +190,11 @@ object KvdbUtils {
     }
   }
 
-  final case class KvdbTailSourceGraphRefs(createIterator: () => Iterator[KvdbPair], clear: () => Unit, close: () => Unit)
+  final case class KvdbTailSourceGraphRefs(
+    createIterator: () => Iterator[KvdbPair],
+    clear: () => Unit,
+    close: () => Unit
+  )
 
   class KvdbTailSourceGraph(
     init: () => KvdbTailSourceGraphRefs,
