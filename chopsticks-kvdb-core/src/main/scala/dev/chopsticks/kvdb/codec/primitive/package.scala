@@ -26,7 +26,7 @@ package object primitive {
 
       def serialize(value: K): Array[Byte] = KvdbSerdesUtils.stringToByteArray(to(value))
 
-      def decode(bytes: Array[Byte]): KeyDeserializationResult[K] =
+      def deserialize(bytes: Array[Byte]): KeyDeserializationResult[K] =
         Right(from(KvdbSerdesUtils.byteArrayToString(bytes)))
     }
 

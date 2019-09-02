@@ -13,37 +13,20 @@ import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
-import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
-import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilySet, KvdbDatabase}
+import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
-import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{
-  PointLookupPattern,
-  PrefixedScanPattern,
-  TotalOrderScanPattern
-}
+import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern, TotalOrderScanPattern}
 import dev.chopsticks.kvdb.rocksdb.RocksdbUtils.OptionsFileSection
-import dev.chopsticks.kvdb.util.KvdbUtils.{
-  InvalidKvdbArgumentException,
-  KvdbAlreadyClosedException,
-  KvdbBatch,
-  KvdbClientOptions,
-  KvdbCloseSignal,
-  KvdbIndexedTailBatch,
-  KvdbIterateSourceGraph,
-  KvdbIterateSourceGraphRefs,
-  KvdbPair,
-  KvdbTailBatch,
-  KvdbTailSourceGraph,
-  KvdbTailSourceGraphRefs,
-  KvdbTailValueBatch,
-  KvdbValueBatch,
-  SeekFailure,
-  UnoptimizedKvdbOperationException,
-  UnsupportedKvdbOperationException
-}
+import dev.chopsticks.kvdb.util.KvdbAliases._
+import dev.chopsticks.kvdb.util.KvdbException._
+import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal, KvdbIterateSourceGraph, KvdbTailSourceGraph}
+import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
+import eu.timepit.refined.types.string.NonEmptyString
+import eu.timepit.refined.auto._
 import org.rocksdb._
+import pureconfig.ConfigConvert
 import zio.blocking._
 import zio.clock.Clock
 import zio.internal.Executor
@@ -136,43 +119,34 @@ object RocksdbDatabase extends StrictLogging {
       }
   }
 
-  //  private object StreamEndMarker
-
-  def apply[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
-    columnFamilySet: ColumnFamilySet[BCF, CFS],
-    columnFamilyConfigMap: RocksdbColumnFamilyConfigMap[BCF, CFS],
-    path: String,
+  final case class Config(
+    path: NonEmptyString,
     readOnly: Boolean,
     startWithBulkInserts: Boolean,
     checksumOnRead: Boolean,
     syncWriteBatch: Boolean,
     useDirectIo: Boolean,
-    ioDispatcher: String
-  )(implicit akkaEnv: AkkaEnv): RocksdbDatabase[BCF, CFS] = {
-    new RocksdbDatabase[BCF, CFS](
-      columnFamilySet,
-      columnFamilyConfigMap,
-      path,
-      readOnly,
-      startWithBulkInserts,
-      checksumOnRead,
-      syncWriteBatch,
-      useDirectIo,
-      ioDispatcher
-    )
+    ioDispatcher: NonEmptyString
+  )
+
+  object Config {
+    import dev.chopsticks.util.config.PureconfigConverters._
+    import eu.timepit.refined.pureconfig._
+    //noinspection TypeAnnotation
+    implicit val configConvert = ConfigConvert[Config]
+  }
+
+  def apply[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
+    materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
+    config: Config
+  ): ZIO[AkkaEnv, Nothing, RocksdbDatabase[BCF, CFS]] = ZIO.access[AkkaEnv] { implicit env =>
+    new RocksdbDatabase[BCF, CFS](materialization, config)
   }
 }
 
 final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
-  val columnFamilySet: ColumnFamilySet[BCF, CFS],
-  columnFamilyConfigMap: RocksdbColumnFamilyConfigMap[BCF, CFS],
-  path: String,
-  readOnly: Boolean,
-  startWithBulkInserts: Boolean,
-  checksumOnRead: Boolean,
-  syncWriteBatch: Boolean,
-  useDirectIo: Boolean,
-  ioDispatcher: String
+  val materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
+  config: RocksdbDatabase.Config
 )(implicit akkaEnv: AkkaEnv)
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
@@ -181,9 +155,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
 
   val isLocal: Boolean = true
 
-  private val columnOptions: Map[CF, ColumnFamilyOptions] = columnFamilySet.set.map { cf =>
+  private val columnOptions: Map[CF, ColumnFamilyOptions] = materialization.columnFamilySet.value.map { cf =>
 //    val defaultOptions = cf.rocksdbOptions
-    val cfOptions: RocksdbColumnFamilyConfig[CF] = columnFamilyConfigMap.map(cf)
+    val cfOptions: RocksdbColumnFamilyConfig[CF] = materialization.columnFamilyConfigMap.map(cf)
 //    val cfOptions: RocksdbCFOptions = options.get(cf, defaultOptions)
 
     val cfBuilder = RocksdbColumnFamilyOptionsBuilder(
@@ -216,7 +190,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
       .setKeepLogFileNum(3)
       .setMaxTotalWalSize(totalWriteBufferSize * 8)
 
-    if (useDirectIo) {
+    if (config.useDirectIo) {
       tunedOptions
         .setUseDirectIoForFlushAndCompaction(true)
         .setUseDirectReads(true)
@@ -228,16 +202,17 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
 
   protected def logPath: Option[String] = None
 
-  private def columnFamilyWithName(name: String): Option[CF] = columnFamilySet.set.find(cf => cf.id == name)
+  private def columnFamilyWithName(name: String): Option[CF] =
+    materialization.columnFamilySet.value.find(cf => cf.id == name)
 
   private def newReadOptions(): ReadOptions = {
     val o = new ReadOptions()
-    if (checksumOnRead) o.setVerifyChecksums(checksumOnRead) else o
+    if (config.checksumOnRead) o.setVerifyChecksums(config.checksumOnRead) else o
   }
 
   private def newWriteOptions(): WriteOptions = {
     val o = new WriteOptions()
-    if (syncWriteBatch) o.setSync(true) else o
+    if (config.syncWriteBatch) o.setSync(true) else o
   }
 
   private def syncColumnFamilies(descriptors: List[ColumnFamilyDescriptor], existingColumnNames: Set[String]): Unit = {
@@ -247,7 +222,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
         .filterNot(_.getName.sameElements(RocksDB.DEFAULT_COLUMN_FAMILY))
 
       if (nonDefaultColumns.nonEmpty) {
-        val db = RocksDB.open(new Options().setCreateIfMissing(true), path)
+        val db = RocksDB.open(new Options().setCreateIfMissing(true), config.path)
 
         val columns = nonDefaultColumns.map { d =>
           db.createColumnFamily(d)
@@ -262,7 +237,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
       val existingDescriptor = descriptors.filter(d => existingColumnNames.contains(byteArrayToString(d.getName)))
       val toCreateDescriptors = descriptors.filter(d => !existingColumnNames.contains(byteArrayToString(d.getName)))
 
-      val db = RocksDB.open(new DBOptions(), path, existingDescriptor.asJava, handles)
+      val db = RocksDB.open(new DBOptions(), config.path, existingDescriptor.asJava, handles)
 
       val newHandles = toCreateDescriptors.map { d =>
         logger.info(s"Creating column family: ${byteArrayToString(d.getName)}")
@@ -276,12 +251,12 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
   }
 
   private def listExistingColumnNames(): List[String] = {
-    RocksDB.listColumnFamilies(new Options(), path).asScala.map(byteArrayToString).toList
+    RocksDB.listColumnFamilies(new Options(), config.path).asScala.map(byteArrayToString).toList
   }
 
 //  private val bulkInsertsLock = MVar.of[Task, Boolean](startWithBulkInserts).memoize
 
-  private lazy val ioEc = akkaEnv.actorSystem.dispatchers.lookup(ioDispatcher)
+  private lazy val ioEc = akkaEnv.actorSystem.dispatchers.lookup(config.ioDispatcher)
   private lazy val ioZioExecutor = Executor.fromExecutionContext(Int.MaxValue)(ioEc)
   private lazy val blockingEnv = new Blocking {
     val blocking: Blocking.Service[Any] = new Blocking.Service[Any] {
@@ -295,7 +270,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
     val task = blocking(Task {
       RocksDB.loadLibrary()
       val columnNames = columnOptions.keys.map(_.id).toSet
-      val enumNameSet = columnFamilySet.set.map(_.id)
+      val enumNameSet = materialization.columnFamilySet.value.map(_.id)
 
       assert(
         columnNames == enumNameSet,
@@ -307,14 +282,14 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
         case (columnFamilyName, colOptions) =>
           new ColumnFamilyDescriptor(
             columnFamilyName.id.getBytes(UTF_8),
-            colOptions.setDisableAutoCompactions(startWithBulkInserts)
+            colOptions.setDisableAutoCompactions(config.startWithBulkInserts)
           )
       }
 
-      val exists = File(path + "/CURRENT").exists
+      val exists = File(config.path + "/CURRENT").exists
 
-      if (!exists && readOnly)
-        throw InvalidKvdbArgumentException(s"Opening database at $path as readyOnly but it doesn't exist")
+      if (!exists && config.readOnly)
+        throw InvalidKvdbArgumentException(s"Opening database at ${config.path} as readyOnly but it doesn't exist")
 
       def openKvdb() = {
         val handles = new JavaArrayList[ColumnFamilyHandle]
@@ -324,8 +299,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
           .setStatistics(new Statistics())
 
         val db = {
-          if (readOnly) RocksDB.openReadOnly(dbOptions, path, descriptors.asJava, handles)
-          else RocksDB.open(dbOptions.setCreateIfMissing(true), path, descriptors.asJava, handles)
+          if (config.readOnly) RocksDB.openReadOnly(dbOptions, config.path, descriptors.asJava, handles)
+          else RocksDB.open(dbOptions.setCreateIfMissing(true), config.path, descriptors.asJava, handles)
         }
 
         val columnHandles = handles.asScala.toList
@@ -361,7 +336,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
       openKvdb()
     }).flatMap {
       case (db, columnHandleMap, stats) =>
-        readColumnFamilyOptionsFromDisk(path)
+        readColumnFamilyOptionsFromDisk(config.path)
           .map { r =>
             val columnHasPrefixExtractorMap: Map[CF, String] = r.iterator.map {
               case (colName, colMap) =>
@@ -790,7 +765,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
                       .takeWhile(key => key != null && keySatisfies(key, toConstraints))
                       .map(key => key -> iter.value())
 
-                    Right(KvdbIterateSourceGraphRefs(it, close))
+                    Right(KvdbIterateSourceGraph.Refs(it, close))
 
                   case Right((k, _)) =>
                     close()
@@ -826,7 +801,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
               }
 
               Source
-                .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, ioDispatcher))
+                .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, config.ioDispatcher))
           }
 
         akkaEnv.unsafeRunToFuture(task)
@@ -922,11 +897,11 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
         else head
       }
 
-      KvdbTailSourceGraphRefs(createIterator, clear = close, close = close)
+      KvdbTailSourceGraph.Refs(createIterator, clear = close, close = close)
     }
 
     Source
-      .fromGraph(new KvdbTailSourceGraph(init, dbCloseSignal, ioDispatcher))
+      .fromGraph(new KvdbTailSourceGraph(init, dbCloseSignal, config.ioDispatcher))
   }
 
   def batchTailSource[Col <: CF](

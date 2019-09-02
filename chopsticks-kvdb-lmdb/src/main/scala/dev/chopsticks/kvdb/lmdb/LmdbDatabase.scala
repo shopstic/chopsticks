@@ -17,12 +17,18 @@ import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
-import dev.chopsticks.kvdb.util.KvdbUtils._
-import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilySet, KvdbDatabase}
+import dev.chopsticks.kvdb.util.KvdbAliases._
+import dev.chopsticks.kvdb.util.KvdbException.{InvalidKvdbArgumentException, KvdbAlreadyClosedException, SeekFailure, UnsupportedKvdbOperationException}
+import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal, KvdbIterateSourceGraph, KvdbTailSourceGraph}
+import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
+import eu.timepit.refined.auto._
+import eu.timepit.refined.types.string.NonEmptyString
 import org.lmdbjava._
+import pureconfig.ConfigConvert
+import squants.information.Information
 import zio.clock.Clock
 import zio.internal.Executor
-import zio.{RIO, Task, ZSchedule}
+import zio.{RIO, Task, ZIO, ZSchedule}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
@@ -32,11 +38,24 @@ import scala.util.control.{ControlThrowable, NonFatal}
 object LmdbDatabase extends StrictLogging {
   type PutBatch = Seq[(Dbi[ByteBuffer], Array[Byte], Array[Byte])]
 
-  final case class FatalKvdbError(message: String, cause: Throwable) extends Error(message, cause) with ControlThrowable
+  final case class Config(
+    path: NonEmptyString,
+    maxSize: Information,
+    noSync: Boolean,
+    ioDispatcher: NonEmptyString
+  )
+  object Config {
+    import dev.chopsticks.util.config.PureconfigConverters._
+    import eu.timepit.refined.pureconfig._
+    //noinspection TypeAnnotation
+    implicit val configConvert = ConfigConvert[Config]
+  }
+
+  final case class FatalError(message: String, cause: Throwable) extends Error(message, cause) with ControlThrowable
 
   final case class ReadTxnContext(env: Env[ByteBuffer], txn: Txn[ByteBuffer], cursor: Cursor[ByteBuffer])
 
-  final case class KvdbReferences[BaseCol <: ColumnFamily[_, _]](
+  final case class References[BaseCol <: ColumnFamily[_, _]](
     env: Env[ByteBuffer],
     dbiMap: Map[BaseCol, Dbi[ByteBuffer]]
   ) {
@@ -49,6 +68,8 @@ object LmdbDatabase extends StrictLogging {
       )
     }
   }
+
+  private val ClosedException = KvdbAlreadyClosedException("Database was already closed")
 
   private def bufferToArray(b: ByteBuffer): Array[Byte] = {
     val value: Array[Byte] = new Array[Byte](b.remaining)
@@ -64,30 +85,17 @@ object LmdbDatabase extends StrictLogging {
     buffer
   }
 
-//  private val monixReporter = UncaughtExceptionReporter {
-//    case _: RejectedExecutionException => logger.warn("[LmdbKvdb] Operation rejected since database has already been closed")
-//    case e => logger.error(e.getMessage, e)
-//  }
-
-  private val KvdbClosedException = KvdbAlreadyClosedException("Database was already closed")
-
   def apply[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
-    columnFamilySet: ColumnFamilySet[BCF, CFS],
-    path: String,
-    maxSize: Long,
-    noSync: Boolean,
-    ioDispatcher: String
-  )(
-    implicit akkaEnv: AkkaEnv
-  ): LmdbDatabase[BCF, CFS] = new LmdbDatabase[BCF, CFS](columnFamilySet, path, maxSize, noSync, ioDispatcher)
+    materialization: KvdbMaterialization[BCF, CFS],
+    config: Config
+  ): ZIO[AkkaEnv, Nothing, LmdbDatabase[BCF, CFS]] = ZIO.access[AkkaEnv] { implicit env =>
+    new LmdbDatabase[BCF, CFS](materialization, config)
+  }
 }
 
-final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
-  val columnFamilySet: ColumnFamilySet[BCF, CFS],
-  path: String,
-  maxSize: Long,
-  noSync: Boolean,
-  ioDispatcher: String
+final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
+  val materialization: KvdbMaterialization[BCF, CFS],
+  config: LmdbDatabase.Config
 )(
   implicit akkaEnv: AkkaEnv
 ) extends KvdbDatabase[BCF, CFS]
@@ -95,12 +103,12 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
 
   import LmdbDatabase._
 
-  type Refs = KvdbReferences[CF]
+  type Refs = References[CF]
 
   private lazy val writeExecutor: ExecutorService = Executors.newSingleThreadExecutor()
   private lazy val writeEc = ExecutionContext.fromExecutor(writeExecutor)
   private lazy val writeZioExecutor = Executor.fromExecutionContext(Int.MaxValue)(writeEc)
-  private lazy val readEc = akkaEnv.actorSystem.dispatchers.lookup(ioDispatcher)
+  private lazy val readEc = akkaEnv.actorSystem.dispatchers.lookup(config.ioDispatcher)
   private lazy val readZioExecutor = Executor.fromExecutionContext(Int.MaxValue)(readEc)
 
   val activeTxnCounter = new LongAdder
@@ -112,30 +120,31 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
     import better.files.Dsl._
     import better.files._
 
-    val file = File(path)
+    val file = File(config.path)
     val _ = mkdirs(file)
-    val extraFlags =
-      if (noSync) Vector(EnvFlags.MDB_NOSYNC, EnvFlags.MDB_NOMETASYNC)
+    val extraFlags = {
+      if (config.noSync) Vector(EnvFlags.MDB_NOSYNC, EnvFlags.MDB_NOMETASYNC)
       else Vector.empty
+    }
 
     val flags = Vector(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD) ++ extraFlags
     val env = Env.create
-      .setMapSize(maxSize)
-      .setMaxDbs(columnFamilySet.set.size)
+      .setMapSize(config.maxSize.toBytes.toLong)
+      .setMaxDbs(materialization.columnFamilySet.value.size)
       .setMaxReaders(4096)
       .open(file.toJava, flags: _*)
 
-    val columnRefs: Map[CF, Dbi[ByteBuffer]] = columnFamilySet.set.map { col =>
+    val columnRefs: Map[CF, Dbi[ByteBuffer]] = materialization.columnFamilySet.value.map { col =>
       (col, env.openDbi(col.id, DbiFlags.MDB_CREATE))
     }.toMap
 
-    KvdbReferences[CF](env, columnRefs)
+    References[CF](env, columnRefs)
   }(writeEc)
 
   private val isClosed = new AtomicBoolean(false)
 
   private def references: Task[Refs] = Task(isClosed.get).flatMap { isClosed =>
-    if (isClosed) Task.fail(KvdbClosedException)
+    if (isClosed) Task.fail(ClosedException)
     else {
       _references.value.fold(Task.fromFuture(_ => _references))(Task.fromTry(_))
     }
@@ -172,7 +181,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
       ReadTxnContext(env, txn, cursor)
     } catch {
       case NonFatal(ex) =>
-        throw FatalKvdbError(
+        throw FatalError(
           s"Fatal db error while trying to createTxnContext for column: ${column.id}: ${ex.toString}",
           ex
         )
@@ -184,7 +193,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
       closeCursor(ctx.cursor)
       closeTxn(ctx.txn)
     } catch {
-      case NonFatal(ex) => throw FatalKvdbError(s"Fatal db error while trying to closeTxnContext: ${ex.toString}", ex)
+      case NonFatal(ex) => throw FatalError(s"Fatal db error while trying to closeTxnContext: ${ex.toString}", ex)
     }
   }
 
@@ -470,7 +479,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
                       .map(key => (key, bufferToArray(cursor.`val`())))
                     // scalastyle:on null
 
-                    Right(KvdbIterateSourceGraphRefs(it, close))
+                    Right(KvdbIterateSourceGraph.Refs(it, close))
 
                   case Right((k, _)) =>
                     close()
@@ -506,7 +515,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
               }
 
               Source
-                .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, ioDispatcher))
+                .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, config.ioDispatcher))
 
           }
 
@@ -619,11 +628,11 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
         }
       }
 
-      KvdbTailSourceGraphRefs(createIterator, clear = clear, close = close)
+      KvdbTailSourceGraph.Refs(createIterator, clear = clear, close = close)
     }
 
     Source
-      .fromGraph(new KvdbTailSourceGraph(init, dbCloseSignal, ioDispatcher))
+      .fromGraph(new KvdbTailSourceGraph(init, dbCloseSignal, config.ioDispatcher))
   }
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
@@ -691,13 +700,13 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
       refs <- references
       _ <- Task(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
         if (isClosed) Task.unit
-        else Task.fail(KvdbClosedException)
+        else Task.fail(ClosedException)
       }
       _ <- readTask(Task {
         writeExecutor.shutdown()
         writeExecutor.awaitTermination(10, TimeUnit.SECONDS)
       })
-      _ <- Task(dbCloseSignal.tryComplete(Failure(KvdbClosedException)))
+      _ <- Task(dbCloseSignal.tryComplete(Failure(ClosedException)))
       _ <- Task(dbCloseSignal.hasNoListeners)
         .repeat(ZSchedule.fixed(100.millis).untilInput[Boolean](identity))
       _ <- readTask(Task {

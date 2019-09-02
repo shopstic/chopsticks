@@ -2,11 +2,12 @@ package dev.chopsticks.kvdb.api
 
 import akka.actor.ActorSystem
 import dev.chopsticks.fp.{AkkaApp, LoggingContext}
-import dev.chopsticks.kvdb.TestDatabase.{DefaultCf, LookupCf, TestDbApi}
+import dev.chopsticks.kvdb.TestDatabase
+import dev.chopsticks.kvdb.TestDatabase.DbApi
+import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbTestUtils
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.{AsyncWordSpecLike, Matchers}
-import dev.chopsticks.kvdb.codec.primitive._
 import zio.ZManaged
 
 abstract class KvdbDatabaseApiTest
@@ -16,14 +17,12 @@ abstract class KvdbDatabaseApiTest
     with AkkaTestKitAutoShutDown
     with LoggingContext {
 
-  protected def managedDb: ZManaged[AkkaApp.Env, Throwable, TestDbApi]
-  protected def defaultCf: DefaultCf
-  protected def lookupCf: LookupCf
-
+  protected def managedDb: ZManaged[AkkaApp.Env, Throwable, DbApi]
+  protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
   private lazy val withDb = KvdbTestUtils.createTestRunner(Environment, managedDb)
-  private lazy val withCf = KvdbTestUtils.createTestRunner(Environment, managedDb.map(_.columnFamily(defaultCf)))
+  private lazy val withCf = KvdbTestUtils.createTestRunner(Environment, managedDb.map(_.columnFamily(dbMat.default)))
 
   private lazy val as = system
 
@@ -41,7 +40,7 @@ abstract class KvdbDatabaseApiTest
   "columnFamily" when {
     "getTask" should {
       "work with db" in withDb { db =>
-        val cf = db.columnFamily(defaultCf)
+        val cf = db.columnFamily(dbMat.default)
         for {
           _ <- cf.putTask("foo", "bar")
           v <- cf.getValueTask(_ is "foo")

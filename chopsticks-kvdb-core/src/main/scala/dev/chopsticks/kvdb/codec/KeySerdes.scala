@@ -40,17 +40,17 @@ object DerivedKeySerdes extends StrictLogging {
     }
   }
 
-  implicit def deriveInstance[P <: Product, R <: HList, F <: HList, C](
+  implicit def deriveProduct[P <: Product, R <: HList, F <: HList, C](
     implicit
     g: Generic.Aux[P, R],
     f: FlatMapper.Aux[flatten.type, R, F],
-    encoder: Lazy[KeySerializer.Aux[P, C]],
-    decoder: Lazy[KeyDeserializer[P]],
+    serializer: Lazy[KeySerializer.Aux[P, C]],
+    deserializer: Lazy[KeyDeserializer[P]],
     typ: Typeable[P]
   ): Aux[P, F, C] = {
     g.unused()
     f.unused()
-    logger.debug(s"[DerivedDbKey][deriveInstance] ${typ.describe}")
+    logger.debug(s"[DerivedDbKey][deriveProduct] ${typ.describe}")
 
     new DerivedKeySerdes[P] {
       type Flattened = F
@@ -58,12 +58,38 @@ object DerivedKeySerdes extends StrictLogging {
 
       def describe: String = typ.describe
 
-      def decode(bytes: Array[Byte]): KeyDeserializationResult[P] = {
-        decoder.value.decode(bytes)
+      def deserialize(bytes: Array[Byte]): KeyDeserializationResult[P] = {
+        deserializer.value.deserialize(bytes)
       }
 
       def serialize(value: P): Array[Byte] = {
-        encoder.value.serialize(value)
+        serializer.value.serialize(value)
+      }
+    }
+  }
+
+  implicit def deriveAny[V, C](
+    implicit
+    serializer: Lazy[KeySerializer.Aux[V, C]],
+    deserializer: Lazy[KeyDeserializer[V]],
+    typ: Typeable[V],
+    ev: V <:!< Product
+  ): Aux[V, V :: HNil, C] = {
+    ev.unused()
+    logger.debug(s"[DerivedDbKey][deriveAny] ${typ.describe}")
+
+    new DerivedKeySerdes[V] {
+      type Flattened = V :: HNil
+      type Codec = C
+
+      def describe: String = typ.describe
+
+      def deserialize(bytes: Array[Byte]): KeyDeserializationResult[V] = {
+        deserializer.value.deserialize(bytes)
+      }
+
+      def serialize(value: V): Array[Byte] = {
+        serializer.value.serialize(value)
       }
     }
   }
@@ -84,33 +110,11 @@ object KeySerdes extends StrictLogging {
   def ordering[A](implicit dbKey: KeySerdes[A]): Ordering[A] =
     (x: A, y: A) => KeySerdes.compare(dbKey.serialize(x), dbKey.serialize(y))
 
-  def deriveGeneric[V, C](
-    implicit
-    encoder: Lazy[KeySerializer.Aux[V, C]],
-    decoder: Lazy[KeyDeserializer[V]],
-    typ: Typeable[V]
-  ): Aux[V, V :: HNil, C] = {
-    new KeySerdes[V] {
-      type Flattened = V :: HNil
-      type Codec = C
-
-      def describe: String = typ.describe
-
-      def decode(bytes: Array[Byte]): KeyDeserializationResult[V] = {
-        decoder.value.decode(bytes)
-      }
-
-      def serialize(value: V): Array[Byte] = {
-        encoder.value.serialize(value)
-      }
-    }
+  def deserialize[V](bytes: Array[Byte])(implicit deserializer: KeySerdes[V]): KeyDeserializationResult[V] = {
+    deserializer.deserialize(bytes)
   }
 
-  def decode[V](bytes: Array[Byte])(implicit decoder: KeySerdes[V]): KeyDeserializationResult[V] = {
-    decoder.decode(bytes)
-  }
-
-  def encode[V](value: V)(implicit encoder: KeySerdes[V]): Array[Byte] = encoder.serialize(value)
+  def serialize[V](value: V)(implicit serializer: KeySerdes[V]): Array[Byte] = serializer.serialize(value)
 
   def compare(a1: Array[Byte], a2: Array[Byte]): Int = {
     val minLen = Math.min(a1.length, a2.length)

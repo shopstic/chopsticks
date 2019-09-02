@@ -18,6 +18,7 @@ ThisBuild / symlinkTargetRoot := Build.symlinkTargetRoot
 
 ThisBuild / licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
 ThisBuild / bintrayReleaseOnPublish := false
+//ThisBuild / turbo := true
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
@@ -115,7 +116,7 @@ lazy val kvdbCodecBerkeleydbKey = Build
   .settings(
     libraryDependencies ++= berkeleyDbDeps
   )
-  .dependsOn(kvdbCore)
+  .dependsOn(kvdbCore, testkit % "test->compile")
 
 lazy val kvdbCodecProtobufValue = Build
   .defineProject("kvdb-codec-protobuf-value")
@@ -142,7 +143,7 @@ lazy val sample = Build
       "-P:silencer:pathFilters=dev/chopsticks/sample/app/proto"
     )
   )
-  .dependsOn(kvdbCore, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, dstream)
+  .dependsOn(kvdbLmdb, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, dstream)
 
 lazy val root = (project in file("."))
   .enablePlugins(SymlinkTargetPlugin)
@@ -152,4 +153,4 @@ lazy val root = (project in file("."))
     bintrayRelease := {},
     dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
   )
-  .aggregate(util, testkit, fp, stream, dstream, kvdbCore, kvdbLmdb, kvdbRocksdb/*, sample*/, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue)
+  .aggregate(util, testkit, fp, stream, dstream, kvdbCore, kvdbLmdb, kvdbRocksdb, sample, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue)

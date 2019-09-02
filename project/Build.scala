@@ -79,8 +79,8 @@ object Build {
           Wart.FinalVal,
           Wart.JavaConversions,
           Wart.LeakingSealed,
-          Wart.NonUnitStatements,
-          Wart.Product
+          Wart.NonUnitStatements
+//          Wart.Product
         ),
         wartremoverExcluded += sourceManaged.value,
         dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),

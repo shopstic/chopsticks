@@ -2,8 +2,9 @@ package dev.chopsticks.kvdb
 
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 
-object TestDatabase {
-  sealed trait TestDbCf[K, V] extends ColumnFamily[K, V]
+object TestDatabase extends KvdbDefinition {
+  type TestDbCf[K, V] = BaseCf[K, V]
+
   trait DefaultCf extends TestDbCf[String, String]
   trait LookupCf extends TestDbCf[String, String]
 
@@ -11,6 +12,12 @@ object TestDatabase {
   trait AnotherCf1 extends AnotherDbCf[String, String]
   trait AnotherCf2 extends AnotherDbCf[String, Int]
 
-  type TestDb = KvdbDatabase[TestDbCf, DefaultCf with LookupCf]
-  type TestDbApi = KvdbDatabaseApi[TestDbCf]
+  type CfSet = DefaultCf with LookupCf
+
+  trait Materialization extends KvdbMaterialization[BaseCf, CfSet] {
+    def default: DefaultCf
+    def lookup: LookupCf
+  }
+
+  type DbApi = KvdbDatabaseApi[TestDbCf]
 }

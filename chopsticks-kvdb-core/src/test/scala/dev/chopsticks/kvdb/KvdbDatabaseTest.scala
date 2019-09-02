@@ -7,14 +7,14 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.testkit.{ImplicitSender, TestProbe}
 import dev.chopsticks.fp.{AkkaApp, LoggingContext, ZAkka}
-import dev.chopsticks.kvdb.TestDatabase.{DefaultCf, LookupCf, TestDb}
 import dev.chopsticks.kvdb.codec.KeyConstraints
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraintList, KvdbKeyRange}
+import dev.chopsticks.kvdb.util.KvdbAliases._
+import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
 import dev.chopsticks.kvdb.util.KvdbTestUtils.populateColumn
-import dev.chopsticks.kvdb.util.KvdbUtils._
-import dev.chopsticks.kvdb.util.{KvdbSerdesUtils, KvdbTestUtils}
+import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest._
 import zio.{RIO, Task, UIO, ZManaged}
@@ -69,7 +69,7 @@ object KvdbDatabaseTest {
   implicit def stringToByteArray(s: String): Array[Byte] = s.getBytes(UTF_8)
 
   implicit val testKvdbClientOptions: KvdbClientOptions =
-    dev.chopsticks.kvdb.util.KvdbUtils.Implicits.defaultClientOptions.copy(tailPollingInterval = 10.millis)
+    dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits.defaultClientOptions.copy(tailPollingInterval = 10.millis)
 }
 
 abstract private[kvdb] class KvdbDatabaseTest
@@ -83,11 +83,14 @@ abstract private[kvdb] class KvdbDatabaseTest
     with LoggingContext {
   import KvdbDatabaseTest._
 
-  protected def managedDb: ZManaged[AkkaApp.Env, Throwable, TestDb]
-  protected def defaultCf: DefaultCf
-  protected def lookupCf: LookupCf
+  protected def managedDb: ZManaged[AkkaApp.Env, Throwable, TestDatabase.Db]
 
-  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDb](Environment, managedDb)
+  protected def dbMat: TestDatabase.Materialization
+
+  private lazy val defaultCf = dbMat.default
+  private lazy val lookupCf = dbMat.lookup
+
+  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](Environment, managedDb)
 
   private lazy val as = system
 

@@ -10,7 +10,8 @@ import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, Constraints
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbPutRequest, KvdbTransactionAction}
-import dev.chopsticks.kvdb.util.KvdbUtils.{KvdbClientOptions, KvdbTailBatch}
+import dev.chopsticks.kvdb.util.KvdbAliases.KvdbTailBatch
+import dev.chopsticks.kvdb.util.KvdbClientOptions
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase}
 import dev.chopsticks.stream.AkkaStreamUtils
 import zio.Task

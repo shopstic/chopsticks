@@ -2,10 +2,10 @@ package dev.chopsticks.kvdb.util
 
 import better.files.File
 import dev.chopsticks.fp.AkkaApp
-import dev.chopsticks.kvdb.TestDatabase.{TestDb, TestDbCf}
-import dev.chopsticks.kvdb.util.KvdbUtils.KvdbClientOptions
+import dev.chopsticks.kvdb.TestDatabase
+import dev.chopsticks.kvdb.TestDatabase.BaseCf
 import org.scalatest.Assertion
-import zio.blocking.{blocking, Blocking}
+import zio.blocking.{Blocking, blocking}
 import zio.{RIO, Task, ZManaged}
 
 import scala.concurrent.Future
@@ -31,8 +31,8 @@ object KvdbTestUtils {
     env.unsafeRunToFuture(task)
   }
 
-  def populateColumn[CF <: TestDbCf[K, V], K, V](
-    db: TestDb,
+  def populateColumn[CF <: BaseCf[K, V], K, V](
+    db: TestDatabase.Db,
     column: CF,
     pairs: Seq[(K, V)]
   ): Task[Unit] = {
@@ -46,5 +46,5 @@ object KvdbTestUtils {
   }
 
   implicit val testKvdbClientOptions: KvdbClientOptions =
-    dev.chopsticks.kvdb.util.KvdbUtils.Implicits.defaultClientOptions.copy(tailPollingInterval = 10.millis)
+    dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits.defaultClientOptions.copy(tailPollingInterval = 10.millis)
 }

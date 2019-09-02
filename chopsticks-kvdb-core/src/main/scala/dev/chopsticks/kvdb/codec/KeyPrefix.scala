@@ -3,25 +3,23 @@ package dev.chopsticks.kvdb.codec
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.util.UnusedImplicits._
 import shapeless.ops.hlist.{IsHCons, Length, Take}
-import shapeless.{Generic, HList, Nat}
+import shapeless.{<:!<, Generic, HList, Nat}
 
 import scala.annotation.implicitNotFound
 
 @implicitNotFound(msg = "Cannot prove that ${A} is a DbKeyPrefix of ${B}.")
 trait KeyPrefix[A, B] {
-  def encode(a: A): Array[Byte]
+  def serialize(a: A): Array[Byte]
 }
 
-final private class KeyPrefixWithSerializer[A, B](serializer: KeySerializer[A]) extends KeyPrefix[A, B] {
-  def encode(a: A): Array[Byte] = serializer.serialize(a)
-}
+object KeyPrefix extends StrictLogging {
+  final private class KeyPrefixWithSerializer[A, B](serializer: KeySerializer[A]) extends KeyPrefix[A, B] {
+    def serialize(a: A): Array[Byte] = serializer.serialize(a)
+  }
 
-trait KeyPrefixPriority3Implicits extends StrictLogging {
-  implicit def selfKeyPrefix[A](implicit encoder: KeySerializer[A]): KeyPrefix[A, A] =
-    new KeyPrefixWithSerializer(encoder)
-}
+  implicit def selfKeyPrefix[A](implicit deserializer: KeySerializer[A]): KeyPrefix[A, A] =
+    new KeyPrefixWithSerializer(deserializer)
 
-trait KeyPrefixPriority2Implicits extends KeyPrefixPriority3Implicits {
   // e.g
   // T as prefix of:
   // case class Bar(one: T, two: Boolean, three: Double)
@@ -29,22 +27,15 @@ trait KeyPrefixPriority2Implicits extends KeyPrefixPriority3Implicits {
     implicit
     f: KeySerdes.Aux[B, F, C],
     t: IsHCons.Aux[F, A, T],
-    encoder: KeySerializer.Aux[A, C]
+    encoder: KeySerializer.Aux[A, C],
+    e: A <:!< Product
   ): KeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][anyToDbKeyPrefixOfProduct] ${f.describe}")
     t.unused()
+    e.unused()
     new KeyPrefixWithSerializer[A, B](encoder)
   }
 
-}
-
-trait KeyPrefixPriority1Implicits extends KeyPrefixPriority2Implicits {
-  //  implicit def selfDbKeyPrefix[A <: Product](implicit encoder: ToDbKey[A]): DbKeyPrefix[A, A] = new DbKeyPrefixWithEncoder(encoder)
-
-  // e.g
-  // case class Foo(one: String, two: Boolean)
-  //    as prefix of:
-  // case class Bar(one: String, two: Boolean, three: Double)
   implicit def productToKeyPrefix[A <: Product, B <: Product, P <: HList, F <: HList, N <: Nat, T <: HList, C](
     implicit
     g: Generic.Aux[A, P],
@@ -52,7 +43,8 @@ trait KeyPrefixPriority1Implicits extends KeyPrefixPriority2Implicits {
     f: KeySerdes.Aux[B, F, C],
     t: Take.Aux[F, N, T],
     e: P =:= T,
-    encoder: KeySerializer.Aux[A, C]
+    n: A <:!< HList,
+    encoder: KeySerializer.Aux[A, C],
   ): KeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${f.describe}")
     //    n.unused()
@@ -60,6 +52,7 @@ trait KeyPrefixPriority1Implicits extends KeyPrefixPriority2Implicits {
     l.unused()
     t.unused()
     e.unused()
+    n.unused()
     new KeyPrefixWithSerializer[A, B](encoder)
   }
 
@@ -81,9 +74,7 @@ trait KeyPrefixPriority1Implicits extends KeyPrefixPriority2Implicits {
     e.unused()
     new KeyPrefixWithSerializer[A, B](encoder)
   }
-}
 
-object KeyPrefix extends KeyPrefixPriority1Implicits {
   def apply[A, B](implicit e: KeyPrefix[A, B]): KeyPrefix[A, B] = e
 
 //  implicit val literalStringDbKeyPrefix: DbKeyPrefix[String, String] = (a: String) =>

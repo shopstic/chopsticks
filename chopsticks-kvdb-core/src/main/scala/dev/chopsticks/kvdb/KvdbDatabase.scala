@@ -5,9 +5,11 @@ import akka.stream.scaladsl.Source
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
-import dev.chopsticks.kvdb.util.KvdbUtils._
+import dev.chopsticks.kvdb.util.KvdbAliases._
+import dev.chopsticks.kvdb.util.KvdbClientOptions
+import dev.chopsticks.kvdb.util.KvdbException.KvdbAlreadyClosedException
 import zio.clock.Clock
-import zio.{RIO, Task}
+import zio.{RIO, Task, ZIO, ZManaged}
 
 import scala.concurrent.Future
 import scala.language.higherKinds
@@ -30,6 +32,17 @@ object KvdbDatabase {
       }
     }
   }
+
+  def manage[R, BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
+    db: ZIO[R, Throwable, KvdbDatabase[BCF, CFS]]
+  ): ZManaged[R with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
+    ZManaged.make[R with Clock, Throwable, KvdbDatabase[BCF, CFS]](db) {
+      _.closeTask().catchAll {
+        case _: KvdbAlreadyClosedException => ZIO.unit
+        case t => ZIO.die(t)
+      }
+    }
+  }
 }
 
 trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
@@ -38,14 +51,14 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def isLocal: Boolean
 
-  def columnFamilySet: ColumnFamilySet[BCF, CFS]
+  def materialization: KvdbMaterialization[BCF, CFS]
 
   def transactionBuilder(): ColumnFamilyTransactionBuilder[BCF] = new ColumnFamilyTransactionBuilder[BCF]
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]]
 
   private lazy val columnFamilyByIdMap: Map[String, CF] =
-    columnFamilySet.set.map(c => (c.id, c)).toMap
+    materialization.columnFamilySet.value.map(c => (c.id, c)).toMap
 
   def columnFamilyWithId(id: String): Option[CF] = columnFamilyByIdMap.get(id)
 

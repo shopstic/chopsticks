@@ -5,7 +5,7 @@ import dev.chopsticks.kvdb.codec.KeyDeserializer.KeyDeserializationResult
 import scala.util.control.NoStackTrace
 
 trait KeyDeserializer[T] {
-  def decode(bytes: Array[Byte]): KeyDeserializationResult[T]
+  def deserialize(bytes: Array[Byte]): KeyDeserializationResult[T]
 }
 
 object KeyDeserializer {
