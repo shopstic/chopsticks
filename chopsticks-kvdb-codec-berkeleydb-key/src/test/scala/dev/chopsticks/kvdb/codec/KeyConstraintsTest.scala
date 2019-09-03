@@ -3,6 +3,7 @@ package dev.chopsticks.kvdb.codec
 import org.scalatest.{Matchers, WordSpecLike}
 import cats.syntax.show._
 import dev.chopsticks.kvdb.codec.berkeleydb_key._
+import scala.language.higherKinds
 
 object KeyConstraintsTest {
   final case class StockDbKeyTest(symbol: String, year: Int, month: Int)
@@ -17,8 +18,11 @@ final class KeyConstraintsTest extends WordSpecLike with Matchers {
   import KeyConstraints.Implicits._
 
   "work" in {
+    implicitly[KeyPrefix[String, StockDbKeyTest]]
+
     println(KeyConstraints.range[StockDbKeyTest](_ is StockDbKeyTest("AAPL", 2017, 3), _ ^= "AAPL").show)
     println(KeyConstraints.range[StockDbKeyTest](_ >= "AAPL123" ^= "AAPL", _ <= "AAPL456").show)
+    println(KeyConstraints.range[StockDbKeyTest](_ >= ("AAPL123" -> 2017) ^= "AAPL", _ <= "AAPL456").show)
     println(KeyConstraints.range[StockDbKeyTest](_ <= "AAPL123" ^= "AAPL", _ < "AAPL999").show)
     println(KeyConstraints.range[StockDbKeyTest](_.first, _.last).show)
   }

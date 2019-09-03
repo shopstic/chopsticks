@@ -12,16 +12,15 @@ trait KeySerdes[P] extends KeySerializer[P] with KeyDeserializer[P] {
   def describe: String
 }
 
-trait DerivedKeySerdes[P] extends KeySerdes[P]
-
-object DerivedKeySerdes extends StrictLogging {
+object KeySerdes extends StrictLogging {
   //noinspection ScalaStyle
   // scalastyle:off
-  type Aux[P, F <: HList, C <: KeyCodec] = DerivedKeySerdes[P] {
+  type Aux[P, F <: HList] = KeySerdes[P] {
     type Flattened = F
-    type Codec = C
   }
   // scalastyle:on
+
+  def apply[T](implicit s: KeySerdes[T]): Aux[T, s.Flattened] = s
 
   trait LowPriorityFlatten extends Poly1 {
     implicit def default[T]: Case.Aux[T, T :: HNil] = at[T](v => v :: HNil)
@@ -40,72 +39,57 @@ object DerivedKeySerdes extends StrictLogging {
     }
   }
 
-  implicit def deriveProduct[P <: Product, R <: HList, F <: HList, C <: KeyCodec](
+  implicit def deriveProduct[P <: Product, R <: HList, F <: HList](
     implicit
     g: Generic.Aux[P, R],
     f: FlatMapper.Aux[flatten.type, R, F],
-    serializer: Lazy[KeySerializer.Aux[P, C]],
-    deserializer: Lazy[KeyDeserializer[P]],
+    serializer: KeySerializer[P],
+    deserializer: KeyDeserializer[P],
     typ: Typeable[P]
-  ): Aux[P, F, C] = {
+  ): Aux[P, F] = {
     g.unused()
     f.unused()
     logger.debug(s"[DerivedDbKey][deriveProduct] ${typ.describe}")
 
-    new DerivedKeySerdes[P] {
+    new KeySerdes[P] {
       type Flattened = F
-      type Codec = C
 
       def describe: String = typ.describe
 
       def deserialize(bytes: Array[Byte]): KeyDeserializationResult[P] = {
-        deserializer.value.deserialize(bytes)
+        deserializer.deserialize(bytes)
       }
 
       def serialize(value: P): Array[Byte] = {
-        serializer.value.serialize(value)
+        serializer.serialize(value)
       }
     }
   }
 
-  implicit def deriveAny[V, C <: KeyCodec](
+  implicit def deriveAny[V](
     implicit
-    serializer: Lazy[KeySerializer.Aux[V, C]],
-    deserializer: Lazy[KeyDeserializer[V]],
+    serializer: KeySerializer[V],
+    deserializer: KeyDeserializer[V],
     typ: Typeable[V],
     ev: V <:!< Product
-  ): Aux[V, V :: HNil, C] = {
+  ): Aux[V, V :: HNil] = {
     ev.unused()
     logger.debug(s"[DerivedDbKey][deriveAny] ${typ.describe}")
 
-    new DerivedKeySerdes[V] {
+    new KeySerdes[V] {
       type Flattened = V :: HNil
-      type Codec = C
 
       def describe: String = typ.describe
 
       def deserialize(bytes: Array[Byte]): KeyDeserializationResult[V] = {
-        deserializer.value.deserialize(bytes)
+        deserializer.deserialize(bytes)
       }
 
       def serialize(value: V): Array[Byte] = {
-        serializer.value.serialize(value)
+        serializer.serialize(value)
       }
     }
   }
-}
-
-object KeySerdes extends StrictLogging {
-  //noinspection ScalaStyle
-  // scalastyle:off
-  type Aux[P, F <: HList, C <: KeyCodec] = KeySerdes[P] {
-    type Flattened = F
-    type Codec = C
-  }
-  // scalastyle:on
-
-  def apply[A](implicit d: DerivedKeySerdes[A]): Aux[A, d.Flattened, d.Codec] =
-    d.asInstanceOf[Aux[A, d.Flattened, d.Codec]]
 
   def ordering[A](implicit dbKey: KeySerdes[A]): Ordering[A] =
     (x: A, y: A) => KeySerdes.compare(dbKey.serialize(x), dbKey.serialize(y))

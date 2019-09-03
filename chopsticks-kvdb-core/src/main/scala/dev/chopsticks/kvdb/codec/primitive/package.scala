@@ -17,10 +17,9 @@ package object primitive {
     Right(KvdbSerdesUtils.epochNanosToInstant(BigInt(v)))
   })
 
-  def literalStringDbKeyFor[K](from: String => K, to: K => String): Aux[K, HNil, PrimitiveDbKeyCodec] =
+  def literalStringDbKeyFor[K](from: String => K, to: K => String): Aux[K, HNil] =
     new KeySerdes[K] {
       type Flattened = HNil
-      type Codec = PrimitiveDbKeyCodec
 
       def describe: String = "literalStringDbKey"
 
@@ -30,6 +29,6 @@ package object primitive {
         Right(from(KvdbSerdesUtils.byteArrayToString(bytes)))
     }
 
-  implicit val literalStringDbKey: Aux[String, HNil, PrimitiveDbKeyCodec] =
+  implicit val literalStringDbKey: Aux[String, HNil] =
     literalStringDbKeyFor[String](identity, identity)
 }

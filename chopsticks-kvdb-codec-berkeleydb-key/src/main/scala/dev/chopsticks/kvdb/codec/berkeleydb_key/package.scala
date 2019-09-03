@@ -9,10 +9,7 @@ import com.sleepycat.bind.tuple.{TupleInput, TupleOutput}
 package object berkeleydb_key {
   implicit def berkeleydbKeySerializer[T](
     implicit serializer: BerkeleydbKeySerializer[T]
-  ): KeySerializer.Aux[T, BerkeleydbKeyCodec] = new KeySerializer[T] {
-    type Codec = BerkeleydbKeyCodec
-    def serialize(key: T): Array[Byte] = serializer.serialize(new TupleOutput(), key).toByteArray
-  }
+  ): KeySerializer[T] = (key: T) => serializer.serialize(new TupleOutput(), key).toByteArray
 
   implicit def berkeleydbKeyDeserializer[T](implicit deserializer: BerkeleydbKeyDeserializer[T]): KeyDeserializer[T] = {
     bytes: Array[Byte] =>

@@ -120,19 +120,19 @@ class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers 
     }
   }
 
-  "different codecs between the key and its prefix" should {
-    final case class TestKey(foo: String)
-    "not compile" in {
-      assertDoesNotCompile("""
-                             |implicit val oneDbKey = {
-                             |  import dev.chopsticks.kvdb.codec.berkeleydb_key._
-                             |  KeySerdes[TestKey]
-                             |}
-                             |import dev.chopsticks.kvdb.codec.primitive._
-                             |implicitly[KeyPrefix[String, TestKey]]
-        """.stripMargin)
-    }
-  }
+//  "different codecs between the key and its prefix" should {
+//    final case class TestKey(foo: String)
+//    "not compile" in {
+//      assertDoesNotCompile("""
+//                             |implicit val oneDbKey = {
+//                             |  import dev.chopsticks.kvdb.codec.berkeleydb_key._
+//                             |  KeySerdes[TestKey]
+//                             |}
+//                             |import dev.chopsticks.kvdb.codec.primitive._
+//                             |implicitly[KeyPrefix[String, TestKey]]
+//        """.stripMargin)
+//    }
+//  }
 
   "compare" when {
     implicit val generatorDrivenConfig =

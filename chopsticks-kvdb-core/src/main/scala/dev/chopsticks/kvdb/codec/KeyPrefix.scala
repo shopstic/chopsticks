@@ -23,12 +23,12 @@ object KeyPrefix extends StrictLogging {
   // e.g
   // T as prefix of:
   // case class Bar(one: T, two: Boolean, three: Double)
-  implicit def anyToKeyPrefixOfProduct[A, B <: Product, F <: HList, T <: HList, C <: KeyCodec](
+  implicit def anyToKeyPrefixOfProduct[A, B <: Product, F <: HList, T <: HList](
     implicit
-    f: KeySerdes.Aux[B, F, C],
+    f: KeySerdes.Aux[B, F],
     t: IsHCons.Aux[F, A, T],
-    serializer: KeySerializer.Aux[A, C],
-    e: A <:!< Product
+    e: A <:!< Product,
+    serializer: KeySerializer[A]
   ): KeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][anyToDbKeyPrefixOfProduct] ${f.describe}")
     t.unused()
@@ -36,15 +36,14 @@ object KeyPrefix extends StrictLogging {
     new KeyPrefixWithSerializer[A, B](serializer)
   }
 
-  implicit def productToKeyPrefix[A <: Product, B <: Product, P <: HList, F <: HList, N <: Nat, T <: HList, C <: KeyCodec](
+  implicit def productToKeyPrefix[A <: Product, B <: Product, P <: HList, F <: HList, N <: Nat, T <: HList](
     implicit
     g: Generic.Aux[A, P],
     l: Length.Aux[P, N],
-    f: KeySerdes.Aux[B, F, C],
+    f: KeySerdes.Aux[B, F],
     t: Take.Aux[F, N, T],
     e: P =:= T,
-    n: A <:!< HList,
-    encoder: KeySerializer.Aux[A, C]
+    encoder: KeySerializer[A]
   ): KeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${f.describe}")
     //    n.unused()
@@ -52,7 +51,6 @@ object KeyPrefix extends StrictLogging {
     l.unused()
     t.unused()
     e.unused()
-    n.unused()
     new KeyPrefixWithSerializer[A, B](encoder)
   }
 
@@ -60,20 +58,20 @@ object KeyPrefix extends StrictLogging {
   // String :: Boolean :: HNil
   //    as prefix of:
   // case class Bar(one: String, two: Boolean, three: Double)
-  implicit def hlistToKeyPrefix[A <: HList, B <: Product, F <: HList, N <: Nat, T <: HList, C <: KeyCodec](
-    implicit
-    l: Length.Aux[A, N],
-    f: KeySerdes.Aux[B, F, C],
-    t: Take.Aux[F, N, T],
-    e: A =:= T,
-    encoder: KeySerializer.Aux[A, C]
-  ): KeyPrefix[A, B] = {
-    logger.debug(s"[DbKeyPrefix][hlistToDbKeyPrefix] ${f.describe}")
-    l.unused()
-    t.unused()
-    e.unused()
-    new KeyPrefixWithSerializer[A, B](encoder)
-  }
+//  implicit def hlistToKeyPrefix[A <: HList, B <: Product, F <: HList, N <: Nat, T <: HList](
+//    implicit
+//    l: Length.Aux[A, N],
+//    f: KeySerdes.Aux[B, F],
+//    t: Take.Aux[F, N, T],
+//    e: A =:= T,
+//    encoder: KeySerializer[A]
+//  ): KeyPrefix[A, B] = {
+//    logger.debug(s"[DbKeyPrefix][hlistToDbKeyPrefix] ${f.describe}")
+//    l.unused()
+//    t.unused()
+//    e.unused()
+//    new KeyPrefixWithSerializer[A, B](encoder)
+//  }
 
   def apply[A, B](implicit e: KeyPrefix[A, B]): KeyPrefix[A, B] = e
 
