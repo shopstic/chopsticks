@@ -145,9 +145,9 @@ object ZAkka {
       .mapMaterializedValue(_.map(_ => NotUsed))
   }
 
-  def mapAsync[A, B, E <: AkkaEnv](
+  def mapAsync[R <: AkkaEnv, A, B](
     parallelism: Int
-  )(runTask: A => RIO[E, B])(implicit env: E): Flow[A, B, NotUsed] = {
+  )(runTask: A => RIO[R, B])(implicit env: R): Flow[A, B, NotUsed] = {
     import env._
 
     Flow[A]
@@ -156,9 +156,9 @@ object ZAkka {
       }
   }
 
-  def mapAsyncUnordered[A, B, E <: AkkaEnv](
+  def mapAsyncUnordered[R <: AkkaEnv, A, B](
     parallelism: Int
-  )(runTask: A => RIO[E, B])(implicit env: E): Flow[A, B, NotUsed] = {
+  )(runTask: A => RIO[R, B])(implicit env: R): Flow[A, B, NotUsed] = {
     import env._
 
     Flow[A]
