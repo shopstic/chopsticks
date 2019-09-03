@@ -1,3 +1,3 @@
 package dev.chopsticks.kvdb.codec
 
-trait BerkeleyDbKeyCodec
+trait BerkeleydbKeyCodec extends KeyCodec

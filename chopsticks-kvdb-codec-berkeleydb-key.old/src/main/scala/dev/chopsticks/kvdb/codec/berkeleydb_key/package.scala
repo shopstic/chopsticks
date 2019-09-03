@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.codec
 
-import java.time._
+import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, YearMonth}
 import java.util.UUID
 
 import com.sleepycat.bind.tuple.{TupleInput, TupleOutput}
@@ -9,8 +9,8 @@ import com.sleepycat.bind.tuple.{TupleInput, TupleOutput}
 package object berkeleydb_key {
   implicit def berkeleydbKeySerializer[T](
     implicit serializer: BerkeleydbKeySerializer[T]
-  ): KeySerializer.Aux[T, BerkeleydbKeyCodec] = new KeySerializer[T] {
-    type Codec = BerkeleydbKeyCodec
+  ): KeySerializer.Aux[T, BerkeleyDbKeyCodec] = new KeySerializer[T] {
+    type Codec = BerkeleyDbKeyCodec
     def serialize(key: T): Array[Byte] = serializer.serialize(new TupleOutput(), key).toByteArray
   }
 
@@ -19,6 +19,7 @@ package object berkeleydb_key {
       deserializer.deserialize(new TupleInput(bytes))
   }
 
+  implicit val stringKeySerializer = berkeleydbKeySerializer[String]
   implicit val stringKeySerdes = KeySerdes[String]
   implicit val booleanKeySerdes = KeySerdes[Boolean]
   implicit val byteKeySerdes = KeySerdes[Byte]

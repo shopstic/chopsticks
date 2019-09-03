@@ -7,14 +7,10 @@ import com.sleepycat.bind.tuple.TupleInput
 import dev.chopsticks.kvdb.codec.KeyDeserializer.{GenericKeyDeserializationException, KeyDeserializationResult}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
+import shapeless.{::, HList, HNil, ProductTypeClass, ProductTypeClassCompanion, Typeable}
 
 import scala.annotation.implicitNotFound
 import scala.util.control.NonFatal
-import magnolia._
-import shapeless.Typeable
-
-import scala.language.experimental.macros
-
 @implicitNotFound(
   msg = "Implicit BerkeleydbKeyDeserializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeyDeserializer[${T}]"
 )
@@ -22,8 +18,8 @@ trait BerkeleydbKeyDeserializer[T] {
   def deserialize(in: TupleInput): KeyDeserializationResult[T]
 }
 
-object BerkeleydbKeyDeserializer {
-  type Typeclass[A] = BerkeleydbKeyDeserializer[A]
+object BerkeleydbKeyDeserializer extends ProductTypeClassCompanion[BerkeleydbKeyDeserializer] {
+  def apply[V](implicit f: BerkeleydbKeyDeserializer[V]): BerkeleydbKeyDeserializer[V] = f
 
   private def createTry[T](f: TupleInput => T)(implicit typ: Typeable[T]): BerkeleydbKeyDeserializer[T] =
     (in: TupleInput) => {
@@ -97,11 +93,26 @@ object BerkeleydbKeyDeserializer {
     } yield ret
   }
 
-  implicit def gen[T]: BerkeleydbKeyDeserializer[T] = macro Magnolia.gen[T]
+  object typeClass extends ProductTypeClass[BerkeleydbKeyDeserializer] {
 
-  def combine[A](ctx: CaseClass[BerkeleydbKeyDeserializer, A]): BerkeleydbKeyDeserializer[A] = (in: TupleInput) => {
-    ctx.constructMonadic { param =>
-      param.typeclass.deserialize(in)
+    val emptyProduct: BerkeleydbKeyDeserializer[HNil] = (_: TupleInput) => Right(HNil)
+
+    def product[F, T <: HList](
+      hc: BerkeleydbKeyDeserializer[F],
+      tc: BerkeleydbKeyDeserializer[T]
+    ): BerkeleydbKeyDeserializer[F :: T] = { in =>
+      for {
+        head <- hc.deserialize(in)
+        tail <- tc.deserialize(in)
+      } yield head :: tail
+    }
+
+    def project[F, G](
+      instance: => BerkeleydbKeyDeserializer[G],
+      to: F => G,
+      from: G => F
+    ): BerkeleydbKeyDeserializer[F] = { in =>
+      instance.deserialize(in).map(from)
     }
   }
 }

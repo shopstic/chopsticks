@@ -114,9 +114,16 @@ lazy val kvdbRemote = Build
 lazy val kvdbCodecBerkeleydbKey = Build
   .defineProject("kvdb-codec-berkeleydb-key")
   .settings(
-    libraryDependencies ++= berkeleyDbDeps
+    libraryDependencies ++= berkeleyDbDeps ++ magnoliaDeps
   )
   .dependsOn(kvdbCore, testkit % "test->compile")
+
+//lazy val kvdbCodecBerkeleydbKey = Build
+//  .defineProject("kvdb-codec-berkeleydb-key")
+//  .settings(
+//    libraryDependencies ++= berkeleyDbDeps
+//  )
+//  .dependsOn(kvdbCore, testkit % "test->compile")
 
 lazy val kvdbCodecProtobufValue = Build
   .defineProject("kvdb-codec-protobuf-value")

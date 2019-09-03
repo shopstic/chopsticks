@@ -1,3 +1,5 @@
 package dev.chopsticks.kvdb.codec.primitive
 
-trait PrimitiveDbKeyCodec
+import dev.chopsticks.kvdb.codec.KeyCodec
+
+trait PrimitiveDbKeyCodec extends KeyCodec

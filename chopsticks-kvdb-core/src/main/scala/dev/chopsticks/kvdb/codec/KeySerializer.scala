@@ -1,13 +1,13 @@
 package dev.chopsticks.kvdb.codec
 
 trait KeySerializer[T] {
-  type Codec
+  type Codec <: KeyCodec
 
   def serialize(key: T): Array[Byte]
 }
 
 object KeySerializer {
-  type Aux[T, C] = KeySerializer[T] {
+  type Aux[T, C <: KeyCodec] = KeySerializer[T] {
     type Codec = C
   }
 }

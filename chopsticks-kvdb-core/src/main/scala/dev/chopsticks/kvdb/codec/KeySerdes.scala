@@ -17,7 +17,7 @@ trait DerivedKeySerdes[P] extends KeySerdes[P]
 object DerivedKeySerdes extends StrictLogging {
   //noinspection ScalaStyle
   // scalastyle:off
-  type Aux[P, F <: HList, C] = DerivedKeySerdes[P] {
+  type Aux[P, F <: HList, C <: KeyCodec] = DerivedKeySerdes[P] {
     type Flattened = F
     type Codec = C
   }
@@ -40,7 +40,7 @@ object DerivedKeySerdes extends StrictLogging {
     }
   }
 
-  implicit def deriveProduct[P <: Product, R <: HList, F <: HList, C](
+  implicit def deriveProduct[P <: Product, R <: HList, F <: HList, C <: KeyCodec](
     implicit
     g: Generic.Aux[P, R],
     f: FlatMapper.Aux[flatten.type, R, F],
@@ -68,7 +68,7 @@ object DerivedKeySerdes extends StrictLogging {
     }
   }
 
-  implicit def deriveAny[V, C](
+  implicit def deriveAny[V, C <: KeyCodec](
     implicit
     serializer: Lazy[KeySerializer.Aux[V, C]],
     deserializer: Lazy[KeyDeserializer[V]],
@@ -98,7 +98,7 @@ object DerivedKeySerdes extends StrictLogging {
 object KeySerdes extends StrictLogging {
   //noinspection ScalaStyle
   // scalastyle:off
-  type Aux[P, F <: HList, C] = KeySerdes[P] {
+  type Aux[P, F <: HList, C <: KeyCodec] = KeySerdes[P] {
     type Flattened = F
     type Codec = C
   }

@@ -142,6 +142,10 @@ object Dependencies {
     "com.sleepycat" % "je" % "18.3.12"
   )
 
+  val magnoliaDeps = Seq(
+    "com.propensive" %% "magnolia" % "0.11.0"
+  )
+
   val pprintDeps = Seq(
     "com.lihaoyi" %% "pprint" % "0.5.5"
   )

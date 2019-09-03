@@ -6,8 +6,7 @@ import java.util.UUID
 import com.sleepycat.bind.tuple.TupleOutput
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import scalapb.GeneratedEnum
-import magnolia._
-import scala.language.experimental.macros
+import shapeless.{::, HList, HNil, ProductTypeClass, ProductTypeClassCompanion}
 
 import scala.annotation.implicitNotFound
 
@@ -18,9 +17,7 @@ trait BerkeleydbKeySerializer[T] {
   def serialize(o: TupleOutput, t: T): TupleOutput
 }
 
-object BerkeleydbKeySerializer {
-  type Typeclass[A] = BerkeleydbKeySerializer[A]
-
+object BerkeleydbKeySerializer extends ProductTypeClassCompanion[BerkeleydbKeySerializer] {
   implicit val stringBerkeleydbKeyEncoder: BerkeleydbKeySerializer[String] = create((o, v) => o.writeString(v))
   implicit val booleanBerkeleydbKeyEncoder: BerkeleydbKeySerializer[Boolean] = create((o, v) => o.writeBoolean(v))
   implicit val byteBerkeleydbKeyEncoder: BerkeleydbKeySerializer[Byte] = create((o, v) => o.writeByte(v.toInt))
@@ -29,6 +26,7 @@ object BerkeleydbKeySerializer {
   implicit val longBerkeleydbKeyEncoder: BerkeleydbKeySerializer[Long] = create((o, v) => o.writeLong(v))
   implicit val doubleBerkeleydbKeyEncoder: BerkeleydbKeySerializer[Double] = create((o, v) => o.writeSortedDouble(v))
   implicit val floatBerkeleydbKeyEncoder: BerkeleydbKeySerializer[Float] = create((o, v) => o.writeSortedFloat(v))
+  implicit val hnilBerkeleydbKeyEncoder: BerkeleydbKeySerializer[HNil] = create((o, _) => o)
 
   implicit val ldBerkeleydbKeyEncoder: BerkeleydbKeySerializer[LocalDate] = create(
     (o, v) => longBerkeleydbKeyEncoder.serialize(o, v.toEpochDay)
@@ -61,12 +59,6 @@ object BerkeleydbKeySerializer {
     f(o, t)
   }
 
-  def combine[A](ctx: CaseClass[BerkeleydbKeySerializer, A]): BerkeleydbKeySerializer[A] =
-    (o: TupleOutput, a: A) =>
-      ctx.parameters.foldLeft(o) { (tuple, p) =>
-        p.typeclass.serialize(tuple, p.dereference(a))
-      }
-
   //noinspection MatchToPartialFunction
   implicit def deriveOption[T](implicit encoder: BerkeleydbKeySerializer[T]): BerkeleydbKeySerializer[Option[T]] = {
     create { (o, maybeValue) =>
@@ -77,5 +69,20 @@ object BerkeleydbKeySerializer {
     }
   }
 
-  implicit def deriveSerializer[A]: BerkeleydbKeySerializer[A] = macro Magnolia.gen[A]
+  object typeClass extends ProductTypeClass[BerkeleydbKeySerializer] {
+
+    val emptyProduct: BerkeleydbKeySerializer[HNil] = hnilBerkeleydbKeyEncoder
+
+    def product[H, T <: HList](
+      hc: BerkeleydbKeySerializer[H],
+      tc: BerkeleydbKeySerializer[T]
+    ): BerkeleydbKeySerializer[H :: T] = {
+      create((out, hlist: H :: T) => {
+        tc.serialize(hc.serialize(out, hlist.head), hlist.tail)
+      })
+    }
+
+    def project[F, G](instance: => BerkeleydbKeySerializer[G], to: F => G, from: G => F): BerkeleydbKeySerializer[F] =
+      create((o, f: F) => instance.serialize(o, to(f)))
+  }
 }
