@@ -13,11 +13,16 @@ import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
+import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
-import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern, TotalOrderScanPattern}
+import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{
+  PointLookupPattern,
+  PrefixedScanPattern,
+  TotalOrderScanPattern
+}
 import dev.chopsticks.kvdb.rocksdb.RocksdbUtils.OptionsFileSection
 import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException._
@@ -38,6 +43,8 @@ import scala.language.higherKinds
 import scala.util.Failure
 
 object RocksdbDatabase extends StrictLogging {
+  final val DEFAULT_COLUMN_NAME: String = new String(RocksDB.DEFAULT_COLUMN_FAMILY, UTF_8)
+
   private def byteArrayToString(bytes: Array[Byte]): String = {
     new String(bytes, UTF_8)
   }
@@ -139,12 +146,18 @@ object RocksdbDatabase extends StrictLogging {
   def apply[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
     config: Config
-  ): ZIO[AkkaEnv, Nothing, RocksdbDatabase[BCF, CFS]] = ZIO.access[AkkaEnv] { implicit env =>
-    new RocksdbDatabase[BCF, CFS](materialization, config)
+  ): ZIO[AkkaEnv, DuplicatedColumnFamilyIdsException, RocksdbDatabase[BCF, CFS]] = {
+    RocksdbMaterialization.validate(materialization) match {
+      case Left(ex) => ZIO.fail(ex)
+      case Right(_) =>
+        ZIO.access[AkkaEnv] { implicit env =>
+          new RocksdbDatabase[BCF, CFS](materialization, config)
+        }
+    }
   }
 }
 
-final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
+final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private(
   val materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
   config: RocksdbDatabase.Config
 )(implicit akkaEnv: AkkaEnv)
@@ -157,7 +170,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
 
   private val columnOptions: Map[CF, ColumnFamilyOptions] = materialization.columnFamilySet.value.map { cf =>
 //    val defaultOptions = cf.rocksdbOptions
-    val cfOptions: RocksdbColumnFamilyConfig[CF] = materialization.columnFamilyConfigMap.map(cf)
+    val cfOptions = materialization.columnFamilyConfigMap.map(cf)
 //    val cfOptions: RocksdbCFOptions = options.get(cf, defaultOptions)
 
     val cfBuilder = RocksdbColumnFamilyOptionsBuilder(
@@ -202,8 +215,12 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
 
   protected def logPath: Option[String] = None
 
+  private def getColumnFamilyName(cf: CF): String = {
+    if (cf == materialization.defaultColumnFamily) DEFAULT_COLUMN_NAME else cf.id
+  }
+
   private def columnFamilyWithName(name: String): Option[CF] =
-    materialization.columnFamilySet.value.find(cf => cf.id == name)
+    materialization.columnFamilySet.value.find(cf => getColumnFamilyName(cf) == name)
 
   private def newReadOptions(): ReadOptions = {
     val o = new ReadOptions()
@@ -269,19 +286,12 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
   private lazy val _references = {
     val task = blocking(Task {
       RocksDB.loadLibrary()
-      val columnNames = columnOptions.keys.map(_.id).toSet
-      val enumNameSet = materialization.columnFamilySet.value.map(_.id)
-
-      assert(
-        columnNames == enumNameSet,
-        s"CF enum set: $columnNames differs from column options columnOptionsAsLid map: $enumNameSet"
-      )
-
+      val columnNames = columnOptions.keys.map(getColumnFamilyName).toSet
       val columnOptionsAsList = columnOptions.toList
       val descriptors = columnOptionsAsList.map {
-        case (columnFamilyName, colOptions) =>
+        case (cf, colOptions) =>
           new ColumnFamilyDescriptor(
-            columnFamilyName.id.getBytes(UTF_8),
+            getColumnFamilyName(cf).getBytes(UTF_8),
             colOptions.setDisableAutoCompactions(config.startWithBulkInserts)
           )
       }
@@ -442,7 +452,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
 
     val metrics = refs.columnHandleMap.flatMap {
       case (cf, cfHandle) =>
-        val cfName = cf.id
+        val cfName = getColumnFamilyName(cf)
         val cfOptions = columnOptions(cf)
         val numLevels = cfOptions.numLevels()
         val blockSize = cfOptions.tableFormatConfig() match {
@@ -1028,7 +1038,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
 
   def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {
     ioTask(references.map { refs =>
-      logger.info(s"Dropping column family: ${column.id}")
+      logger.info(s"Dropping column family: ${getColumnFamilyName(column)}")
       refs.db.dropColumnFamily(refs.getColumnHandle(column))
     })
   }

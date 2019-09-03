@@ -114,7 +114,7 @@ object DstreamSampleApp extends AkkaApp {
             .log("server graph")
             .fork
           _ <- ZIO.forkAll_ {
-            (1 to 2).map { id =>
+            (1 to 8).map { id =>
               runWorker(client, id).either
                 .repeat(ZSchedule.forever)
             }

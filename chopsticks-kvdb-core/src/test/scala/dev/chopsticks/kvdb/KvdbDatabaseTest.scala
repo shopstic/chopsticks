@@ -87,7 +87,7 @@ abstract private[kvdb] class KvdbDatabaseTest
 
   protected def dbMat: TestDatabase.Materialization
 
-  private lazy val defaultCf = dbMat.default
+  private lazy val defaultCf = dbMat.plain
   private lazy val lookupCf = dbMat.lookup
 
   private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](Environment, managedDb)

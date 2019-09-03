@@ -7,7 +7,7 @@ import dev.chopsticks.kvdb.util.KvdbAliases.KvdbPair
 import dev.chopsticks.kvdb.util.KvdbUtils
 
 abstract class ColumnFamily[K: KeySerdes, V: ValueSerdes] {
-  lazy val id: String = KvdbUtils.deriveColumnFamilyId(this.getClass)
+  val id: String = KvdbUtils.deriveColumnFamilyId(this.getClass)
 
   def keySerdes: KeySerdes[K] = implicitly[KeySerdes[K]]
   def valueSerdes: ValueSerdes[V] = implicitly[ValueSerdes[V]]

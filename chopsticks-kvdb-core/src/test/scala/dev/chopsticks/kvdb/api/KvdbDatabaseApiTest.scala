@@ -22,7 +22,7 @@ abstract class KvdbDatabaseApiTest
 //  protected def anotherCf: AnotherCf1
 
   private lazy val withDb = KvdbTestUtils.createTestRunner(Environment, managedDb)
-  private lazy val withCf = KvdbTestUtils.createTestRunner(Environment, managedDb.map(_.columnFamily(dbMat.default)))
+  private lazy val withCf = KvdbTestUtils.createTestRunner(Environment, managedDb.map(_.columnFamily(dbMat.plain)))
 
   private lazy val as = system
 
@@ -40,7 +40,7 @@ abstract class KvdbDatabaseApiTest
   "columnFamily" when {
     "getTask" should {
       "work with db" in withDb { db =>
-        val cf = db.columnFamily(dbMat.default)
+        val cf = db.columnFamily(dbMat.plain)
         for {
           _ <- cf.putTask("foo", "bar")
           v <- cf.getValueTask(_ is "foo")

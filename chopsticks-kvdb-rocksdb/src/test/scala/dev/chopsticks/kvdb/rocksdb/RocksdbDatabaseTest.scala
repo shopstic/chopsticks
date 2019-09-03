@@ -15,14 +15,14 @@ import zio.ZManaged
 
 object RocksdbDatabaseTest {
   object dbMaterialization extends Materialization with RocksdbMaterialization[BaseCf, CfSet] {
-    object default extends DefaultCf {
-      override lazy val id: String = "default"
-    }
+    object plain extends PlainCf
     object lookup extends LookupCf
+
+    val defaultColumnFamily: plain.type = plain
 
     val columnFamilyConfigMap: RocksdbColumnFamilyConfigMap[BaseCf, CfSet] = {
       RocksdbColumnFamilyConfigMap[BaseCf] of (
-        default,
+        plain,
         RocksdbColumnFamilyConfig(
           memoryBudget = 1.mib,
           blockCache = 1.mib,
@@ -41,7 +41,7 @@ object RocksdbDatabaseTest {
         )
       )
     }
-    val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf] of default and lookup
+    val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf] of plain and lookup
   }
 
   val managedDb: ZManaged[AkkaApp.Env, Throwable, Db] = {

@@ -155,7 +155,7 @@ object Dstreams extends LoggingContext {
           .forever
           .retry(retrySchedule)
       }
-      .const(())
+      .unit
   }
 
   def handle[Req, Res](

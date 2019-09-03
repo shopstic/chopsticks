@@ -5,7 +5,7 @@ import dev.chopsticks.fp.AkkaApp
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.BaseCf
 import org.scalatest.Assertion
-import zio.blocking.{Blocking, blocking}
+import zio.blocking.{blocking, Blocking}
 import zio.{RIO, Task, ZManaged}
 
 import scala.concurrent.Future

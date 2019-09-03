@@ -266,14 +266,19 @@ class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers 
 
       "compare < 0" in {
         forAll { b: LocalTime =>
-          assert(KeySerdes.compare(KeySerdes.serialize(LocalTimeKey(None)), KeySerdes.serialize(LocalTimeKey(Some(b)))) < 0)
+          assert(
+            KeySerdes.compare(KeySerdes.serialize(LocalTimeKey(None)), KeySerdes.serialize(LocalTimeKey(Some(b)))) < 0
+          )
         }
       }
 
       "compare > 0" in {
         forAll { (a: LocalTime, b: LocalTime) =>
           whenever(a.isAfter(b)) {
-            assert(KeySerdes.compare(KeySerdes.serialize(LocalTimeKey(Some(a))), KeySerdes.serialize(LocalTimeKey(Some(b)))) > 0)
+            assert(
+              KeySerdes
+                .compare(KeySerdes.serialize(LocalTimeKey(Some(a))), KeySerdes.serialize(LocalTimeKey(Some(b)))) > 0
+            )
           }
         }
       }

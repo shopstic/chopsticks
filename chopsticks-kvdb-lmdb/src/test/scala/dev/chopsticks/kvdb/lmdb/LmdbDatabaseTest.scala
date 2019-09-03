@@ -1,7 +1,7 @@
 package dev.chopsticks.kvdb.lmdb
 
 import dev.chopsticks.fp.AkkaApp
-import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, DefaultCf, LookupCf}
+import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, LookupCf, PlainCf}
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbTestUtils
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabase, KvdbDatabaseTest, TestDatabase}
@@ -13,10 +13,10 @@ import zio.ZManaged
 
 object LmdbDatabaseTest {
   object dbMaterialization extends TestDatabase.Materialization {
-    object default extends DefaultCf
+    object plain extends PlainCf
     object lookup extends LookupCf
     val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = {
-      ColumnFamilySet[BaseCf] of default and lookup
+      ColumnFamilySet[BaseCf] of plain and lookup
     }
   }
 

@@ -13,6 +13,7 @@ import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
+import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
@@ -88,8 +89,14 @@ object LmdbDatabase extends StrictLogging {
   def apply[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS],
     config: Config
-  ): ZIO[AkkaEnv, Nothing, LmdbDatabase[BCF, CFS]] = ZIO.access[AkkaEnv] { implicit env =>
-    new LmdbDatabase[BCF, CFS](materialization, config)
+  ): ZIO[AkkaEnv, DuplicatedColumnFamilyIdsException, LmdbDatabase[BCF, CFS]] = {
+    KvdbMaterialization.validate(materialization) match {
+      case Left(ex) => ZIO.fail(ex)
+      case Right(mat) =>
+        ZIO.access[AkkaEnv] { implicit env =>
+          new LmdbDatabase[BCF, CFS](mat, config)
+        }
+    }
   }
 }
 

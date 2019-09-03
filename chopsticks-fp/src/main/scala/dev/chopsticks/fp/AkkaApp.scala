@@ -56,17 +56,17 @@ trait AkkaApp extends LoggingContext {
       ConfigParseOptions.defaults.setAllowMissing(false),
       ConfigResolveOptions.defaults
     )
-    val as = createActorSystem(appName, config)
+    val akkaActorSystem = createActorSystem(appName, config)
     val managedEnv: ZManaged[AkkaApp.Env, Nothing, Env] = createEnv(config)
     val zioTracingEnabled = Try(config.getBoolean("zio.trace")).recover { case _ => true }.getOrElse(true)
-    val shutdown: CoordinatedShutdown = CoordinatedShutdown(as)
+    val shutdown: CoordinatedShutdown = CoordinatedShutdown(akkaActorSystem)
     val runtime: zio.Runtime[AkkaApp.Env] = new zio.Runtime[AkkaApp.Env] {
       val Environment: AkkaApp.Env = new AkkaApp.LiveEnv {
-        implicit val actorSystem: ActorSystem = as
+        implicit val actorSystem: ActorSystem = akkaActorSystem
       }
       val Platform: zio.internal.Platform = new zio.internal.Platform.Proxy(
         PlatformLive
-          .fromExecutionContext(as.dispatcher)
+          .fromExecutionContext(akkaActorSystem.dispatcher)
           .withTracingConfig(if (zioTracingEnabled) TracingConfig.enabled else TracingConfig.disabled)
       ) {
         private val isShuttingDown = new AtomicBoolean(false)

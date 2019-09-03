@@ -9,13 +9,13 @@ object RocksdbColumnFamilyConfigMap {
 }
 
 final class RocksdbColumnFamilyConfigMap[BCF[A, B] <: ColumnFamily[A, B], +CF <: BCF[_, _]] private (
-  val map: Map[BCF[_, _], RocksdbColumnFamilyConfig[BCF[_, _]]]
+  val map: Map[BCF[_, _], RocksdbColumnFamilyConfig]
 ) {
-  def and[B <: BCF[_, _]](cf: B, cfg: RocksdbColumnFamilyConfig[B]): RocksdbColumnFamilyConfigMap[BCF, CF with B] = {
+  def and[B <: BCF[_, _]](cf: B, cfg: RocksdbColumnFamilyConfig): RocksdbColumnFamilyConfigMap[BCF, CF with B] = {
     new RocksdbColumnFamilyConfigMap[BCF, CF with B](map.updated(cf, cfg))
   }
 
-  def of[B <: BCF[_, _]](cf: B, cfg: RocksdbColumnFamilyConfig[B]): RocksdbColumnFamilyConfigMap[BCF, B] = {
+  def of[B <: BCF[_, _]](cf: B, cfg: RocksdbColumnFamilyConfig): RocksdbColumnFamilyConfigMap[BCF, B] = {
     new RocksdbColumnFamilyConfigMap[BCF, B](Map(cf -> cfg))
   }
 }

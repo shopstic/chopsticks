@@ -44,7 +44,7 @@ object KeyPrefix extends StrictLogging {
     t: Take.Aux[F, N, T],
     e: P =:= T,
     n: A <:!< HList,
-    encoder: KeySerializer.Aux[A, C],
+    encoder: KeySerializer.Aux[A, C]
   ): KeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${f.describe}")
     //    n.unused()
