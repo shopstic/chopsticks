@@ -123,8 +123,8 @@ object Dstreams extends LoggingContext {
 
   def work[R, Req, Res](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
-  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[R with AkkaEnv with LogEnv, Done] = {
-    val graph = ZIO.access[R with AkkaEnv] { implicit env =>
+  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with LogEnv with R, Done] = {
+    val graph = ZIO.access[AkkaEnv with R] { implicit env =>
       val promise = Promise[Source[Res, NotUsed]]()
 
       requestBuilder
@@ -145,15 +145,13 @@ object Dstreams extends LoggingContext {
   )(
     makeSource: Req => RIO[R, Source[Res, NotUsed]]
   ): ZIO[R with MeasuredLogging with Clock, Throwable, Unit] = {
-    val retrySchedule: ZSchedule[Clock, Throwable, Any] = ZSchedule.exponential(100.millis) || ZSchedule.fixed(1.second)
-
     ZIO
       .foreachPar(1 to config.poolSize) { id =>
         work(requestBuilder.addHeader(WORKER_ID_HEADER, id.toString).addHeader(WORKER_NODE_HEADER, config.nodeId))(
           makeSource
         ).logResult(s"dstream-worker-$id", _.toString)
           .forever
-          .retry(retrySchedule)
+          .retry(ZSchedule.exponential(100.millis) || ZSchedule.fixed(1.second))
       }
       .unit
   }
