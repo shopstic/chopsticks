@@ -5,7 +5,7 @@ import akka.stream.scaladsl.{Flow, RunnableGraph}
 import akka.stream.{Attributes, KillSwitch}
 import zio._
 
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future, Promise}
 import scala.util.{Failure, Success}
 
 object ZAkka {
@@ -29,10 +29,17 @@ object ZAkka {
     }
   }
 
-  def graph[R >: Nothing, A](
-    make: => RIO[R, RunnableGraph[Future[A]]]
-  ): RIO[R with AkkaEnv with LogEnv, A] = {
-    ZIO.accessM[R with AkkaEnv with LogEnv] { env =>
+  @deprecated("Use graphM instead", "0.21.0")
+  def graph[R, A](
+    make: RIO[R, RunnableGraph[Future[A]]]
+  ): RIO[AkkaEnv with LogEnv with R, A] = {
+    graphM(make)
+  }
+
+  def graphM[R, A](
+    make: RIO[R, RunnableGraph[Future[A]]]
+  ): RIO[AkkaEnv with LogEnv with R, A] = {
+    ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
       make.flatMap { graph =>
         val f = graph.run()(env.materializer)
         f.value
@@ -48,11 +55,19 @@ object ZAkka {
     }
   }
 
-  def interruptableGraph[R >: Nothing, A](
-    make: => RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
+  @deprecated("Use interruptableGraphM instead", "0.21.0")
+  def interruptableGraph[R, A](
+    make: RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
     graceful: Boolean
-  )(implicit ctx: LogCtx): RIO[R with AkkaEnv with LogEnv, A] = {
-    ZIO.accessM[R with AkkaEnv with LogEnv] { env =>
+  )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv with R, A] = {
+    interruptableGraphM(make, graceful)(ctx)
+  }
+
+  def interruptableGraphM[R, A](
+    make: RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
+    graceful: Boolean
+  )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv with R, A] = {
+    ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
       make.flatMap { graph =>
         val (ks, f) = graph.run()(env.materializer)
         val task = f.value
@@ -80,18 +95,57 @@ object ZAkka {
     }
   }
 
-  def interruptableMapAsync[A, B, Env <: AkkaEnv](
+  def interruptableMapAsyncM[R, A, B](
     parallelism: Int
-  )(runTask: A => RIO[Env, B])(implicit env: Env): Flow[A, B, Future[NotUsed]] = {
-    import env._
+  )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
+    ZIO.access[AkkaEnv with R] { env =>
+      implicit val ec: ExecutionContextExecutor = env.dispatcher
 
-    Flow
-      .lazyInitAsync(() => {
-        val completionPromise = Promise[Unit]()
-        val interruptTask = Task.fromFuture(_ => completionPromise.future)
-        Future.successful(
-          Flow[A]
-            .mapAsync(parallelism) { a =>
+      Flow
+        .lazyInitAsync(() => {
+          val completionPromise = Promise[Unit]()
+          val interruptTask = Task.fromFuture(_ => completionPromise.future)
+          Future.successful(
+            Flow[A]
+              .mapAsync(parallelism) { a =>
+                val interruptableTask = for {
+                  fib <- runTask(a).fold(Future.failed, Future.successful).fork
+                  c <- (interruptTask *> fib.interrupt).fork
+                  ret <- fib.join
+                  _ <- c.interrupt.fork
+                } yield ret
+
+                env.unsafeRunToFuture(interruptableTask.provide(env)).flatten
+              }
+              .watchTermination() { (_, f) =>
+                f.onComplete(_ => completionPromise.success(()))
+                NotUsed
+              }
+          )
+        })
+        .mapMaterializedValue(_.map(_ => NotUsed))
+    }
+  }
+
+  def interruptableMapAsync[R, A, B](
+    parallelism: Int
+  )(runTask: A => RIO[R, B])(implicit env: AkkaEnv with R): Flow[A, B, Future[NotUsed]] = {
+    env.unsafeRun(interruptableMapAsyncM(parallelism)(runTask).provide(env))
+  }
+
+  def interruptableMapAsyncUnorderedM[R, A, B](
+    parallelism: Int,
+    attributes: Option[Attributes] = None
+  )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
+    ZIO.access[AkkaEnv with R] { env =>
+      implicit val ec: ExecutionContextExecutor = env.dispatcher
+
+      Flow
+        .lazyInitAsync(() => {
+          val completionPromise = Promise[Unit]()
+          val interruptTask = Task.fromFuture(_ => completionPromise.future)
+          val flow = Flow[A]
+            .mapAsyncUnordered(parallelism) { a =>
               val interruptableTask = for {
                 fib <- runTask(a).fold(Future.failed, Future.successful).fork
                 c <- (interruptTask *> fib.interrupt).fork
@@ -99,72 +153,62 @@ object ZAkka {
                 _ <- c.interrupt.fork
               } yield ret
 
-              unsafeRunToFuture(interruptableTask.provide(env)).flatten
+              env.unsafeRunToFuture(interruptableTask.provide(env)).flatten
             }
-            .watchTermination() { (_, f) =>
-              f.onComplete(_ => completionPromise.success(()))
-              NotUsed
-            }
-        )
-      })
-      .mapMaterializedValue(_.map(_ => NotUsed))
+
+          val flowWithAttrs = attributes.fold(flow)(attrs => flow.withAttributes(attrs))
+
+          Future.successful(
+            flowWithAttrs
+              .watchTermination() { (_, f) =>
+                f.onComplete(_ => completionPromise.success(()))
+                NotUsed
+              }
+          )
+        })
+        .mapMaterializedValue(_.map(_ => NotUsed))
+    }
   }
 
-  def interruptableMapAsyncUnordered[R <: AkkaEnv, A, B](
+  def interruptableMapAsyncUnordered[R, A, B](
     parallelism: Int,
     attributes: Option[Attributes] = None
-  )(runTask: A => RIO[R, B])(implicit env: R): Flow[A, B, Future[NotUsed]] = {
-    import env._
-
-    Flow
-      .lazyInitAsync(() => {
-        val completionPromise = Promise[Unit]()
-        val interruptTask = Task.fromFuture(_ => completionPromise.future)
-        val flow = Flow[A]
-          .mapAsyncUnordered(parallelism) { a =>
-            val interruptableTask = for {
-              fib <- runTask(a).fold(Future.failed, Future.successful).fork
-              c <- (interruptTask *> fib.interrupt).fork
-              ret <- fib.join
-              _ <- c.interrupt.fork
-            } yield ret
-
-            unsafeRunToFuture(interruptableTask.provide(env)).flatten
-          }
-
-        val flowWithAttrs = attributes.fold(flow)(attrs => flow.withAttributes(attrs))
-
-        Future.successful(
-          flowWithAttrs
-            .watchTermination() { (_, f) =>
-              f.onComplete(_ => completionPromise.success(()))
-              NotUsed
-            }
-        )
-      })
-      .mapMaterializedValue(_.map(_ => NotUsed))
+  )(runTask: A => RIO[R, B])(implicit env: AkkaEnv with R): Flow[A, B, Future[NotUsed]] = {
+    env.unsafeRun(interruptableMapAsyncUnorderedM(parallelism, attributes)(runTask).provide(env))
   }
 
-  def mapAsync[R <: AkkaEnv, A, B](
+  def mapAsyncM[R, A, B](
     parallelism: Int
-  )(runTask: A => RIO[R, B])(implicit env: R): Flow[A, B, NotUsed] = {
-    import env._
-
-    Flow[A]
-      .mapAsync(parallelism) { a =>
-        unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(env)).flatten
-      }
+  )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, NotUsed]] = {
+    ZIO.access[AkkaEnv with R] { env =>
+      Flow[A]
+        .mapAsync(parallelism) { a =>
+          env.unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(env)).flatten
+        }
+    }
   }
 
-  def mapAsyncUnordered[R <: AkkaEnv, A, B](
+  def mapAsync[R, A, B](
     parallelism: Int
-  )(runTask: A => RIO[R, B])(implicit env: R): Flow[A, B, NotUsed] = {
-    import env._
+  )(runTask: A => RIO[R, B])(implicit env: AkkaEnv with R): Flow[A, B, NotUsed] = {
+    env.unsafeRun(mapAsyncM(parallelism)(runTask).provide(env))
+  }
 
-    Flow[A]
-      .mapAsyncUnordered(parallelism) { a: A =>
-        unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(env)).flatten
-      }
+  def mapAsyncUnorderedM[R, A, B](
+    parallelism: Int
+  )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, NotUsed]] = {
+    ZIO.access[AkkaEnv with R] { env =>
+      Flow[A]
+        .mapAsyncUnordered(parallelism) { a: A =>
+          env.unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(env)).flatten
+        }
+    }
+  }
+
+  def mapAsyncUnordered[R, A, B](
+    parallelism: Int
+  )(runTask: A => RIO[R, B])(implicit env: AkkaEnv with R): Flow[A, B, NotUsed] = {
+    env.unsafeRun(mapAsyncUnorderedM(parallelism)(runTask).provide(env))
   }
 
   private val ecTask = Task.descriptor.map(_.executor.asEC)

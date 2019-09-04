@@ -170,13 +170,13 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     )
   }
 
-  def source(implicit clientOptions: KvdbClientOptions): Source[(K, V), Future[NotUsed]] = {
-    source(_.first, _.last)
+  def batchedSource(implicit clientOptions: KvdbClientOptions): Source[List[(K, V)], Future[NotUsed]] = {
+    batchedSource(_.first, _.last)
   }
 
-  def source(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
+  def batchedSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[(K, V), Future[NotUsed]] = {
+  ): Source[List[(K, V)], Future[NotUsed]] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateSource(cf, range)
       .mapAsync(1) { batch =>
@@ -184,12 +184,21 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
           batch.map[(K, V), List[(K, V)]](cf.unsafeDeserialize)(breakOut)
         }(akkaEnv.dispatcher)
       }
-      .mapConcat(identity)
   }
 
-  def valueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
+  def source(implicit clientOptions: KvdbClientOptions): Source[(K, V), Future[NotUsed]] = {
+    source(_.first, _.last)
+  }
+
+  def source(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[V, Future[NotUsed]] = {
+  ): Source[(K, V), Future[NotUsed]] = {
+    batchedSource(from, to).mapConcat(identity)
+  }
+
+  def batchedValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
+    implicit clientOptions: KvdbClientOptions
+  ): Source[List[V], Future[NotUsed]] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateValuesSource(cf, range)
       .mapAsync(1) { batch =>
@@ -197,7 +206,16 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
           batch.map[V, List[V]](cf.unsafeDeserializeValue)(breakOut)
         }(akkaEnv.dispatcher)
       }
-      .mapConcat(identity)
+  }
+
+  def valueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
+    implicit clientOptions: KvdbClientOptions
+  ): Source[V, Future[NotUsed]] = {
+    batchedValueSource(from, to).mapConcat(identity)
+  }
+
+  def batchedValueSource(implicit clientOptions: KvdbClientOptions): Source[List[V], Future[NotUsed]] = {
+    batchedValueSource(_.first, _.last)
   }
 
   def valueSource(implicit clientOptions: KvdbClientOptions): Source[V, Future[NotUsed]] = {

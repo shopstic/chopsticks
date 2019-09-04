@@ -61,13 +61,13 @@ object DstreamSampleApp extends AkkaApp {
         .mapMaterializedValue(f => (ks, f))
     }
 
-    ZAkka.interruptableGraph(graphTask, graceful = true)
+    ZAkka.interruptableGraphM(graphTask, graceful = true)
   }
 
   protected def runWorker(client: DstreamSampleAppClient, id: Int) = {
     Dstreams
       .work(client.work().addHeader(Dstreams.WORKER_ID_HEADER, id.toString)) { a =>
-        UIO {
+        ZIO.access[AkkaEnv] { _ =>
           //          println(s"Client < [worker=$id][assignment=${a.valueIn}]")
           Source
             .single(1)

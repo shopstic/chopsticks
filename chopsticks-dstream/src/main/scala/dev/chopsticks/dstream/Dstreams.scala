@@ -121,7 +121,7 @@ object Dstreams extends LoggingContext {
       }(run)
   }
 
-  def work[Req, Res, R >: Nothing](
+  def work[R, Req, Res](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[R with AkkaEnv with LogEnv, Done] = {
     val graph = ZIO.access[R with AkkaEnv] { implicit env =>
@@ -136,7 +136,7 @@ object Dstreams extends LoggingContext {
         .toMat(Sink.ignore)(Keep.both)
     }
 
-    ZAkka.interruptableGraph(graph, graceful = true)
+    ZAkka.interruptableGraphM(graph, graceful = true)
   }
 
   def workPool[Req, Res, R <: AkkaEnv](

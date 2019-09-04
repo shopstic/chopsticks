@@ -42,7 +42,7 @@ object KvdbDatabaseTest {
   private def collectPairs(
     source: Source[KvdbBatch, Any]
   ): RIO[AkkaApp.Env, immutable.Seq[(Array[Byte], Array[Byte])]] = {
-    ZAkka.graph(UIO {
+    ZAkka.graphM(UIO {
       source
         .toMat(collectSink)(Keep.right)
     })
@@ -51,7 +51,7 @@ object KvdbDatabaseTest {
   private def collectValues(
     source: Source[KvdbValueBatch, Any]
   ): RIO[AkkaApp.Env, immutable.Seq[Array[Byte]]] = {
-    ZAkka.graph(UIO {
+    ZAkka.graphM(UIO {
       source
         .toMat(collectValuesSink)(Keep.right)
     })
@@ -612,7 +612,7 @@ abstract private[kvdb] class KvdbDatabaseTest
             .result
         }
         _ <- db.transactionTask(tx)
-        batches <- ZAkka.graph(UIO {
+        batches <- ZAkka.graphM(UIO {
           db.iterateSource(defaultCf, $$(_.first, _.last))(
               testKvdbClientOptions.copy(maxBatchBytes = batchSize)
             )
@@ -770,7 +770,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   "tailSource" should {
     "complete with UnsupportedKvdbOperationException if constraint list is empty" in withDb { db =>
       ZAkka
-        .graph(UIO {
+        .graphM(UIO {
           db.tailSource(defaultCf, $$(identity, identity))
             .toMat(Sink.head)(Keep.right)
         })
@@ -798,7 +798,7 @@ abstract private[kvdb] class KvdbDatabaseTest
         }
         _ <- db.transactionTask(tx)
         batches <- ZAkka
-          .graph(UIO {
+          .graphM(UIO {
             db.tailSource(defaultCf, $$(_.first, _.last))(
                 testKvdbClientOptions.copy(maxBatchBytes = batchSize)
               )
@@ -879,7 +879,7 @@ abstract private[kvdb] class KvdbDatabaseTest
       for {
         _ <- db.putTask(defaultCf, "aaaa", "aaaa")
         head <- ZAkka
-          .graph(UIO {
+          .graphM(UIO {
             db.tailSource(defaultCf, $$(_.last, _.last))
               .collect { case Right(b) => b }
               .completionTimeout(1.second)
@@ -896,7 +896,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   "batchTailSource" should {
     "complete with UnsupportedKvdbOperationException if constraint list is empty" in withDb { db =>
       ZAkka
-        .graph(UIO {
+        .graphM(UIO {
           db.batchTailSource(defaultCf, List.empty)
             .toMat(Sink.head)(Keep.right)
         })
