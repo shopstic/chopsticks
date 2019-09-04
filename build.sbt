@@ -32,7 +32,8 @@ lazy val util = Build
 lazy val testkit = Build
   .defineProject("testkit")
   .settings(
-    libraryDependencies ++= akkaTestDeps ++ scalatestDeps ++ janinoDeps
+    libraryDependencies ++= akkaTestDeps ++ scalatestDeps ++ janinoDeps ++ zioTestDeps,
+    Compile / packageBin / mappings ~= { _.filter(_._1.name != "logback-test.xml") }
   )
   .dependsOn(util)
 
@@ -160,4 +161,16 @@ lazy val root = (project in file("."))
     bintrayRelease := {},
     dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
   )
-  .aggregate(util, testkit, fp, stream, dstream, kvdbCore, kvdbLmdb, kvdbRocksdb, sample, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue)
+  .aggregate(
+    util,
+    testkit,
+    fp,
+    stream,
+    dstream,
+    kvdbCore,
+    kvdbLmdb,
+    kvdbRocksdb,
+    sample,
+    kvdbCodecBerkeleydbKey,
+    kvdbCodecProtobufValue
+  )
