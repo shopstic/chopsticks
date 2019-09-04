@@ -377,7 +377,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     }
   }
 
-  def openTask(): Task[Unit] = references.map(_ => ())
+  def openTask(): Task[Unit] = references.unit
 
   def compactTask(): Task[Unit] = references.flatMap { refs =>
     ioTask(Task {

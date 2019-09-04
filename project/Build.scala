@@ -7,7 +7,7 @@ import sbt.Keys._
 
 //noinspection TypeAnnotation
 object Build {
-  val buildVersion = "0.21.0"
+  val buildVersion = "0.21.3"
 
   lazy val ITest = config("it") extend Test
 
@@ -15,7 +15,7 @@ object Build {
 
   val forkTests = sys.env.get("FORK_TESTS").forall(_ == "true")
 
-  val symlinkTargetRoot = file(sys.env("HOME")) / ".sbt-targets" / "shopstic" / "chopsticks"
+  val symlinkTargetRoot = file(sys.env("HOME")) / ".sbt-targets" / "dev" / "chopsticks"
 
   val scalacLintingOptions = Seq(
     "-deprecation", // Emit warning and location for usages of deprecated APIs.

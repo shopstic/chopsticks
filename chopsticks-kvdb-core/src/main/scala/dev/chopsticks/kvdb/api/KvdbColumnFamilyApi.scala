@@ -325,7 +325,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         case (batch, serialized) =>
           unsafeRunToFuture(
             db.transactionTask(serialized)
-              .map(_ => batch)
+              .as(batch)
           )
       }
   }

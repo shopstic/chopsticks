@@ -29,7 +29,6 @@ object ZAkka {
     }
   }
 
-  @deprecated("Use graphM instead", "0.21.0")
   def graph[R, A](
     make: RIO[R, RunnableGraph[Future[A]]]
   ): RIO[AkkaEnv with LogEnv with R, A] = {
@@ -55,7 +54,6 @@ object ZAkka {
     }
   }
 
-  @deprecated("Use interruptableGraphM instead", "0.21.0")
   def interruptableGraph[R, A](
     make: RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
     graceful: Boolean

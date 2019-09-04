@@ -25,7 +25,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (val db: Kv
 
   def openTask(): Task[this.type] = {
     db.openTask()
-      .map(_ => this)
+      .as(this)
   }
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]] = db.statsTask
@@ -34,7 +34,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (val db: Kv
 
   def transactionTask(actions: Seq[KvdbTransactionAction]): Task[Seq[KvdbTransactionAction]] = {
     db.transactionTask(actions)
-      .map(_ => actions)
+      .as(actions)
   }
 
   def transactionBuilder: ColumnFamilyTransactionBuilder[BCF] = db.transactionBuilder()

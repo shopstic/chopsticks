@@ -6,19 +6,29 @@ import akka.actor.testkit.typed.scaladsl.ManualTime
 import com.typesafe.config.{Config, ConfigFactory}
 import akka.actor.typed
 import akka.actor.typed.scaladsl.adapter._
+import zio.Runtime
+import zio.internal.PlatformLive
+import zio.test.mock.MockClock
 
 import scala.concurrent.duration.FiniteDuration
 
 object ManualTimeAkkaTestKit {
-  final class ManualClock(implicit typedSystem: typed.ActorSystem[_]) {
+  final class ManualClock(mockClock: Option[MockClock] = None)(implicit typedSystem: typed.ActorSystem[_]) {
     private val controller = ManualTime()
-    private val totalTimePassed = new AtomicLong()
+    private val totalNanoPassed = new AtomicLong()
+    private val rt = Runtime[Any]((), PlatformLive.fromExecutionContext(typedSystem.executionContext))
+
     def timePasses(amount: FiniteDuration): Unit = {
-      val _ = totalTimePassed.getAndAdd(amount.toNanos)
+      val _ = totalNanoPassed.getAndAdd(amount.toNanos)
+      mockClock.foreach { c =>
+        val d = zio.duration.Duration.fromScala(amount)
+        rt.unsafeRun(c.clock.adjust(d))
+        rt.unsafeRun(c.scheduler.adjust(d))
+      }
       controller.timePasses(amount)
     }
 
-    def nanoTime(): Long = totalTimePassed.get()
+    def nanoTime(): Long = totalNanoPassed.get()
   }
 }
 
