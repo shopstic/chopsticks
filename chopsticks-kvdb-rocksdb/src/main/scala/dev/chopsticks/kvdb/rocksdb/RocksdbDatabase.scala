@@ -157,7 +157,7 @@ object RocksdbDatabase extends StrictLogging {
   }
 }
 
-final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private(
+final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
   config: RocksdbDatabase.Config
 )(implicit akkaEnv: AkkaEnv)
@@ -491,7 +491,14 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
   private val InvalidIterator = Left(Array.emptyByteArray)
 
-  private def doGetTask(iter: RocksIterator, constraints: List[KvdbKeyConstraint]): Either[Array[Byte], KvdbPair] = {
+  private def maybeExactGet(constraints: List[KvdbKeyConstraint]): Option[Array[Byte]] = {
+    if (constraints.size == 1 && constraints.head.operator == Operator.EQUAL) {
+      Some(constraints.head.operand.toByteArray)
+    }
+    else None
+  }
+
+  private def doGet(iter: RocksIterator, constraints: List[KvdbKeyConstraint]): Either[Array[Byte], KvdbPair] = {
     if (constraints.isEmpty) {
       Left(Array.emptyByteArray)
     }
@@ -588,16 +595,22 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       val columnHandle = refs.getColumnHandle(column)
       val options = newReadOptions()
       val constraints = constraintList.constraints
-      if (constraintsNeedTotalOrder(constraints)) {
-        val _ = options.setTotalOrderSeek(true)
-      }
-      val iter = db.newIterator(columnHandle, options)
 
-      try {
-        doGetTask(iter, constraints).toOption
-      } finally {
-        options.close()
-        iter.close()
+      maybeExactGet(constraints) match {
+        case Some(key) =>
+          Option(db.get(columnHandle, key)).map(value => key -> value)
+        case None =>
+          if (constraintsNeedTotalOrder(constraints)) {
+            val _ = options.setTotalOrderSeek(true)
+          }
+          val iter = db.newIterator(columnHandle, options)
+
+          try {
+            doGet(iter, constraints).toOption
+          } finally {
+            options.close()
+            iter.close()
+          }
       }
     })
   }
@@ -616,7 +629,14 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       val iter = db.newIterator(columnHandle, options)
 
       try {
-        requests.map(r => doGetTask(iter, r.constraints).toOption)
+        requests.map { r =>
+          maybeExactGet(r.constraints) match {
+            case Some(key) =>
+              Option(db.get(columnHandle, key)).map(value => key -> value)
+            case None =>
+              doGet(iter, r.constraints).toOption
+          }
+        }
       } finally {
         options.close()
         iter.close()
@@ -763,7 +783,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                   iter.close()
                 }
 
-                doGetTask(iter, fromConstraints) match {
+                doGet(iter, fromConstraints) match {
                   case Right(p) if keySatisfies(p._1, toConstraints) =>
                     val it = Iterator(p) ++ Iterator
                       .continually {
@@ -883,7 +903,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
           else KvdbKeyConstraint(Operator.GREATER, ProtoByteString.copyFrom(lastKey)) :: toConstraints
         }
 
-        val head = doGetTask(iter, headConstraints) match {
+        val head = doGet(iter, headConstraints) match {
           case Right(v) if keySatisfies(v._1, toConstraints) => Iterator.single(v)
           case _ => Iterator.empty
         }

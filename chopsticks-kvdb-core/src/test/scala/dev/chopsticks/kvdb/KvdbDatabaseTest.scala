@@ -90,11 +90,11 @@ abstract private[kvdb] class KvdbDatabaseTest
   private lazy val defaultCf = dbMat.plain
   private lazy val lookupCf = dbMat.lookup
 
-  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](Environment, managedDb)
+  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](env, managedDb)
 
   private lazy val as = system
 
-  private object Environment extends AkkaApp.LiveEnv {
+  private object env extends AkkaApp.LiveEnv {
     implicit val actorSystem: ActorSystem = as
   }
 
@@ -114,7 +114,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     values.map(p => byteArrayToString(p)) should equal(vs)
   }
 
-  import Environment.materializer
+  import env.materializer
 
   "wrong column family" should {
     "not compile" in withDb { db =>

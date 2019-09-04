@@ -18,17 +18,23 @@ object KvdbDatabase {
 
   def keySatisfies(key: Array[Byte], constraints: List[KvdbKeyConstraint]): Boolean = {
     constraints.forall { c =>
-      val operand = c.operand.toByteArray
-      c.operator match {
-        case Operator.FIRST | Operator.LAST => true
-        case Operator.EQUAL => KeySerdes.isEqual(key, operand)
-        case Operator.LESS_EQUAL => KeySerdes.compare(key, operand) <= 0
-        case Operator.LESS => KeySerdes.compare(key, operand) < 0
-        case Operator.GREATER => KeySerdes.compare(key, operand) > 0
-        case Operator.GREATER_EQUAL => KeySerdes.compare(key, operand) >= 0
-        case Operator.PREFIX => KeySerdes.isPrefix(operand, key)
-        case Operator.Unrecognized(v) =>
-          throw new IllegalArgumentException(s"Got Operator.Unrecognized($v)")
+      val operator = c.operator
+
+      if (operator == Operator.FIRST || operator == Operator.LAST) {
+        true
+      }
+      else {
+        val operand = c.operand.toByteArray
+        operator match {
+          case Operator.EQUAL => KeySerdes.isEqual(key, operand)
+          case Operator.LESS_EQUAL => KeySerdes.compare(key, operand) <= 0
+          case Operator.LESS => KeySerdes.compare(key, operand) < 0
+          case Operator.GREATER => KeySerdes.compare(key, operand) > 0
+          case Operator.GREATER_EQUAL => KeySerdes.compare(key, operand) >= 0
+          case Operator.PREFIX => KeySerdes.isPrefix(operand, key)
+          case Operator.Unrecognized(v) =>
+            throw new IllegalArgumentException(s"Got Operator.Unrecognized($v)")
+        }
       }
     }
   }
