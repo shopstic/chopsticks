@@ -12,7 +12,7 @@ trait AkkaEnv {
 
   implicit lazy val materializer: Materializer = ActorMaterializer()
   implicit lazy val dispatcher: ExecutionContextExecutor = actorSystem.dispatcher
-  protected lazy val rt = Runtime[Any]((), PlatformLive.fromExecutionContext(dispatcher))
+  protected lazy val rt = Runtime[Any](this, PlatformLive.fromExecutionContext(dispatcher))
 
   def unsafeRunSync[E, A](zio: ZIO[Any, E, A]): Exit[E, A] = {
     rt.unsafeRunSync(zio)

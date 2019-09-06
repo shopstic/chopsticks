@@ -32,6 +32,7 @@ object KvdbDatabase {
           case Operator.GREATER => KeySerdes.compare(key, operand) > 0
           case Operator.GREATER_EQUAL => KeySerdes.compare(key, operand) >= 0
           case Operator.PREFIX => KeySerdes.isPrefix(operand, key)
+          case Operator.FIRST | Operator.LAST => true
           case Operator.Unrecognized(v) =>
             throw new IllegalArgumentException(s"Got Operator.Unrecognized($v)")
         }

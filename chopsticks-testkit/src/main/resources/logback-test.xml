@@ -1,4 +1,4 @@
-<configuration debug="true">
+<configuration debug="false">
   <appender name="STDOUT_AKKA" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
       <pattern>%X{akkaTimestamp} [%.-1level] [%logger] [%.15thread] [%X{akkaSource}] %msg%n</pattern>

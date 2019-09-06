@@ -23,7 +23,9 @@ object ManualTimeAkkaTestKit {
       mockClock.foreach { c =>
         val d = zio.duration.Duration.fromScala(amount)
         rt.unsafeRun(c.clock.adjust(d))
-        rt.unsafeRun(c.scheduler.adjust(d))
+        if (c.clock ne c.scheduler) {
+          rt.unsafeRun(c.scheduler.adjust(d))
+        }
       }
       controller.timePasses(amount)
     }

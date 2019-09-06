@@ -19,7 +19,12 @@ import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.KvdbAliases._
-import dev.chopsticks.kvdb.util.KvdbException.{InvalidKvdbArgumentException, KvdbAlreadyClosedException, SeekFailure, UnsupportedKvdbOperationException}
+import dev.chopsticks.kvdb.util.KvdbException.{
+  InvalidKvdbArgumentException,
+  KvdbAlreadyClosedException,
+  SeekFailure,
+  UnsupportedKvdbOperationException
+}
 import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal, KvdbIterateSourceGraph, KvdbTailSourceGraph}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.auto._

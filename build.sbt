@@ -42,7 +42,7 @@ lazy val fp = Build
   .settings(
     libraryDependencies ++= akkaStreamDeps ++ zioDeps
   )
-  .dependsOn(util)
+  .dependsOn(util, testkit % "test->compile")
 
 lazy val stream = Build
   .defineProject("stream")
