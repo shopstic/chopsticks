@@ -992,13 +992,15 @@ abstract private[kvdb] class KvdbDatabaseTest
         _ <- db.putTask(defaultCf, "pppp1", "pppp1")
         _ <- db.putTask(lookupCf, "bbbb1", "bbbb1")
         _ <- db.putTask(defaultCf, "pppp2", "pppp2")
+        _ <- db.putTask(defaultCf, "pppp3", "pppp3")
+        _ <- db.putTask(defaultCf, "zzzz3", "zzzz3")
         _ <- db.transactionTask(
           db.transactionBuilder()
             .delete(defaultCf, "aaaa1")
             .put(lookupCf, "dddd1", "dddd1")
-            .delete(lookupCf, "bbbb1")
+            .delete(lookupCf, "bbbb1", single = true)
             .put(defaultCf, "cccc1", "cccc1")
-            .deletePrefix(defaultCf, "pppp")
+            .deleteRange(defaultCf, "pppp1", "pppp4")
             .result
         )
         allDefault <- collectPairs(db.iterateSource(defaultCf, $$(_.first, _.last)))
@@ -1007,13 +1009,44 @@ abstract private[kvdb] class KvdbDatabaseTest
         assertPairs(
           allDefault,
           Vector(
-            ("cccc1", "cccc1")
+            ("cccc1", "cccc1"),
+            ("zzzz3", "zzzz3")
           )
         )
         assertPairs(
           allLookup,
           Vector(
             ("dddd1", "dddd1")
+          )
+        )
+      }
+    }
+
+    "support deleteRange" in withDb { db =>
+      for {
+        _ <- populateColumn(
+          db,
+          defaultCf,
+          List(
+            "aaaa1" -> "aaaa1",
+            "aaaa2" -> "aaaa2",
+            "aaaa3" -> "aaaa3",
+            "aaaa4" -> "aaaa4",
+            "aaaa5" -> "aaaa5"
+          )
+        )
+        _ <- db.transactionTask(
+          db.transactionBuilder()
+            .deleteRange(defaultCf, "aaaa2", "aaaa5")
+            .result
+        )
+        allDefault <- collectPairs(db.iterateSource(defaultCf, $$(_.first, _.last)))
+      } yield {
+        assertPairs(
+          allDefault,
+          Vector(
+            ("aaaa1", "aaaa1"),
+            ("aaaa5", "aaaa5"),
           )
         )
       }

@@ -2,6 +2,7 @@ package dev.chopsticks.kvdb
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.TransactionAction
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
@@ -20,6 +21,7 @@ object KvdbDatabase {
     constraints.forall { c =>
       val operator = c.operator
 
+      // Micro optimization to avoid "operand.toByteArray" for first and last operator
       if (operator == Operator.FIRST || operator == Operator.LAST) {
         true
       }
@@ -94,7 +96,7 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long]
 
-  def transactionTask(actions: Seq[KvdbTransactionAction]): Task[Unit]
+  def transactionTask(actions: Seq[TransactionAction]): Task[Unit]
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions

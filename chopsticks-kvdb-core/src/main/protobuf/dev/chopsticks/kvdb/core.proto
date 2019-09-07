@@ -29,39 +29,47 @@ message KvdbKeyRange {
   repeated KvdbKeyConstraint to = 2 [(scalapb.field).collection_type="List"];
 }
 
-message KvdbPutRequest {
-  string column_id = 1;
-  bytes key = 2;
-  bytes value = 3;
-}
-
-message KvdbPutResult {
-}
-
-message KvdbDeleteRequest {
-  string column_id = 1;
-  bytes key = 2;
-}
-
-message KvdbDeleteResult {
-}
-
-message KvdbDeletePrefixRequest {
-  string column_id = 1;
-  bytes prefix = 2;
-}
-
-message KvdbDeletePrefixResult {
-  uint64 count = 1;
-}
-
-message KvdbTransactionAction {
-  oneof action {
-    KvdbPutRequest put = 1;
-    KvdbDeleteRequest delete = 2;
-    KvdbDeletePrefixRequest delete_prefix = 3;
-  }
-}
+//message KvdbPutRequest {
+//  string column_id = 1;
+//  bytes key = 2;
+//  bytes value = 3;
+//}
+//
+//message KvdbPutResult {
+//}
+//
+//message KvdbDeleteRequest {
+//  string column_id = 1;
+//  bytes key = 2;
+//  bool single = 3;
+//}
+//
+//message KvdbDeleteRangeRequest {
+//  string column_id = 1;
+//  bytes from_key = 2;
+//  bytes to_key = 3;
+//}
+//
+//message KvdbDeleteResult {
+//}
+//
+//message KvdbDeletePrefixRequest {
+//  string column_id = 1;
+//  bytes prefix = 2;
+//}
+//
+//message KvdbDeletePrefixResult {
+//  uint64 count = 1;
+//}
+//
+//message KvdbTransactionAction {
+//  oneof action {
+//    KvdbPutRequest put = 1;
+//    KvdbDeleteRequest delete = 2;
+//    KvdbDeletePrefixRequest delete_prefix = 3;
+//    KvdbDeleteRangeRequest delete_range = 4;
+//  }
+//}
 
 message KvdbOperationException {
   enum ExceptionType {

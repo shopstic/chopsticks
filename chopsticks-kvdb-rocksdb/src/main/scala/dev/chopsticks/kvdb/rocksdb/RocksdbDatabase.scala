@@ -12,6 +12,12 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
+  TransactionAction,
+  TransactionDelete,
+  TransactionDeleteRange,
+  TransactionPut
+}
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
 import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
@@ -28,8 +34,8 @@ import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal, KvdbIterateSourceGraph, KvdbTailSourceGraph}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
-import eu.timepit.refined.types.string.NonEmptyString
 import eu.timepit.refined.auto._
+import eu.timepit.refined.types.string.NonEmptyString
 import org.rocksdb._
 import pureconfig.ConfigConvert
 import zio.blocking._
@@ -1013,34 +1019,31 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .map(_.map(_.map(_._2)))
   }
 
-  @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  def transactionTask(actions: Seq[KvdbTransactionAction]): Task[Unit] = {
+//  @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
+  def transactionTask(actions: Seq[TransactionAction]): Task[Unit] = {
     ioTask(references.map { refs =>
       val db = refs.db
       val writeBatch = new WriteBatch()
 
       try {
-        for (action <- actions) {
-          action.action match {
-            case KvdbTransactionAction.Action.Put(KvdbPutRequest(columnId, key, value)) =>
-              writeBatch.put(refs.getColumnHandle(columnFamilyWithId(columnId).get), key.toByteArray, value.toByteArray)
+        actions.foreach {
+          case TransactionPut(columnId, key, value) =>
+            writeBatch.put(refs.getColumnHandle(columnFamilyWithId(columnId).get), key, value)
 
-            case KvdbTransactionAction.Action.Delete(KvdbDeleteRequest(columnId, key)) =>
-              writeBatch.delete(refs.getColumnHandle(columnFamilyWithId(columnId).get), key.toByteArray)
+          case TransactionDelete(columnId, key, single) =>
+            if (single) {
+              writeBatch.singleDelete(refs.getColumnHandle(columnFamilyWithId(columnId).get), key)
+            }
+            else {
+              writeBatch.delete(refs.getColumnHandle(columnFamilyWithId(columnId).get), key)
+            }
 
-            case KvdbTransactionAction.Action.DeletePrefix(KvdbDeletePrefixRequest(columnId, prefix)) =>
-              val column = columnFamilyWithId(columnId).get
-              val prefixBytes = prefix.toByteArray
-
-              refs.validateColumnPrefixSeekOperation(column, prefixBytes) match {
-                case Some(ex) => throw ex
-                case None =>
-                  doDeletePrefix(db, refs.getColumnHandle(column), writeBatch, prefixBytes)
-              }
-
-            case _ =>
-              throw new IllegalArgumentException(s"Invalid transaction action: ${action.action}")
-          }
+          case TransactionDeleteRange(columnId, fromKey, toKey) =>
+            writeBatch.deleteRange(
+              refs.getColumnHandle(columnFamilyWithId(columnId).get),
+              fromKey,
+              toKey
+            )
         }
 
         val writeOptions = newWriteOptions()
@@ -1053,6 +1056,14 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       } finally {
         writeBatch.close()
       }
+    })
+  }
+
+  def compactRange[Col <: CF](column: Col): Task[Unit] = {
+    ioTask(references.map { refs =>
+      val db = refs.db
+      val columnHandle = refs.getColumnHandle(column)
+      db.compactRange(columnHandle)
     })
   }
 

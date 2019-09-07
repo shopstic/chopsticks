@@ -1,7 +1,7 @@
 package dev.chopsticks.kvdb.api
 
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.kvdb.proto.KvdbTransactionAction
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.TransactionAction
 import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilyTransactionBuilder, KvdbDatabase}
 import zio.clock.Clock
 import zio.{RIO, Task, ZIO}
@@ -32,7 +32,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (val db: Kv
 
   def closeTask(): RIO[Clock, Unit] = db.closeTask()
 
-  def transactionTask(actions: Seq[KvdbTransactionAction]): Task[Seq[KvdbTransactionAction]] = {
+  def transactionTask(actions: Seq[TransactionAction]): Task[Seq[TransactionAction]] = {
     db.transactionTask(actions)
       .as(actions)
   }

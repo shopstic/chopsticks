@@ -12,6 +12,12 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
+  TransactionAction,
+  TransactionDelete,
+  TransactionDeleteRange,
+  TransactionPut
+}
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
 import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
@@ -315,6 +321,36 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
   private def doDelete(txn: Txn[ByteBuffer], dbi: Dbi[ByteBuffer], key: Array[Byte]): Boolean = {
     dbi.delete(txn, putInBuffer(reuseablePutKeyBuffer, key))
+  }
+
+  private def doDeleteRange(
+    txn: Txn[ByteBuffer],
+    dbi: Dbi[ByteBuffer],
+    fromKey: Array[Byte],
+    toKey: Array[Byte]
+  ): Long = {
+    val cursor = openCursor(dbi, txn)
+
+    try {
+      if (cursor.get(putInBuffer(reuseablePutKeyBuffer, fromKey), GetOp.MDB_SET)) {
+        val it = Iterator.single(bufferToArray(cursor.key())) ++ Iterator
+          .continually {
+            cursor.next()
+          }
+          .takeWhile(identity)
+          .map(_ => bufferToArray(cursor.key()))
+
+        val count = it
+          .takeWhile(k => KeySerdes.compare(k, toKey) < 0)
+          .foldLeft(0L) { (count, key) =>
+            if (dbi.delete(txn, putInBuffer(reuseablePutKeyBuffer, key))) count + 1
+            else count
+          }
+
+        count
+      }
+      else 0L
+    } finally closeCursor(cursor)
   }
 
   private def doDeletePrefix(txn: Txn[ByteBuffer], dbi: Dbi[ByteBuffer], prefix: Array[Byte]): Long = {
@@ -680,25 +716,24 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  def transactionTask(actions: Seq[KvdbTransactionAction]): Task[Unit] = {
+  def transactionTask(actions: Seq[TransactionAction]): Task[Unit] = {
     writeTask(for {
       refs <- references
       _ <- Task {
         val txn: Txn[ByteBuffer] = createTxn(refs.env, forWrite = true)
 
         try {
-          for (action <- actions) {
-            action.action match {
-              case KvdbTransactionAction.Action.Put(KvdbPutRequest(columnId, key, value)) =>
-                doPut(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key.toByteArray, value.toByteArray)
-              case KvdbTransactionAction.Action.Delete(KvdbDeleteRequest(columnId, key)) =>
-                doDelete(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key.toByteArray)
-              case KvdbTransactionAction.Action.DeletePrefix(KvdbDeletePrefixRequest(columnId, prefix)) =>
-                doDeletePrefix(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), prefix.toByteArray)
-              case _ =>
-                throw new IllegalArgumentException(s"Invalid transaction action: ${action.action}")
-            }
+          actions.foreach {
+            case TransactionPut(columnId, key, value) =>
+              doPut(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key, value)
+
+            case TransactionDelete(columnId, key, _) =>
+              doDelete(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key)
+
+            case TransactionDeleteRange(columnId, fromKey, toKey) =>
+              doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey)
           }
+          
           txn.commit()
         } finally closeTxn(txn)
       }

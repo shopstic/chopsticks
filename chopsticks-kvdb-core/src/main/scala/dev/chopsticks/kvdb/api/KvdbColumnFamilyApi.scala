@@ -6,10 +6,11 @@ import akka.NotUsed
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
 import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{TransactionAction, TransactionPut}
 import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
-import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbPutRequest, KvdbTransactionAction}
+import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList}
 import dev.chopsticks.kvdb.util.KvdbAliases.KvdbTailBatch
 import dev.chopsticks.kvdb.util.KvdbClientOptions
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase}
@@ -239,15 +240,11 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .map(v => (kt.transform(v), v))
   }
 
-  private def serializeAsPutRequest(pair: (K, V)): KvdbTransactionAction = {
-    KvdbTransactionAction(
-      KvdbTransactionAction.Action.Put(
-        KvdbPutRequest(
-          columnId = cf.id,
-          key = ByteString.copyFrom(cf.serializeKey(pair._1)),
-          value = ByteString.copyFrom(cf.serializeValue(pair._2))
-        )
-      )
+  private def serializeAsPutRequest(pair: (K, V)): TransactionAction = {
+    TransactionPut(
+      columnId = cf.id,
+      key = cf.serializeKey(pair._1),
+      value = cf.serializeValue(pair._2)
     )
   }
 
