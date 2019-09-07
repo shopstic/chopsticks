@@ -151,7 +151,7 @@ lazy val sample = Build
       "-P:silencer:pathFilters=dev/chopsticks/sample/app/proto"
     )
   )
-  .dependsOn(kvdbLmdb, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, dstream)
+  .dependsOn(kvdbLmdb, kvdbRocksdb, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, dstream)
 
 lazy val root = (project in file("."))
   .enablePlugins(SymlinkTargetPlugin)
@@ -170,7 +170,7 @@ lazy val root = (project in file("."))
     kvdbCore,
     kvdbLmdb,
     kvdbRocksdb,
-    sample,
     kvdbCodecBerkeleydbKey,
-    kvdbCodecProtobufValue
+    kvdbCodecProtobufValue,
+    sample
   )
