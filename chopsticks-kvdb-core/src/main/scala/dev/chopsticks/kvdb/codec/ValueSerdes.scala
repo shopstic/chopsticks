@@ -27,4 +27,5 @@ object ValueSerdes {
   }
 
   implicit val byteArrayValueSerdes: ValueSerdes[Array[Byte]] = ValueSerdes.create[Array[Byte]](identity, bytes => Right(bytes))
+  implicit val unitValueSerdes: ValueSerdes[Unit] = ValueSerdes.create[Unit](_ => Array.emptyByteArray, _ => Right(()))
 }
