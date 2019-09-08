@@ -31,9 +31,9 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
   final case class ScheduleKey(time: Instant, id: MtMessageId)
 
   object DbDef extends KvdbDefinition {
-    trait Queue extends BaseCf[ScheduleKey, MtMessageId]
+    trait Queue extends BaseCf[ScheduleKey, Unit]
     trait Fact extends BaseCf[MtMessageId, Array[Byte]]
-    trait Inflight extends BaseCf[MtMessageId, MtMessageId]
+    trait Inflight extends BaseCf[MtMessageId, Unit]
 
     type CfSet = Queue
 
@@ -79,8 +79,8 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
             dbApi
               .transactionTask(
                 batch
-                  .foldLeft(dbApi.transactionBuilder) { (tx, item) =>
-                    tx.put(dbMat.queue, item, item.id)
+                  .foldLeft(dbApi.transactionBuilder) { (tx, item: ScheduleKey) =>
+                    tx.put(dbMat.queue, item, ())
                       .put(dbMat.fact, item.id, genValue)
                   }
                   .result
@@ -140,7 +140,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
     val inflightCf = dbApi.columnFamily(dbMat.inflight)
 
     for {
-      flow <- ZAkka.mapAsyncUnorderedM(parallelism) { batch: Seq[(MtMessageId, MtMessageId)] =>
+      flow <- ZAkka.mapAsyncUnorderedM(parallelism) { batch: Seq[(MtMessageId, Unit)] =>
         val task = for {
           tx <- UIO {
             Random
@@ -199,14 +199,14 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
           case _ => true
         }
         .wireTap(_ => metrics.batches.increment())
-        .mapAsyncUnordered(parallelism) { batch: List[(ScheduleKey, MtMessageId)] =>
+        .mapAsyncUnordered(parallelism) { batch: List[(ScheduleKey, Unit)] =>
           val deleteTask = for {
             tx <- UIO {
               batch
                 .foldLeft(dbApi.transactionBuilder) {
-                  case (tx, (k, v)) =>
+                  case (tx, (k, _)) =>
                     tx.delete(dbMat.queue, k)
-                      .put(dbMat.inflight, v, v)
+                      .put(dbMat.inflight, k.id, ())
                 }
                 .result
             }
@@ -214,7 +214,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
           } yield ret
 
           val batchGetTask = for {
-            keys <- UIO(batch.map(_._2))
+            keys <- UIO(batch.map(_._1.id))
             ret <- dbApi
               .columnFamily(dbMat.fact)
               .batchGetByKeysTask(keys)

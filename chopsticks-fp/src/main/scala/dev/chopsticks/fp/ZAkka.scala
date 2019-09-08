@@ -1,7 +1,7 @@
 package dev.chopsticks.fp
 
 import akka.NotUsed
-import akka.stream.scaladsl.{Flow, RunnableGraph}
+import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
 import akka.stream.{Attributes, KillSwitch}
 import zio._
 
@@ -213,5 +213,67 @@ object ZAkka {
 
   def withEc[T](make: ExecutionContext => T): Task[T] = {
     ecTask.map(make)
+  }
+
+  object ops {
+    implicit class AkkaStreamFlowZioOps[-In, +Out, +Mat](flow: Flow[In, Out, Mat]) {
+      def effectMapAsync[R, Next](
+        parallelism: Int
+      )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Flow[In, Next, Mat] = {
+        flow
+          .via(mapAsync[R, Out, Next](parallelism)(runTask))
+      }
+
+      def effectMapAsyncUnordered[R, Next](
+        parallelism: Int
+      )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Flow[In, Next, Mat] = {
+        flow
+          .via(mapAsyncUnordered[R, Out, Next](parallelism)(runTask))
+      }
+
+      def interruptableEffectMapAsync[R, Next](
+        parallelism: Int
+      )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Flow[In, Next, Mat] = {
+        flow
+          .via(interruptableMapAsync[R, Out, Next](parallelism)(runTask))
+      }
+
+      def interruptableEffectMapAsyncUnordered[R, Next](
+        parallelism: Int
+      )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Flow[In, Next, Mat] = {
+        flow
+          .via(interruptableMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
+      }
+    }
+
+    implicit class AkkaStreamSourceZioOps[+Out, +Mat](source: Source[Out, Mat]) {
+      def effectMapAsync[R, Next](
+        parallelism: Int
+      )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Source[Next, Mat] = {
+        source
+          .via(mapAsync[R, Out, Next](parallelism)(runTask))
+      }
+
+      def effectMapAsyncUnordered[R, Next](
+        parallelism: Int
+      )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Source[Next, Mat] = {
+        source
+          .via(mapAsyncUnordered[R, Out, Next](parallelism)(runTask))
+      }
+
+      def interruptableEffectMapAsync[R, Next](
+        parallelism: Int
+      )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Source[Next, Mat] = {
+        source
+          .via(interruptableMapAsync[R, Out, Next](parallelism)(runTask))
+      }
+
+      def interruptableEffectMapAsyncUnordered[R, Next](
+        parallelism: Int
+      )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Source[Next, Mat] = {
+        source
+          .via(interruptableMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
+      }
+    }
   }
 }

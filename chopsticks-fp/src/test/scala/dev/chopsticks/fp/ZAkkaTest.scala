@@ -12,7 +12,7 @@ import org.scalatest.{Matchers, WordSpecLike}
 import zio.clock.Clock
 import zio.test.mock.MockClock
 import zio.{UIO, ZIO}
-
+import dev.chopsticks.fp.ZAkka.ops._
 import scala.concurrent.duration._
 
 final class ZAkkaTest extends ManualTimeAkkaTestKit with WordSpecLike with Matchers with AkkaTestKitAutoShutDown {
@@ -31,16 +31,13 @@ final class ZAkkaTest extends ManualTimeAkkaTestKit with WordSpecLike with Match
 
     val (source, sink) = TestSource
       .probe[Int]
-      .via(
-        ZAkka
-          .mapAsync(1) { i: Int =>
-            ZIO.accessM[Clock] { env =>
-              val c = env.clock
-              c.sleep(zio.duration.Duration(10, TimeUnit.SECONDS)) *> UIO(i + 1)
-            }
-          }
-          .withAttributes(Attributes.inputBuffer(initial = 0, max = 1))
-      )
+      .effectMapAsync(1) { i =>
+        ZIO.accessM[Clock] { env =>
+          val c = env.clock
+          c.sleep(zio.duration.Duration(10, TimeUnit.SECONDS)) *> UIO(i + 1)
+        }
+      }
+      .withAttributes(Attributes.inputBuffer(initial = 0, max = 1))
       .toMat(TestSink.probe[Int])(Keep.both)
       .run
 
