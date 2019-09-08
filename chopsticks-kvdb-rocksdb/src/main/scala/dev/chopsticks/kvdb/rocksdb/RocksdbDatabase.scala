@@ -12,27 +12,17 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
-  TransactionAction,
-  TransactionDelete,
-  TransactionDeleteRange,
-  TransactionPut
-}
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{TransactionAction, TransactionDelete, TransactionDeleteRange, TransactionPut}
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
 import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
-import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{
-  PointLookupPattern,
-  PrefixedScanPattern,
-  TotalOrderScanPattern
-}
 import dev.chopsticks.kvdb.rocksdb.RocksdbUtils.OptionsFileSection
 import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException._
-import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal, KvdbIterateSourceGraph, KvdbTailSourceGraph}
+import dev.chopsticks.kvdb.util._
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
@@ -40,8 +30,7 @@ import org.rocksdb._
 import pureconfig.ConfigConvert
 import zio.blocking._
 import zio.clock.Clock
-import zio.internal.Executor
-import zio.{RIO, Task, UIO, ZIO, ZSchedule}
+import zio.{RIO, Task, ZIO, ZSchedule}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -174,26 +163,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
   val isLocal: Boolean = true
 
-  private val columnOptions: Map[CF, ColumnFamilyOptions] = materialization.columnFamilySet.value.map { cf =>
-//    val defaultOptions = cf.rocksdbOptions
-    val cfOptions = materialization.columnFamilyConfigMap.map(cf)
-//    val cfOptions: RocksdbCFOptions = options.get(cf, defaultOptions)
-
-    val cfBuilder = RocksdbColumnFamilyOptionsBuilder(
-      memoryBudget = cfOptions.memoryBudget,
-      blockCache = cfOptions.blockCache,
-      blockSize = cfOptions.blockSize,
-      compression = cfOptions.compression
-    )
-    val tunedCfBuilder = cfOptions.readPattern match {
-      case PointLookupPattern =>
-        cfBuilder.withPointLookup()
-      case PrefixedScanPattern(minPrefixLength) =>
-        cfBuilder.withCappedPrefixExtractor(minPrefixLength.value)
-      case TotalOrderScanPattern => cfBuilder
-    }
-    (cf, tunedCfBuilder.build())
-  }.toMap
+  private val columnOptions: Map[CF, ColumnFamilyOptions] = materialization.columnFamilyConfigMap.map
 
   private val coreCount: Int = Runtime.getRuntime.availableProcessors()
   private lazy val dbOptions: DBOptions = {
@@ -279,13 +249,13 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
 //  private val bulkInsertsLock = MVar.of[Task, Boolean](startWithBulkInserts).memoize
 
-  private lazy val ioEc = akkaEnv.actorSystem.dispatchers.lookup(config.ioDispatcher)
-  private lazy val ioZioExecutor = Executor.fromExecutionContext(Int.MaxValue)(ioEc)
-  private lazy val blockingEnv = new Blocking {
-    val blocking: Blocking.Service[Any] = new Blocking.Service[Any] {
-      val blockingExecutor: ZIO[Any, Nothing, Executor] = UIO.succeed(ioZioExecutor)
-    }
-  }
+//  private lazy val ioEc = akkaEnv.actorSystem.dispatchers.lookup(config.ioDispatcher)
+//  private lazy val ioZioExecutor = Executor.fromExecutionContext(1)(ioEc)
+//  private lazy val blockingEnv = new Blocking {
+//    val blocking: Blocking.Service[Any] = new Blocking.Service[Any] {
+//      val blockingExecutor: ZIO[Any, Nothing, Executor] = UIO.succeed(ioZioExecutor)
+//    }
+//  }
 
   private val dbCloseSignal = new KvdbCloseSignal
 
@@ -365,11 +335,11 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
           }
     }
 
-    akkaEnv.unsafeRunToFuture(task.provide(blockingEnv))
+    akkaEnv.unsafeRunToFuture(task.provide(KvdbIoThreadPool.blockingEnv))
   }
 
   private def ioTask[T](task: Task[T]): Task[T] = {
-    task.lock(ioZioExecutor)
+    task.lock(KvdbIoThreadPool.executor)
   }
 
   private val isClosed = new AtomicBoolean(false)
@@ -940,7 +910,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .fromGraph(new KvdbTailSourceGraph(init, dbCloseSignal, config.ioDispatcher))
   }
 
-  def batchTailSource[Col <: CF](
+  def concurrentTailSource[Col <: CF](
     column: Col,
     ranges: List[KvdbKeyRange]
   )(

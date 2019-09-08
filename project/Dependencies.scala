@@ -40,8 +40,8 @@ object Dependencies {
     "org.typelevel" %% "squants" % "1.4.0"
   )
 
-  val kamonCoreDeps = Seq(
-    "io.kamon" %% "kamon-core" % "2.0.0"
+  val prometheusClientDeps = Seq(
+    "io.prometheus" % "simpleclient" % "0.6.0"
   )
 
   val akkaGrpcRuntimeDeps = Seq(

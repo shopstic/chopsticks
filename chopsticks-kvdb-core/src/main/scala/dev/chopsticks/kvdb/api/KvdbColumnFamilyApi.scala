@@ -431,7 +431,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
-  def batchTailVerboseRawSource(
+  def concurrentTailVerboseRawSource(
     ranges: ConstraintsRangesBuilder[K]
   )(implicit clientOptions: KvdbClientOptions): Source[(Int, KvdbTailBatch), Future[NotUsed]] = {
     val builtRanges = ranges(KeyConstraints.seed[K]).map {
@@ -439,10 +439,10 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         KeyConstraints.toRange[K](from, to)
     }
 
-    db.batchTailSource(cf, builtRanges)
+    db.concurrentTailSource(cf, builtRanges)
   }
 
-  def batchTailVerboseSource(
+  def concurrentTailVerboseSource(
     ranges: ConstraintsRangesBuilder[K],
     decodingParallelism: Int = 1
   )(
@@ -450,7 +450,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   ): Source[(Int, Either[Instant, List[(K, V)]]), Future[NotUsed]] = {
     import cats.syntax.either._
 
-    batchTailVerboseRawSource(ranges)
+    concurrentTailVerboseRawSource(ranges)
       .mapAsync(decodingParallelism) {
         case (index, Left(e)) => Future.successful((index, Either.left(e.time)))
         case (index, Right(batch)) =>

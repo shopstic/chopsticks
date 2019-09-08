@@ -4,8 +4,7 @@ import akka.NotUsed
 import akka.grpc.scaladsl.Metadata
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
-import kamon.Kamon
-import kamon.metric.Gauge
+import io.prometheus.client.{Counter, Gauge}
 import zio.stm.{STM, TRef}
 import zio.{IO, Task, UIO}
 
@@ -27,12 +26,19 @@ object DstreamEnv {
     def report(assignment: Req): IO[InvalidAssignment[Req], Unit]
   }
 
-  abstract class LiveService[Req, Res](rt: zio.Runtime[Any])(implicit mat: Materializer, ec: ExecutionContext)
+  trait Metrics {
+    def workerGauge: Gauge
+    def attemptCounter: Counter
+    def queueGauge: Gauge
+    def mapGauge: Gauge
+  }
+
+  abstract class LiveService[Req, Res](rt: zio.Runtime[Any], metrics: Metrics)(implicit mat: Materializer, ec: ExecutionContext)
       extends Service[Req, Res] {
-    protected val workerGauge = Kamon.gauge("dstream.server.workers").withoutTags()
-    protected val attemptCounter = Kamon.counter("dstream.server.attempts").withoutTags()
-    protected val queueGauge: Gauge = Kamon.gauge("dstream.server.queue").withoutTags()
-    protected val mapGauge = Kamon.gauge("dstream.server.map").withoutTags()
+    protected val workerGauge = metrics.workerGauge
+    protected val attemptCounter = metrics.attemptCounter
+    protected val queueGauge = metrics.queueGauge
+    protected val mapGauge = metrics.mapGauge
     protected lazy val assignmentQueueRefBox = rt.unsafeRun(TRef.makeCommit(Queue.empty[Req]).memoize)
     protected lazy val workResultMapRefBox =
       rt.unsafeRun(TRef.makeCommit(Map.empty[Req, Option[WorkResult[Res]]]).memoize)
@@ -44,7 +50,7 @@ object DstreamEnv {
         assignmentQueueRef.get <*> workResultMapRef.get
       }
       (queue, map) = state
-      _ <- UIO(queueGauge.update(queue.size.toDouble)) *> UIO(mapGauge.update(map.size.toDouble))
+      _ <- UIO(queueGauge.set(queue.size.toDouble)) *> UIO(mapGauge.set(map.size.toDouble))
       _ <- UIO(println(s"Map: ${map
         .map {
           case (k, v) =>
@@ -58,8 +64,8 @@ object DstreamEnv {
       val worker = WorkResult(inSource, metadata)
 //      val abortTask = Task.fromFuture(_ => inFuture).fold(_ => (), _ => ())
       val abortTask = Task.never
-      val stats = UIO(attemptCounter.increment()) *> UIO(workerGauge.increment())
-        .ensuring(abortTask *> UIO(workerGauge.decrement()))
+      val stats = UIO(attemptCounter.inc()) *> UIO(workerGauge.inc())
+        .ensuring(abortTask *> UIO(workerGauge.dec()))
 
       for {
         _ <- stats.fork

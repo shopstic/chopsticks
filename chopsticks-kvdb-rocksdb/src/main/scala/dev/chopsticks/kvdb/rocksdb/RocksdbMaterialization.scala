@@ -7,7 +7,7 @@ import scala.language.higherKinds
 
 trait RocksdbMaterialization[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
   def defaultColumnFamily: BCF[_, _]
-  def columnFamilyConfigMap: RocksdbColumnFamilyConfigMap[BCF, CFS]
+  def columnFamilyConfigMap: RocksdbColumnFamilyOptionsMap[BCF, CFS]
 }
 
 object RocksdbMaterialization {

@@ -1,29 +1,19 @@
 package dev.chopsticks.kvdb.rocksdb
 
 import org.rocksdb._
-import squants.information.Information
+import squants.information.Mebibytes
 
 import scala.collection.JavaConverters._
 
 object RocksdbColumnFamilyOptionsBuilder {
-  def apply(
-    memoryBudget: Information,
-    blockCache: Information,
-    blockSize: Information,
-    compression: CompressionType
-  ): RocksdbColumnFamilyOptionsBuilder = {
-    new RocksdbColumnFamilyOptionsBuilder(memoryBudget, blockCache, blockSize, compression)
+  def apply(config: RocksdbColumnFamilyConfig): RocksdbColumnFamilyOptionsBuilder = {
+    new RocksdbColumnFamilyOptionsBuilder(config)
   }
 }
 
-final class RocksdbColumnFamilyOptionsBuilder private (
-  memoryBudget: Information,
-  blockCache: Information,
-  blockSize: Information,
-  compression: CompressionType
-) {
-  private val memoryBudgetBytes = memoryBudget.toBytes.toLong
-  private val blockCacheBytes = blockCache.toBytes.toLong
+final class RocksdbColumnFamilyOptionsBuilder private (config: RocksdbColumnFamilyConfig) {
+  private val memoryBudgetBytes = config.memoryBudget.toBytes.toLong
+  private val blockCacheBytes = config.blockCache.toBytes.toLong
 
   //  private val writeBufferSize = memoryBudget / 4
   private val columnOptions = {
@@ -46,45 +36,52 @@ final class RocksdbColumnFamilyOptionsBuilder private (
       .setSoftPendingCompactionBytesLimit(0)
       .setHardPendingCompactionBytesLimit(0)
       .setMaxCompactionBytes(Long.MaxValue)
-      .setCompressionType(compression)
+      .setCompressionType(config.compression)
       .setCompressionPerLevel(
-        ((0 to 1).map(_ => CompressionType.NO_COMPRESSION) ++ (2 to numLevels).map(_ => compression)).asJava
+        ((0 to 1).map(_ => CompressionType.NO_COMPRESSION) ++ (2 to numLevels).map(_ => config.compression)).asJava
       )
+      .setOptimizeFiltersForHits(true)
   }
 
-  private val tableFormat = if (blockCacheBytes > 0) {
-    new BlockBasedTableConfig()
-      .setBlockSize(blockSize.toBytes.toLong)
-      // TODO: ClockCache does not work, file an issue
-      .setBlockCache(new LRUCache(blockCacheBytes, -1, true, 0.5))
-      .setCacheIndexAndFilterBlocks(true)
-      .setCacheIndexAndFilterBlocksWithHighPriority(true)
-      .setPinL0FilterAndIndexBlocksInCache(true)
-  }
-  else {
-    new BlockBasedTableConfig()
-      .setBlockSize(blockSize.toBytes.toLong)
-      .setNoBlockCache(true)
+  private def createTableFormat =
+    if (blockCacheBytes > 0) {
+      new BlockBasedTableConfig()
+        .setBlockSize(config.blockSize.toBytes.toLong)
+        // TODO: ClockCache does not work, file an issue
+        .setBlockCache(new LRUCache(blockCacheBytes))
+//        .setCacheIndexAndFilterBlocks(true)
+//        .setCacheIndexAndFilterBlocksWithHighPriority(true)
+//        .setPinL0FilterAndIndexBlocksInCache(true)
+    }
+    else {
+      new BlockBasedTableConfig()
+        .setBlockSize(config.blockSize.toBytes.toLong)
+        .setNoBlockCache(true)
+    }
+
+  def withTotalOrder(): RocksdbColumnFamilyOptionsBuilder = {
+    val _ = columnOptions
+      .setTableFormatConfig(createTableFormat)
+    this
   }
 
   def withCappedPrefixExtractor(length: Int): RocksdbColumnFamilyOptionsBuilder = {
-    {
-      val _ = columnOptions.useCappedPrefixExtractor(length)
-    }
-    val _ = tableFormat
+    val tableFormat = createTableFormat
       .setIndexType(IndexType.kHashSearch)
+
+    {
+      val _ = columnOptions
+        .useCappedPrefixExtractor(length)
+        .setTableFormatConfig(tableFormat)
+    }
     this
   }
 
   def withPointLookup(): RocksdbColumnFamilyOptionsBuilder = {
     {
       val _ = columnOptions
-        .optimizeForPointLookup(1)
+        .optimizeForPointLookup(config.blockCache.to(Mebibytes).toLong)
     }
-    val _ = tableFormat
-      .setDataBlockIndexType(DataBlockIndexType.kDataBlockBinaryAndHash)
-      .setDataBlockHashTableUtilRatio(0.75)
-      .setFilterPolicy(new BloomFilter(10))
     this
   }
 
@@ -94,6 +91,6 @@ final class RocksdbColumnFamilyOptionsBuilder private (
   }
 
   def build(): ColumnFamilyOptions = {
-    columnOptions.setTableFormatConfig(tableFormat)
+    columnOptions
   }
 }

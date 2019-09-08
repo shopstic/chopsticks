@@ -25,4 +25,6 @@ object ValueSerdes {
   def deserialize[T](bytes: Array[Byte])(implicit decoder: ValueDeserializer[T]): ValueDeserializationResult[T] = {
     decoder.deserialize(bytes)
   }
+
+  implicit val byteArrayValueSerdes: ValueSerdes[Array[Byte]] = ValueSerdes.create[Array[Byte]](identity, bytes => Right(bytes))
 }

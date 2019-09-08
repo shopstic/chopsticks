@@ -897,7 +897,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     "complete with UnsupportedKvdbOperationException if constraint list is empty" in withDb { db =>
       ZAkka
         .graphM(UIO {
-          db.batchTailSource(defaultCf, List.empty)
+          db.concurrentTailSource(defaultCf, List.empty)
             .toMat(Sink.head)(Keep.right)
         })
         .either
@@ -910,7 +910,7 @@ abstract private[kvdb] class KvdbDatabaseTest
 
     "tail" in withDb { db =>
       val source = db
-        .batchTailSource(
+        .concurrentTailSource(
           defaultCf,
           List(
             $$(_ ^= "aaaa", _ ^= "aaaa"),

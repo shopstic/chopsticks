@@ -25,8 +25,8 @@ lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 lazy val util = Build
   .defineProject("util")
   .settings(
-    libraryDependencies ++= akkaSlf4jDeps ++ kamonCoreDeps
-      ++ squantsDeps ++ loggingDeps ++ pureconfigDeps ++ microlibsDeps
+    libraryDependencies ++= akkaSlf4jDeps ++ squantsDeps ++ loggingDeps ++
+      pureconfigDeps ++ microlibsDeps ++ prometheusClientDeps
   )
 
 lazy val testkit = Build

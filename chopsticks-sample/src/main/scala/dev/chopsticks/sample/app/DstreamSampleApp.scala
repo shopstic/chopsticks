@@ -12,6 +12,7 @@ import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZAkka, ZLogger}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
+import io.prometheus.client.{Counter, Gauge}
 import zio._
 
 import scala.concurrent.duration._
@@ -21,11 +22,18 @@ object DstreamSampleApp extends AkkaApp {
   type DsEnv = DstreamEnv[Assignment, Result]
   type Env = AkkaApp.Env with DsEnv
 
+  private object dstreamMetrics extends DstreamEnv.Metrics {
+    val workerGauge: Gauge = Gauge.build.name("dstream_workers").register()
+    val attemptCounter: Counter = Counter.build.name("dstream_attempts_total").register()
+    val queueGauge: Gauge = Gauge.build.name("dstream_queue").register()
+    val mapGauge: Gauge = Gauge.build.name("dstream_map").register()
+  }
+
   protected def createEnv(untypedConfig: Config) = {
     ZManaged.environment[AkkaApp.Env].map { env =>
       new AkkaApp.LiveEnv with DsEnv {
         implicit val actorSystem: ActorSystem = env.actorSystem
-        object dstreamService extends DstreamEnv.LiveService[Assignment, Result](rt) {
+        object dstreamService extends DstreamEnv.LiveService[Assignment, Result](rt, dstreamMetrics) {
           unsafeRunToFuture(updateQueueGauge.repeat(ZSchedule.fixed(1.second)).provide(env))
             .onComplete(t => s"METRICS COMLETED ===================== $t")
         }

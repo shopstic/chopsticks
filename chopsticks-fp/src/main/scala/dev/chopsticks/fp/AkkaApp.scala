@@ -19,7 +19,7 @@ import scala.util.Try
 import scala.util.control.NonFatal
 
 object AkkaApp {
-  type Env = Clock with Console with system.System with Random with Blocking with AkkaEnv with LogEnv with MonEnv
+  type Env = Clock with Console with system.System with Random with Blocking with AkkaEnv with LogEnv
   trait LiveEnv
       extends Clock.Live
       with Console.Live
@@ -27,7 +27,6 @@ object AkkaApp {
       with Random.Live
       with Blocking.Live
       with LogEnv.Live
-      with MonEnv.Live
       with AkkaEnv {
 //    override val blocking: Blocking.Service[Any] = new Blocking.Service[Any] {
 //      lazy val blockingExecutor: ZIO[Any, Nothing, Executor] = UIO(
@@ -80,13 +79,7 @@ trait AkkaApp extends LoggingContext {
     }
 
     val main = for {
-      appFib <- managedEnv.use { e: Env =>
-        for {
-          monFib <- e.monitor(config).fork
-          ret <- run.provide(e)
-          _ <- monFib.interrupt
-        } yield ret
-      }.fork
+      appFib <- managedEnv.use(run.provide(_)).fork
       _ <- UIO {
         shutdown.addTask("app-interruption", "interrupt app") { () =>
           runtime.unsafeRunToFuture(appFib.interrupt.ignore *> UIO(Done))

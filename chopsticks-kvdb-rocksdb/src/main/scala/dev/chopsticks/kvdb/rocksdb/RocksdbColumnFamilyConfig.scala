@@ -1,7 +1,7 @@
 package dev.chopsticks.kvdb.rocksdb
 
 import eu.timepit.refined.types.numeric.PosInt
-import org.rocksdb.CompressionType
+import org.rocksdb.{ColumnFamilyOptions, CompressionType}
 import pureconfig.ConfigConvert
 import pureconfig.error.FailureReason
 import squants.information.Information
@@ -28,12 +28,33 @@ object RocksdbColumnFamilyConfig {
       },
       _.getLibraryName
     )
+
+  //noinspection TypeAnnotation
+  implicit val configConvert = {
+    import dev.chopsticks.util.config.PureconfigConverters._
+    ConfigConvert[RocksdbColumnFamilyConfig]
+  }
 }
 
 final case class RocksdbColumnFamilyConfig(
   memoryBudget: Information,
   blockCache: Information,
   blockSize: Information,
-  readPattern: RocksdbColumnFamilyConfig.ReadPattern,
   compression: CompressionType = CompressionType.NO_COMPRESSION
-)
+) {
+  import RocksdbColumnFamilyConfig._
+
+  def toOptions(readPattern: ReadPattern): ColumnFamilyOptions = {
+    val cfBuilder = RocksdbColumnFamilyOptionsBuilder(this)
+    val tunedCfBuilder = readPattern match {
+      case PointLookupPattern =>
+        cfBuilder.withPointLookup()
+      case PrefixedScanPattern(minPrefixLength) =>
+        cfBuilder.withCappedPrefixExtractor(minPrefixLength.value)
+      case TotalOrderScanPattern =>
+        cfBuilder.withTotalOrder()
+    }
+
+    tunedCfBuilder.build()
+  }
+}

@@ -6,10 +6,9 @@ import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern}
 import dev.chopsticks.kvdb.util.KvdbTestUtils
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabase, KvdbDatabaseTest}
-import eu.timepit.refined.auto._
 import eu.timepit.refined._
+import eu.timepit.refined.auto._
 import eu.timepit.refined.collection.NonEmpty
-import org.rocksdb.CompressionType
 import squants.information.InformationConversions._
 import zio.ZManaged
 
@@ -20,25 +19,21 @@ object RocksdbDatabaseTest {
 
     val defaultColumnFamily: plain.type = plain
 
-    val columnFamilyConfigMap: RocksdbColumnFamilyConfigMap[BaseCf, CfSet] = {
-      RocksdbColumnFamilyConfigMap[BaseCf] of (
+    val columnFamilyConfigMap: RocksdbColumnFamilyOptionsMap[BaseCf, CfSet] = {
+      RocksdbColumnFamilyOptionsMap[BaseCf] of (
         plain,
         RocksdbColumnFamilyConfig(
           memoryBudget = 1.mib,
           blockCache = 1.mib,
-          blockSize = 8.kib,
-          readPattern = PrefixedScanPattern(1),
-          compression = CompressionType.NO_COMPRESSION
-        )
+          blockSize = 8.kib
+        ).toOptions(PrefixedScanPattern(1))
       ) and (
         lookup,
         RocksdbColumnFamilyConfig(
           memoryBudget = 1.mib,
           blockCache = 1.mib,
-          blockSize = 8.kib,
-          readPattern = PointLookupPattern,
-          compression = CompressionType.NO_COMPRESSION
-        )
+          blockSize = 8.kib
+        ).toOptions(PointLookupPattern)
       )
     }
     val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf] of plain and lookup

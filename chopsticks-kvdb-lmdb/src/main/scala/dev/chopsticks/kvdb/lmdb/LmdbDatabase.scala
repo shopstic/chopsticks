@@ -12,12 +12,7 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
-  TransactionAction,
-  TransactionDelete,
-  TransactionDeleteRange,
-  TransactionPut
-}
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{TransactionAction, TransactionDelete, TransactionDeleteRange, TransactionPut}
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
 import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
@@ -25,13 +20,8 @@ import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.KvdbAliases._
-import dev.chopsticks.kvdb.util.KvdbException.{
-  InvalidKvdbArgumentException,
-  KvdbAlreadyClosedException,
-  SeekFailure,
-  UnsupportedKvdbOperationException
-}
-import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal, KvdbIterateSourceGraph, KvdbTailSourceGraph}
+import dev.chopsticks.kvdb.util.KvdbException.{InvalidKvdbArgumentException, KvdbAlreadyClosedException, SeekFailure, UnsupportedKvdbOperationException}
+import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal, KvdbIterateSourceGraph, KvdbTailSourceGraph, KvdbIoThreadPool}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
@@ -126,8 +116,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   private lazy val writeExecutor: ExecutorService = Executors.newSingleThreadExecutor()
   private lazy val writeEc = ExecutionContext.fromExecutor(writeExecutor)
   private lazy val writeZioExecutor = Executor.fromExecutionContext(Int.MaxValue)(writeEc)
-  private lazy val readEc = akkaEnv.actorSystem.dispatchers.lookup(config.ioDispatcher)
-  private lazy val readZioExecutor = Executor.fromExecutionContext(Int.MaxValue)(readEc)
+  private lazy val readZioExecutor = KvdbIoThreadPool.executor
 
   val activeTxnCounter = new LongAdder
   val activeCursorCounter = new LongAdder
@@ -580,7 +569,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       .map(_.map(_._2))
   }
 
-  def batchTailSource[Col <: CF](
+  def concurrentTailSource[Col <: CF](
     column: Col,
     ranges: List[KvdbKeyRange]
   )(
