@@ -1,8 +1,8 @@
 package dev.chopsticks.fp
 
 import akka.NotUsed
-import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
-import akka.stream.{Attributes, KillSwitch}
+import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
+import akka.stream.{Attributes, KillSwitch, KillSwitches}
 import zio._
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future, Promise}
@@ -168,6 +168,61 @@ object ZAkka {
     }
   }
 
+  def interruptableLazySource[R, A, B](effect: RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Source[B, Future[NotUsed]]] = {
+    ZIO.access[AkkaEnv with R] { env =>
+      implicit val ec: ExecutionContextExecutor = env.dispatcher
+
+      Source
+        .lazily(() => {
+          val completionPromise = Promise[Unit]()
+          val interruptTask = Task.fromFuture(_ => completionPromise.future)
+
+          val interruptableTask = for {
+            fib <- effect.fold(Future.failed, Future.successful).fork
+            c <- (interruptTask *> fib.interrupt).fork
+            ret <- fib.join
+            _ <- c.interrupt.fork
+          } yield ret
+
+          Source
+            .lazilyAsync(() => {
+              env.unsafeRunToFuture(interruptableTask.provide(env)).flatten
+            })
+            .watchTermination() { (_, f) =>
+              f.onComplete(_ => completionPromise.success(()))
+              NotUsed
+            }
+        })
+    }
+  }
+
+  def switchFlatMapConcatM[In, Out](f: In => Source[Out, Any]): ZIO[AkkaEnv, Nothing, Flow[In, Out, NotUsed]] = {
+    ZIO.access[AkkaEnv] { env =>
+      import env._
+      Flow[In]
+        .statefulMapConcat(() => {
+          var currentKillSwitch = Option.empty[KillSwitch]
+
+          in => {
+            currentKillSwitch.foreach(_.shutdown())
+
+            val (ks, s) = f(in)
+              .viaMat(KillSwitches.single)(Keep.right)
+              .preMaterialize()
+
+            currentKillSwitch = Some(ks)
+            List(s)
+          }
+        })
+        .async
+        .flatMapConcat(identity)
+    }
+  }
+
+  def switchFlatMapConcat[In, Out](f: In => Source[Out, Any])(implicit env: AkkaEnv): Flow[In, Out, NotUsed] = {
+    env.unsafeRun(switchFlatMapConcatM[In, Out](f).provide(env))
+  }
+
   def interruptableMapAsyncUnordered[R, A, B](
     parallelism: Int,
     attributes: Option[Attributes] = None
@@ -244,6 +299,11 @@ object ZAkka {
         flow
           .via(interruptableMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
+
+      def switchFlatMapConcat[Next](f: Out => Source[Next, Any])(implicit env: AkkaEnv): Flow[In, Next, Mat] = {
+        flow
+          .via(ZAkka.switchFlatMapConcat(f))
+      }
     }
 
     implicit class AkkaStreamSourceZioOps[+Out, +Mat](source: Source[Out, Mat]) {
@@ -273,6 +333,11 @@ object ZAkka {
       )(runTask: Out => RIO[R, Next])(implicit env: AkkaEnv with R): Source[Next, Mat] = {
         source
           .via(interruptableMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
+      }
+
+      def switchFlatMapConcat[Next](f: Out => Source[Next, Any])(implicit env: AkkaEnv): Source[Next, Mat] = {
+        source
+          .via(ZAkka.switchFlatMapConcat(f))
       }
     }
   }
