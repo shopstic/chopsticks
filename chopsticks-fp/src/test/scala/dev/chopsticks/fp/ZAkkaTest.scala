@@ -3,40 +3,77 @@ package dev.chopsticks.fp
 import java.util.concurrent.TimeUnit
 
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Keep, Source}
+import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
-import akka.stream.{ActorMaterializer, Attributes, Materializer}
+import akka.stream.{ActorMaterializer, Attributes, KillSwitches, Materializer}
 import dev.chopsticks.fp.ZAkka.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedMockClockService, ManualTimeAkkaTestKit}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{Assertion, Matchers, Succeeded, WordSpecLike}
+import org.scalatest.{Assertion, AsyncWordSpecLike, Matchers, Succeeded}
+import zio.blocking._
 import zio.clock.Clock
 import zio.test.mock.MockClock
-import zio.{UIO, ZIO}
+import zio.{Task, UIO, ZIO}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
 
 final class ZAkkaTest
     extends ManualTimeAkkaTestKit
-    with WordSpecLike
+    with AsyncWordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown
     with ScalaFutures {
 
   implicit val mat: Materializer = ActorMaterializer()
 
-  type Env = AkkaEnv with MockClock
+  type Env = AkkaEnv with MockClock with Blocking
 
-  def withEnv(test: Env => Assertion): Assertion = {
-    object env extends AkkaEnv with MockClock {
+  private def createEnv: Env = {
+    new AkkaEnv with MockClock with Blocking.Live {
       implicit val actorSystem: ActorSystem = system
       private val fixedMockClockService = FixedMockClockService(unsafeRun(MockClock.makeMock(MockClock.DefaultData)))
       val clock: MockClock.Service[Any] = fixedMockClockService
       val scheduler: MockClock.Service[Any] = fixedMockClockService
     }
-    test(env)
+  }
+
+  def withEnv(test: Env => Assertion): Future[Assertion] = {
+    Future(test(createEnv))
+  }
+
+  def withEffect[E, A](test: ZIO[Env, Throwable, Assertion]): Future[Assertion] = {
+    val env = createEnv
+    env.unsafeRunToFuture(test.provide(env))
+  }
+
+  "interruptableLazySource" should {
+    "interrupt effect" in withEffect {
+      for {
+        clock <- ZIO.access[MockClock](c => new ManualClock(Some(c)))
+        startP <- zio.Promise.make[Nothing, Unit]
+        startFuture <- startP.await.toFuture
+        interruptedP <- zio.Promise.make[Nothing, Unit]
+        interruptedFuture <- interruptedP.await.toFuture
+        source <- ZAkka.interruptableLazySource {
+          startP.succeed(()) *> ZIO.succeed(1)
+            .delay(zio.duration.Duration(3, TimeUnit.SECONDS))
+            .onInterrupt(interruptedP.succeed(()))
+        }
+        _ <- blocking(Task {
+          val ks = source
+            .viaMat(KillSwitches.single)(Keep.right)
+            .toMat(Sink.ignore)(Keep.left)
+            .run
+
+          whenReady(startFuture)(identity)
+          ks.shutdown()
+          clock.timePasses(3.seconds)
+          whenReady(interruptedFuture)(identity)
+        })
+      } yield Succeeded
+    }
   }
 
   "manual time" in withEnv { implicit env =>
@@ -78,7 +115,7 @@ final class ZAkkaTest
       "function identically to flatMapConcat when there's no switching" in withEnv { implicit env =>
         val (source, sink) = TestSource
           .probe[Source[Int, Any]]
-          .switchFlatMapConcat(identity)
+          .switchFlatMapConcat(UIO(_))
           .toMat(TestSink.probe)(Keep.both)
           .run
 
@@ -102,7 +139,7 @@ final class ZAkkaTest
         val promise = Promise[Boolean]()
         val (source, sink) = TestSource
           .probe[Source[Int, Any]]
-          .switchFlatMapConcat(identity)
+          .switchFlatMapConcat(UIO(_))
           .toMat(TestSink.probe)(Keep.both)
           .run
 
