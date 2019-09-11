@@ -28,7 +28,7 @@ object KvdbTestUtils {
       .use(testCode(_))
       .provide(env)
 
-    env.unsafeRunToFuture(task)
+    env.akka.unsafeRunToFuture(task)
   }
 
   def populateColumn[CF <: BaseCf[K, V], K, V](

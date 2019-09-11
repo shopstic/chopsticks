@@ -12,7 +12,12 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{TransactionAction, TransactionDelete, TransactionDeleteRange, TransactionPut}
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
+  TransactionAction,
+  TransactionDelete,
+  TransactionDeleteRange,
+  TransactionPut
+}
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
 import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
@@ -20,8 +25,19 @@ import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.KvdbAliases._
-import dev.chopsticks.kvdb.util.KvdbException.{InvalidKvdbArgumentException, KvdbAlreadyClosedException, SeekFailure, UnsupportedKvdbOperationException}
-import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal, KvdbIterateSourceGraph, KvdbTailSourceGraph, KvdbIoThreadPool}
+import dev.chopsticks.kvdb.util.KvdbException.{
+  InvalidKvdbArgumentException,
+  KvdbAlreadyClosedException,
+  SeekFailure,
+  UnsupportedKvdbOperationException
+}
+import dev.chopsticks.kvdb.util.{
+  KvdbClientOptions,
+  KvdbCloseSignal,
+  KvdbIoThreadPool,
+  KvdbIterateSourceGraph,
+  KvdbTailSourceGraph
+}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
@@ -105,7 +121,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   val materialization: KvdbMaterialization[BCF, CFS],
   config: LmdbDatabase.Config
 )(
-  implicit akkaEnv: AkkaEnv
+  implicit env: AkkaEnv
 ) extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
@@ -556,7 +572,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
           }
 
-        akkaEnv.unsafeRunToFuture(task)
+        env.akka.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -610,7 +626,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
               }
           }
 
-        akkaEnv.unsafeRunToFuture(task)
+        env.akka.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -691,7 +707,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
             }
           }
 
-        akkaEnv.unsafeRunToFuture(task)
+        env.akka.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -722,7 +738,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
             case TransactionDeleteRange(columnId, fromKey, toKey) =>
               doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey)
           }
-          
+
           txn.commit()
         } finally closeTxn(txn)
       }

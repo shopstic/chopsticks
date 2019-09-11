@@ -1,7 +1,6 @@
 package dev.chopsticks.kvdb.api
 
-import akka.actor.ActorSystem
-import dev.chopsticks.fp.{AkkaApp, LoggingContext}
+import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LoggingContext}
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
 import dev.chopsticks.kvdb.codec.primitive._
@@ -27,7 +26,7 @@ abstract class KvdbDatabaseApiTest
   private lazy val as = system
 
   private object Environment extends AkkaApp.LiveEnv {
-    implicit val actorSystem: ActorSystem = as
+    val akka: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(as)
   }
 
   "open" should {

@@ -33,7 +33,7 @@ object Dstreams extends LoggingContext {
   ): ZManaged[R with AkkaEnv with MeasuredLogging, Throwable, Http.ServerBinding] = {
     val acquire = for {
       service <- makeService
-      binding <- ZIO.accessM[AkkaEnv] { env =>
+      binding <- ZIO.access[AkkaEnv](_.akka).flatMap { env =>
         import env._
         val settings = ServerSettings(actorSystem)
 
@@ -68,7 +68,8 @@ object Dstreams extends LoggingContext {
   )(make: GrpcClientSettings => ZIO[R, E, Client]): ZManaged[R with AkkaEnv with MeasuredLogging, E, Client] = {
     ZManaged.make(
       ZIO
-        .access[AkkaEnv] { env =>
+        .access[AkkaEnv](_.akka)
+        .map { env =>
           import env._
           GrpcClientSettings
             .connectToServiceAt(config.serverHost, config.serverPort)
@@ -113,7 +114,7 @@ object Dstreams extends LoggingContext {
           .accessM[DstreamEnv[Req, Res]](_.dstreamService.enqueueAssignment(assignment))
       } { worker =>
         val cleanup = for {
-          _ <- ZIO.access[AkkaEnv](env => worker.source.runWith(Sink.cancelled)(env.materializer))
+          _ <- ZIO.access[AkkaEnv](env => worker.source.runWith(Sink.cancelled)(env.akka.materializer))
           _ <- ZIO.accessM[DstreamEnv[Req, Res]](_.dstreamService.report(assignment))
         } yield ()
 
@@ -161,14 +162,15 @@ object Dstreams extends LoggingContext {
     in: Source[Res, NotUsed],
     metadata: Metadata
   ): Source[Req, NotUsed] = {
-    import env._
+    val akkaEnv = env.akka
+    import akkaEnv._
 
     val (ks, inSource) = in
       .viaMat(KillSwitches.single)(Keep.right)
       .preMaterialize()
 
     Source
-      .fromFutureSource(unsafeRunToFuture(dstreamService.enqueueWorker(inSource, metadata)))
+      .fromFutureSource(unsafeRunToFuture(env.dstreamService.enqueueWorker(inSource, metadata)))
       .watchTermination() {
         case (_, f) =>
           f.onComplete {

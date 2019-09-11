@@ -27,8 +27,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   db: KvdbDatabase[BCF, _],
   cf: CF
 )(
-  implicit akkaEnv: AkkaEnv
+  implicit env: AkkaEnv
 ) {
+  private val akkaEnv = env.akka
   import akkaEnv._
 
   def estimateCountTask: Task[Long] = {
@@ -183,7 +184,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(1) { batch =>
         Future {
           batch.map[(K, V), List[(K, V)]](cf.unsafeDeserialize)(breakOut)
-        }(akkaEnv.dispatcher)
+        }
       }
   }
 
@@ -205,7 +206,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(1) { batch =>
         Future {
           batch.map[V, List[V]](cf.unsafeDeserializeValue)(breakOut)
-        }(akkaEnv.dispatcher)
+        }
       }
   }
 

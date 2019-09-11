@@ -8,21 +8,33 @@ import zio.{Exit, IO, Runtime, Task, ZIO}
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
 trait AkkaEnv {
-  implicit def actorSystem: ActorSystem
+  def akka: AkkaEnv.Service
+}
 
-  implicit lazy val materializer: Materializer = ActorMaterializer()
-  implicit lazy val dispatcher: ExecutionContextExecutor = actorSystem.dispatcher
-  protected lazy val rt = Runtime[Any](this, PlatformLive.fromExecutionContext(dispatcher))
+object AkkaEnv {
+  trait Service {
+    implicit def actorSystem: ActorSystem
 
-  def unsafeRunSync[E, A](zio: ZIO[Any, E, A]): Exit[E, A] = {
-    rt.unsafeRunSync(zio)
+    implicit lazy val materializer: Materializer = ActorMaterializer()
+    implicit lazy val dispatcher: ExecutionContextExecutor = actorSystem.dispatcher
+    lazy val rt: Runtime[Any] = Runtime[Any](this, PlatformLive.fromExecutionContext(dispatcher))
+
+    def unsafeRunSync[E, A](zio: ZIO[Any, E, A]): Exit[E, A] = {
+      rt.unsafeRunSync(zio)
+    }
+
+    def unsafeRun[E, A](zio: IO[E, A]): A = {
+      rt.unsafeRun(zio)
+    }
+
+    def unsafeRunToFuture[A](task: Task[A]): Future[A] = {
+      rt.unsafeRunToFuture(task)
+    }
   }
 
-  def unsafeRun[E, A](zio: IO[E, A]): A = {
-    rt.unsafeRun(zio)
-  }
-
-  def unsafeRunToFuture[A](task: Task[A]): Future[A] = {
-    rt.unsafeRunToFuture(task)
+  object Service {
+    def fromActorSystem(system: ActorSystem): Service = new Service {
+      implicit val actorSystem: ActorSystem = system
+    }
   }
 }

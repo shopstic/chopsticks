@@ -12,7 +12,12 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{TransactionAction, TransactionDelete, TransactionDeleteRange, TransactionPut}
+import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
+  TransactionAction,
+  TransactionDelete,
+  TransactionDeleteRange,
+  TransactionPut
+}
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
 import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
@@ -155,7 +160,7 @@ object RocksdbDatabase extends StrictLogging {
 final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
   config: RocksdbDatabase.Config
-)(implicit akkaEnv: AkkaEnv)
+)(implicit env: AkkaEnv)
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
@@ -173,7 +178,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
     val tunedOptions = options
       .setIncreaseParallelism(coreCount)
+      .setMaxBackgroundFlushes(coreCount)
       .setMaxBackgroundCompactions(coreCount)
+      .setMaxBackgroundJobs(coreCount)
       .setMaxSubcompactions(coreCount)
       .setMaxOpenFiles(-1)
       .setKeepLogFileNum(3)
@@ -335,7 +342,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
           }
     }
 
-    akkaEnv.unsafeRunToFuture(task.provide(KvdbIoThreadPool.blockingEnv))
+    env.akka.unsafeRunToFuture(task.provide(KvdbIoThreadPool.blockingEnv))
   }
 
   private def ioTask[T](task: Task[T]): Task[T] = {
@@ -810,7 +817,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                 .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, config.ioDispatcher))
           }
 
-        akkaEnv.unsafeRunToFuture(task)
+        env.akka.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -950,7 +957,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                 }
               }
           }
-        akkaEnv.unsafeRunToFuture(task)
+        env.akka.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -976,7 +983,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
             }
           }
 
-        akkaEnv.unsafeRunToFuture(task)
+        env.akka.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
   }

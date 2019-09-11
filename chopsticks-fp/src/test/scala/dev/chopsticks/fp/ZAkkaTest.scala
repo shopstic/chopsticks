@@ -2,7 +2,6 @@ package dev.chopsticks.fp
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{ActorMaterializer, Attributes, KillSwitches, Materializer}
@@ -32,8 +31,10 @@ final class ZAkkaTest
 
   private def createEnv: Env = {
     new AkkaEnv with MockClock with Blocking.Live {
-      implicit val actorSystem: ActorSystem = system
-      private val fixedMockClockService = FixedMockClockService(unsafeRun(MockClock.makeMock(MockClock.DefaultData)))
+      val akka: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(system)
+      private val fixedMockClockService = FixedMockClockService(
+        akka.unsafeRun(MockClock.makeMock(MockClock.DefaultData))
+      )
       val clock: MockClock.Service[Any] = fixedMockClockService
       val scheduler: MockClock.Service[Any] = fixedMockClockService
     }
@@ -45,7 +46,7 @@ final class ZAkkaTest
 
   def withEffect[E, A](test: ZIO[Env, Throwable, Assertion]): Future[Assertion] = {
     val env = createEnv
-    env.unsafeRunToFuture(test.provide(env))
+    env.akka.unsafeRunToFuture(test.provide(env))
   }
 
   "interruptableLazySource" should {
@@ -57,7 +58,8 @@ final class ZAkkaTest
         interruptedP <- zio.Promise.make[Nothing, Unit]
         interruptedFuture <- interruptedP.await.toFuture
         source <- ZAkka.interruptableLazySource {
-          startP.succeed(()) *> ZIO.succeed(1)
+          startP.succeed(()) *> ZIO
+            .succeed(1)
             .delay(zio.duration.Duration(3, TimeUnit.SECONDS))
             .onInterrupt(interruptedP.succeed(()))
         }
@@ -134,8 +136,6 @@ final class ZAkkaTest
       }
 
       "cancel the prior source and switch to the new one" in withEnv { implicit env =>
-        import env.dispatcher
-//        val clock = new ManualClock(Some(env))
         val promise = Promise[Boolean]()
         val (source, sink) = TestSource
           .probe[Source[Int, Any]]
@@ -146,9 +146,11 @@ final class ZAkkaTest
         sink.request(2)
         source.sendNext {
           Source
-            .fromFuture(akka.pattern.after(3.seconds, env.actorSystem.scheduler)(Future.successful(1)))
+            .fromFuture(
+              akka.pattern.after(3.seconds, env.akka.actorSystem.scheduler)(Future.successful(1))(env.akka.dispatcher)
+            )
             .watchTermination() { (_, f) =>
-              f.onComplete(_ => promise.success(true))
+              f.onComplete(_ => promise.success(true))(env.akka.dispatcher)
               f
             }
         }

@@ -1,6 +1,5 @@
 package dev.chopsticks.sample.app
 
-import akka.actor.ActorSystem
 import akka.grpc.GrpcClientSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
@@ -8,8 +7,7 @@ import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream.{DstreamEnv, Dstreams}
-import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.fp.zio_ext.MeasuredLogging
+import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZAkka, ZLogger}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
 import io.prometheus.client.{Counter, Gauge}
@@ -31,10 +29,13 @@ object DstreamSampleApp extends AkkaApp {
 
   protected def createEnv(untypedConfig: Config) = {
     ZManaged.environment[AkkaApp.Env].map { env =>
+      val akkaEnv = env.akka
+      import akkaEnv._
       new AkkaApp.LiveEnv with DsEnv {
-        implicit val actorSystem: ActorSystem = env.actorSystem
+        val akka: AkkaEnv.Service = env.akka
         object dstreamService extends DstreamEnv.LiveService[Assignment, Result](rt, dstreamMetrics) {
-          unsafeRunToFuture(updateQueueGauge.repeat(ZSchedule.fixed(1.second)).provide(env))
+          env.akka
+            .unsafeRunToFuture(updateQueueGauge.repeat(ZSchedule.fixed(1.second)).provide(env))
             .onComplete(t => s"METRICS COMLETED ===================== $t")
         }
       }
@@ -43,8 +44,6 @@ object DstreamSampleApp extends AkkaApp {
 
   private val runServer = {
     val graphTask = ZIO.access[AkkaEnv with DsEnv with MeasuredLogging] { implicit env =>
-      import env._
-
       val ks = KillSwitches.shared("server shared killswitch")
 
       Source(1 to Int.MaxValue)
@@ -58,7 +57,7 @@ object DstreamSampleApp extends AkkaApp {
                   .take(1)
                   .runForeach { _ =>
                     //                    println(s"Server < [worker=$workerId][assignment=${assignment.valueIn}] $r")
-                  }
+                  }(env.akka.materializer)
               }
             }
             .retry(ZSchedule.logInput((e: Throwable) => ZLogger.error("Distribute failed", e)))
@@ -94,13 +93,14 @@ object DstreamSampleApp extends AkkaApp {
 
   protected def run: ZIO[Env, Throwable, Unit] = {
     val createService = ZIO.access[AkkaEnv with DsEnv] { env =>
-      import env._
+      val akkaEnv = env.akka
+      import akkaEnv._
       DstreamSampleAppPowerApiHandler(Dstreams.handle(env, _, _))
     }
     val port = 9999
     val managedServer =
       Dstreams.createManagedServer(DstreamServerConfig(port = port, idleTimeout = 5.seconds), createService)
-    val managedClient = Dstreams.createManagedClient(ZIO.access[AkkaEnv] { env =>
+    val managedClient = Dstreams.createManagedClient(ZIO.access[AkkaEnv](_.akka).map { env =>
       import env._
       DstreamSampleAppClient(
         GrpcClientSettings

@@ -2,11 +2,10 @@ package dev.chopsticks.kvdb
 
 import java.nio.charset.StandardCharsets.UTF_8
 
-import akka.actor.ActorSystem
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.testkit.{ImplicitSender, TestProbe}
-import dev.chopsticks.fp.{AkkaApp, LoggingContext, ZAkka}
+import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LoggingContext, ZAkka}
 import dev.chopsticks.kvdb.codec.KeyConstraints
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraintList, KvdbKeyRange}
@@ -95,7 +94,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   private lazy val as = system
 
   private object env extends AkkaApp.LiveEnv {
-    implicit val actorSystem: ActorSystem = as
+    val akka: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(as)
   }
 
   private def assertPair(pair: Option[KvdbPair], key: String, value: String): Assertion = {
@@ -114,7 +113,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     values.map(p => byteArrayToString(p)) should equal(vs)
   }
 
-  import env.materializer
+  import env.akka.materializer
 
   "wrong column family" should {
     "not compile" in withDb { db =>
@@ -1046,7 +1045,7 @@ abstract private[kvdb] class KvdbDatabaseTest
           allDefault,
           Vector(
             ("aaaa1", "aaaa1"),
-            ("aaaa5", "aaaa5"),
+            ("aaaa5", "aaaa5")
           )
         )
       }

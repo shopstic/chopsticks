@@ -1,13 +1,12 @@
 package dev.chopsticks.sample.app
 
-import akka.actor.ActorSystem
 import com.typesafe.config.Config
-import dev.chopsticks.fp.{AkkaApp, ConfigEnv, ZLogger}
+import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ConfigEnv, ZLogger}
 import dev.chopsticks.util.config.PureconfigLoader
+import zio.duration._
 import zio.{ZIO, ZManaged}
 
 import scala.concurrent.TimeoutException
-import zio.duration._
 
 object PlainSampleApp extends AkkaApp {
   final case class AppConfig(foo: Int, bar: String)
@@ -22,7 +21,7 @@ object PlainSampleApp extends AkkaApp {
       .environment[AkkaApp.Env]
       .map { akkaEnv =>
         new AkkaApp.LiveEnv with Cfg {
-          implicit val actorSystem: ActorSystem = akkaEnv.actorSystem
+          val akka: AkkaEnv.Service = akkaEnv.akka
           val config: AppConfig = PureconfigLoader.unsafeLoad[AppConfig](rawConfig, "app")
         }
       }

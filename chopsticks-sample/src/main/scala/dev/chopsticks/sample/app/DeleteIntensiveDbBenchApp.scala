@@ -63,7 +63,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
     counter: LongAdder,
     parallelism: Int
   ) = {
-    ZIO.access[AkkaEnv] { env =>
+    ZIO.access[AkkaEnv](_.akka).map { env =>
       val random = ThreadLocalRandom.current()
 
       Source
@@ -99,7 +99,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
       Flow[Any]
         .conflate(Keep.right)
         .mapAsync(1) { _ =>
-          env.unsafeRunToFuture(
+          env.akka.unsafeRunToFuture(
             db.compactRange(dbMat.queue)
               .timed
               .map(_._1)
@@ -224,7 +224,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
 
           val par = measure(deleteTask, metrics.purgeDuration) zipParRight measure(batchGetTask, metrics.getDuration)
 
-          env.unsafeRunToFuture(
+          env.akka.unsafeRunToFuture(
             measure(par, metrics.duration)
               .provide(env)
           )

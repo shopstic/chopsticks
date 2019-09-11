@@ -4,6 +4,7 @@ import org.rocksdb._
 import squants.information.Mebibytes
 
 import scala.collection.JavaConverters._
+import eu.timepit.refined.auto._
 
 object RocksdbColumnFamilyOptionsBuilder {
   def apply(config: RocksdbColumnFamilyConfig): RocksdbColumnFamilyOptionsBuilder = {
@@ -17,11 +18,11 @@ final class RocksdbColumnFamilyOptionsBuilder private (config: RocksdbColumnFami
 
   //  private val writeBufferSize = memoryBudget / 4
   private val columnOptions = {
-    val writeBufferSize = memoryBudgetBytes / 4
+    val writeBufferSize = memoryBudgetBytes / config.writeBufferCount
 
     val cf = new ColumnFamilyOptions()
       .setWriteBufferSize(writeBufferSize)
-      .setMaxWriteBufferNumber(4)
+      .setMaxWriteBufferNumber(config.writeBufferCount)
       .setMinWriteBufferNumberToMerge(1)
       .setTargetFileSizeBase(writeBufferSize)
       .setTargetFileSizeMultiplier(10)

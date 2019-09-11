@@ -2,7 +2,6 @@ package dev.chopsticks.sample.app
 
 import java.time.{LocalDate, LocalDateTime}
 
-import akka.actor.ActorSystem
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink}
 import com.typesafe.config.Config
@@ -40,7 +39,7 @@ object KvdbTestSampleApp extends AkkaApp {
       typedConfig = PureconfigLoader.unsafeLoad[AppConfig](untypedConfig, "app")
       db <- KvdbDatabase.manage(LmdbDatabase(sampleDb, typedConfig.db))
     } yield new AkkaApp.LiveEnv with CfgEnv with SampleDb.Env {
-      implicit val actorSystem: ActorSystem = akkaEnv.actorSystem
+      val akka: AkkaEnv.Service = akkaEnv.akka
       val config: AppConfig = typedConfig
       val sampleDb: SampleDb.Db = db
     }

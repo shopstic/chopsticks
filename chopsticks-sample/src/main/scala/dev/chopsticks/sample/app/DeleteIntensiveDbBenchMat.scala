@@ -9,6 +9,7 @@ import dev.chopsticks.kvdb.rocksdb.{RocksdbColumnFamilyConfig, RocksdbColumnFami
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import dev.chopsticks.sample.app.DeleteIntensiveDbBenchApp.{DbDef, MtMessageId}
 import squants.information.InformationConversions._
+import eu.timepit.refined.auto._
 
 object DeleteIntensiveDbBenchMat extends DbDef.Materialization with RocksdbMaterialization[DbDef.BaseCf, DbDef.CfSet] {
   import DbDef._
@@ -33,7 +34,8 @@ object DeleteIntensiveDbBenchMat extends DbDef.Materialization with RocksdbMater
         RocksdbColumnFamilyConfig(
           memoryBudget = 128.mib,
           blockCache = 1.gib,
-          blockSize = 64.kib
+          blockSize = 64.kib,
+          writeBufferCount = 4
         ).toOptions(TotalOrderScanPattern)
       )
       .and(
@@ -41,7 +43,8 @@ object DeleteIntensiveDbBenchMat extends DbDef.Materialization with RocksdbMater
         RocksdbColumnFamilyConfig(
           memoryBudget = 1.gib,
           blockCache = 1.gib,
-          blockSize = 64.kib
+          blockSize = 64.kib,
+          writeBufferCount = 4
         ).toOptions(PointLookupPattern)
       )
       .and(
@@ -49,7 +52,8 @@ object DeleteIntensiveDbBenchMat extends DbDef.Materialization with RocksdbMater
         RocksdbColumnFamilyConfig(
           memoryBudget = 128.mib,
           blockCache = 1.gib,
-          blockSize = 64.kib
+          blockSize = 64.kib,
+          writeBufferCount = 4
         ).toOptions(PointLookupPattern)
       )
 }

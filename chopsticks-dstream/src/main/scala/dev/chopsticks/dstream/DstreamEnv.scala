@@ -33,8 +33,10 @@ object DstreamEnv {
     def mapGauge: Gauge
   }
 
-  abstract class LiveService[Req, Res](rt: zio.Runtime[Any], metrics: Metrics)(implicit mat: Materializer, ec: ExecutionContext)
-      extends Service[Req, Res] {
+  abstract class LiveService[Req, Res](rt: zio.Runtime[Any], metrics: Metrics)(
+    implicit mat: Materializer,
+    ec: ExecutionContext
+  ) extends Service[Req, Res] {
     protected val workerGauge = metrics.workerGauge
     protected val attemptCounter = metrics.attemptCounter
     protected val queueGauge = metrics.queueGauge

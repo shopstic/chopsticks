@@ -25,14 +25,16 @@ object RocksdbDatabaseTest {
         RocksdbColumnFamilyConfig(
           memoryBudget = 1.mib,
           blockCache = 1.mib,
-          blockSize = 8.kib
+          blockSize = 8.kib,
+          writeBufferCount = 4
         ).toOptions(PrefixedScanPattern(1))
       ) and (
         lookup,
         RocksdbColumnFamilyConfig(
           memoryBudget = 1.mib,
           blockCache = 1.mib,
-          blockSize = 8.kib
+          blockSize = 8.kib,
+          writeBufferCount = 4
         ).toOptions(PointLookupPattern)
       )
     }
