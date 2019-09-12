@@ -37,7 +37,7 @@ object Dependencies {
   )
 
   val squantsDeps = Seq(
-    "org.typelevel" %% "squants" % "1.4.0"
+    "org.typelevel" %% "squants" % "1.5.0"
   )
 
   val prometheusClientDeps = Seq(
@@ -49,11 +49,11 @@ object Dependencies {
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "1.6.1"
+    "org.typelevel" %% "cats-core" % "2.0.0"
   )
 
   val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "1.2.1"
+    "org.typelevel" %% "kittens" % "2.0.0"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
