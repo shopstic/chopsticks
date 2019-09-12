@@ -34,7 +34,7 @@ object RocksdbUtils extends StrictLogging {
   }
 
   def propertiesFromMap(map: Map[String, String]): Properties = {
-    (new Properties /: map) {
+    map.foldLeft(new Properties) {
       case (a, (k, v)) =>
         val _ = a.put(k, v)
         a
