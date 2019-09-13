@@ -5,7 +5,7 @@ import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
 import akka.stream.{Attributes, KillSwitch, KillSwitches}
 import zio._
 
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 object ZAkka {
@@ -97,29 +97,34 @@ object ZAkka {
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.access[AkkaEnv with R] { env =>
+      val akkaEnv = env.akka
+      import akkaEnv._
+
       Flow
         .lazyInitAsync(() => {
-          val completionPromise = Promise[Unit]()
-          val interruptTask = Task.fromFuture(_ => completionPromise.future)
+          val completionPromise = unsafeRun(zio.Promise.make[Nothing, Unit])
+
           Future.successful(
             Flow[A]
               .mapAsync(parallelism) { a =>
                 val interruptableTask = for {
                   fib <- runTask(a).fork
-                  c <- (interruptTask *> fib.interrupt).fork
+                  c <- (completionPromise.await *> fib.interrupt).fork
                   ret <- fib.join
                   _ <- c.interrupt.fork
                 } yield ret
 
-                env.akka.unsafeRunToFuture(interruptableTask.provide(env))
+                unsafeRunToFuture(interruptableTask.provide(env))
               }
               .watchTermination() { (_, f) =>
-                f.onComplete(_ => completionPromise.success(()))(env.akka.dispatcher)
+                f.onComplete { _ =>
+                  val _ = unsafeRun(completionPromise.succeed(()))
+                }
                 NotUsed
               }
           )
         })
-        .mapMaterializedValue(_.map(_ => NotUsed)(env.akka.dispatcher))
+        .mapMaterializedValue(_.map(_ => NotUsed))
     }
   }
 
@@ -134,20 +139,24 @@ object ZAkka {
     attributes: Option[Attributes] = None
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.access[AkkaEnv with R] { env =>
+      val akkaEnv = env.akka
+      import akkaEnv._
+
       Flow
         .lazyInitAsync(() => {
-          val completionPromise = Promise[Unit]()
-          val interruptTask = Task.fromFuture(_ => completionPromise.future)
+          val completionPromise = unsafeRun(zio.Promise.make[Nothing, Unit])
+          val interruption = completionPromise.await
+
           val flow = Flow[A]
             .mapAsyncUnordered(parallelism) { a =>
               val interruptableTask = for {
                 fib <- runTask(a).fork
-                c <- (interruptTask *> fib.interrupt).fork
+                c <- (interruption *> fib.interrupt).fork
                 ret <- fib.join
                 _ <- c.interrupt.fork
               } yield ret
 
-              env.akka.unsafeRunToFuture(interruptableTask.provide(env))
+              unsafeRunToFuture(interruptableTask.provide(env))
             }
 
           val flowWithAttrs = attributes.fold(flow)(attrs => flow.withAttributes(attrs))
@@ -155,7 +164,9 @@ object ZAkka {
           Future.successful(
             flowWithAttrs
               .watchTermination() { (_, f) =>
-                f.onComplete(_ => completionPromise.success(()))(env.akka.dispatcher)
+                f.onComplete { _ =>
+                  val _ = unsafeRun(completionPromise.succeed(()))
+                }
                 NotUsed
               }
           )
@@ -166,14 +177,16 @@ object ZAkka {
 
   def interruptableLazySource[R, A, B](effect: RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Source[B, Future[NotUsed]]] = {
     ZIO.access[AkkaEnv with R] { env =>
+      val akkaEnv = env.akka
+      import akkaEnv._
+
       Source
         .lazily(() => {
-          val completionPromise = Promise[Unit]()
-          val interruptTask = Task.fromFuture(_ => completionPromise.future)
+          val completionPromise = unsafeRun(zio.Promise.make[Nothing, Unit])
 
           val interruptableTask = for {
             fib <- effect.fork
-            c <- (interruptTask *> fib.interrupt).fork
+            c <- (completionPromise.await *> fib.interrupt).fork
             ret <- fib.join
             _ <- c.interrupt.fork
           } yield ret
@@ -182,8 +195,8 @@ object ZAkka {
             .fromFuture(env.akka.unsafeRunToFuture(interruptableTask.provide(env)))
             .watchTermination() { (_, f) =>
               f.onComplete { _ =>
-                completionPromise.success(())
-              }(env.akka.dispatcher)
+                val _ = unsafeRun(completionPromise.succeed(()))
+              }
               NotUsed
             }
         })
@@ -194,6 +207,9 @@ object ZAkka {
     f: In => RIO[R, Source[Out, Any]]
   ): ZIO[AkkaEnv with R, Nothing, Flow[In, Out, NotUsed]] = {
     ZIO.access[AkkaEnv with R] { env =>
+      val akkaEnv = env.akka
+      import akkaEnv._
+
       Flow[In]
         .statefulMapConcat(() => {
           var currentKillSwitch = Option.empty[KillSwitch]
@@ -204,7 +220,7 @@ object ZAkka {
             val (ks, s) = env.akka
               .unsafeRun(f(in).provide(env))
               .viaMat(KillSwitches.single)(Keep.right)
-              .preMaterialize()(env.akka.materializer)
+              .preMaterialize()
 
             currentKillSwitch = Some(ks)
             List(s)
