@@ -2,7 +2,7 @@ package dev.chopsticks.util.config
 
 import com.typesafe.config.Config
 import japgolly.microlibs.utils.AsciiTable
-import pureconfig.ConfigReader
+import pureconfig.{ConfigReader, ConfigSource}
 import pureconfig.error.{CannotParse, ConfigReaderFailures, ConvertFailure, ThrowableFailure}
 import pureconfig.generic.ProductHint
 
@@ -10,7 +10,7 @@ object PureconfigLoader {
   implicit def hint[T]: ProductHint[T] = ProductHint[T](allowUnknownKeys = false)
 
   def load[Cfg: ConfigReader](config: Config, namespace: String): Either[String, Cfg] = {
-    pureconfig.loadConfig[Cfg](config, namespace) match {
+    ConfigSource.fromConfig(config).at(namespace).load[Cfg] match {
       case Left(failures: ConfigReaderFailures) =>
         Left(
           AsciiTable(

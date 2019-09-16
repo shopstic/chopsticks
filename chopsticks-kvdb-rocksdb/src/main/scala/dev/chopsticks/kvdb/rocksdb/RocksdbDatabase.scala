@@ -166,6 +166,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
   import RocksdbDatabase._
 
+  private val akkaEnv: AkkaEnv.Service = env.akka
+
   val isLocal: Boolean = true
 
   private val columnOptions: Map[CF, ColumnFamilyOptions] = materialization.columnFamilyConfigMap.map
@@ -342,7 +344,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
           }
     }
 
-    env.akka.unsafeRunToFuture(task.provide(KvdbIoThreadPool.blockingEnv))
+    akkaEnv.unsafeRunToFuture(task.provide(KvdbIoThreadPool.blockingEnv))
   }
 
   private def ioTask[T](task: Task[T]): Task[T] = {
@@ -817,7 +819,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                 .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, config.ioDispatcher))
           }
 
-        env.akka.unsafeRunToFuture(task)
+        akkaEnv.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -957,7 +959,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                 }
               }
           }
-        env.akka.unsafeRunToFuture(task)
+        akkaEnv.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -983,7 +985,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
             }
           }
 
-        env.akka.unsafeRunToFuture(task)
+        akkaEnv.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
   }
