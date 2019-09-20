@@ -88,7 +88,7 @@ object Dependencies {
   val scalatestDeps = Seq(
     "org.scalactic" %% "scalactic" % "3.0.8",
     "org.scalatest" %% "scalatest" % "3.0.8",
-    "org.scalacheck" %% "scalacheck" % "1.14.0",
+    "org.scalacheck" %% "scalacheck" % "1.14.1",
     "org.scalamock" %% "scalamock" % "4.4.0"
   )
 
@@ -118,8 +118,8 @@ object Dependencies {
   )
 
   val refinedDeps = Seq(
-    "eu.timepit" %% "refined" % "0.9.9",
-    "eu.timepit" %% "refined-pureconfig" % "0.9.9"
+    "eu.timepit" %% "refined" % "0.9.10",
+    "eu.timepit" %% "refined-pureconfig" % "0.9.10"
   )
 
   val chimneyDeps = Seq(
