@@ -5,7 +5,7 @@ import java.util.concurrent.{SynchronousQueue, ThreadFactory, ThreadPoolExecutor
 
 import zio.ZIO
 import zio.blocking.Blocking
-import zio.internal.{Executor, PlatformLive}
+import zio.internal.Executor
 
 object KvdbIoThreadPool {
   final class KvdbIoThreadFactory(name: String, daemon: Boolean) extends ThreadFactory {
@@ -27,7 +27,7 @@ object KvdbIoThreadPool {
     }
   }
 
-  lazy val executor: Executor = PlatformLive.ExecutorUtil.fromThreadPoolExecutor(_ => Int.MaxValue) {
+  lazy val executor: Executor = zio.internal.Executor.fromThreadPoolExecutor(_ => Int.MaxValue) {
     val corePoolSize = 0
     val maxPoolSize = Int.MaxValue
     val keepAliveTime = 60000L

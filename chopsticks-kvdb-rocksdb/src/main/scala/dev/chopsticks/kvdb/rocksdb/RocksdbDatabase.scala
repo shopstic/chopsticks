@@ -968,7 +968,6 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbTailBatch, Future[NotUsed]] = {
-
     Source
       .lazilyAsync(() => {
         val task = references
