@@ -96,7 +96,7 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long]
 
-  def transactionTask(actions: Seq[TransactionAction]): Task[Unit]
+  def transactionTask(actions: Seq[TransactionAction], sync: Boolean = false): Task[Unit]
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions

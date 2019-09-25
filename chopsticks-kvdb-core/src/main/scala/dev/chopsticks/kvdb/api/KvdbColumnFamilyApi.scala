@@ -250,6 +250,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   def putInBatchesFlow(
+    sync: Boolean,
     maxBatchSize: Int = 4096,
     groupWithin: FiniteDuration = Duration.Zero,
     batchEncodingParallelism: Int = 2
@@ -265,24 +266,26 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(1) {
         case (batch, serialized) =>
           unsafeRunToFuture(
-            db.transactionTask(serialized)
+            db.transactionTask(serialized, sync)
               .map(_ => batch)
           )
       }
   }
 
   def putValuesInBatchesFlow(
+    sync: Boolean,
     maxBatchSize: Int = 4096,
     groupWithin: FiniteDuration = Duration.Zero,
     batchEncodingParallelism: Int = 2
   )(implicit kt: KeyTransformer[V, K]): Flow[V, Seq[(K, V)], NotUsed] = {
     Flow[V]
       .via(transformValueToPairFlow)
-      .via(putInBatchesFlow(maxBatchSize, groupWithin, batchEncodingParallelism))
+      .via(putInBatchesFlow(sync, maxBatchSize, groupWithin, batchEncodingParallelism))
   }
 
   def putInBatchesWithCheckpointFlow[CCF <: BCF[CK, CV], CK, CV](
     checkpointColumn: CCF,
+    sync: Boolean,
     maxBatchSize: Int = 4096,
     groupWithin: FiniteDuration = Duration.Zero,
     batchEncodingParallelism: Int = 1
@@ -291,6 +294,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   ): Flow[(K, V), Seq[(K, V)], NotUsed] = {
     putInBatchesWithCheckpointsFlow[CCF, CK, CV](
       checkpointColumn,
+      sync,
       maxBatchSize,
       groupWithin,
       batchEncodingParallelism
@@ -301,6 +305,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def putInBatchesWithCheckpointsFlow[CCF <: BCF[CK, CV], CK, CV](
     checkpointColumn: CCF,
+    sync: Boolean,
     maxBatchSize: Int = 4096,
     groupWithin: FiniteDuration = Duration.Zero,
     batchEncodingParallelism: Int = 1
@@ -322,7 +327,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(1) {
         case (batch, serialized) =>
           unsafeRunToFuture(
-            db.transactionTask(serialized)
+            db.transactionTask(serialized, sync)
               .as(batch)
           )
       }
@@ -330,6 +335,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def putValuesInBatchesWithCheckpointFlow[CCF <: BCF[CK, CV], CK, CV](
     checkpointColumn: CCF,
+    sync: Boolean,
     maxBatchSize: Int = 4096,
     groupWithin: FiniteDuration = Duration.Zero,
     batchEncodingParallelism: Int = 1
@@ -341,6 +347,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .via(
         putInBatchesWithCheckpointFlow[CCF, CK, CV](
           checkpointColumn,
+          sync,
           maxBatchSize,
           groupWithin,
           batchEncodingParallelism
@@ -352,6 +359,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def putValuesInBatchesWithCheckpointsFlow[CCF <: BCF[CK, CV], CK, CV](
     checkpointColumn: CCF,
+    sync: Boolean,
     maxBatchSize: Int = 4096,
     groupWithin: FiniteDuration = Duration.Zero,
     batchEncodingParallelism: Int = 1
@@ -363,6 +371,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .via(
         putInBatchesWithCheckpointsFlow[CCF, CK, CV](
           checkpointColumn,
+          sync,
           maxBatchSize,
           groupWithin,
           batchEncodingParallelism

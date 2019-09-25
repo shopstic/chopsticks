@@ -32,8 +32,8 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (val db: Kv
 
   def closeTask(): RIO[Clock, Unit] = db.closeTask()
 
-  def transactionTask(actions: Seq[TransactionAction]): Task[Seq[TransactionAction]] = {
-    db.transactionTask(actions)
+  def transactionTask(actions: Seq[TransactionAction], sync: Boolean = false): Task[Seq[TransactionAction]] = {
+    db.transactionTask(actions, sync)
       .as(actions)
   }
 

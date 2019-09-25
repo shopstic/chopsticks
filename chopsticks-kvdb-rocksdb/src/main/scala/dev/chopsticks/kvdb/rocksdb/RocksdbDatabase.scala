@@ -131,8 +131,8 @@ object RocksdbDatabase extends StrictLogging {
     readOnly: Boolean,
     startWithBulkInserts: Boolean,
     checksumOnRead: Boolean,
-    syncWriteBatch: Boolean,
     useDirectIo: Boolean,
+    syncWriteBatch: Boolean,
     ioDispatcher: NonEmptyString
   )
 
@@ -212,9 +212,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     if (config.checksumOnRead) o.setVerifyChecksums(config.checksumOnRead) else o
   }
 
-  private def newWriteOptions(): WriteOptions = {
+  private def newWriteOptions(sync: Boolean = false): WriteOptions = {
     val o = new WriteOptions()
-    if (config.syncWriteBatch) o.setSync(true) else o
+    if (sync || config.syncWriteBatch) o.setSync(true) else o
   }
 
   private def syncColumnFamilies(descriptors: List[ColumnFamilyDescriptor], existingColumnNames: Set[String]): Unit = {
@@ -998,7 +998,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   }
 
 //  @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  def transactionTask(actions: Seq[TransactionAction]): Task[Unit] = {
+  def transactionTask(actions: Seq[TransactionAction], sync: Boolean): Task[Unit] = {
     ioTask(references.map { refs =>
       val db = refs.db
       val writeBatch = new WriteBatch()
@@ -1024,7 +1024,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
             )
         }
 
-        val writeOptions = newWriteOptions()
+        val writeOptions = newWriteOptions(sync)
 
         try {
           db.write(writeOptions, writeBatch)

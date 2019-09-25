@@ -721,7 +721,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  def transactionTask(actions: Seq[TransactionAction]): Task[Unit] = {
+  def transactionTask(actions: Seq[TransactionAction], sync: Boolean): Task[Unit] = {
     writeTask(for {
       refs <- references
       _ <- Task {
