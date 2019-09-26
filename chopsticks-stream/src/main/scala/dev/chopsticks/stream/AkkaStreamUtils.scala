@@ -5,7 +5,7 @@ import java.time.Instant
 import akka.NotUsed
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed._
-import akka.stream.scaladsl.{Balance, Flow, GraphDSL, Keep, Merge, Sink}
+import akka.stream.scaladsl.{Balance, Flow, GraphDSL, Keep, Merge, Sink, Source}
 import akka.stream.typed.scaladsl.ActorSource
 import akka.stream.{Attributes, FlowShape, Materializer, OverflowStrategy}
 
@@ -148,6 +148,21 @@ object AkkaStreamUtils {
         })(_ += _)
         .map(_.result())
     }
+  }
+
+  def batchWithOptionalAggregateFlow[In, Out](
+    max: Long,
+    costFn: In => Long,
+    seed: In => Out
+  )(aggregate: (Out, In) => Option[Out]): Flow[In, Out, NotUsed] = {
+    Flow.fromGraph(
+      new BatchWithOptionalAggregateFlow[In, Out](
+        max: Long,
+        costFn: In => Long,
+        seed: In => Out,
+        aggregate: (Out, In) => Option[Out]
+      )
+    )
   }
 
   final class HandlerLogger(name: String, logger: Logger) {
@@ -333,6 +348,44 @@ object AkkaStreamUtils {
         Behaviors.stopped
       case (_, Terminated(`child`)) =>
         Behaviors.stopped
+    }
+  }
+
+  object ops {
+    implicit class AkkaStreamUtilsFlowOps[-In, +Out, +Mat](flow: Flow[In, Out, Mat]) {
+      def batchWithOptionalAggregate[Next](max: Long, seed: Out => Next)(
+        aggregate: (Next, Out) => Option[Next]
+      ): Flow[In, Next, Mat] = {
+        flow.via(
+          batchWithOptionalAggregateFlow[Out, Next](max, _ => 1, seed)(aggregate)
+        )
+      }
+
+      def batchWeightedWithOptionalAggregate[Next](max: Long, costFn: Out => Long, seed: Out => Next)(
+        aggregate: (Next, Out) => Option[Next]
+      ): Flow[In, Next, Mat] = {
+        flow.via(
+          batchWithOptionalAggregateFlow[Out, Next](max, costFn, seed)(aggregate)
+        )
+      }
+    }
+
+    implicit class AkkaStreamUtilsSourceOps[+Out, +Mat](source: Source[Out, Mat]) {
+      def batchWithOptionalAggregate[Next](max: Long, seed: Out => Next)(
+        aggregate: (Next, Out) => Option[Next]
+      ): Source[Next, Mat] = {
+        source.via(
+          batchWithOptionalAggregateFlow[Out, Next](max, _ => 1, seed)(aggregate)
+        )
+      }
+
+      def batchWeightedWithOptionalAggregate[Next](max: Long, costFn: Out => Long, seed: Out => Next)(
+        aggregate: (Next, Out) => Option[Next]
+      ): Source[Next, Mat] = {
+        source.via(
+          batchWithOptionalAggregateFlow[Out, Next](max, costFn, seed)(aggregate)
+        )
+      }
     }
   }
 }
