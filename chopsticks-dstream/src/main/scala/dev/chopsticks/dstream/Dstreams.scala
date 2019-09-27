@@ -12,6 +12,7 @@ import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
+import dev.chopsticks.stream.ZAkkaStreams
 import zio._
 import zio.clock.Clock
 
@@ -131,13 +132,13 @@ object Dstreams extends LoggingContext {
       requestBuilder
         .invoke(Source.fromFutureSource(promise.future).mapMaterializedValue(_ => NotUsed))
         .viaMat(KillSwitches.single)(Keep.right)
-        .via(ZAkka.interruptableMapAsync(1) { assignment: Req =>
+        .via(ZAkkaStreams.interruptableMapAsync(1) { assignment: Req =>
           makeSource(assignment).map(s => promise.success(s)) *> Task.fromFuture(_ => promise.future)
         })
         .toMat(Sink.ignore)(Keep.both)
     }
 
-    ZAkka.interruptableGraphM(graph, graceful = true)
+    ZAkkaStreams.interruptableGraphM(graph, graceful = true)
   }
 
   def workPool[Req, Res, R <: AkkaEnv](

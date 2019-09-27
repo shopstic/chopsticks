@@ -13,6 +13,7 @@ import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
 import dev.chopsticks.kvdb.lmdb.LmdbDatabase
 import dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits._
 import dev.chopsticks.sample.kvdb.SampleDb
+import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
 import zio.{RIO, ZIO, ZManaged}
 
@@ -59,7 +60,7 @@ object KvdbTestSampleApp extends AkkaApp {
           .mkString("\n")
       )
       defaultCf = dbApi.columnFamily(sampleDb.default)
-      tailFiber <- ZAkka
+      tailFiber <- ZAkkaStreams
         .interruptableGraphM(
           ZIO.access[AkkaEnv with LogEnv] { env =>
             val log = env.logger

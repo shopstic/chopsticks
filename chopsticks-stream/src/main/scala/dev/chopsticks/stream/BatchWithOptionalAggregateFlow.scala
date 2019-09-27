@@ -11,8 +11,8 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
   max: Long,
   costFn: In => Long,
   seed: In => Out,
-  aggregate: (Out, In) => Option[Out])
-  extends GraphStage[FlowShape[In, Out]] {
+  aggregate: (Out, In) => Option[Out]
+) extends GraphStage[FlowShape[In, Out]] {
 
   val in: Inlet[In] = Inlet[In]("Batch.in")
   val out: Outlet[Out] = Outlet[Out]("Batch.out")
@@ -41,13 +41,14 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
           } catch {
             case NonFatal(ex) =>
               decider(ex) match {
-                case Supervision.Stop    => failStage(ex)
+                case Supervision.Stop => failStage(ex)
                 case Supervision.Restart => restartState()
                 case Supervision.Resume =>
                   pending = null.asInstanceOf[In]
               }
           }
-        } else {
+        }
+        else {
           agg = null.asInstanceOf[Out]
         }
       }
@@ -71,9 +72,11 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
                 case Supervision.Resume =>
               }
           }
-        } else if (left < cost) {
+        }
+        else if (left < cost) {
           pending = elem
-        } else {
+        }
+        else {
           try {
             aggregate(agg, elem) match {
               case Some(newAgg) =>
@@ -106,7 +109,8 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
         if (agg == null) {
           if (isClosed(in)) completeStage()
           else if (!hasBeenPulled(in)) pull(in)
-        } else if (isClosed(in)) {
+        }
+        else if (isClosed(in)) {
           push(out, agg)
           if (pending == null) completeStage()
           else {
@@ -115,7 +119,7 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
             } catch {
               case NonFatal(ex) =>
                 decider(ex) match {
-                  case Supervision.Stop   => failStage(ex)
+                  case Supervision.Stop => failStage(ex)
                   case Supervision.Resume =>
                   case Supervision.Restart =>
                     restartState()
@@ -124,7 +128,8 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
             }
             pending = null.asInstanceOf[In]
           }
-        } else {
+        }
+        else {
           flush()
           if (!hasBeenPulled(in)) pull(in)
         }
@@ -140,4 +145,3 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
       setHandlers(in, out, this)
     }
 }
-

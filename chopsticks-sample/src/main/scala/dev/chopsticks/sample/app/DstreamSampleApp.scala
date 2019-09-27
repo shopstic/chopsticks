@@ -8,8 +8,9 @@ import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream.{DstreamEnv, Dstreams}
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZAkka, ZLogger}
+import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ZLogger}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
+import dev.chopsticks.stream.ZAkkaStreams
 import io.prometheus.client.{Counter, Gauge}
 import zio._
 
@@ -48,7 +49,7 @@ object DstreamSampleApp extends AkkaApp {
 
       Source(1 to Int.MaxValue)
         .map(Assignment(_))
-        .via(ZAkka.interruptableMapAsyncUnordered(12) { assignment: Assignment =>
+        .via(ZAkkaStreams.interruptableMapAsyncUnordered(12) { assignment: Assignment =>
           Dstreams
             .distribute(assignment) { result: WorkResult[Result] =>
               Task.fromFuture { _ =>
@@ -68,7 +69,7 @@ object DstreamSampleApp extends AkkaApp {
         .mapMaterializedValue(f => (ks, f))
     }
 
-    ZAkka.interruptableGraphM(graphTask, graceful = true)
+    ZAkkaStreams.interruptableGraphM(graphTask, graceful = true)
   }
 
   protected def runWorker(client: DstreamSampleAppClient, id: Int) = {

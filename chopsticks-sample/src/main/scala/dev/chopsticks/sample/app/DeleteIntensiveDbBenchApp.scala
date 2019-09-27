@@ -11,12 +11,13 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import com.typesafe.config.{Config => TypesafeConfig}
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LogEnv, ZAkka}
+import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LogEnv}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase
 import dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits.defaultClientOptions
 import dev.chopsticks.kvdb.util.KvdbException.SeekFailure
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDefinition, KvdbMaterialization}
+import dev.chopsticks.stream.ZAkkaStreams
 import eu.timepit.refined.auto._
 import eu.timepit.refined.collection.NonEmpty
 import eu.timepit.refined.refineV
@@ -140,7 +141,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
     val inflightCf = dbApi.columnFamily(dbMat.inflight)
 
     for {
-      flow <- ZAkka.mapAsyncUnorderedM(parallelism) { batch: Seq[(MtMessageId, Unit)] =>
+      flow <- ZAkkaStreams.mapAsyncUnorderedM(parallelism) { batch: Seq[(MtMessageId, Unit)] =>
         val task = for {
           tx <- UIO {
             Random
@@ -326,7 +327,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
 //        db = db
 //      )
 
-      populateThenPurgeFib <- ZAkka
+      populateThenPurgeFib <- ZAkkaStreams
         .interruptableGraph(
           ZIO.succeed {
             populateSource
@@ -347,7 +348,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
         )
         .fork
 
-      responseFib <- ZAkka
+      responseFib <- ZAkkaStreams
         .interruptableGraph(
           ZIO.succeed(
             responseSource

@@ -1,11 +1,12 @@
-package dev.chopsticks.fp
+package dev.chopsticks.stream
 
 import java.util.concurrent.TimeUnit
 
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{ActorMaterializer, Attributes, KillSwitches, Materializer}
-import dev.chopsticks.fp.ZAkka.ops._
+import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedMockClockService, ManualTimeAkkaTestKit}
 import org.scalatest.concurrent.ScalaFutures
@@ -18,7 +19,7 @@ import zio.{Task, UIO, ZIO}
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
 
-final class ZAkkaTest
+final class ZAkkaStreamsTest
     extends ManualTimeAkkaTestKit
     with AsyncWordSpecLike
     with Matchers
@@ -57,7 +58,7 @@ final class ZAkkaTest
         startFuture <- startP.await.toFuture
         interruptedP <- zio.Promise.make[Nothing, Unit]
         interruptedFuture <- interruptedP.await.toFuture
-        source <- ZAkka.interruptableLazySource {
+        source <- ZAkkaStreams.interruptableLazySource {
           startP.succeed(()) *> ZIO
             .succeed(1)
             .delay(zio.duration.Duration(3, TimeUnit.SECONDS))
@@ -110,6 +111,26 @@ final class ZAkkaTest
     sink.expectComplete()
 
     Succeeded
+  }
+
+  "ZAkkaStreams" when {
+    "recursiveSource" should {
+      "repeat" in withEnv { implicit env =>
+        val sink = ZAkkaStreams
+          .recursiveSource(ZIO.succeed(1), (_: Int, o: Int) => o) { s =>
+            Source(s to s + 2)
+          }
+          .toMat(TestSink.probe[Int])(Keep.right)
+          .run()
+
+        val sub = sink.expectSubscription()
+        sub.request(6)
+        sink.expectNextN(List(1, 2, 3, 3, 4, 5))
+        sub.cancel()
+
+        Succeeded
+      }
+    }
   }
 
   "ops" when {

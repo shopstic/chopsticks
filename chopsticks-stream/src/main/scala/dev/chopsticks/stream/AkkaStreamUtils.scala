@@ -3,15 +3,15 @@ package dev.chopsticks.stream
 import java.time.Instant
 
 import akka.NotUsed
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed._
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.stream.scaladsl.{Balance, Flow, GraphDSL, Keep, Merge, Sink, Source}
 import akka.stream.typed.scaladsl.ActorSource
 import akka.stream.{Attributes, FlowShape, Materializer, OverflowStrategy}
 
 import scala.collection.immutable
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.{ExecutionContext, Future}
 
 object AkkaStreamUtils {
   def balancerFlow[In, Out](worker: Flow[In, Out, Any], workerCount: Int): Flow[In, Out, NotUsed] = {
