@@ -6,7 +6,6 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
-import dev.chopsticks.stream.MultiMergeSorted
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.{Matchers, WordSpecLike}
 

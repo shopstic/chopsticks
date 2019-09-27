@@ -1,19 +1,21 @@
 package dev.chopsticks.kvdb.codec
 
-import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, YearMonth}
+import java.time._
 import java.util.UUID
 
 import com.sleepycat.bind.tuple.TupleInput
 import dev.chopsticks.kvdb.codec.KeyDeserializer.{GenericKeyDeserializationException, KeyDeserializationResult}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
-import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
-
-import scala.annotation.implicitNotFound
-import scala.util.control.NonFatal
+import enumeratum.EnumEntry
+import enumeratum.values._
 import magnolia._
+import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import shapeless.Typeable
 
+import scala.annotation.implicitNotFound
 import scala.language.experimental.macros
+import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
 
 @implicitNotFound(
   msg = "Implicit BerkeleydbKeyDeserializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeyDeserializer[${T}]"
@@ -85,6 +87,42 @@ object BerkeleydbKeyDeserializer {
         case NonFatal(e) =>
           Left(GenericKeyDeserializationException(s"Failed decoding to proto enum ${typ.describe}: ${e.toString}", e))
       }
+    }
+  }
+
+  implicit def enumeratumByteEnumKeyDecoder[E <: ByteEnumEntry](
+    implicit e: ByteEnum[E]
+  ): BerkeleydbKeyDeserializer[E] = { (in: TupleInput) =>
+    Try(e.withValue(in.readByte())) match {
+      case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
+      case Success(value) => Right(value)
+    }
+  }
+
+  implicit def enumeratumShortEnumKeyDecoder[E <: ShortEnumEntry](
+    implicit e: ShortEnum[E]
+  ): BerkeleydbKeyDeserializer[E] = { (in: TupleInput) =>
+    Try(e.withValue(in.readShort())) match {
+      case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
+      case Success(value) => Right(value)
+    }
+  }
+
+  implicit def enumeratumIntEnumKeyDecoder[E <: IntEnumEntry](
+    implicit e: IntEnum[E]
+  ): BerkeleydbKeyDeserializer[E] = { (in: TupleInput) =>
+    Try(e.withValue(in.readInt())) match {
+      case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
+      case Success(value) => Right(value)
+    }
+  }
+
+  implicit def enumeratumEnumKeyDecoder[E <: EnumEntry](
+    implicit e: enumeratum.Enum[E]
+  ): BerkeleydbKeyDeserializer[E] = { (in: TupleInput) =>
+    Try(e.withName(in.readString())) match {
+      case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
+      case Success(value) => Right(value)
     }
   }
 

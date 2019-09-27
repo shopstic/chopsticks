@@ -1,15 +1,17 @@
 package dev.chopsticks.kvdb.codec
 
-import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, YearMonth}
+import java.time._
 import java.util.UUID
 
 import com.sleepycat.bind.tuple.TupleOutput
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
-import scalapb.GeneratedEnum
+import enumeratum.EnumEntry
+import enumeratum.values.{ByteEnumEntry, IntEnumEntry, ShortEnumEntry}
 import magnolia._
-import scala.language.experimental.macros
+import scalapb.GeneratedEnum
 
 import scala.annotation.implicitNotFound
+import scala.language.experimental.macros
 
 @implicitNotFound(
   msg = "Implicit BerkeleydbKeySerializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeySerializer[${T}]"
@@ -54,6 +56,18 @@ object BerkeleydbKeySerializer {
 
   implicit def protobufEnumBerkeleydbKeyEncoder[T <: GeneratedEnum]: BerkeleydbKeySerializer[T] =
     create((o, v) => intBerkeleydbKeyEncoder.serialize(o, v.value))
+
+  implicit def enumeratumByteEnumKeyEncoder[E <: ByteEnumEntry]: BerkeleydbKeySerializer[E] =
+    (o: TupleOutput, t: E) => o.writeByte(t.value.toInt)
+
+  implicit def enumeratumShortEnumKeyEncoder[E <: ShortEnumEntry]: BerkeleydbKeySerializer[E] =
+    (o: TupleOutput, t: E) => o.writeShort(t.value.toInt)
+
+  implicit def enumeratumIntEnumKeyEncoder[E <: IntEnumEntry]: BerkeleydbKeySerializer[E] =
+    (o: TupleOutput, t: E) => o.writeInt(t.value)
+
+  implicit def enumeratumEnumKeyEncoder[E <: EnumEntry]: BerkeleydbKeySerializer[E] =
+    (o: TupleOutput, t: E) => o.writeString(t.entryName)
 
   def apply[V](implicit f: BerkeleydbKeySerializer[V]): BerkeleydbKeySerializer[V] = f
 

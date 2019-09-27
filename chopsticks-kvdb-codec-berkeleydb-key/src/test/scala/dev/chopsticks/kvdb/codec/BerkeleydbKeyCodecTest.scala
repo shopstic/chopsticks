@@ -6,8 +6,47 @@ import java.util.UUID
 import org.scalatest.{Assertions, Matchers, WordSpecLike}
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import dev.chopsticks.testkit.ArbitraryTime._
+import enumeratum.EnumEntry
+import enumeratum.values.{ByteEnum, ByteEnumEntry, IntEnum, IntEnumEntry}
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalactic.anyvals.{PosInt, PosZDouble}
+
 import scala.language.higherKinds
+
+object BerkeleydbKeyCodecTest {
+  sealed abstract class ByteEnumTest(val value: Byte) extends ByteEnumEntry
+
+  object ByteEnumTest extends ByteEnum[ByteEnumTest] {
+    case object One extends ByteEnumTest(1)
+    case object Two extends ByteEnumTest(2)
+    case object Three extends ByteEnumTest(3)
+    val values = findValues
+  }
+
+  implicit val byteEnumTestGen: Arbitrary[ByteEnumTest] = Arbitrary(Gen.oneOf(ByteEnumTest.values))
+
+  sealed abstract class IntEnumTest(val value: Int) extends IntEnumEntry
+
+  object IntEnumTest extends IntEnum[IntEnumTest] {
+    case object One extends IntEnumTest(1)
+    case object Two extends IntEnumTest(2)
+    case object Three extends IntEnumTest(3)
+    val values = findValues
+  }
+
+  implicit val intEnumTestGen: Arbitrary[IntEnumTest] = Arbitrary(Gen.oneOf(IntEnumTest.values))
+
+  sealed abstract class EnumTest(val value: String) extends EnumEntry
+
+  object EnumTest extends enumeratum.Enum[EnumTest] {
+    case object One extends EnumTest("one")
+    case object Two extends EnumTest("one")
+    case object Three extends EnumTest("one")
+    val values = findValues
+  }
+
+  implicit val enumTestGen: Arbitrary[EnumTest] = Arbitrary(Gen.oneOf(EnumTest.values))
+}
 
 //noinspection TypeAnnotation
 class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers with ScalaCheckDrivenPropertyChecks {
@@ -387,6 +426,37 @@ class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers 
         forAll { (uuid: UUID, foo: Boolean) =>
           val key = UuidKey(uuid, foo)
           KeySerdes.deserialize[UuidKey](KeySerdes.serialize(key)) should equal(Right(key))
+        }
+      }
+    }
+
+    "Enumeratum" when {
+      import BerkeleydbKeyCodecTest._
+
+      "ByteEnum" should {
+        "serialize / deserialize" in {
+          forAll { (entry: ByteEnumTest) =>
+            import berkeleydb_key._
+            KeySerdes.deserialize[ByteEnumTest](KeySerdes.serialize(entry)) should equal(Right(entry))
+          }
+        }
+      }
+
+      "IntEnum" should {
+        "serialize / deserialize" in {
+          forAll { (entry: IntEnumTest) =>
+            import berkeleydb_key._
+            KeySerdes.deserialize[IntEnumTest](KeySerdes.serialize(entry)) should equal(Right(entry))
+          }
+        }
+      }
+
+      "Enum" should {
+        "serialize / deserialize" in {
+          forAll { (entry: EnumTest) =>
+            import berkeleydb_key._
+            KeySerdes.deserialize[EnumTest](KeySerdes.serialize(entry)) should equal(Right(entry))
+          }
         }
       }
     }
