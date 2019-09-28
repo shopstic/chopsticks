@@ -17,16 +17,6 @@ package object zio_ext {
 
   type MeasuredLogging = LogEnv with Clock
 
-  implicit final class TaskExtensions[A](io: Task[A]) {
-    def logResult(name: String, result: A => String)(implicit ctx: LogCtx): RIO[MeasuredLogging, A] = {
-      new ZIOExtensions(io).logResult(name, result)
-    }
-
-    def log(name: String)(implicit ctx: LogCtx): RIO[MeasuredLogging, A] = {
-      new ZIOExtensions(io).log(name)
-    }
-  }
-
   implicit final class ZIOExtensions[R >: Nothing, E <: Any, A](io: ZIO[R, E, A]) {
     def logResult(name: String, result: A => String)(
       implicit ctx: LogCtx
@@ -53,6 +43,25 @@ package object zio_ext {
 
     def log(name: String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed")
+    }
+
+    def retryForever[R1 <: R](
+      retryPolicy: ZSchedule[R1, Any, Any],
+      repeatSchedule: ZSchedule[R1, Any, Any],
+      retryResetMinDuration: zio.duration.Duration
+    ): ZIO[R1 with Clock, Nothing, Unit] = {
+      io.either.timed
+        .flatMap {
+          case (elapsed, result) =>
+            result match {
+              case Right(_) => ZIO.succeed(())
+              case Left(_) if elapsed > retryResetMinDuration => ZIO.succeed(())
+              case Left(ex) => ZIO.fail(ex)
+            }
+        }
+        .retry(retryPolicy)
+        .repeat(repeatSchedule.unit)
+        .orDieWith(_ => new IllegalStateException("Can't happen with infinite retries"))
     }
   }
 }

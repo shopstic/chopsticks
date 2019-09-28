@@ -1,12 +1,13 @@
 package dev.chopsticks.sample.app
 
+import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
+
 import com.typesafe.config.Config
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv, ConfigEnv, ZLogger}
+import dev.chopsticks.fp._
 import dev.chopsticks.util.config.PureconfigLoader
 import zio.duration._
-import zio.{ZIO, ZManaged}
-
-import scala.concurrent.TimeoutException
+import zio.{Task, ZIO, ZManaged, ZSchedule}
+import dev.chopsticks.fp.zio_ext._
 
 object PlainSampleApp extends AkkaApp {
   final case class AppConfig(foo: Int, bar: String)
@@ -30,9 +31,24 @@ object PlainSampleApp extends AkkaApp {
   protected def run: ZIO[Env, Throwable, Unit] = {
     for {
       config <- ZIO.access[Cfg](_.config)
+      logEnv <- ZIO.environment[LogEnv]
       _ <- ZLogger.info(s"Works config=$config")
-      _ <- ZIO.unit.delay(10.seconds).timeoutFail(new TimeoutException("ya die"))(2.seconds)
-//      _ <- ZIO.never.timeoutFail(new TimeoutException("ya die"))(2.seconds)
+      _ <- ZIO
+        .effectSuspend {
+          val delay = ThreadLocalRandom.current().nextLong(100, 1500)
+          val duration = zio.duration.Duration(delay, TimeUnit.MILLISECONDS)
+          println(s"""Going to delay: $duration""")
+          Task
+            .fail(new IllegalStateException("Test failure"))
+            .delay(duration)
+        }
+        .retryForever(
+          retryPolicy = (ZSchedule.exponential(500.millis) || ZSchedule.spaced(4.seconds)).onDecision { (_: Any, d) =>
+            ZLogger.info(s"Retry backoff: ${d.delay}").provide(logEnv)
+          },
+          repeatSchedule = ZSchedule.forever.logOutput(i => ZLogger.info(s"Success $i")),
+          retryResetMinDuration = 750.millis
+        )
     } yield ()
   }
 }
