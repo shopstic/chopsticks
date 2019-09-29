@@ -1,8 +1,9 @@
 package dev.chopsticks.kvdb.codec
 
 import com.typesafe.scalalogging.StrictLogging
+import dev.chopsticks.kvdb.codec.KeySerdes.flatten
 import dev.chopsticks.kvdb.util.UnusedImplicits._
-import shapeless.ops.hlist.{IsHCons, Length, Take}
+import shapeless.ops.hlist.{FlatMapper, IsHCons, Length, Take}
 import shapeless.{<:!<, Generic, HList, Nat}
 
 import scala.annotation.implicitNotFound
@@ -36,22 +37,32 @@ object KeyPrefix extends StrictLogging {
     new KeyPrefixWithSerializer[A, B](serializer)
   }
 
-  implicit def productToKeyPrefix[A <: Product, B <: Product, P <: HList, F <: HList, N <: Nat, T <: HList](
+  implicit def productToKeyPrefix[
+    Prefix <: Product,
+    Key <: Product,
+    PrefixHlist <: HList,
+    PrefixFlattenedHlist <: HList,
+    KeyHlist <: HList,
+    N <: Nat,
+    TakenHlist <: HList
+  ](
     implicit
-    g: Generic.Aux[A, P],
-    l: Length.Aux[P, N],
-    f: KeySerdes.Aux[B, F],
-    t: Take.Aux[F, N, T],
-    e: P =:= T,
-    encoder: KeySerializer[A]
-  ): KeyPrefix[A, B] = {
-    logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${f.describe}")
+    prefixHlist: Generic.Aux[Prefix, PrefixHlist],
+    prefixFlattenedHlist: FlatMapper.Aux[flatten.type, PrefixHlist, PrefixFlattenedHlist],
+    length: Length.Aux[PrefixFlattenedHlist, N],
+    keyHlist: KeySerdes.Aux[Key, KeyHlist],
+    takenHlist: Take.Aux[KeyHlist, N, TakenHlist],
+    evidence: PrefixFlattenedHlist =:= TakenHlist,
+    encoder: KeySerializer[Prefix]
+  ): KeyPrefix[Prefix, Key] = {
+    logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${keyHlist.describe}")
     //    n.unused()
-    g.unused()
-    l.unused()
-    t.unused()
-    e.unused()
-    new KeyPrefixWithSerializer[A, B](encoder)
+    prefixHlist.unused()
+    prefixFlattenedHlist.unused()
+    length.unused()
+    takenHlist.unused()
+    evidence.unused()
+    new KeyPrefixWithSerializer[Prefix, Key](encoder)
   }
 
   // e.g

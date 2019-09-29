@@ -17,6 +17,8 @@ import org.scalactic.anyvals.{PosInt, PosZDouble}
 import scala.language.higherKinds
 
 object BerkeleydbKeyCodecTest {
+  final case class Sym(symbol: String) extends AnyVal
+
   sealed abstract class ByteEnumTest(val value: Byte) extends ByteEnumEntry
 
   object ByteEnumTest extends ByteEnum[ByteEnumTest] {
@@ -130,13 +132,14 @@ class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers 
   }
 
   "prefix" should {
-    case class TradeTick(symbol: String, dateTime: LocalDateTime, price: BigDecimal, size: Int)
+    import BerkeleydbKeyCodecTest.Sym
+    case class TradeTick(symbol: Sym, dateTime: LocalDateTime, price: BigDecimal, size: Int)
     object TradeTick {
       import berkeleydb_key._
       implicit val dbKey = KeySerdes[TradeTick]
     }
 
-    case class Prefix(symbol: String, dateTime: LocalDateTime)
+    case class Prefix(symbol: Sym, dateTime: LocalDateTime)
     object Prefix {
       import berkeleydb_key._
       implicit val dbKeyPrefix = KeyPrefix[Prefix, TradeTick]
@@ -145,8 +148,8 @@ class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers 
     "serialize" in {
       val now = LocalDateTime.now
 
-      val tick = TradeTick("AAPL", now, BigDecimal("1234.67"), 1000)
-      val prefix = Prefix("AAPL", now)
+      val tick = TradeTick(Sym("AAPL"), now, BigDecimal("1234.67"), 1000)
+      val prefix = Prefix(Sym("AAPL"), now)
       assert(KeySerdes.isPrefix(KeyPrefix[Prefix, TradeTick].serialize(prefix), KeySerdes.serialize(tick)))
     }
   }
