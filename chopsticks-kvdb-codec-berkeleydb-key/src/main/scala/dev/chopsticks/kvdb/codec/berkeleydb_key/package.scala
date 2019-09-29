@@ -4,10 +4,6 @@ import java.time._
 import java.util.UUID
 
 import com.sleepycat.bind.tuple.{TupleInput, TupleOutput}
-import dev.chopsticks.kvdb.codec.KeyDeserializer.GenericKeyDeserializationException
-import eu.timepit.refined.api.{RefType, Validate}
-
-import scala.language.higherKinds
 
 //noinspection TypeAnnotation
 package object berkeleydb_key {
@@ -18,28 +14,6 @@ package object berkeleydb_key {
   implicit def berkeleydbKeyDeserializer[T](implicit deserializer: BerkeleydbKeyDeserializer[T]): KeyDeserializer[T] = {
     bytes: Array[Byte] =>
       deserializer.deserialize(new TupleInput(bytes))
-  }
-
-  implicit def refinedBerkeleydbKeySerializer[F[_, _], T, P](
-    implicit serializer: BerkeleydbKeySerializer[T],
-    refType: RefType[F],
-    validate: Validate[T, P]
-  ): BerkeleydbKeySerializer[F[T, P]] = {
-    import dev.chopsticks.kvdb.util.UnusedImplicits._
-    validate.unused()
-    (o: TupleOutput, t: F[T, P]) => serializer.serialize(o, refType.unwrap(t))
-  }
-
-
-  implicit def refinedBerkeleydbKeyDeserializer[F[_, _], T, P](
-    implicit deserializer: BerkeleydbKeyDeserializer[T],
-    refType: RefType[F],
-    validate: Validate[T, P]
-  ): BerkeleydbKeyDeserializer[F[T, P]] = (in: TupleInput) => {
-    import cats.syntax.either._
-    deserializer.deserialize(in).flatMap { value =>
-      refType.refine[P](value).leftMap(GenericKeyDeserializationException(_))
-    }
   }
 
   implicit val stringKeySerdes = KeySerdes[String]

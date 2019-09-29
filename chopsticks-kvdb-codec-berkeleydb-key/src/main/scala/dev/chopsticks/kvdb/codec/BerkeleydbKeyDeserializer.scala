@@ -8,12 +8,14 @@ import dev.chopsticks.kvdb.codec.KeyDeserializer.{GenericKeyDeserializationExcep
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import enumeratum.EnumEntry
 import enumeratum.values._
+import eu.timepit.refined.api.{RefType, Validate}
 import magnolia._
 import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import shapeless.Typeable
 
 import scala.annotation.implicitNotFound
 import scala.language.experimental.macros
+import scala.language.higherKinds
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -123,6 +125,17 @@ object BerkeleydbKeyDeserializer {
     Try(e.withName(in.readString())) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
       case Success(value) => Right(value)
+    }
+  }
+
+  implicit def refinedBerkeleydbKeyDeserializer[F[_, _], T, P](
+    implicit deserializer: BerkeleydbKeyDeserializer[T],
+    refType: RefType[F],
+    validate: Validate[T, P]
+  ): BerkeleydbKeyDeserializer[F[T, P]] = (in: TupleInput) => {
+    import cats.syntax.either._
+    deserializer.deserialize(in).flatMap { value =>
+      refType.refine[P](value).leftMap(GenericKeyDeserializationException(_))
     }
   }
 
