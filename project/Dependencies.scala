@@ -117,8 +117,11 @@ object Dependencies {
     "com.beachape" %% "enumeratum" % "1.5.13"
   )
 
-  val refinedDeps = Seq(
-    "eu.timepit" %% "refined" % "0.9.10",
+  val refinedCoreDeps = Seq(
+    "eu.timepit" %% "refined" % "0.9.10"
+  )
+
+  val refinedDeps = refinedCoreDeps ++ Seq(
     "eu.timepit" %% "refined-pureconfig" % "0.9.10"
   )
 

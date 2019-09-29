@@ -3,11 +3,14 @@ package dev.chopsticks.kvdb.codec
 import java.time.{LocalDate, LocalDateTime, LocalTime, YearMonth}
 import java.util.UUID
 
+import dev.chopsticks.kvdb.codec.BerkeleydbKeyCodecTest.TestKeyWithRefined
 import org.scalatest.{Assertions, Matchers, WordSpecLike}
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import dev.chopsticks.testkit.ArbitraryTime._
 import enumeratum.EnumEntry
 import enumeratum.values.{ByteEnum, ByteEnumEntry, IntEnum, IntEnumEntry}
+import eu.timepit.refined.types.net.PortNumber
+import eu.timepit.refined.types.string.NonEmptyString
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalactic.anyvals.{PosInt, PosZDouble}
 
@@ -46,6 +49,12 @@ object BerkeleydbKeyCodecTest {
   }
 
   implicit val enumTestGen: Arbitrary[EnumTest] = Arbitrary(Gen.oneOf(EnumTest.values))
+
+  final case class TestKeyWithRefined(foo: NonEmptyString, bar: PortNumber)
+  object TestKeyWithRefined {
+    import dev.chopsticks.kvdb.codec.berkeleydb_key._
+    implicit val dbKey = KeySerdes[TestKeyWithRefined]
+  }
 }
 
 //noinspection TypeAnnotation
@@ -458,6 +467,15 @@ class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers 
             KeySerdes.deserialize[EnumTest](KeySerdes.serialize(entry)) should equal(Right(entry))
           }
         }
+      }
+    }
+
+    "refined" should {
+      "serdes" in {
+        import berkeleydb_key._
+        import eu.timepit.refined.auto._
+        val key = TestKeyWithRefined("foo", 1234)
+        KeySerdes.deserialize[TestKeyWithRefined](KeySerdes.serialize(key)) should equal(Right(key))
       }
     }
   }
