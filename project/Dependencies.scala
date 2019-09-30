@@ -57,7 +57,7 @@ object Dependencies {
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.12.0")
+    .map(p => "com.github.pureconfig" %% p % "0.12.1")
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
@@ -151,7 +151,7 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.11.0"
+    "com.propensive" %% "magnolia" % "0.12.0"
   )
 
   val pprintDeps = Seq(
