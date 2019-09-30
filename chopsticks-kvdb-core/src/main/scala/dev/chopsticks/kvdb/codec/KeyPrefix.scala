@@ -4,7 +4,7 @@ import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.codec.KeySerdes.flatten
 import dev.chopsticks.kvdb.util.UnusedImplicits._
 import shapeless.ops.hlist.{FlatMapper, IsHCons, Length, Take}
-import shapeless.{<:!<, Generic, HList, Nat}
+import shapeless.{<:!<, =:!=, Generic, HList, Nat}
 
 import scala.annotation.implicitNotFound
 
@@ -47,6 +47,7 @@ object KeyPrefix extends StrictLogging {
     TakenHlist <: HList
   ](
     implicit
+    neqEvidence: Prefix =:!= Key,
     prefixHlist: Generic.Aux[Prefix, PrefixHlist],
     prefixFlattenedHlist: FlatMapper.Aux[flatten.type, PrefixHlist, PrefixFlattenedHlist],
     length: Length.Aux[PrefixFlattenedHlist, N],
@@ -57,6 +58,7 @@ object KeyPrefix extends StrictLogging {
   ): KeyPrefix[Prefix, Key] = {
     logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${keyHlist.describe}")
     //    n.unused()
+    neqEvidence.unused()
     prefixHlist.unused()
     prefixFlattenedHlist.unused()
     length.unused()
