@@ -713,7 +713,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  def tailValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  def tailValueSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbTailValueBatch, Future[NotUsed]] = {
     tailSource(column, range)

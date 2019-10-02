@@ -102,7 +102,7 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbTailBatch, Future[NotUsed]]
 
-  def tailValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  def tailValueSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbTailValueBatch, Future[NotUsed]]
 

@@ -989,7 +989,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .flatMapConcat(identity)
   }
 
-  def tailValuesSource[Col <: CF](
+  def tailValueSource[Col <: CF](
     column: Col,
     range: KvdbKeyRange
   )(implicit clientOptions: KvdbClientOptions): Source[KvdbTailValueBatch, Future[NotUsed]] = {

@@ -952,7 +952,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   "tailValuesSource" should {
     "tail" in withDb { db =>
       val source = db
-        .tailValuesSource(defaultCf, $$(_ ^= "bbbb", _ ^= "bbbb"))
+        .tailValueSource(defaultCf, $$(_ ^= "bbbb", _ ^= "bbbb"))
         .collect { case Right(b) => b }
         .via(flattenFlow)
       val probe = TestProbe()

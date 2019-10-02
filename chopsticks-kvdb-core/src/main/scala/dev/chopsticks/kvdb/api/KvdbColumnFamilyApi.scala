@@ -11,7 +11,7 @@ import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, Constraints
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList}
-import dev.chopsticks.kvdb.util.KvdbAliases.KvdbTailBatch
+import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbTailBatch, KvdbValueBatch}
 import dev.chopsticks.kvdb.util.KvdbClientOptions
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase}
 import dev.chopsticks.stream.AkkaStreamUtils
@@ -381,14 +381,20 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       )
   }
 
+  def tailRawValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
+    implicit clientOptions: KvdbClientOptions
+  ): Source[KvdbValueBatch, Future[NotUsed]] = {
+    db.tailValueSource(cf, KeyConstraints.range[K](from, to))
+      .collect {
+        case Right(b) => b
+      }
+  }
+
   def tailValueSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
   )(implicit clientOptions: KvdbClientOptions): Source[V, Future[NotUsed]] = {
-    db.tailValuesSource(cf, KeyConstraints.range[K](from, to))
-      .collect {
-        case Right(b) => b
-      }
+    tailRawValueSource(from, to)
       .mapAsync(1) { b =>
         Future {
           b.map[V, List[V]](cf.unsafeDeserializeValue)(breakOut)
@@ -401,14 +407,21 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     tailValueSource(_.first, _.last)
   }
 
-  def tailSource(
+  def tailRawSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[(K, V), Future[NotUsed]] = {
+  )(implicit clientOptions: KvdbClientOptions): Source[KvdbBatch, Future[NotUsed]] = {
     db.tailSource(cf, KeyConstraints.range[K](from, to))
       .collect {
         case Right(b) => b
       }
+  }
+
+  def tailSource(
+    from: ConstraintsBuilder[K],
+    to: ConstraintsBuilder[K]
+  )(implicit clientOptions: KvdbClientOptions): Source[(K, V), Future[NotUsed]] = {
+    tailRawSource(from, to)
       .mapAsync(1) { batch =>
         Future {
           batch.map[(K, V), List[(K, V)]](cf.unsafeDeserialize)(breakOut)
@@ -478,7 +491,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     to: ConstraintsBuilder[K]
   )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, V], Future[NotUsed]] = {
     import cats.syntax.either._
-    db.tailValuesSource(cf, KeyConstraints.range[K](from, to))
+    db.tailValueSource(cf, KeyConstraints.range[K](from, to))
       .mapAsync(1) {
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
