@@ -9,7 +9,7 @@ import shapeless.{<:!<, =:!=, Generic, HList, Nat}
 import scala.annotation.implicitNotFound
 
 @implicitNotFound(msg = "Cannot prove that ${A} is a DbKeyPrefix of ${B}.")
-trait KeyPrefix[A, B] {
+trait KeyPrefix[-A, B] {
   def serialize(a: A): Array[Byte]
 }
 

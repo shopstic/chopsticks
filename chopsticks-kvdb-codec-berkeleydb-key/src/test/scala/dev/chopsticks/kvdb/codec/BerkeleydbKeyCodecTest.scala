@@ -52,6 +52,13 @@ object BerkeleydbKeyCodecTest {
 
   implicit val enumTestGen: Arbitrary[EnumTest] = Arbitrary(Gen.oneOf(EnumTest.values))
 
+  final case class ContravariantKeyPrefixTest(foo: EnumTest, bar: IntEnumTest, baz: ByteEnumTest)
+  object ContravariantKeyPrefixTest {
+    import dev.chopsticks.kvdb.codec.berkeleydb_key._
+    implicit val dbKey = KeySerdes[ContravariantKeyPrefixTest]
+    implicit val dbKeyPrefix = KeyPrefix[(EnumTest, IntEnumTest), ContravariantKeyPrefixTest]
+  }
+
   final case class TestKeyWithRefined(foo: NonEmptyString, bar: PortNumber)
   object TestKeyWithRefined {
     import dev.chopsticks.kvdb.codec.berkeleydb_key._
@@ -479,6 +486,13 @@ class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers 
         import eu.timepit.refined.auto._
         val key = TestKeyWithRefined("foo", 1234)
         KeySerdes.deserialize[TestKeyWithRefined](KeySerdes.serialize(key)) should equal(Right(key))
+      }
+    }
+
+    "KeyPrefix" should {
+      "be contravariant" in {
+        import BerkeleydbKeyCodecTest._
+        KeyPrefix[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(ContravariantKeyPrefixTest.dbKeyPrefix)
       }
     }
   }
