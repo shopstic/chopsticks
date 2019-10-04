@@ -18,7 +18,7 @@ import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest._
 import zio.{RIO, Task, UIO, ZManaged}
-
+import squants.information.InformationConversions._
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.language.implicitConversions
@@ -600,7 +600,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     "respect given MaxKvdbBatchBytes" in withDb { db =>
       val count = 10000
       val pad = 5
-      val batchSize = 10000
+      val maxBatchBytes = 10.kib
 
       for {
         tx <- Task {
@@ -614,7 +614,7 @@ abstract private[kvdb] class KvdbDatabaseTest
         _ <- db.transactionTask(tx)
         batches <- ZAkkaStreams.graphM(UIO {
           db.iterateSource(defaultCf, $$(_.first, _.last))(
-              testKvdbClientOptions.copy(maxBatchBytes = batchSize)
+              testKvdbClientOptions.copy(maxBatchBytes = maxBatchBytes)
             )
             .toMat(Sink.seq)(Keep.right)
         })
@@ -785,7 +785,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     "respect given MaxKvdbBatchBytes" in withDb { db =>
       val count = 10000
       val pad = 5
-      val batchSize = 10000
+      val maxBatchBytes = 10.kib
 
       for {
         tx <- Task {
@@ -800,7 +800,7 @@ abstract private[kvdb] class KvdbDatabaseTest
         batches <- ZAkkaStreams
           .graphM(UIO {
             db.tailSource(defaultCf, $$(_.first, _.last))(
-                testKvdbClientOptions.copy(maxBatchBytes = batchSize)
+                testKvdbClientOptions.copy(maxBatchBytes = maxBatchBytes)
               )
               .takeWhile(
                 (b: KvdbTailBatch) => b.right.forall(a => KvdbSerdesUtils.byteArrayToString(a.last._1) != "10000"),

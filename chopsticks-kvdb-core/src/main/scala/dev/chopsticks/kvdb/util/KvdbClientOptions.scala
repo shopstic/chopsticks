@@ -1,11 +1,13 @@
 package dev.chopsticks.kvdb.util
 
-import scala.concurrent.duration._
+import squants.information.Information
 
-final case class KvdbClientOptions(maxBatchBytes: Int, tailPollingInterval: FiniteDuration)
+import scala.concurrent.duration._
+import squants.information.InformationConversions._
+
+final case class KvdbClientOptions(maxBatchBytes: Information, tailPollingInterval: FiniteDuration = 100.millis)
 object KvdbClientOptions {
   object Implicits {
-    implicit val defaultClientOptions: KvdbClientOptions =
-      KvdbClientOptions(maxBatchBytes = 32 * 1024, tailPollingInterval = 100.millis)
+    implicit val defaultClientOptions: KvdbClientOptions = KvdbClientOptions(32.kib)
   }
 }

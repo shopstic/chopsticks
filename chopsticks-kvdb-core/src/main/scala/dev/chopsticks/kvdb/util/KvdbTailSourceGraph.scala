@@ -32,6 +32,7 @@ class KvdbTailSourceGraph(
 )(implicit clientOptions: KvdbClientOptions)
     extends GraphStage[SourceShape[KvdbTailBatch]] {
   import KvdbTailSourceGraph._
+  private val maxBatchBytes = clientOptions.maxBatchBytes.toBytes.toInt
 
   val outlet: Outlet[KvdbTailBatch] = Outlet("KvdbIterateSourceGraph.out")
 
@@ -99,7 +100,7 @@ class KvdbTailSourceGraph(
           var batchSizeSoFar = 0
           var isEmpty = true
 
-          while (batchSizeSoFar < clientOptions.maxBatchBytes && iterator.hasNext) {
+          while (batchSizeSoFar < maxBatchBytes && iterator.hasNext) {
             val next = iterator.next()
             batchSizeSoFar += next._1.length + next._2.length
             val _ = reusableBuffer += next
