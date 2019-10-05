@@ -8,12 +8,12 @@ import akka.stream.{ActorMaterializer, Attributes, KillSwitches, Materializer}
 import dev.chopsticks.fp.AkkaEnv
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
-import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedMockClockService, ManualTimeAkkaTestKit}
+import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClockService, ManualTimeAkkaTestKit}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{Assertion, AsyncWordSpecLike, Matchers, Succeeded}
 import zio.blocking._
 import zio.clock.Clock
-import zio.test.mock.MockClock
+import zio.test.environment.TestClock
 import zio.{Task, UIO, ZIO}
 
 import scala.concurrent.duration._
@@ -28,16 +28,16 @@ final class ZAkkaStreamsTest
 
   implicit val mat: Materializer = ActorMaterializer()
 
-  type Env = AkkaEnv with MockClock with Blocking
+  type Env = AkkaEnv with TestClock with Blocking
 
   private def createEnv: Env = {
-    new AkkaEnv with MockClock with Blocking.Live {
+    new AkkaEnv with TestClock with Blocking.Live {
       val akka: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(system)
-      private val fixedMockClockService = FixedMockClockService(
-        akka.unsafeRun(MockClock.makeMock(MockClock.DefaultData))
+      private val fixedTestClockService = FixedTestClockService(
+        akka.unsafeRun(TestClock.makeTest(TestClock.DefaultData))
       )
-      val clock: MockClock.Service[Any] = fixedMockClockService
-      val scheduler: MockClock.Service[Any] = fixedMockClockService
+      val clock: TestClock.Service[Any] = fixedTestClockService
+      val scheduler: TestClock.Service[Any] = fixedTestClockService
     }
   }
 
@@ -53,7 +53,7 @@ final class ZAkkaStreamsTest
   "interruptableLazySource" should {
     "interrupt effect" in withEffect {
       for {
-        clock <- ZIO.access[MockClock](c => new ManualClock(Some(c)))
+        clock <- ZIO.access[TestClock](c => new ManualClock(Some(c)))
         startP <- zio.Promise.make[Nothing, Unit]
         startFuture <- startP.await.toFuture
         interruptedP <- zio.Promise.make[Nothing, Unit]

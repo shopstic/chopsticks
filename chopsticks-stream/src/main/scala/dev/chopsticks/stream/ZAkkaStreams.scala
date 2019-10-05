@@ -126,7 +126,7 @@ object ZAkkaStreams {
                   fib <- runTask(a).fork
                   c <- (completionPromise.await *> fib.interrupt).fork
                   ret <- fib.join
-                  _ <- c.interrupt.fork
+                  _ <- c.interrupt
                 } yield ret
 
                 unsafeRunToFuture(interruptableTask.provide(env))
@@ -168,7 +168,7 @@ object ZAkkaStreams {
                 fib <- runTask(a).fork
                 c <- (interruption *> fib.interrupt).fork
                 ret <- fib.join
-                _ <- c.interrupt.fork
+                _ <- c.interrupt
               } yield ret
 
               unsafeRunToFuture(interruptableTask.provide(env))
@@ -203,7 +203,7 @@ object ZAkkaStreams {
             fib <- effect.fork
             c <- (completionPromise.await *> fib.interrupt).fork
             ret <- fib.join
-            _ <- c.interrupt.fork
+            _ <- c.interrupt
           } yield ret
 
           Source

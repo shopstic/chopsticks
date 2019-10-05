@@ -22,10 +22,10 @@ object DstreamSampleApp extends AkkaApp {
   type Env = AkkaApp.Env with DsEnv
 
   private object dstreamMetrics extends DstreamEnv.Metrics {
-    val workerGauge: Gauge = Gauge.build.name("dstream_workers").register()
-    val attemptCounter: Counter = Counter.build.name("dstream_attempts_total").register()
-    val queueGauge: Gauge = Gauge.build.name("dstream_queue").register()
-    val mapGauge: Gauge = Gauge.build.name("dstream_map").register()
+    val workerGauge: Gauge = Gauge.build("dstream_workers", "dstream_workers").register()
+    val attemptCounter: Counter = Counter.build("dstream_attempts_total", "dstream_attempts_total").register()
+    val queueGauge: Gauge = Gauge.build("dstream_queue", "dstream_queue").register()
+    val mapGauge: Gauge = Gauge.build("dstream_map", "dstream_map").register()
   }
 
   protected def createEnv(untypedConfig: Config) = {

@@ -3,9 +3,9 @@ package dev.chopsticks.fp
 import akka.actor.ActorSystem
 import akka.stream.{ActorMaterializer, Materializer}
 import zio.internal.PlatformLive
-import zio.{Exit, IO, Runtime, Task, ZIO}
+import zio.{CancelableFuture, Exit, IO, Runtime, Task, ZIO}
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.ExecutionContextExecutor
 
 trait AkkaEnv {
   def akka: AkkaEnv.Service
@@ -27,7 +27,7 @@ object AkkaEnv {
       rt.unsafeRun(zio)
     }
 
-    def unsafeRunToFuture[A](task: Task[A]): Future[A] = {
+    def unsafeRunToFuture[A](task: Task[A]): CancelableFuture[Throwable, A] = {
       rt.unsafeRunToFuture(task)
     }
   }

@@ -6,7 +6,7 @@ object Dependencies {
   val SCALA_VERSION = "2.12.10"
   val AKKA_VERSION = "2.5.25"
   val AKKA_HTTP_VERSION = "10.1.10"
-  val ZIO_VERSION = "1.0.0-RC13"
+  val ZIO_VERSION = "1.0.0-RC14"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION

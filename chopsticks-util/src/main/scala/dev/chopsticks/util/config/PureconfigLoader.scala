@@ -9,6 +9,9 @@ import pureconfig.generic.ProductHint
 object PureconfigLoader {
   implicit def hint[T]: ProductHint[T] = ProductHint[T](allowUnknownKeys = false)
 
+  private def sanitizeReason(reason: String) = {
+    reason.replaceAllLiterally("\n", " ")
+  }
   def load[Cfg: ConfigReader](config: Config, namespace: String): Either[String, Cfg] = {
     ConfigSource.fromConfig(config).at(namespace).load[Cfg] match {
       case Left(failures: ConfigReaderFailures) =>
@@ -20,11 +23,11 @@ object PureconfigLoader {
                   case "" => ""
                   case _ => location.map(_.toString).getOrElse(config.getValue(path).origin().description())
                 }
-                List(path, reason.description, origin)
+                List(path, sanitizeReason(reason.description), origin)
               case CannotParse(reason, location) =>
-                List("", reason, location.toString)
+                List("", sanitizeReason(reason), location.toString)
               case ThrowableFailure(e, location) =>
-                List("", e.getMessage, location.toString)
+                List("", sanitizeReason(e.getMessage), location.toString)
             },
             separateDataRows = false
           )

@@ -87,7 +87,7 @@ object DstreamEnv {
         }.fork
         abortFib <- (abortTask *> assignmentFib.interrupt).fork
         assignment <- assignmentFib.join
-        _ <- abortFib.interrupt.fork
+        _ <- abortFib.interrupt
 //        _ <- UIO(println(s"beforeInterrupt enqueueWorker > assignment=$assignment"))
 //        _ <- abortFib.interrupt
 //        _ <- UIO(println(s"afterInterrupt enqueueWorker > assignment=$assignment"))
