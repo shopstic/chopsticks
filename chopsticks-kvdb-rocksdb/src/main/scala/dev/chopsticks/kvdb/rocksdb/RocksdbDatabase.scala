@@ -166,7 +166,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
   import RocksdbDatabase._
 
-  private val akkaEnv: AkkaEnv.Service = env.akka
+  private val akkaEnv: AkkaEnv.Service = env.akkaService
 
   val isLocal: Boolean = true
 

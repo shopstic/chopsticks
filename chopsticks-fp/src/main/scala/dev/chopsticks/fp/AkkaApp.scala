@@ -61,7 +61,7 @@ trait AkkaApp extends LoggingContext {
     val shutdown: CoordinatedShutdown = CoordinatedShutdown(akkaActorSystem)
     val runtime: zio.Runtime[AkkaApp.Env] = new zio.Runtime[AkkaApp.Env] {
       val Environment: AkkaApp.Env = new AkkaApp.LiveEnv {
-        val akka: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(akkaActorSystem)
+        val akkaService: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(akkaActorSystem)
       }
       val Platform: zio.internal.Platform = new zio.internal.Platform.Proxy(
         PlatformLive

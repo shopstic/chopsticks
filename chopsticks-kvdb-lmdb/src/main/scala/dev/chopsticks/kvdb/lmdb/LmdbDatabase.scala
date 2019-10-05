@@ -572,7 +572,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
           }
 
-        env.akka.unsafeRunToFuture(task)
+        env.akkaService.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -626,7 +626,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
               }
           }
 
-        env.akka.unsafeRunToFuture(task)
+        env.akkaService.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -707,7 +707,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
             }
           }
 
-        env.akka.unsafeRunToFuture(task)
+        env.akkaService.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))

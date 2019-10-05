@@ -34,7 +34,7 @@ object Dstreams extends LoggingContext {
   ): ZManaged[R with AkkaEnv with MeasuredLogging, Throwable, Http.ServerBinding] = {
     val acquire = for {
       service <- makeService
-      binding <- ZIO.access[AkkaEnv](_.akka).flatMap { env =>
+      binding <- ZIO.access[AkkaEnv](_.akkaService).flatMap { env =>
         import env._
         val settings = ServerSettings(actorSystem)
 
@@ -69,7 +69,7 @@ object Dstreams extends LoggingContext {
   )(make: GrpcClientSettings => ZIO[R, E, Client]): ZManaged[R with AkkaEnv with MeasuredLogging, E, Client] = {
     ZManaged.make(
       ZIO
-        .access[AkkaEnv](_.akka)
+        .access[AkkaEnv](_.akkaService)
         .map { env =>
           import env._
           GrpcClientSettings
@@ -115,7 +115,7 @@ object Dstreams extends LoggingContext {
           .accessM[DstreamEnv[Req, Res]](_.dstreamService.enqueueAssignment(assignment))
       } { worker =>
         val cleanup = for {
-          _ <- ZIO.access[AkkaEnv](env => worker.source.runWith(Sink.cancelled)(env.akka.materializer))
+          _ <- ZIO.access[AkkaEnv](env => worker.source.runWith(Sink.cancelled)(env.akkaService.materializer))
           _ <- ZIO.accessM[DstreamEnv[Req, Res]](_.dstreamService.report(assignment))
         } yield ()
 
@@ -138,7 +138,7 @@ object Dstreams extends LoggingContext {
         .toMat(Sink.ignore)(Keep.both)
     }
 
-    ZAkkaStreams.interruptableGraphM(graph, graceful = true)
+    ZAkkaStreams.interruptableGraph(graph, graceful = true)
   }
 
   def workPool[Req, Res, R <: AkkaEnv](
@@ -163,8 +163,8 @@ object Dstreams extends LoggingContext {
     in: Source[Res, NotUsed],
     metadata: Metadata
   ): Source[Req, NotUsed] = {
-    val akkaEnv = env.akka
-    import akkaEnv._
+    val akkaService = env.akkaService
+    import akkaService._
 
     val (ks, inSource) = in
       .viaMat(KillSwitches.single)(Keep.right)

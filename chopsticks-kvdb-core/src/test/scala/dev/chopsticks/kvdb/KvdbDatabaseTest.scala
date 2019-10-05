@@ -95,7 +95,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   private lazy val as = system
 
   private object env extends AkkaApp.LiveEnv {
-    val akka: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(as)
+    val akkaService: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(as)
   }
 
   private def assertPair(pair: Option[KvdbPair], key: String, value: String): Assertion = {
@@ -114,7 +114,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     values.map(p => byteArrayToString(p)) should equal(vs)
   }
 
-  import env.akka.materializer
+  import env.akkaService.materializer
 
   "wrong column family" should {
     "not compile" in withDb { db =>

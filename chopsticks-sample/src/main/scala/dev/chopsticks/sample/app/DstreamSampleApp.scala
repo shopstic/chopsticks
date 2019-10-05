@@ -30,12 +30,12 @@ object DstreamSampleApp extends AkkaApp {
 
   protected def createEnv(untypedConfig: Config) = {
     ZManaged.environment[AkkaApp.Env].map { env =>
-      val akkaEnv = env.akka
+      val akkaEnv = env.akkaService
       import akkaEnv._
       new AkkaApp.LiveEnv with DsEnv {
-        val akka: AkkaEnv.Service = env.akka
+        val akkaService: AkkaEnv.Service = env.akkaService
         object dstreamService extends DstreamEnv.LiveService[Assignment, Result](rt, dstreamMetrics) {
-          env.akka
+          env.akkaService
             .unsafeRunToFuture(updateQueueGauge.repeat(ZSchedule.fixed(1.second)).provide(env))
             .onComplete(t => s"METRICS COMLETED ===================== $t")
         }
@@ -58,7 +58,7 @@ object DstreamSampleApp extends AkkaApp {
                   .take(1)
                   .runForeach { _ =>
                     //                    println(s"Server < [worker=$workerId][assignment=${assignment.valueIn}] $r")
-                  }(env.akka.materializer)
+                  }(env.akkaService.materializer)
               }
             }
             .retry(ZSchedule.logInput((e: Throwable) => ZLogger.error("Distribute failed", e)))
@@ -69,7 +69,7 @@ object DstreamSampleApp extends AkkaApp {
         .mapMaterializedValue(f => (ks, f))
     }
 
-    ZAkkaStreams.interruptableGraphM(graphTask, graceful = true)
+    ZAkkaStreams.interruptableGraph(graphTask, graceful = true)
   }
 
   protected def runWorker(client: DstreamSampleAppClient, id: Int) = {
@@ -94,14 +94,14 @@ object DstreamSampleApp extends AkkaApp {
 
   protected def run: ZIO[Env, Throwable, Unit] = {
     val createService = ZIO.access[AkkaEnv with DsEnv] { env =>
-      val akkaEnv = env.akka
+      val akkaEnv = env.akkaService
       import akkaEnv._
       DstreamSampleAppPowerApiHandler(Dstreams.handle(env, _, _))
     }
     val port = 9999
     val managedServer =
       Dstreams.createManagedServer(DstreamServerConfig(port = port, idleTimeout = 5.seconds), createService)
-    val managedClient = Dstreams.createManagedClient(ZIO.access[AkkaEnv](_.akka).map { env =>
+    val managedClient = Dstreams.createManagedClient(ZIO.access[AkkaEnv](_.akkaService).map { env =>
       import env._
       DstreamSampleAppClient(
         GrpcClientSettings

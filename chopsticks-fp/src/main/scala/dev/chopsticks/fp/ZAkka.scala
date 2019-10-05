@@ -20,7 +20,7 @@ object ZAkka {
             f.onComplete {
               case Success(a) => cb(Task.succeed(a))
               case Failure(t) => cb(Task.fail(t))
-            }(env.akka.dispatcher)
+            }(env.akkaService.dispatcher)
           }
         )(Task.fromTry(_))
     }

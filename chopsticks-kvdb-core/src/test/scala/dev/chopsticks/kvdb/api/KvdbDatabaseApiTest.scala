@@ -26,7 +26,7 @@ abstract class KvdbDatabaseApiTest
   private lazy val as = system
 
   private object Environment extends AkkaApp.LiveEnv {
-    val akka: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(as)
+    val akkaService: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(as)
   }
 
   "open" should {

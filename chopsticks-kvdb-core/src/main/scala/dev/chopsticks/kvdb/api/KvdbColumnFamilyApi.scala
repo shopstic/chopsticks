@@ -29,7 +29,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 )(
   implicit env: AkkaEnv
 ) {
-  private val akkaEnv = env.akka
+  private val akkaEnv = env.akkaService
   import akkaEnv._
 
   def estimateCountTask: Task[Long] = {

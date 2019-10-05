@@ -32,9 +32,9 @@ final class ZAkkaStreamsTest
 
   private def createEnv: Env = {
     new AkkaEnv with TestClock with Blocking.Live {
-      val akka: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(system)
+      val akkaService: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(system)
       private val fixedTestClockService = FixedTestClockService(
-        akka.unsafeRun(TestClock.makeTest(TestClock.DefaultData))
+        akkaService.unsafeRun(TestClock.makeTest(TestClock.DefaultData))
       )
       val clock: TestClock.Service[Any] = fixedTestClockService
       val scheduler: TestClock.Service[Any] = fixedTestClockService
@@ -47,7 +47,7 @@ final class ZAkkaStreamsTest
 
   def withEffect[E, A](test: ZIO[Env, Throwable, Assertion]): Future[Assertion] = {
     val env = createEnv
-    env.akka.unsafeRunToFuture(test.provide(env))
+    env.akkaService.unsafeRunToFuture(test.provide(env))
   }
 
   "interruptableLazySource" should {
@@ -168,10 +168,10 @@ final class ZAkkaStreamsTest
         source.sendNext {
           Source
             .fromFuture(
-              akka.pattern.after(3.seconds, env.akka.actorSystem.scheduler)(Future.successful(1))(env.akka.dispatcher)
+              akka.pattern.after(3.seconds, env.akkaService.actorSystem.scheduler)(Future.successful(1))(env.akkaService.dispatcher)
             )
             .watchTermination() { (_, f) =>
-              f.onComplete(_ => promise.success(true))(env.akka.dispatcher)
+              f.onComplete(_ => promise.success(true))(env.akkaService.dispatcher)
               f
             }
         }

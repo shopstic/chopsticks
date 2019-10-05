@@ -22,7 +22,7 @@ object PlainSampleApp extends AkkaApp {
       .environment[AkkaApp.Env]
       .map { akkaEnv =>
         new AkkaApp.LiveEnv with Cfg {
-          val akka: AkkaEnv.Service = akkaEnv.akka
+          val akkaService: AkkaEnv.Service = akkaEnv.akkaService
           val config: AppConfig = PureconfigLoader.unsafeLoad[AppConfig](rawConfig, "app")
         }
       }

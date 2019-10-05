@@ -8,7 +8,7 @@ import zio.{CancelableFuture, Exit, IO, Runtime, Task, ZIO}
 import scala.concurrent.ExecutionContextExecutor
 
 trait AkkaEnv {
-  def akka: AkkaEnv.Service
+  def akkaService: AkkaEnv.Service
 }
 
 object AkkaEnv {

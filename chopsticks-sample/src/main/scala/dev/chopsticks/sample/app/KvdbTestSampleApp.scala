@@ -40,7 +40,7 @@ object KvdbTestSampleApp extends AkkaApp {
       typedConfig = PureconfigLoader.unsafeLoad[AppConfig](untypedConfig, "app")
       db <- KvdbDatabase.manage(LmdbDatabase(sampleDb, typedConfig.db))
     } yield new AkkaApp.LiveEnv with CfgEnv with SampleDb.Env {
-      val akka: AkkaEnv.Service = akkaEnv.akka
+      val akkaService: AkkaEnv.Service = akkaEnv.akkaService
       val config: AppConfig = typedConfig
       val sampleDb: SampleDb.Db = db
     }
@@ -61,7 +61,7 @@ object KvdbTestSampleApp extends AkkaApp {
       )
       defaultCf = dbApi.columnFamily(sampleDb.default)
       tailFiber <- ZAkkaStreams
-        .interruptableGraphM(
+        .interruptableGraph(
           ZIO.access[AkkaEnv with LogEnv] { env =>
             val log = env.logger
 
