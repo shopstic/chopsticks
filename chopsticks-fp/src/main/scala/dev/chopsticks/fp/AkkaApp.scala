@@ -45,7 +45,7 @@ trait AkkaApp extends LoggingContext {
 
   protected def createEnv(untypedConfig: Config): ZManaged[AkkaApp.Env, Nothing, Env]
 
-  protected def run: RIO[Env, Unit]
+  def run: RIO[Env, Unit]
 
   def main(args: Array[String]): Unit = {
     val appName = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replaceAllLiterally("$", "")))

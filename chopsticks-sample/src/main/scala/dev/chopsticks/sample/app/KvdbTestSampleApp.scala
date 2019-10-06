@@ -48,7 +48,7 @@ object KvdbTestSampleApp extends AkkaApp {
     envR.orDie
   }
 
-  protected def run: RIO[Env, Unit] = {
+  def run: RIO[Env, Unit] = {
     val task = for {
       db <- ZIO.access[SampleDb.Env](_.sampleDb)
       dbApi <- KvdbDatabaseApi(db)

@@ -233,7 +233,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
     }
   }
 
-  protected def run = {
+  def run: ZIO[Env, Throwable, Unit] = {
     val populateMessages = new LongAdder()
     val populateBatches = new LongAdder()
 

@@ -28,7 +28,7 @@ object PlainSampleApp extends AkkaApp {
       }
   }
 
-  protected def run: ZIO[Env, Throwable, Unit] = {
+  def run: ZIO[Env, Throwable, Unit] = {
     for {
       config <- ZIO.access[Cfg](_.config)
       logEnv <- ZIO.environment[LogEnv]

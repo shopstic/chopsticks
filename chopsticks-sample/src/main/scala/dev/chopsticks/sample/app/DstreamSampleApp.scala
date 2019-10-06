@@ -92,7 +92,7 @@ object DstreamSampleApp extends AkkaApp {
       }
   }
 
-  protected def run: ZIO[Env, Throwable, Unit] = {
+  def run: ZIO[Env, Throwable, Unit] = {
     val createService = ZIO.access[AkkaEnv with DsEnv] { env =>
       val akkaEnv = env.akkaService
       import akkaEnv._
