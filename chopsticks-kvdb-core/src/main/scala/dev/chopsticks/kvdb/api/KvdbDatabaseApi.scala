@@ -11,11 +11,11 @@ import scala.language.higherKinds
 object KvdbDatabaseApi {
   def apply[BCF[A, B] <: ColumnFamily[A, B]](
     db: KvdbDatabase[BCF, _]
-  ): ZIO[AkkaEnv, Nothing, KvdbDatabaseApi[BCF]] = ZIO.access[AkkaEnv](implicit env => new KvdbDatabaseApi[BCF](db))
+  ): ZIO[AkkaEnv, Nothing, KvdbDatabaseApi[BCF]] = ZIO.runtime[AkkaEnv].map(implicit rt => new KvdbDatabaseApi[BCF](db))
 }
 
 final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (val db: KvdbDatabase[BCF, _])(
-  implicit akkaEnv: AkkaEnv
+  implicit rt: zio.Runtime[AkkaEnv]
 ) {
   def columnFamily[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
     col: CF[K, V] with CF2

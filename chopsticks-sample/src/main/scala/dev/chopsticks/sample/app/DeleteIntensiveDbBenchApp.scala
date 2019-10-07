@@ -64,7 +64,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
     counter: LongAdder,
     parallelism: Int
   ) = {
-    ZIO.access[AkkaEnv](_.akkaService).map { env =>
+    ZIO.runtime[Any].map { rt =>
       val random = ThreadLocalRandom.current()
 
       Source
@@ -76,7 +76,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
         .groupedWithin(2048, 10.millis)
         .wireTap(_ => batchCounter.increment())
         .mapAsyncUnordered(parallelism) { batch =>
-          env.unsafeRunToFuture {
+          rt.unsafeRunToFuture {
             dbApi
               .transactionTask(
                 batch
@@ -96,18 +96,21 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
   protected def createCompactionFlow(
     db: RocksdbDatabase[DbDef.BaseCf, DbDef.CfSet]
   ): ZIO[AkkaEnv with Clock, Nothing, Flow[Any, duration.Duration, NotUsed]] = {
-    ZIO.access[AkkaEnv with Clock] { env =>
-      Flow[Any]
-        .conflate(Keep.right)
-        .mapAsync(1) { _ =>
-          env.akkaService.unsafeRunToFuture(
-            db.compactRange(dbMat.queue)
-              .timed
-              .map(_._1)
-              .provide(env)
-          )
-        }
-    }
+    for {
+      rt <- ZIO.runtime[Any]
+      ret <- ZIO.access[AkkaEnv with Clock] { env =>
+        Flow[Any]
+          .conflate(Keep.right)
+          .mapAsync(1) { _ =>
+            rt.unsafeRunToFuture(
+              db.compactRange(dbMat.queue)
+                .timed
+                .map(_._1)
+                .provide(env)
+            )
+          }
+      }
+    } yield ret
   }
 
   protected def measure[R, E, A](f: ZIO[R, E, A], metric: LongAdder): ZIO[R with Clock, E, A] = {
@@ -180,57 +183,60 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
     metrics: DequeueMetrics,
     parallelism: Int
   ) = {
-    ZIO.access[AkkaEnv with Clock] { env =>
-      Flow[Seq[ScheduleKey]]
-        .batchWeighted(100000L, _.size.toLong, identity)(Keep.right)
-        .flatMapConcat { _ =>
-          metrics.cycles.increment()
-          dbApi
-            .columnFamily(dbMat.queue)
-            .batchedSource(_.first, _.last)
-            .recover {
-              case _: SeekFailure =>
-                List.empty
-            }
-        }
-        .filter {
-          case b if b.isEmpty =>
-            metrics.emptyCycles.increment()
-            false
-          case _ => true
-        }
-        .wireTap(_ => metrics.batches.increment())
-        .mapAsyncUnordered(parallelism) { batch: List[(ScheduleKey, Unit)] =>
-          val deleteTask = for {
-            tx <- UIO {
-              batch
-                .foldLeft(dbApi.transactionBuilder) {
-                  case (tx, (k, _)) =>
-                    tx.delete(dbMat.queue, k)
-                      .put(dbMat.inflight, k.id, ())
-                }
-                .result
-            }
-            ret <- dbApi.transactionTask(tx)
-          } yield ret
+    for {
+      rt <- ZIO.runtime[Any]
+      ret <- ZIO.access[AkkaEnv with Clock] { env =>
+        Flow[Seq[ScheduleKey]]
+          .batchWeighted(100000L, _.size.toLong, identity)(Keep.right)
+          .flatMapConcat { _ =>
+            metrics.cycles.increment()
+            dbApi
+              .columnFamily(dbMat.queue)
+              .batchedSource(_.first, _.last)
+              .recover {
+                case _: SeekFailure =>
+                  List.empty
+              }
+          }
+          .filter {
+            case b if b.isEmpty =>
+              metrics.emptyCycles.increment()
+              false
+            case _ => true
+          }
+          .wireTap(_ => metrics.batches.increment())
+          .mapAsyncUnordered(parallelism) { batch: List[(ScheduleKey, Unit)] =>
+            val deleteTask = for {
+              tx <- UIO {
+                batch
+                  .foldLeft(dbApi.transactionBuilder) {
+                    case (tx, (k, _)) =>
+                      tx.delete(dbMat.queue, k)
+                        .put(dbMat.inflight, k.id, ())
+                  }
+                  .result
+              }
+              ret <- dbApi.transactionTask(tx)
+            } yield ret
 
-          val batchGetTask = for {
-            keys <- UIO(batch.map(_._1.id))
-            ret <- dbApi
-              .columnFamily(dbMat.fact)
-              .batchGetByKeysTask(keys)
-          } yield ret.iterator.collect {
-            case Some(pair) => pair
-          }.toList
+            val batchGetTask = for {
+              keys <- UIO(batch.map(_._1.id))
+              ret <- dbApi
+                .columnFamily(dbMat.fact)
+                .batchGetByKeysTask(keys)
+            } yield ret.iterator.collect {
+              case Some(pair) => pair
+            }.toList
 
-          val par = measure(deleteTask, metrics.purgeDuration) zipParRight measure(batchGetTask, metrics.getDuration)
+            val par = measure(deleteTask, metrics.purgeDuration) zipParRight measure(batchGetTask, metrics.getDuration)
 
-          env.akkaService.unsafeRunToFuture(
-            measure(par, metrics.duration)
-              .provide(env)
-          )
-        }
-    }
+            rt.unsafeRunToFuture(
+              measure(par, metrics.duration)
+                .provide(env)
+            )
+          }
+      }
+    } yield ret
   }
 
   def run: ZIO[Env, Throwable, Unit] = {

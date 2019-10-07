@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{ActorMaterializer, Attributes, KillSwitches, Materializer}
-import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LogEnv}
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClockService, ManualTimeAkkaTestKit}
@@ -13,6 +13,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{Assertion, AsyncWordSpecLike, Matchers, Succeeded}
 import zio.blocking._
 import zio.clock.Clock
+import zio.internal.PlatformLive
 import zio.test.environment.TestClock
 import zio.{Task, UIO, ZIO}
 
@@ -30,24 +31,26 @@ final class ZAkkaStreamsTest
 
   type Env = AkkaEnv with TestClock with Blocking
 
-  private def createEnv: Env = {
-    new AkkaEnv with TestClock with Blocking.Live {
-      val akkaService: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(system)
+  private def createRuntime: zio.Runtime[Env] = {
+    AkkaApp.createRuntime(new AkkaEnv with LogEnv.Live with TestClock with Blocking.Live {
+      val akkaService: AkkaEnv.Service = AkkaEnv.Service.Live(system)
       private val fixedTestClockService = FixedTestClockService(
-        akkaService.unsafeRun(TestClock.makeTest(TestClock.DefaultData))
+        zio.Runtime[Unit]((), PlatformLive.fromExecutionContext(akkaService.dispatcher))
+          .unsafeRun(TestClock.makeTest(TestClock.DefaultData))
       )
       val clock: TestClock.Service[Any] = fixedTestClockService
       val scheduler: TestClock.Service[Any] = fixedTestClockService
-    }
+    })
   }
 
-  def withEnv(test: Env => Assertion): Future[Assertion] = {
-    Future(test(createEnv))
+
+  def withRuntime(test: zio.Runtime[Env] => Assertion): Future[Assertion] = {
+    Future(test(createRuntime))
   }
 
   def withEffect[E, A](test: ZIO[Env, Throwable, Assertion]): Future[Assertion] = {
-    val env = createEnv
-    env.akkaService.unsafeRunToFuture(test.provide(env))
+    val rt = createRuntime
+    rt.unsafeRunToFuture(test.provide(rt.Environment))
   }
 
   "interruptableLazySource" should {
@@ -79,8 +82,8 @@ final class ZAkkaStreamsTest
     }
   }
 
-  "manual time" in withEnv { implicit env =>
-    val clock = new ManualClock(Some(env))
+  "manual time" in withRuntime { implicit rt =>
+    val clock = new ManualClock(Some(rt.Environment))
 
     val (source, sink) = TestSource
       .probe[Int]
@@ -115,7 +118,7 @@ final class ZAkkaStreamsTest
 
   "ZAkkaStreams" when {
     "recursiveSource" should {
-      "repeat" in withEnv { implicit env =>
+      "repeat" in withRuntime { implicit env =>
         val sink = ZAkkaStreams
           .recursiveSource(ZIO.succeed(1), (_: Int, o: Int) => o) { s =>
             Source(s to s + 2)
@@ -135,7 +138,7 @@ final class ZAkkaStreamsTest
 
   "ops" when {
     "switchFlatMapConcat" should {
-      "function identically to flatMapConcat when there's no switching" in withEnv { implicit env =>
+      "function identically to flatMapConcat when there's no switching" in withRuntime { implicit env =>
         val (source, sink) = TestSource
           .probe[Source[Int, Any]]
           .switchFlatMapConcat(UIO(_))
@@ -156,7 +159,9 @@ final class ZAkkaStreamsTest
         Succeeded
       }
 
-      "cancel the prior source and switch to the new one" in withEnv { implicit env =>
+      "cancel the prior source and switch to the new one" in withRuntime { implicit rt =>
+        val akkaService = rt.Environment.akkaService
+
         val promise = Promise[Boolean]()
         val (source, sink) = TestSource
           .probe[Source[Int, Any]]
@@ -168,10 +173,10 @@ final class ZAkkaStreamsTest
         source.sendNext {
           Source
             .fromFuture(
-              akka.pattern.after(3.seconds, env.akkaService.actorSystem.scheduler)(Future.successful(1))(env.akkaService.dispatcher)
+              akka.pattern.after(3.seconds, akkaService.actorSystem.scheduler)(Future.successful(1))(akkaService.dispatcher)
             )
             .watchTermination() { (_, f) =>
-              f.onComplete(_ => promise.success(true))(env.akkaService.dispatcher)
+              f.onComplete(_ => promise.success(true))(akkaService.dispatcher)
               f
             }
         }

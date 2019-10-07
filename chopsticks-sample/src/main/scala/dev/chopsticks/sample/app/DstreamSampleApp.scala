@@ -29,14 +29,16 @@ object DstreamSampleApp extends AkkaApp {
   }
 
   protected def createEnv(untypedConfig: Config) = {
-    ZManaged.environment[AkkaApp.Env].map { env =>
+    for {
+      env <- ZManaged.environment[AkkaApp.Env]
+      rt <- ZManaged.fromEffect(ZIO.runtime[Any])
+    } yield {
       val akkaEnv = env.akkaService
       import akkaEnv._
       new AkkaApp.LiveEnv with DsEnv {
         val akkaService: AkkaEnv.Service = env.akkaService
         object dstreamService extends DstreamEnv.LiveService[Assignment, Result](rt, dstreamMetrics) {
-          env.akkaService
-            .unsafeRunToFuture(updateQueueGauge.repeat(ZSchedule.fixed(1.second)).provide(env))
+          rt.unsafeRunToFuture(updateQueueGauge.repeat(ZSchedule.fixed(1.second)).provide(env))
             .onComplete(t => s"METRICS COMLETED ===================== $t")
         }
       }
@@ -44,7 +46,7 @@ object DstreamSampleApp extends AkkaApp {
   }
 
   private val runServer = {
-    val graphTask = ZIO.access[AkkaEnv with DsEnv with MeasuredLogging] { implicit env =>
+    val graphTask = ZIO.runtime[AkkaEnv with DsEnv with MeasuredLogging].map { implicit rt =>
       val ks = KillSwitches.shared("server shared killswitch")
 
       Source(1 to Int.MaxValue)
@@ -58,7 +60,7 @@ object DstreamSampleApp extends AkkaApp {
                   .take(1)
                   .runForeach { _ =>
                     //                    println(s"Server < [worker=$workerId][assignment=${assignment.valueIn}] $r")
-                  }(env.akkaService.materializer)
+                  }(rt.Environment.akkaService.materializer)
               }
             }
             .retry(ZSchedule.logInput((e: Throwable) => ZLogger.error("Distribute failed", e)))
@@ -93,10 +95,10 @@ object DstreamSampleApp extends AkkaApp {
   }
 
   def run: ZIO[Env, Throwable, Unit] = {
-    val createService = ZIO.access[AkkaEnv with DsEnv] { env =>
-      val akkaEnv = env.akkaService
+    val createService = ZIO.runtime[AkkaEnv with DsEnv].map { rt =>
+      val akkaEnv = rt.Environment.akkaService
       import akkaEnv._
-      DstreamSampleAppPowerApiHandler(Dstreams.handle(env, _, _))
+      DstreamSampleAppPowerApiHandler(Dstreams.handle(rt, _, _))
     }
     val port = 9999
     val managedServer =

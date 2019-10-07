@@ -110,7 +110,7 @@ object LmdbDatabase extends StrictLogging {
     KvdbMaterialization.validate(materialization) match {
       case Left(ex) => ZIO.fail(ex)
       case Right(mat) =>
-        ZIO.access[AkkaEnv] { implicit env =>
+        ZIO.runtime[AkkaEnv].map { implicit rt =>
           new LmdbDatabase[BCF, CFS](mat, config)
         }
     }
@@ -121,7 +121,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   val materialization: KvdbMaterialization[BCF, CFS],
   config: LmdbDatabase.Config
 )(
-  implicit env: AkkaEnv
+  implicit rt: zio.Runtime[AkkaEnv]
 ) extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
@@ -572,7 +572,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
           }
 
-        env.akkaService.unsafeRunToFuture(task)
+        rt.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -626,7 +626,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
               }
           }
 
-        env.akkaService.unsafeRunToFuture(task)
+        rt.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -707,7 +707,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
             }
           }
 
-        env.akkaService.unsafeRunToFuture(task)
+        rt.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))

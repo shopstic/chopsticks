@@ -22,7 +22,7 @@ object AkkaStreamInterruptionSampleApp extends AkkaApp {
           .wireTap(n => env.logger.info(s"Out: $n"))
           .map { v =>
             if (v > 4) {
-              throw new IllegalStateException("shit the bed")
+              throw new IllegalStateException("Die intentionally")
             }
             v
           }

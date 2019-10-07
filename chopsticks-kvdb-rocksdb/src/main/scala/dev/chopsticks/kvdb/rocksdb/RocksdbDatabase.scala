@@ -150,7 +150,7 @@ object RocksdbDatabase extends StrictLogging {
     RocksdbMaterialization.validate(materialization) match {
       case Left(ex) => ZIO.fail(ex)
       case Right(_) =>
-        ZIO.access[AkkaEnv] { implicit env =>
+        ZIO.runtime[AkkaEnv].map { implicit env =>
           new RocksdbDatabase[BCF, CFS](materialization, config)
         }
     }
@@ -160,13 +160,11 @@ object RocksdbDatabase extends StrictLogging {
 final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
   config: RocksdbDatabase.Config
-)(implicit env: AkkaEnv)
+)(implicit rt: zio.Runtime[AkkaEnv])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
   import RocksdbDatabase._
-
-  private val akkaEnv: AkkaEnv.Service = env.akkaService
 
   val isLocal: Boolean = true
 
@@ -344,7 +342,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
           }
     }
 
-    akkaEnv.unsafeRunToFuture(task.provide(KvdbIoThreadPool.blockingEnv))
+    rt.unsafeRunToFuture(task.provide(KvdbIoThreadPool.blockingEnv))
   }
 
   private def ioTask[T](task: Task[T]): Task[T] = {
@@ -819,7 +817,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                 .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, config.ioDispatcher))
           }
 
-        akkaEnv.unsafeRunToFuture(task)
+        rt.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -959,7 +957,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                 }
               }
           }
-        akkaEnv.unsafeRunToFuture(task)
+
+        rt.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -984,7 +983,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
             }
           }
 
-        akkaEnv.unsafeRunToFuture(task)
+        rt.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
   }

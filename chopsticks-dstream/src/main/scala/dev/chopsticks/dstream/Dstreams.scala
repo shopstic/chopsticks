@@ -126,7 +126,7 @@ object Dstreams extends LoggingContext {
   def work[R, Req, Res](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with LogEnv with R, Done] = {
-    val graph = ZIO.access[AkkaEnv with R] { implicit env =>
+    val graph = ZIO.runtime[AkkaEnv with R].map { implicit rt =>
       val promise = Promise[Source[Res, NotUsed]]()
 
       requestBuilder
@@ -159,10 +159,11 @@ object Dstreams extends LoggingContext {
   }
 
   def handle[Req, Res](
-    env: AkkaEnv with DstreamEnv[Req, Res],
+    rt: zio.Runtime[AkkaEnv with DstreamEnv[Req, Res]],
     in: Source[Res, NotUsed],
     metadata: Metadata
   ): Source[Req, NotUsed] = {
+    val env = rt.Environment
     val akkaService = env.akkaService
     import akkaService._
 
@@ -171,7 +172,7 @@ object Dstreams extends LoggingContext {
       .preMaterialize()
 
     Source
-      .fromFutureSource(unsafeRunToFuture(env.dstreamService.enqueueWorker(inSource, metadata)))
+      .fromFutureSource(rt.unsafeRunToFuture(env.dstreamService.enqueueWorker(inSource, metadata)))
       .watchTermination() {
         case (_, f) =>
           f.onComplete {

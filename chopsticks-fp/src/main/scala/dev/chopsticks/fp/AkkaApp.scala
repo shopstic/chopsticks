@@ -18,7 +18,7 @@ import zio.system.System
 import scala.util.Try
 import scala.util.control.NonFatal
 
-object AkkaApp {
+object AkkaApp extends LoggingContext {
   type Env = Clock with Console with system.System with Random with Blocking with AkkaEnv with LogEnv
   trait LiveEnv
       extends Clock.Live
@@ -35,6 +35,33 @@ object AkkaApp {
 //        )
 //      )
 //    }
+  }
+
+  object Env {
+    final case class Live(actorSystem: ActorSystem) extends LiveEnv {
+      val akkaService: AkkaEnv.Service = AkkaEnv.Service.Live(actorSystem)
+    }
+  }
+
+  def createRuntime[R <: AkkaEnv with LogEnv](env: R, tracingConfig: TracingConfig = TracingConfig.enabled): zio.Runtime[R] = {
+    val shutdown: CoordinatedShutdown = CoordinatedShutdown(env.akkaService.actorSystem)
+
+    new zio.Runtime[R] {
+      val Platform: zio.internal.Platform = new zio.internal.Platform.Proxy(
+        PlatformLive
+          .fromExecutionContext(env.akkaService.actorSystem.dispatcher)
+          .withTracingConfig(tracingConfig)
+      ) {
+        private val isShuttingDown = new AtomicBoolean(false)
+        override def reportFailure(cause: Cause[_]): Unit = {
+          if (!cause.interrupted && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
+            Environment.logger.error("Application failure:\n" + cause.prettyPrint)
+            val _ = shutdown.run(JvmExitReason)
+          }
+        }
+      }
+      val Environment: R = env
+    }
   }
 }
 
@@ -59,24 +86,10 @@ trait AkkaApp extends LoggingContext {
     val managedEnv: ZManaged[AkkaApp.Env, Nothing, Env] = createEnv(config)
     val zioTracingEnabled = Try(config.getBoolean("zio.trace")).recover { case _ => true }.getOrElse(true)
     val shutdown: CoordinatedShutdown = CoordinatedShutdown(akkaActorSystem)
-    val runtime: zio.Runtime[AkkaApp.Env] = new zio.Runtime[AkkaApp.Env] {
-      val Environment: AkkaApp.Env = new AkkaApp.LiveEnv {
-        val akkaService: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(akkaActorSystem)
-      }
-      val Platform: zio.internal.Platform = new zio.internal.Platform.Proxy(
-        PlatformLive
-          .fromExecutionContext(akkaActorSystem.dispatcher)
-          .withTracingConfig(if (zioTracingEnabled) TracingConfig.enabled else TracingConfig.disabled)
-      ) {
-        private val isShuttingDown = new AtomicBoolean(false)
-        override def reportFailure(cause: Cause[_]): Unit = {
-          if (!cause.interrupted && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
-            super.reportFailure(cause)
-            val _ = shutdown.run(JvmExitReason)
-          }
-        }
-      }
-    }
+    val runtime: zio.Runtime[AkkaApp.Env] = AkkaApp.createRuntime(
+      AkkaApp.Env.Live(akkaActorSystem),
+      if (zioTracingEnabled) TracingConfig.enabled else TracingConfig.disabled
+    )
 
     val main = for {
       appFib <- managedEnv.use(run.provide(_)).fork

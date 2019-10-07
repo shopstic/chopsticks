@@ -20,14 +20,10 @@ abstract class KvdbDatabaseApiTest
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
-  private lazy val withDb = KvdbTestUtils.createTestRunner(Environment, managedDb)
-  private lazy val withCf = KvdbTestUtils.createTestRunner(Environment, managedDb.map(_.columnFamily(dbMat.plain)))
 
-  private lazy val as = system
-
-  private object Environment extends AkkaApp.LiveEnv {
-    val akkaService: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(as)
-  }
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.Live(system))
+  private lazy val withDb = KvdbTestUtils.createTestRunner(runtime, managedDb)
+  private lazy val withCf = KvdbTestUtils.createTestRunner(runtime, managedDb.map(_.columnFamily(dbMat.plain)))
 
   "open" should {
     "work" in withDb { db =>

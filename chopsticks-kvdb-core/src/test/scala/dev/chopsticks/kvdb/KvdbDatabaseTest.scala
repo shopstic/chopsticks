@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets.UTF_8
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.testkit.{ImplicitSender, TestProbe}
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LoggingContext}
+import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.codec.KeyConstraints
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraintList, KvdbKeyRange}
@@ -17,8 +17,9 @@ import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbSerdesUtils, KvdbTestUti
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest._
-import zio.{RIO, Task, UIO, ZManaged}
 import squants.information.InformationConversions._
+import zio.{RIO, Task, UIO, ZManaged}
+
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.language.implicitConversions
@@ -90,13 +91,8 @@ abstract private[kvdb] class KvdbDatabaseTest
   private lazy val defaultCf = dbMat.plain
   private lazy val lookupCf = dbMat.lookup
 
-  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](env, managedDb)
-
-  private lazy val as = system
-
-  private object env extends AkkaApp.LiveEnv {
-    val akkaService: AkkaEnv.Service = AkkaEnv.Service.fromActorSystem(as)
-  }
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.Live(system))
+  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](runtime, managedDb)
 
   private def assertPair(pair: Option[KvdbPair], key: String, value: String): Assertion = {
     inside(pair) {
@@ -114,7 +110,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     values.map(p => byteArrayToString(p)) should equal(vs)
   }
 
-  import env.akkaService.materializer
+  import runtime.Environment.akkaService.materializer
 
   "wrong column family" should {
     "not compile" in withDb { db =>

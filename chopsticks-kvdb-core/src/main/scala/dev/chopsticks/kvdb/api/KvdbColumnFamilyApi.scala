@@ -27,9 +27,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   db: KvdbDatabase[BCF, _],
   cf: CF
 )(
-  implicit env: AkkaEnv
+  implicit rt: zio.Runtime[AkkaEnv]
 ) {
-  private val akkaEnv = env.akkaService
+  private val akkaEnv = rt.Environment.akkaService
   import akkaEnv._
 
   def estimateCountTask: Task[Long] = {
@@ -124,7 +124,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
               else {
                 val uncachedIndices = uncachedIndicesBuilder.result()
 
-                unsafeRunToFuture(
+                rt.unsafeRunToFuture(
                   db.batchGetTask(cf, uncachedRequests.toList)
                     .map { pairs =>
                       for ((maybePair, index) <- pairs.zipWithIndex) {
@@ -139,7 +139,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
               }
             }
             else {
-              unsafeRunToFuture(
+              rt.unsafeRunToFuture(
                 db.batchGetTask(cf, requests)
                   .map { maybePairs =>
                     keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2))))
@@ -275,7 +275,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
       .mapAsync(1) {
         case (batch, serialized) =>
-          unsafeRunToFuture(
+          rt.unsafeRunToFuture(
             db.transactionTask(serialized, sync)
               .map(_ => batch)
           )
@@ -336,7 +336,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
       .mapAsync(1) {
         case (batch, serialized) =>
-          unsafeRunToFuture(
+          rt.unsafeRunToFuture(
             db.transactionTask(serialized, sync)
               .as(batch)
           )
