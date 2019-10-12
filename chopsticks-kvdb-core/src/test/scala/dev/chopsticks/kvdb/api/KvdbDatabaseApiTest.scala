@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.api
 
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LoggingContext}
+import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
 import dev.chopsticks.kvdb.codec.primitive._
@@ -19,7 +19,6 @@ abstract class KvdbDatabaseApiTest
   protected def managedDb: ZManaged[AkkaApp.Env, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
-
 
   private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.Live(system))
   private lazy val withDb = KvdbTestUtils.createTestRunner(runtime, managedDb)
