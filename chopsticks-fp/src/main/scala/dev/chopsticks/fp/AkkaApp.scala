@@ -80,7 +80,9 @@ trait AkkaApp extends LoggingContext {
     val appConfigName = this.getClass.getPackage.getName.replaceAllLiterally(".", "/") + "/" + appName
     val customAppConfig = scala.sys.props.get("config.file") match {
       case Some(customConfigFile) =>
-        ConfigFactory.parseFile(Paths.get(customConfigFile).toFile, ConfigParseOptions.defaults().setAllowMissing(false))
+        ConfigFactory
+          .parseFile(Paths.get(customConfigFile).toFile, ConfigParseOptions.defaults().setAllowMissing(false))
+          .resolve(ConfigResolveOptions.defaults())
       case None =>
         ConfigFactory.empty()
     }
