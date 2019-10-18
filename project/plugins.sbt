@@ -9,5 +9,5 @@ addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.4.3")
 addSbtPlugin("com.thesamet" % "sbt-protoc" % "0.99.25")
 addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "0.7.2")
 libraryDependencies ++= Seq(
-  "com.thesamet.scalapb" %% "compilerplugin" % "0.9.3"
+  "com.thesamet.scalapb" %% "compilerplugin" % "0.9.4"
 )

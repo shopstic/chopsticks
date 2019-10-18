@@ -4,9 +4,9 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.12.10"
-  val AKKA_VERSION = "2.5.25"
+  val AKKA_VERSION = "2.5.26"
   val AKKA_HTTP_VERSION = "10.1.10"
-  val ZIO_VERSION = "1.0.0-RC14"
+  val ZIO_VERSION = "1.0.0-RC15"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -126,7 +126,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.3.2"
+    "io.scalaland" %% "chimney" % "0.3.3"
   )
 
   val snappyDeps = Seq(
