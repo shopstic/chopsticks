@@ -1,4 +1,5 @@
 package dev.chopsticks.fp
+import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
 
 import akka.Done
@@ -77,11 +78,18 @@ trait AkkaApp extends LoggingContext {
   def main(args: Array[String]): Unit = {
     val appName = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replaceAllLiterally("$", "")))
     val appConfigName = this.getClass.getPackage.getName.replaceAllLiterally(".", "/") + "/" + appName
-    val config = ConfigFactory.load(
+    val customAppConfig = scala.sys.props.get("config.file") match {
+      case Some(customConfigFile) =>
+        ConfigFactory.parseFile(Paths.get(customConfigFile).toFile, ConfigParseOptions.defaults().setAllowMissing(false))
+      case None =>
+        ConfigFactory.empty()
+    }
+
+    val config = customAppConfig.withFallback(ConfigFactory.load(
       appConfigName,
       ConfigParseOptions.defaults.setAllowMissing(false),
       ConfigResolveOptions.defaults
-    )
+    ))
     val akkaActorSystem = createActorSystem(appName, config)
     val managedEnv: ZManaged[AkkaApp.Env, Nothing, Env] = createEnv(config)
     val zioTracingEnabled = Try(config.getBoolean("zio.trace")).recover { case _ => true }.getOrElse(true)
