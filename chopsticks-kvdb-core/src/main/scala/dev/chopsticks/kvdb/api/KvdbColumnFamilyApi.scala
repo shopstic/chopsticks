@@ -6,7 +6,6 @@ import akka.NotUsed
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
 import dev.chopsticks.fp.AkkaEnv
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{TransactionAction, TransactionPut}
 import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
@@ -235,11 +234,13 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   def putTask(key: K, value: V): Task[Unit] = {
-    db.putTask(cf, cf.serializeKey(key), cf.serializeValue(value))
+    val (k, v) = cf.serialize(key, value)
+    db.putTask(cf, k, v)
   }
 
   def putValueTask(value: V)(implicit kt: KeyTransformer[V, K]): Task[Unit] = {
-    db.putTask(cf, cf.serializeKey(kt.transform(value)), cf.serializeValue(value))
+    val (k, v) = cf.serialize(kt.transform(value), value)
+    db.putTask(cf, k, v)
   }
 
   def deleteTask(key: K): Task[Unit] = {
@@ -249,14 +250,6 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def transformValueToPairFlow(implicit kt: KeyTransformer[V, K]): Flow[V, (K, V), NotUsed] = {
     Flow[V]
       .map(v => (kt.transform(v), v))
-  }
-
-  private def serializeAsPutRequest(pair: (K, V)): TransactionAction = {
-    TransactionPut(
-      columnId = cf.id,
-      key = cf.serializeKey(pair._1),
-      value = cf.serializeValue(pair._2)
-    )
   }
 
   def putInBatchesFlow(
@@ -269,8 +262,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .via(AkkaStreamUtils.batchFlow(maxBatchSize, groupWithin))
       .mapAsync(batchEncodingParallelism) { batch =>
         Future {
-          batch
-            .map(serializeAsPutRequest)
+          batch.foldLeft(db.transactionBuilder()) { case (tx, (k, v)) =>
+            tx.put(cf, k, v)
+          }.result
         }.map(serialized => (batch, serialized))
       }
       .mapAsync(1) {

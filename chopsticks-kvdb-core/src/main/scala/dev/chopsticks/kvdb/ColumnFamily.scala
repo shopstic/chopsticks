@@ -12,6 +12,10 @@ abstract class ColumnFamily[K: KeySerdes, V: ValueSerdes] {
   def keySerdes: KeySerdes[K] = implicitly[KeySerdes[K]]
   def valueSerdes: ValueSerdes[V] = implicitly[ValueSerdes[V]]
 
+  def serialize(key: K, value: V): (Array[Byte], Array[Byte]) = {
+    (serializeKey(key), serializeValue(value))
+  }
+
   def serializeKey(key: K): Array[Byte] = keySerdes.serialize(key)
   def deserializeKey(bytes: Array[Byte]): KeyDeserializationResult[K] = keySerdes.deserialize(bytes)
 

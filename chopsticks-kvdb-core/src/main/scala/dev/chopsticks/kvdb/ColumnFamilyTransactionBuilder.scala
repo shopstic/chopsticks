@@ -20,10 +20,11 @@ final class ColumnFamilyTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
   private val buffer = new mutable.ListBuffer[TransactionAction]
 
   def put[CF <: BCF[K, V], K, V](column: CF, key: K, value: V): this.type = {
+    val (k, v) = column.serialize(key, value)
     val _ = buffer += TransactionPut(
       columnId = column.id,
-      key = column.serializeKey(key),
-      value = column.serializeValue(value)
+      key = k,
+      value = v
     )
     this
   }
