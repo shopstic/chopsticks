@@ -185,7 +185,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     implicit clientOptions: KvdbClientOptions
   ): Source[List[(K, V)], Future[NotUsed]] = {
     batchedRawSource(from, to)
-      .mapAsync(1) { batch =>
+      .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
           batch.map[(K, V), List[(K, V)]](cf.unsafeDeserialize)(breakOut)
         }
@@ -213,7 +213,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     implicit clientOptions: KvdbClientOptions
   ): Source[List[V], Future[NotUsed]] = {
     batchedRawValueSource(from, to)
-      .mapAsync(1) { batch =>
+      .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
           batch.map[V, List[V]](cf.unsafeDeserializeValue)(breakOut)
         }
@@ -405,7 +405,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     to: ConstraintsBuilder[K]
   )(implicit clientOptions: KvdbClientOptions): Source[V, Future[NotUsed]] = {
     tailBatchedRawValueSource(from, to)
-      .mapAsync(1) { b =>
+      .mapAsync(clientOptions.serdesParallelism) { b =>
         Future {
           b.map[V, List[V]](cf.unsafeDeserializeValue)(breakOut)
         }
@@ -432,7 +432,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     to: ConstraintsBuilder[K]
   )(implicit clientOptions: KvdbClientOptions): Source[(K, V), Future[NotUsed]] = {
     tailBatchedRawSource(from, to)
-      .mapAsync(1) { batch =>
+      .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
           batch.map[(K, V), List[(K, V)]](cf.unsafeDeserialize)(breakOut)
         }
@@ -450,7 +450,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, (K, V)], Future[NotUsed]] = {
     import cats.syntax.either._
     db.tailSource(cf, KeyConstraints.range[K](from, to))
-      .mapAsync(1) {
+      .mapAsync(clientOptions.serdesParallelism) {
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
           Future {
@@ -476,15 +476,14 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   def concurrentTailVerboseSource(
-    ranges: ConstraintsRangesBuilder[K],
-    decodingParallelism: Int = 1
+    ranges: ConstraintsRangesBuilder[K]
   )(
     implicit clientOptions: KvdbClientOptions
   ): Source[(Int, Either[Instant, List[(K, V)]]), Future[NotUsed]] = {
     import cats.syntax.either._
 
     concurrentTailVerboseRawSource(ranges)
-      .mapAsync(decodingParallelism) {
+      .mapAsync(clientOptions.serdesParallelism) {
         case (index, Left(e)) => Future.successful((index, Either.left(e.time)))
         case (index, Right(batch)) =>
           Future {
@@ -502,7 +501,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, V], Future[NotUsed]] = {
     import cats.syntax.either._
     db.tailValueSource(cf, KeyConstraints.range[K](from, to))
-      .mapAsync(1) {
+      .mapAsync(clientOptions.serdesParallelism) {
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
           Future {
