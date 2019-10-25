@@ -95,6 +95,13 @@ lazy val kvdbRemote = Build
   )
   .dependsOn(kvdbCore)
 
+lazy val avro4s = Build
+  .defineProject("avro4s")
+  .settings(
+    libraryDependencies ++= avro4sDeps ++ refinedCoreDeps
+  )
+  .dependsOn(util)
+
 //lazy val kvdb = Build
 //  .defineProject("kvdb")
 //  .settings(
@@ -172,5 +179,6 @@ lazy val root = (project in file("."))
     kvdbRocksdb,
     kvdbCodecBerkeleydbKey,
     kvdbCodecProtobufValue,
+    avro4s,
     sample
   )

@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb.codec
 
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.codec.KeySerdes.flatten
-import dev.chopsticks.kvdb.util.UnusedImplicits._
+import dev.chopsticks.util.implicits.UnusedImplicits._
 import shapeless.ops.hlist.{FlatMapper, IsHCons, Length, Take}
 import shapeless.{<:!<, =:!=, Generic, HList, Nat}
 

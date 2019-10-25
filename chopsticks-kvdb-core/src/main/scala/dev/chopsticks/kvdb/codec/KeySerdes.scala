@@ -4,7 +4,7 @@ import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.codec.KeyDeserializer.KeyDeserializationResult
 import shapeless._
 import shapeless.ops.hlist.FlatMapper
-import dev.chopsticks.kvdb.util.UnusedImplicits._
+import dev.chopsticks.util.implicits.UnusedImplicits._
 
 trait KeySerdes[P] extends KeySerializer[P] with KeyDeserializer[P] {
   type Flattened <: HList

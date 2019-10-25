@@ -76,7 +76,7 @@ object BerkeleydbKeySerializer {
     refType: RefType[F],
     validate: Validate[T, P]
   ): BerkeleydbKeySerializer[F[T, P]] = {
-    import dev.chopsticks.kvdb.util.UnusedImplicits._
+    import dev.chopsticks.util.implicits.UnusedImplicits._
     validate.unused()
     (o: TupleOutput, t: F[T, P]) => serializer.serialize(o, refType.unwrap(t))
   }

@@ -41,7 +41,7 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.7.0"
+    "io.prometheus" % "simpleclient" % "0.8.0"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
@@ -97,7 +97,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.2.4"
+    "org.rocksdb" % "rocksdbjni" % "6.3.6"
   )
 
   val lmdbDeps = Seq(
@@ -156,5 +156,9 @@ object Dependencies {
 
   val pprintDeps = Seq(
     "com.lihaoyi" %% "pprint" % "0.5.5"
+  )
+
+  val avro4sDeps = Seq(
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.2"
   )
 }
