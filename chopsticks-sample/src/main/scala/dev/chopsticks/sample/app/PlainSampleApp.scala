@@ -35,7 +35,7 @@ object PlainSampleApp extends AkkaApp {
       _ <- ZLogger.info(s"Works config=$config")
       _ <- ZIO
         .effectSuspend {
-          val delay = ThreadLocalRandom.current().nextLong(100, 1500)
+          val delay = ThreadLocalRandom.current().nextLong(100, 700)
           val duration = zio.duration.Duration(delay, TimeUnit.MILLISECONDS)
           println(s"""Going to delay: $duration""")
           Task
@@ -44,7 +44,7 @@ object PlainSampleApp extends AkkaApp {
         }
         .retryForever(
           retryPolicy = (ZSchedule.exponential(500.millis) || ZSchedule.spaced(4.seconds)).onDecision { (_: Any, d) =>
-            ZLogger.info(s"Retry backoff: ${d.delay}").provide(logEnv)
+            ZLogger.info(s"Retry backoff: $d").provide(logEnv)
           },
           repeatSchedule = ZSchedule.forever.logOutput(i => ZLogger.info(s"Success $i")),
           retryResetMinDuration = 750.millis

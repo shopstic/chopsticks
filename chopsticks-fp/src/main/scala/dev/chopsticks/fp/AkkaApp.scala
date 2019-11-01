@@ -7,6 +7,7 @@ import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.{ActorSystem, CoordinatedShutdown}
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
 import pureconfig.{KebabCase, PascalCase}
+import zio.Cause.Die
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -28,15 +29,7 @@ object AkkaApp extends LoggingContext {
       with Random.Live
       with Blocking.Live
       with LogEnv.Live
-      with AkkaEnv {
-//    override val blocking: Blocking.Service[Any] = new Blocking.Service[Any] {
-//      lazy val blockingExecutor: ZIO[Any, Nothing, Executor] = UIO(
-//        Executor.fromExecutionContext(Int.MaxValue)(
-//          actorSystem.dispatchers.lookup("akka.stream.default-blocking-io-dispatcher")
-//        )
-//      )
-//    }
-  }
+      with AkkaEnv
 
   object Env {
     final case class Live(actorSystem: ActorSystem) extends LiveEnv {
@@ -54,10 +47,12 @@ object AkkaApp extends LoggingContext {
           .withTracingConfig(tracingConfig)
       ) {
         private val isShuttingDown = new AtomicBoolean(false)
-        override def reportFailure(cause: Cause[_]): Unit = {
+
+        override def reportFailure(cause: Cause[Any]): Unit = {
           if (!cause.interrupted && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
             Environment.logger.error("Application failure:\n" + cause.prettyPrint)
             val _ = shutdown.run(JvmExitReason)
+            sys.exit(1)
           }
         }
       }
@@ -115,8 +110,8 @@ trait AkkaApp extends LoggingContext {
       runtime.unsafeRun(main)
       sys.exit(0)
     } catch {
-      case NonFatal(_) =>
-        sys.exit(1)
+      case NonFatal(e) =>
+        runtime.Platform.reportFailure(Die(e))
     }
   }
 }

@@ -6,7 +6,7 @@ object Dependencies {
   val SCALA_VERSION = "2.12.10"
   val AKKA_VERSION = "2.5.26"
   val AKKA_HTTP_VERSION = "10.1.10"
-  val ZIO_VERSION = "1.0.0-RC15"
+  val ZIO_VERSION = "1.0.0-RC16"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -77,8 +77,8 @@ object Dependencies {
   val loggingDeps = Seq(
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
     "ch.qos.logback" % "logback-classic" % "1.2.3",
-    "org.slf4j" % "log4j-over-slf4j" % "1.7.28",
-    "org.slf4j" % "jul-to-slf4j" % "1.7.28"
+    "org.slf4j" % "log4j-over-slf4j" % "1.7.29",
+    "org.slf4j" % "jul-to-slf4j" % "1.7.29"
   )
 
   val janinoDeps = Seq(
@@ -155,7 +155,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.5.5"
+    "com.lihaoyi" %% "pprint" % "0.5.6"
   )
 
   val avro4sDeps = Seq(
