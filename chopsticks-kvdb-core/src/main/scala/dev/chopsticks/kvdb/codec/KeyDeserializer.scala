@@ -21,5 +21,4 @@ object KeyDeserializer {
       with DecodingFailure
 
   type KeyDeserializationResult[T] = Either[DecodingFailure, T]
-
 }

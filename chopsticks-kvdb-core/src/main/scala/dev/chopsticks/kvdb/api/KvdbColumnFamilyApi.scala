@@ -66,7 +66,6 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     groupWithin: FiniteDuration = Duration.Zero,
     useCache: Boolean = false
   ): Flow[O, (O, Option[V]), NotUsed] = {
-
     val flow = if (groupWithin > Duration.Zero) {
       Flow[O]
         .groupedWithin(maxBatchSize, groupWithin)
@@ -171,7 +170,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     )
   }
 
-  def batchedRawSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(implicit clientOptions: KvdbClientOptions): Source[KvdbBatch, Future[NotUsed]] = {
+  def batchedRawSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
+    implicit clientOptions: KvdbClientOptions
+  ): Source[KvdbBatch, Future[NotUsed]] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateSource(cf, range)
   }
@@ -262,9 +263,12 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .via(AkkaStreamUtils.batchFlow(maxBatchSize, groupWithin))
       .mapAsync(batchEncodingParallelism) { batch =>
         Future {
-          batch.foldLeft(db.transactionBuilder()) { case (tx, (k, v)) =>
-            tx.put(cf, k, v)
-          }.result
+          batch
+            .foldLeft(db.transactionBuilder()) {
+              case (tx, (k, v)) =>
+                tx.put(cf, k, v)
+            }
+            .result
         }.map(serialized => (batch, serialized))
       }
       .mapAsync(1) {

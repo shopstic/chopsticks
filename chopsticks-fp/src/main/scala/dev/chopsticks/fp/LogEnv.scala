@@ -10,9 +10,7 @@ trait LogEnv {
 }
 
 object LogEnv {
-
   trait Live extends LogEnv {
     def logger(implicit ctx: LogCtx): Logger = Logger(LoggerFactory.getLogger(ctx.name))
   }
-
 }

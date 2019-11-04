@@ -25,7 +25,6 @@ import scala.concurrent.duration._
 import scala.language.implicitConversions
 
 object KvdbDatabaseTest {
-
   private def flattenFlow[T] = Flow[Array[T]].mapConcat { b =>
     new scala.collection.immutable.Iterable[T] {
       val iterator: Iterator[T] = b.iterator
@@ -540,7 +539,6 @@ abstract private[kvdb] class KvdbDatabaseTest
         )
       }
     }
-
   }
 
   "batchGetTask" should {

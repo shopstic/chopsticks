@@ -17,7 +17,6 @@ import zio._
 import scala.concurrent.duration._
 
 object DstreamSampleApp extends AkkaApp {
-
   type DsEnv = DstreamEnv[Assignment, Result]
   type Env = AkkaApp.Env with DsEnv
 

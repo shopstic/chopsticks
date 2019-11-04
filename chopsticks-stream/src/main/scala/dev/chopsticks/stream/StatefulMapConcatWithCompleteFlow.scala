@@ -84,5 +84,4 @@ final class StatefulMapConcatWithCompleteFlow[In, Out](
   }
 
   override def toString = "StatefulMapConcatWithCompleteFlow"
-
 }

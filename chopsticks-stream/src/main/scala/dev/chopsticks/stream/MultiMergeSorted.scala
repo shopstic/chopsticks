@@ -37,7 +37,6 @@ final class MultiMergeSorted[T: ClassTag] private (
 
   // scalastyle:off method.length
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
-
     private val buffer = new Array[AnyRef](inputsCount)
 
     private def itemAt(index: Int): T = buffer(index).asInstanceOf[T]

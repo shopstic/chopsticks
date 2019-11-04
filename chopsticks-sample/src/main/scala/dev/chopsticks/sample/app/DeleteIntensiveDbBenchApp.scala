@@ -338,13 +338,13 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
           ZIO.succeed {
             populateSource
               .via(dequeueFlow)
-//              .wireTap(compactionFlow.to(Sink.foreach { duration =>
-//                compactCounter.increment()
-//                compactTimeCounter.add(duration.toMillis)
-//              }))
+              //              .wireTap(compactionFlow.to(Sink.foreach { duration =>
+              //                compactCounter.increment()
+              //                compactTimeCounter.add(duration.toMillis)
+              //              }))
               .mapConcat(identity)
-//              .take(1000000)
-//              .throttle(100000, 1.second)
+              //              .take(1000000)
+              //              .throttle(100000, 1.second)
               .viaMat(KillSwitches.single)(Keep.right)
               .toMat(Sink.foreach { _ =>
                 dequeueMessages.increment()

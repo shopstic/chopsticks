@@ -6,7 +6,6 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 object ZAkka {
-
   def fromFutureWithEnv[R >: Nothing, A](make: (R, ExecutionContext) => Future[A]): RIO[R, A] = {
     ZIO.accessM((env: R) => ZIO.fromFuture(ec => make(env, ec)))
   }

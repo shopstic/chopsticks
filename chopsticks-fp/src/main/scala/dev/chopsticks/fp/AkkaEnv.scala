@@ -1,6 +1,6 @@
 package dev.chopsticks.fp
 
-import akka.actor.{ActorSystem, typed}
+import akka.actor.{typed, ActorSystem}
 import akka.stream.{ActorMaterializer, Materializer}
 
 import scala.concurrent.ExecutionContextExecutor

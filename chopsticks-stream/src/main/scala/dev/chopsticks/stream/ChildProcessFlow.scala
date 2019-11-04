@@ -15,7 +15,6 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 object ChildProcessFlow {
-
   final case class ProcessExitIOResult(in: IOResult, out: IOResult, err: IOResult, exitValue: Int)
 
   final case class ChildProcessConfig(
@@ -191,5 +190,4 @@ object ChildProcessFlow {
       context.stop(self)
     }
   }
-
 }

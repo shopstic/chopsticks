@@ -8,18 +8,15 @@ import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success, Try}
 
 object LastStateFlow {
-
   def apply[E, S, R](seed: => S, next: (S, E) => S, result: S => R): LastStateFlow[E, S, R] =
     new LastStateFlow[E, S, R](seed, next, result)
 }
 
 final class LastStateFlow[E, S, R] private (seed: => S, next: (S, E) => S, result: S => R)
     extends GraphStageWithMaterializedValue[FlowShape[E, E], Future[(R, Try[Done])]] {
-
   override val shape = FlowShape(Inlet[E]("LastStateFlow.in"), Outlet[E]("LastStateFlow.out"))
 
   override def createLogicAndMaterializedValue(attributes: Attributes): (GraphStageLogic, Future[(R, Try[Done])]) = {
-
     val matValue = Promise[(R, Try[Done])]()
 
     val logic: GraphStageLogic = new GraphStageLogic(shape) {

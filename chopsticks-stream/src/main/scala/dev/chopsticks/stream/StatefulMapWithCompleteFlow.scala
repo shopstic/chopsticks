@@ -72,5 +72,4 @@ final class StatefulMapWithCompleteFlow[In, Out](val funs: () => (In => Out, () 
   }
 
   override def toString = "StatefulMapWithCompleteFlow"
-
 }

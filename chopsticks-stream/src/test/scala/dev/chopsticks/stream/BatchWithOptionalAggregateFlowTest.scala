@@ -16,7 +16,6 @@ class BatchWithOptionalAggregateFlowTest
     with WordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-
   implicit val mat: ActorMaterializer = ActorMaterializer()
 
   "original Akka tests" should {
@@ -82,7 +81,6 @@ class BatchWithOptionalAggregateFlowTest
       sub.request(1)
       subscriber.expectNoMessage(100.millis)
       sub.cancel()
-
     }
   }
 
@@ -114,5 +112,4 @@ class BatchWithOptionalAggregateFlowTest
       sub.cancel()
     }
   }
-
 }

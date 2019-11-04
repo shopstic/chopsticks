@@ -9,7 +9,6 @@ import scala.concurrent.duration.Duration
 import scala.language.implicitConversions
 
 package object zio_ext {
-
   private val nanoTime = ZIO.accessM((e: Clock) => e.clock.nanoTime)
 
   implicit def scalaToZioDuration(d: Duration): zio.duration.Duration =

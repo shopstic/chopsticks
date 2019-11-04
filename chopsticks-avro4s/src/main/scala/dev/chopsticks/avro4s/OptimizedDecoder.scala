@@ -30,15 +30,13 @@ trait LowPriorityOptimizedDecoder {
   ): OptimizedDecoder[A] = {
     import dev.chopsticks.util.implicits.UnusedImplicits._
     ev.unused()
-    (value: Any, schema: Schema, fieldMapper: FieldMapper) =>
-      {
-        e.decode(value, schema, fieldMapper)
-      }
+    (value: Any, schema: Schema, fieldMapper: FieldMapper) => {
+      e.decode(value, schema, fieldMapper)
+    }
   }
 }
 
 object OptimizedDecoder extends LowPriorityOptimizedDecoder {
-
   type Typeclass[A] = OptimizedDecoder[A]
 
   def apply[T](implicit encoder: OptimizedDecoder[T]): OptimizedDecoder[T] = encoder
@@ -66,7 +64,6 @@ object OptimizedDecoder extends LowPriorityOptimizedDecoder {
     else {
       new OptimizedDecoder[T] {
         override def decode(value: Any, schema: Schema, fieldMapper: FieldMapper): T = {
-
           value match {
             case record: IndexedRecord =>
               // if we are in here then we are decoding a case class so we need a record schema

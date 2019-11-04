@@ -18,7 +18,6 @@ import dev.chopsticks.util.config.PureconfigLoader
 import zio.{RIO, ZIO, ZManaged}
 
 object KvdbTestSampleApp extends AkkaApp {
-
   final case class AppConfig(
     db: LmdbDatabase.Config
   )

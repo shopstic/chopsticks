@@ -37,7 +37,10 @@ object AkkaApp extends LoggingContext {
     }
   }
 
-  def createRuntime[R <: AkkaEnv with LogEnv](env: R, tracingConfig: TracingConfig = TracingConfig.enabled): zio.Runtime[R] = {
+  def createRuntime[R <: AkkaEnv with LogEnv](
+    env: R,
+    tracingConfig: TracingConfig = TracingConfig.enabled
+  ): zio.Runtime[R] = {
     val shutdown: CoordinatedShutdown = CoordinatedShutdown(env.akkaService.actorSystem)
 
     new zio.Runtime[R] {
@@ -52,7 +55,7 @@ object AkkaApp extends LoggingContext {
           if (!cause.interrupted && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
             Environment.logger.error("Application failure:\n" + cause.prettyPrint)
             val _ = shutdown.run(JvmExitReason)
-            sys.exit(1)
+            sys.exit(0)
           }
         }
       }
@@ -82,11 +85,13 @@ trait AkkaApp extends LoggingContext {
         ConfigFactory.empty()
     }
 
-    val config = customAppConfig.withFallback(ConfigFactory.load(
-      appConfigName,
-      ConfigParseOptions.defaults.setAllowMissing(false),
-      ConfigResolveOptions.defaults
-    ))
+    val config = customAppConfig.withFallback(
+      ConfigFactory.load(
+        appConfigName,
+        ConfigParseOptions.defaults.setAllowMissing(false),
+        ConfigResolveOptions.defaults
+      )
+    )
     val akkaActorSystem = createActorSystem(appName, config)
     val managedEnv: ZManaged[AkkaApp.Env, Nothing, Env] = createEnv(config)
     val zioTracingEnabled = Try(config.getBoolean("zio.trace")).recover { case _ => true }.getOrElse(true)

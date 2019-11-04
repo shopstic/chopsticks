@@ -263,8 +263,7 @@ object ZAkkaStreams {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       Flow[A]
         .mapAsync(parallelism) { a =>
-          rt.unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(rt.Environment))
-            .flatten
+          rt.unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(rt.Environment)).flatten
         }
     }
   }

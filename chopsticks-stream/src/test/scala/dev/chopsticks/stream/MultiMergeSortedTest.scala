@@ -15,7 +15,6 @@ class MultiMergeSortedTest
     with WordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-
   implicit val mat: ActorMaterializer = ActorMaterializer()
 
   "sort single type" in {

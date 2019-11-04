@@ -15,7 +15,6 @@ import scala.concurrent.Future
 import scala.util.control.NoStackTrace
 
 object ChildProcessActor {
-
   final case class ProcessStarted(
     stdin: Sink[ByteString, Future[IOResult]],
     stdout: Source[ByteString, Future[IOResult]],
@@ -71,7 +70,6 @@ class ChildProcessActor(
   blockingDispatcherConfigKey: String
 ) extends Actor
     with ActorLogging {
-
   import ChildProcessActor._
 
   implicit val blockingEc: MessageDispatcher = context.system.dispatchers.lookup(blockingDispatcherConfigKey)

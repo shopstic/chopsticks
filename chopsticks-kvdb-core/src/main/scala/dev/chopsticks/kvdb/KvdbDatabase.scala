@@ -16,7 +16,6 @@ import scala.concurrent.Future
 import scala.language.higherKinds
 
 object KvdbDatabase {
-
   def keySatisfies(key: Array[Byte], constraints: List[KvdbKeyConstraint]): Boolean = {
     constraints.forall { c =>
       val operator = c.operator
@@ -55,7 +54,6 @@ object KvdbDatabase {
 }
 
 trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
-
   type CF = BCF[_, _]
 
   def isLocal: Boolean

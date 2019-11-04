@@ -492,7 +492,9 @@ class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers 
     "KeyPrefix" should {
       "be contravariant" in {
         import BerkeleydbKeyCodecTest._
-        KeyPrefix[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(ContravariantKeyPrefixTest.dbKeyPrefix)
+        KeyPrefix[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(
+          ContravariantKeyPrefixTest.dbKeyPrefix
+        )
       }
     }
   }

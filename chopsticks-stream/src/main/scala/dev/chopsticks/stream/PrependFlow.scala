@@ -8,7 +8,6 @@ object PrependFlow {
 }
 
 final class PrependFlow[V] private (initialValue: => V) extends GraphStage[FlowShape[V, V]] {
-
   val shape = FlowShape(Inlet[V]("MemoryFlow.in"), Outlet[V]("MemoryFlow.out"))
 
   def createLogic(attributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {

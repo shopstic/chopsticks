@@ -124,7 +124,6 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   implicit rt: zio.Runtime[AkkaEnv]
 ) extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
-
   import LmdbDatabase._
 
   type Refs = References[CF]
@@ -569,7 +568,6 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
               Source
                 .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, config.ioDispatcher))
-
           }
 
         rt.unsafeRunToFuture(task)

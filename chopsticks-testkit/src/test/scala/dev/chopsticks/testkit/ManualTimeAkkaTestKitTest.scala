@@ -14,7 +14,6 @@ final class ManualTimeAkkaTestKitTest
     with WordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-
   implicit val materializer: ActorMaterializer = ActorMaterializer()
 
   "plain Akka stream" in {
@@ -39,5 +38,4 @@ final class ManualTimeAkkaTestKitTest
     source.sendComplete()
     sink.expectComplete()
   }
-
 }

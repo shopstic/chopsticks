@@ -3,7 +3,6 @@ package dev.chopsticks.kvdb.codec
 import scalapb._
 
 package object protobuf_value {
-
   implicit def protobufMessageValueSerdes[T <: GeneratedMessage with Message[T]: GeneratedMessageCompanion]
     : ValueSerdes[T] =
     new ProtobufValueSerdes[T]

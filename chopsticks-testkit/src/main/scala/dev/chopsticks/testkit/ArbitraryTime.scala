@@ -6,7 +6,6 @@ import org.scalacheck.{Arbitrary, Gen}
 import scala.collection.JavaConverters._
 
 object ArbitraryTime {
-
   lazy val uniformMonth: Gen[Month] = Gen.oneOf(Month.values())
 
   lazy val uniformDayOfWeek: Gen[DayOfWeek] = Gen.oneOf(DayOfWeek.values())

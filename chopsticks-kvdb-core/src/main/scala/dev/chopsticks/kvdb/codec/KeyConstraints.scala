@@ -72,7 +72,6 @@ object KeyConstraints {
   }
 
   private val MAX_BYTE = ProtoByteString.copyFrom(Array[Byte](0xFF.toByte))
-
 }
 
 //noinspection ScalaStyle

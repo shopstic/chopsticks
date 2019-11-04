@@ -13,7 +13,6 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
   seed: In => Out,
   aggregate: (Out, In) => Option[Out]
 ) extends GraphStage[FlowShape[In, Out]] {
-
   val in: Inlet[In] = Inlet[In]("Batch.in")
   val out: Outlet[Out] = Outlet[Out]("Batch.out")
 
@@ -21,7 +20,6 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) with InHandler with OutHandler {
-
       lazy val decider: Decider = inheritedAttributes.mandatoryAttribute[SupervisionStrategy].decider
 
       private var agg: Out = null.asInstanceOf[Out]
@@ -84,7 +82,6 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
                 left -= cost
               case None =>
                 pending = elem
-
             }
           } catch {
             case NonFatal(ex) =>
@@ -133,7 +130,6 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
           flush()
           if (!hasBeenPulled(in)) pull(in)
         }
-
       }
 
       private def restartState(): Unit = {

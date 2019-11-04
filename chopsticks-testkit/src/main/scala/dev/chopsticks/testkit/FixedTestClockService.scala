@@ -10,7 +10,6 @@ import zio.test.environment.TestClock
 import zio.test.environment.TestClock.FiberData
 
 final case class FixedTestClockService(original: TestClock.Test) extends TestClock.Service[Any] {
-
   override def fiberTime: UIO[Duration] = original.fiberTime
 
   override def adjust(duration: zio.duration.Duration): UIO[Unit] = original.adjust(duration)

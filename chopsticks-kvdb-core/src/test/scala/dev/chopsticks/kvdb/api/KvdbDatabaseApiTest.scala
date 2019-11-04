@@ -15,7 +15,6 @@ abstract class KvdbDatabaseApiTest
     with Matchers
     with AkkaTestKitAutoShutDown
     with LoggingContext {
-
   protected def managedDb: ZManaged[AkkaApp.Env, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
@@ -51,7 +50,6 @@ abstract class KvdbDatabaseApiTest
           v should equal(Some("bar"))
         }
       }
-
     }
   }
 }

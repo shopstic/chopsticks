@@ -163,7 +163,6 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 )(implicit rt: zio.Runtime[AkkaEnv])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
-
   import RocksdbDatabase._
 
   val isLocal: Boolean = true

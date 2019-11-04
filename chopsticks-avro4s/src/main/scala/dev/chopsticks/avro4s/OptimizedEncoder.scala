@@ -35,7 +35,6 @@ trait LowPriorityOptimizedEncoder {
 }
 
 object OptimizedEncoder extends LowPriorityOptimizedEncoder {
-
   type Typeclass[A] = OptimizedEncoder[A]
 
   def apply[T](implicit encoder: OptimizedEncoder[T]): OptimizedEncoder[T] = encoder
@@ -97,9 +96,9 @@ object OptimizedEncoder extends LowPriorityOptimizedEncoder {
     val nameCache = ctx.subtypes
       .foldLeft(Map.empty[(Schema.Type, TypeName), String]) { (m, subtype) =>
         m.updated(
-          Schema.Type.UNION -> subtype.typeName,
-          NameExtractor(subtype.typeName, subtype.annotations ++ ctx.annotations).fullName
-        )
+            Schema.Type.UNION -> subtype.typeName,
+            NameExtractor(subtype.typeName, subtype.annotations ++ ctx.annotations).fullName
+          )
           .updated(Schema.Type.ENUM -> subtype.typeName, NameExtractor(subtype.typeName, subtype.annotations).name)
       }
 

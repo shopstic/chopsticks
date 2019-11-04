@@ -26,7 +26,6 @@ final class ZAkkaStreamsTest
     with Matchers
     with AkkaTestKitAutoShutDown
     with ScalaFutures {
-
   implicit val mat: Materializer = ActorMaterializer()
 
   type Env = AkkaEnv with TestClock with Blocking
@@ -35,14 +34,14 @@ final class ZAkkaStreamsTest
     AkkaApp.createRuntime(new AkkaEnv with LogEnv.Live with TestClock with Blocking.Live {
       val akkaService: AkkaEnv.Service = AkkaEnv.Service.Live(system)
       private val fixedTestClockService = FixedTestClockService(
-        zio.Runtime[Unit]((), PlatformLive.fromExecutionContext(akkaService.dispatcher))
+        zio
+          .Runtime[Unit]((), PlatformLive.fromExecutionContext(akkaService.dispatcher))
           .unsafeRun(TestClock.makeTest(TestClock.DefaultData))
       )
       val clock: TestClock.Service[Any] = fixedTestClockService
       val scheduler: TestClock.Service[Any] = fixedTestClockService
     })
   }
-
 
   def withRuntime(test: zio.Runtime[Env] => Assertion): Future[Assertion] = {
     Future(test(createRuntime))
@@ -173,7 +172,8 @@ final class ZAkkaStreamsTest
         source.sendNext {
           Source
             .fromFuture(
-              akka.pattern.after(3.seconds, akkaService.actorSystem.scheduler)(Future.successful(1))(akkaService.dispatcher)
+              akka.pattern
+                .after(3.seconds, akkaService.actorSystem.scheduler)(Future.successful(1))(akkaService.dispatcher)
             )
             .watchTermination() { (_, f) =>
               f.onComplete(_ => promise.success(true))(akkaService.dispatcher)
@@ -195,5 +195,4 @@ final class ZAkkaStreamsTest
       }
     }
   }
-
 }
