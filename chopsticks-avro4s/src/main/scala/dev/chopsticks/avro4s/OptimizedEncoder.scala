@@ -25,7 +25,7 @@ trait OptimizedEncoder[T] extends Serializable {
 trait LowPriorityOptimizedEncoder {
   implicit def encoderToOptimizedEncoder[A /*: Typeable*/ ](
     implicit e: Encoder[A],
-    ev: Refute[OptimizedEncoder.Optimized[A]]
+    ev: Refute[Optimized[A]]
   ): OptimizedEncoder[A] = {
     import dev.chopsticks.util.implicits.UnusedImplicits._
     ev.unused()
@@ -35,11 +35,6 @@ trait LowPriorityOptimizedEncoder {
 }
 
 object OptimizedEncoder extends LowPriorityOptimizedEncoder {
-  trait Optimized[T]
-  object Optimized {
-    private object singleton extends Optimized[Any]
-    def apply[T]: Optimized[T] = singleton.asInstanceOf[Optimized[T]]
-  }
 
   type Typeclass[A] = OptimizedEncoder[A]
 
