@@ -145,7 +145,7 @@ object Dependencies {
     compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.2"),
     "com.github.ghik" %% "silencer-lib" % "1.4.2" % Provided
   )
-  
+
   val berkeleyDbDeps = Seq(
     "com.sleepycat" % "je" % "18.3.12"
   )
@@ -159,6 +159,6 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.2"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.3"
   )
 }
