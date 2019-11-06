@@ -55,7 +55,6 @@ object AkkaApp extends LoggingContext {
           if (!cause.interrupted && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
             Environment.logger.error("Application failure:\n" + cause.prettyPrint)
             val _ = shutdown.run(JvmExitReason)
-            sys.exit(0)
           }
         }
       }
