@@ -34,18 +34,18 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
   object DbDef extends KvdbDefinition {
     trait Queue extends BaseCf[ScheduleKey, Unit]
     trait Fact extends BaseCf[MtMessageId, Array[Byte]]
-    trait Inflight extends BaseCf[MtMessageId, Unit]
+    trait InProgress extends BaseCf[MtMessageId, Unit]
 
     type CfSet = Queue
 
     trait Materialization extends KvdbMaterialization[BaseCf, CfSet] {
       def queue: Queue
       def fact: Fact
-      def inflight: Inflight
+      def inProgress: InProgress
       val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf]
         .of(queue)
         .and(fact)
-        .and(inflight)
+        .and(inProgress)
     }
   }
 
@@ -141,7 +141,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
     metrics: ResponseMetrics,
     parallelism: Int
   ) = {
-    val inflightCf = dbApi.columnFamily(dbMat.inflight)
+    val inflightCf = dbApi.columnFamily(dbMat.inProgress)
 
     for {
       flow <- ZAkkaStreams.mapAsyncUnorderedM(parallelism) { batch: Seq[(MtMessageId, Unit)] =>
@@ -151,7 +151,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
               .shuffle(batch)
               .foldLeft(dbApi.transactionBuilder) {
                 case (t, (k, _)) =>
-                  t.delete(dbMat.inflight, k)
+                  t.delete(dbMat.inProgress, k)
               }
               .result
           }
@@ -212,7 +212,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
                   .foldLeft(dbApi.transactionBuilder) {
                     case (tx, (k, _)) =>
                       tx.delete(dbMat.queue, k)
-                        .put(dbMat.inflight, k.id, ())
+                        .put(dbMat.inProgress, k.id, ())
                   }
                   .result
               }
@@ -224,9 +224,10 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
               ret <- dbApi
                 .columnFamily(dbMat.fact)
                 .batchGetByKeysTask(keys)
-            } yield ret.iterator.collect {
-              case Some(pair) => pair
-            }.toList
+            } yield
+              ret.iterator.collect {
+                case Some(pair) => pair
+              }.toList
 
             val par = measure(deleteTask, metrics.purgeDuration) zipParRight measure(batchGetTask, metrics.getDuration)
 
@@ -264,18 +265,6 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
     val parallelism = 2
 
     for {
-      //      db <- RocksdbDatabase(
-      //        dbMat,
-      //        RocksdbDatabase.Config(
-      //          path = "/Volumes/NKTPRO/Downloads/bench-db",
-      //          readOnly = false,
-      //          startWithBulkInserts = false,
-      //          checksumOnRead = false,
-      //          syncWriteBatch = true,
-      //          useDirectIo = true,
-      //          ioDispatcher = "dev.chopsticks.kvdb.db-io-dispatcher"
-      //        )
-      //      )
       db <- RocksdbDatabase(
         dbMat,
         RocksdbDatabase.Config(
@@ -329,22 +318,12 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
         parallelism = parallelism
       )
 
-//      compactionFlow <- createCompactionFlow(
-//        db = db
-//      )
-
       populateThenPurgeFib <- ZAkkaStreams
         .interruptableGraph(
           ZIO.succeed {
             populateSource
               .via(dequeueFlow)
-              //              .wireTap(compactionFlow.to(Sink.foreach { duration =>
-              //                compactCounter.increment()
-              //                compactTimeCounter.add(duration.toMillis)
-              //              }))
               .mapConcat(identity)
-              //              .take(1000000)
-              //              .throttle(100000, 1.second)
               .viaMat(KillSwitches.single)(Keep.right)
               .toMat(Sink.foreach { _ =>
                 dequeueMessages.increment()

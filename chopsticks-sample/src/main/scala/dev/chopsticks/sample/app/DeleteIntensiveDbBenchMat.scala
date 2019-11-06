@@ -23,7 +23,7 @@ object DeleteIntensiveDbBenchMat extends DbDef.Materialization with RocksdbMater
 
   object queue extends Queue
   object fact extends Fact
-  object inflight extends Inflight
+  object inProgress extends InProgress
 
   val defaultColumnFamily: BaseCf[_, _] = queue
 
@@ -48,7 +48,7 @@ object DeleteIntensiveDbBenchMat extends DbDef.Materialization with RocksdbMater
         ).toOptions(PointLookupPattern)
       )
       .and(
-        inflight,
+        inProgress,
         RocksdbColumnFamilyConfig(
           memoryBudget = 128.mib,
           blockCache = 1.gib,

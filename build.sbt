@@ -12,13 +12,11 @@ ThisBuild / Test / fork := Build.forkTests
 ThisBuild / Test / javaOptions += "-Xmx768m"
 ThisBuild / Build.ITest / fork := Build.forkTests
 ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
-//Global / concurrentRestrictions ++= (if (!Build.forkTests) Seq(Tags.limit(Tags.Test, 2)) else Seq.empty[Tags.Rule])
 
 ThisBuild / symlinkTargetRoot := Build.symlinkTargetRoot
 
 ThisBuild / licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
 ThisBuild / bintrayReleaseOnPublish := false
-//ThisBuild / turbo := true
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
@@ -102,23 +100,6 @@ lazy val avro4s = Build
   )
   .dependsOn(util)
 
-//lazy val kvdb = Build
-//  .defineProject("kvdb")
-//  .settings(
-//    libraryDependencies ++= akkaHttpDeps ++ rocksdbDeps ++ lmdbDeps ++
-//      shapelessDeps ++ scalapbRuntimeDeps ++ enumeratumDeps ++ chimneyDeps ++
-//      kittensDeps ++ snappyDeps ++ betterFilesDeps ++ refinedDeps ++ silencerDeps,
-//    Compile / PB.targets := Seq(
-//      scalapb
-//        .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value
-//    ),
-//    scalacOptions ++= Seq(
-//      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
-//      "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
-//    )
-//  )
-//  .dependsOn(util, fp, stream)
-
 lazy val kvdbCodecBerkeleydbKey = Build
   .defineProject("kvdb-codec-berkeleydb-key")
   .settings(
@@ -126,24 +107,9 @@ lazy val kvdbCodecBerkeleydbKey = Build
   )
   .dependsOn(kvdbCore, testkit % "test->compile")
 
-//lazy val kvdbCodecBerkeleydbKey = Build
-//  .defineProject("kvdb-codec-berkeleydb-key")
-//  .settings(
-//    libraryDependencies ++= berkeleyDbDeps
-//  )
-//  .dependsOn(kvdbCore, testkit % "test->compile")
-
 lazy val kvdbCodecProtobufValue = Build
   .defineProject("kvdb-codec-protobuf-value")
   .dependsOn(kvdbCore)
-
-//lazy val kvdbTest = Build
-//  .defineProject("kvdb-test")
-//  .settings(
-//    publish / skip := true,
-//    bintrayRelease := {},
-//  )
-//  .dependsOn(kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, kvdbCodecPrimitive, testkit % "test->compile")
 
 lazy val sample = Build
   .defineProject("sample")
