@@ -16,7 +16,7 @@ ThisBuild / resolvers += Resolver.bintrayRepo("shopstic", "maven")
 
 ## chopsticks-kvdb-*
 
-[Akka Streams](https://doc.akka.io/docs/akka/current/stream/index.html) integration with 2 of the world's best open-source, embedded, ordered key-value storage engines: [LMDB](http://www.lmdb.tech/doc/) and [RocksDB](https://github.com/facebook/rocksdb), with a clear asbtraction layer to integrate with more engines in the futures.
+[Akka Streams](https://doc.akka.io/docs/akka/current/stream/index.html) integration with 2 of the world's best open-source, embedded, ordered key-value storage engines: [LMDB](http://www.lmdb.tech/doc/) and [RocksDB](https://github.com/facebook/rocksdb), with a clear asbtraction layer to integrate with more engines in the future.
 
 To use, add the corresponding modules to your `build.sbt`. For example:
 
@@ -34,7 +34,8 @@ However, embedded KV databases are far from being easy to use, since they are ve
 
 `chopsticks-kvdb` abstracts all of the hard parts away behind Akka Streams interfaces, which makes utilizing these databases significantly simpler:
 
-- Auto derivation of key serializer / deserializer for case classes and most of the common JVM data types.
+- Auto derivation of key serializer / deserializer for case classes and most of the common JVM data types. 
+- Key serializers ensure keys are lexicographically ordered, leveraging the execellent Tuple implementation from [Berkeley DB](https://en.wikipedia.org/wiki/Berkeley_DB).
 - Auto derivation of key prefixes which guarantees type-safety of prefixes at compile time. [Prefix range scan](https://github.com/facebook/rocksdb/wiki/rocksdb-basics#prefix-iterators) is fundamental to ordered KV databases.
 - Supports any value serialization format, out-of-the-box integration with [ScalaPB](https://github.com/scalapb/ScalaPB)
 - High-level, easy to use iterator key constraint DSL
@@ -70,8 +71,7 @@ object MyAppAkka extends AkkaApp {
 }
 ```
 
-An `ActorSystem` is automatically managed together with the life-cycle of the application. The default ZIO `Platform` env is configured with the Akka's dispatcher thread pool.
-. Additionally, the app's [Lightbend config](https://github.com/lightbend/config) is automatically loaded from classpath. The config file name is derived from the app's class name, by converting a *PascalCase* `MyAwesomeApp` class name to *kebab-case* `my-awesome-app.conf` file name. 
+An `ActorSystem` is automatically managed together with the life-cycle of the application. The default ZIO `Platform` env is configured with the Akka's dispatcher thread pool. Additionally, the app's [Lightbend config](https://github.com/lightbend/config) is automatically loaded from classpath. The config file name is derived from the app's class name, by converting a *PascalCase* `MyAwesomeApp` class name to *kebab-case* `my-awesome-app.conf` file name. 
 
 ## chopsticks-stream
 
@@ -87,7 +87,7 @@ A collection of very useful [Akka Streams](https://doc.akka.io/docs/akka/current
 
 Similar to [batch](https://doc.akka.io/docs/akka/current/stream/operators/Source-or-Flow/batch.html), but allows the aggregate function to decide whether to force emitting the currently aggregated buffer based on its accumulated state, vs. just based on the cost function.
 
-As an example, we can batch upstream elements while downstream is slower as usual, but emit the accumulated buffer right away if there's another element already contained in the UUID Set. This ensures every batch consists non-overlapping transactions against the same set of entities.
+As an example, we can batch upstream elements while downstream is slower as usual, but emit the accumulated buffer right away if there's another element already contained in the UUID Set. This ensures every batch consists of non-overlapping transactions against the same set of entities.
 
 ```scala
 Flow[Transaction]
