@@ -52,7 +52,7 @@ final class ZAkkaStreamsTest
     rt.unsafeRunToFuture(test.provide(rt.Environment))
   }
 
-  "interruptableLazySource" should {
+  "interruptibleLazySource" should {
     "interrupt effect" in withEffect {
       for {
         clock <- ZIO.access[TestClock](c => new ManualClock(Some(c)))
@@ -60,7 +60,7 @@ final class ZAkkaStreamsTest
         startFuture <- startP.await.toFuture
         interruptedP <- zio.Promise.make[Nothing, Unit]
         interruptedFuture <- interruptedP.await.toFuture
-        source <- ZAkkaStreams.interruptableLazySource {
+        source <- ZAkkaStreams.interruptibleLazySource {
           startP.succeed(()) *> ZIO
             .succeed(1)
             .delay(zio.duration.Duration(3, TimeUnit.SECONDS))

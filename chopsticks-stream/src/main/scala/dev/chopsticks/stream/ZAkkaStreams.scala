@@ -70,7 +70,7 @@ object ZAkkaStreams {
     }
   }
 
-  def interruptableGraph[R, A](
+  def interruptibleGraph[R, A](
     make: RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
     graceful: Boolean
   )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv with R, A] = {
@@ -90,7 +90,7 @@ object ZAkkaStreams {
         task.onInterrupt(
           UIO {
             if (graceful) ks.shutdown()
-            else ks.abort(new InterruptedException("Stream (interruptableGraph) was interrupted"))
+            else ks.abort(new InterruptedException("Stream (interruptibleGraph) was interrupted"))
           } *> task.fold(
             e =>
               env.logger
@@ -102,7 +102,7 @@ object ZAkkaStreams {
     }
   }
 
-  def interruptableMapAsyncM[R, A, B](
+  def interruptibleMapAsyncM[R, A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
@@ -117,14 +117,14 @@ object ZAkkaStreams {
           Future.successful(
             Flow[A]
               .mapAsync(parallelism) { a =>
-                val interruptableTask = for {
+                val interruptibleTask = for {
                   fib <- runTask(a).fork
                   c <- (completionPromise.await *> fib.interrupt).fork
                   ret <- fib.join
                   _ <- c.interrupt
                 } yield ret
 
-                rt.unsafeRunToFuture(interruptableTask.provide(env))
+                rt.unsafeRunToFuture(interruptibleTask.provide(env))
               }
               .watchTermination() { (_, f) =>
                 f.onComplete { _ =>
@@ -138,13 +138,13 @@ object ZAkkaStreams {
     }
   }
 
-  def interruptableMapAsync[R, A, B](
+  def interruptibleMapAsync[R, A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, Future[NotUsed]] = {
-    rt.unsafeRun(interruptableMapAsyncM(parallelism)(runTask).provide(rt.Environment))
+    rt.unsafeRun(interruptibleMapAsyncM(parallelism)(runTask).provide(rt.Environment))
   }
 
-  def interruptableMapAsyncUnorderedM[R, A, B](
+  def interruptibleMapAsyncUnorderedM[R, A, B](
     parallelism: Int,
     attributes: Option[Attributes] = None
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
@@ -160,14 +160,14 @@ object ZAkkaStreams {
 
           val flow = Flow[A]
             .mapAsyncUnordered(parallelism) { a =>
-              val interruptableTask = for {
+              val interruptibleTask = for {
                 fib <- runTask(a).fork
                 c <- (interruption *> fib.interrupt).fork
                 ret <- fib.join
                 _ <- c.interrupt
               } yield ret
 
-              rt.unsafeRunToFuture(interruptableTask.provide(env))
+              rt.unsafeRunToFuture(interruptibleTask.provide(env))
             }
 
           val flowWithAttrs = attributes.fold(flow)(attrs => flow.withAttributes(attrs))
@@ -186,7 +186,7 @@ object ZAkkaStreams {
     }
   }
 
-  def interruptableLazySource[R, A, B](effect: RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Source[B, Future[NotUsed]]] = {
+  def interruptibleLazySource[R, A, B](effect: RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Source[B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       val env = rt.Environment
       val akkaService = env.akkaService
@@ -196,7 +196,7 @@ object ZAkkaStreams {
         .lazily(() => {
           val completionPromise = rt.unsafeRun(zio.Promise.make[Nothing, Unit])
 
-          val interruptableTask = for {
+          val interruptibleTask = for {
             fib <- effect.fork
             c <- (completionPromise.await *> fib.interrupt).fork
             ret <- fib.join
@@ -204,7 +204,7 @@ object ZAkkaStreams {
           } yield ret
 
           Source
-            .fromFuture(rt.unsafeRunToFuture(interruptableTask.provide(env)))
+            .fromFuture(rt.unsafeRunToFuture(interruptibleTask.provide(env)))
             .watchTermination() { (_, f) =>
               f.onComplete { _ =>
                 val _ = rt.unsafeRun(completionPromise.succeed(()))
@@ -250,11 +250,11 @@ object ZAkkaStreams {
     rt.unsafeRun(switchFlatMapConcatM[R, In, Out](f).provide(rt.Environment))
   }
 
-  def interruptableMapAsyncUnordered[R, A, B](
+  def interruptibleMapAsyncUnordered[R, A, B](
     parallelism: Int,
     attributes: Option[Attributes] = None
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, Future[NotUsed]] = {
-    rt.unsafeRun(interruptableMapAsyncUnorderedM(parallelism, attributes)(runTask).provide(rt.Environment))
+    rt.unsafeRun(interruptibleMapAsyncUnorderedM(parallelism, attributes)(runTask).provide(rt.Environment))
   }
 
   def mapAsyncM[R, A, B](
@@ -313,18 +313,18 @@ object ZAkkaStreams {
           .via(mapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
-      def interruptableEffectMapAsync[R, Next](
+      def interruptibleEffectMapAsync[R, Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
         flow
-          .via(interruptableMapAsync[R, Out, Next](parallelism)(runTask))
+          .via(interruptibleMapAsync[R, Out, Next](parallelism)(runTask))
       }
 
-      def interruptableEffectMapAsyncUnordered[R, Next](
+      def interruptibleEffectMapAsyncUnordered[R, Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
         flow
-          .via(interruptableMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
+          .via(interruptibleMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
       def switchFlatMapConcat[R, Next](
@@ -350,18 +350,18 @@ object ZAkkaStreams {
           .via(mapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
-      def interruptableEffectMapAsync[R, Next](
+      def interruptibleEffectMapAsync[R, Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
         source
-          .via(interruptableMapAsync[R, Out, Next](parallelism)(runTask))
+          .via(interruptibleMapAsync[R, Out, Next](parallelism)(runTask))
       }
 
-      def interruptableEffectMapAsyncUnordered[R, Next](
+      def interruptibleEffectMapAsyncUnordered[R, Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
         source
-          .via(interruptableMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
+          .via(interruptibleMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
       def switchFlatMapConcat[R, Next](

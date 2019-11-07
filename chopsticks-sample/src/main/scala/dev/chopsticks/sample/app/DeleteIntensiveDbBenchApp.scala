@@ -224,10 +224,9 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
               ret <- dbApi
                 .columnFamily(dbMat.fact)
                 .batchGetByKeysTask(keys)
-            } yield
-              ret.iterator.collect {
-                case Some(pair) => pair
-              }.toList
+            } yield ret.iterator.collect {
+              case Some(pair) => pair
+            }.toList
 
             val par = measure(deleteTask, metrics.purgeDuration) zipParRight measure(batchGetTask, metrics.getDuration)
 
@@ -319,7 +318,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
       )
 
       populateThenPurgeFib <- ZAkkaStreams
-        .interruptableGraph(
+        .interruptibleGraph(
           ZIO.succeed {
             populateSource
               .via(dequeueFlow)
@@ -334,7 +333,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
         .fork
 
       responseFib <- ZAkkaStreams
-        .interruptableGraph(
+        .interruptibleGraph(
           ZIO.succeed(
             responseSource
               .viaMat(KillSwitches.single)(Keep.right)

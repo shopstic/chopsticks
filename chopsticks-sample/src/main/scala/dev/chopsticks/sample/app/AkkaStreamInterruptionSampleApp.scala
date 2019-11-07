@@ -15,7 +15,7 @@ object AkkaStreamInterruptionSampleApp extends AkkaApp {
   protected def createEnv(untypedConfig: Config) = ZManaged.environment[AkkaApp.Env]
 
   def run: ZIO[Env, Throwable, Unit] = {
-    val stream = ZAkkaStreams.interruptableGraph(
+    val stream = ZAkkaStreams.interruptibleGraph(
       ZIO.access[LogEnv] { env =>
         Source(1 to 10)
           .throttle(1, 1.second)

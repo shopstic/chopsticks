@@ -50,7 +50,7 @@ object DstreamSampleApp extends AkkaApp {
 
       Source(1 to Int.MaxValue)
         .map(Assignment(_))
-        .via(ZAkkaStreams.interruptableMapAsyncUnordered(12) { assignment: Assignment =>
+        .via(ZAkkaStreams.interruptibleMapAsyncUnordered(12) { assignment: Assignment =>
           Dstreams
             .distribute(assignment) { result: WorkResult[Result] =>
               Task.fromFuture { _ =>
@@ -70,7 +70,7 @@ object DstreamSampleApp extends AkkaApp {
         .mapMaterializedValue(f => (ks, f))
     }
 
-    ZAkkaStreams.interruptableGraph(graphTask, graceful = true)
+    ZAkkaStreams.interruptibleGraph(graphTask, graceful = true)
   }
 
   protected def runWorker(client: DstreamSampleAppClient, id: Int) = {

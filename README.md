@@ -141,8 +141,8 @@ Akka Streams married to ZIO, which allows utilization of ZIO's effect instead of
 
 - `effectMapAsync`: equivalent to [mapAsync](https://doc.akka.io/docs/akka/current/stream/operators/Source-or-Flow/mapAsync.html#mapasync)
 - `effectMapAsyncUnordered`: equivalent to [mapAsyncUnordered](https://doc.akka.io/docs/akka/current/stream/operators/Source-or-Flow/mapAsyncUnordered.html#mapasyncunordered)
-- `interruptableEffectMapAsync`: similar to `effectMapAsync` but will interrupt the pending effects when the stream completes. This guarantees no leaks, which is a common problem with mid-stream Futures.
-- `interruptableEffectMapAsyncUnordered`
+- `interruptibleEffectMapAsync`: similar to `effectMapAsync` but will interrupt the pending effects when the stream completes. This guarantees no leaks, which is a common problem with mid-stream Futures.
+- `interruptibleEffectMapAsyncUnordered`
 - `switchFlatMapConcat`: Akka Streams does not have an equivalence of Rx's [switchMap](https://www.learnrxjs.io/operators/transformation/switchmap.html), which enables cancellation of the outstanding sub-stream and switching to the new one. This fills in the gap nicely.
  
 To use those, simply import:

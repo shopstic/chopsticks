@@ -132,13 +132,13 @@ object Dstreams extends LoggingContext {
       requestBuilder
         .invoke(Source.fromFutureSource(promise.future).mapMaterializedValue(_ => NotUsed))
         .viaMat(KillSwitches.single)(Keep.right)
-        .via(ZAkkaStreams.interruptableMapAsync(1) { assignment: Req =>
+        .via(ZAkkaStreams.interruptibleMapAsync(1) { assignment: Req =>
           makeSource(assignment).map(s => promise.success(s)) *> Task.fromFuture(_ => promise.future)
         })
         .toMat(Sink.ignore)(Keep.both)
     }
 
-    ZAkkaStreams.interruptableGraph(graph, graceful = true)
+    ZAkkaStreams.interruptibleGraph(graph, graceful = true)
   }
 
   def workPool[Req, Res, R <: AkkaEnv](

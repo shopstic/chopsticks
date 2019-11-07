@@ -60,7 +60,7 @@ object KvdbTestSampleApp extends AkkaApp {
       )
       defaultCf = dbApi.columnFamily(sampleDb.default)
       tailFiber <- ZAkkaStreams
-        .interruptableGraph(
+        .interruptibleGraph(
           ZIO.access[AkkaEnv with LogEnv] { env =>
             val log = env.logger
 
