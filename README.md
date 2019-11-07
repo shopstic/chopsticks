@@ -1,4 +1,4 @@
-# Scala Chopsticks
+# Scala chopsticks
 
 `chopsticks` is an essential collection of Scala libraries for everyday use. It's designed specifically to build high performance, production-grade functional reactive stream systems. These have been used extensively in our internal production streaming systems for years, dealing with __over 1 million persistent writes / s with concurrently up to 30 million reads / s__ in each individual server.
 
@@ -16,7 +16,7 @@ ThisBuild / resolvers += Resolver.bintrayRepo("shopstic", "maven")
 
 ## chopsticks-kvdb-*
 
-[Akka Streams](https://doc.akka.io/docs/akka/current/stream/index.html) integration with 2 of the world's best open-source, embedded, ordered key-value storage engines: [LMDB](http://www.lmdb.tech/doc/) and [RocksDB](https://github.com/facebook/rocksdb), with a clear asbtraction layer to integrate with more engines in the future.
+[Akka Streams](https://doc.akka.io/docs/akka/current/stream/index.html) integration with 2 of the world's best open-source, embedded, ordered key-value storage engines: [LMDB](http://www.lmdb.tech/doc/) and [RocksDB](https://github.com/facebook/rocksdb), with a clear abstraction layer to integrate with more engines in the future.
 
 To use, add the corresponding modules to your `build.sbt`. For example:
 
@@ -35,7 +35,7 @@ However, embedded KV databases are far from being easy to use, since they are ve
 `chopsticks-kvdb` abstracts all of the hard parts away behind Akka Streams interfaces, which makes utilizing these databases significantly simpler:
 
 - Auto derivation of key serializer / deserializer for case classes and most of the common JVM data types. 
-- Key serializers ensure keys are lexicographically ordered, leveraging the execellent Tuple implementation from [Berkeley DB](https://en.wikipedia.org/wiki/Berkeley_DB).
+- Key serializers ensure keys are lexicographically ordered, leveraging the excellent Tuple implementation from [Berkeley DB](https://en.wikipedia.org/wiki/Berkeley_DB).
 - Auto derivation of key prefixes which guarantees type-safety of prefixes at compile time. [Prefix range scan](https://github.com/facebook/rocksdb/wiki/rocksdb-basics#prefix-iterators) is fundamental to ordered KV databases.
 - Supports any value serialization format, out-of-the-box integration with [ScalaPB](https://github.com/scalapb/ScalaPB)
 - High-level, easy to use iterator key constraint DSL
@@ -122,7 +122,7 @@ Source
 
 Similar to [mergeSorted](https://doc.akka.io/docs/akka/current/stream/operators/Source-or-Flow/mergeSorted.html), but supports any arbitrary number of sources to merge, instead of just 2.
 
-This is indispensible when you need to combine multiple concurrent time-series sources into a single time-series, ordered in a single timeline. The ordering criteria can be supplied via an `Ordering` implicit value.
+This is indispensable when you need to combine multiple concurrent time-series sources into a single time-series, ordered in a single timeline. The ordering criteria can be supplied via an `Ordering` implicit value.
 
 ```scala
 implicit val timeOrdering: Ordering[Event] = ...
