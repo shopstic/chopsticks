@@ -2,7 +2,6 @@ package dev.chopsticks.stream
 
 import java.time.LocalDateTime
 
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
@@ -15,8 +14,6 @@ class MultiMergeSortedTest
     with WordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-  implicit val mat: ActorMaterializer = ActorMaterializer()
-
   "sort single type" in {
     val source = MultiMergeSorted.merge[Int](
       List(

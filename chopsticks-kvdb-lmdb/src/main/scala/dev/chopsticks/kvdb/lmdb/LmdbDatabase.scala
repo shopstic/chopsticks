@@ -507,9 +507,9 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
   def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, Future[NotUsed]] = {
+  ): Source[KvdbBatch, NotUsed] = {
     Source
-      .lazilyAsync(() => {
+      .lazyFuture(() => {
         val task = references
           .map {
             refs =>
@@ -578,7 +578,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
   def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, Future[NotUsed]] = {
+  ): Source[KvdbValueBatch, NotUsed] = {
     iterateSource(column, range)
       .map(_.map(_._2))
   }
@@ -588,9 +588,9 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     ranges: List[KvdbKeyRange]
   )(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbIndexedTailBatch, Future[NotUsed]] = {
+  ): Source[KvdbIndexedTailBatch, NotUsed] = {
     Source
-      .lazilyAsync(() => {
+      .lazyFuture(() => {
         val task = references
           .map {
             refs =>
@@ -688,9 +688,9 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailBatch, Future[NotUsed]] = {
+  ): Source[KvdbTailBatch, NotUsed] = {
     Source
-      .lazilyAsync(() => {
+      .lazyFuture(() => {
         val task = references
           .map { refs =>
             if (range.from.isEmpty) {
@@ -713,7 +713,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
   def tailValueSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailValueBatch, Future[NotUsed]] = {
+  ): Source[KvdbTailValueBatch, NotUsed] = {
     tailSource(column, range)
       .map(_.map(_.map(_._2)))
   }

@@ -91,7 +91,7 @@ object DstreamEnv {
 //        _ <- UIO(println(s"beforeInterrupt enqueueWorker > assignment=$assignment"))
 //        _ <- abortFib.interrupt
 //        _ <- UIO(println(s"afterInterrupt enqueueWorker > assignment=$assignment"))
-      } yield Source.single(assignment) ++ Source.fromFutureSource(inFuture.map(_ => Source.empty))
+      } yield Source.single(assignment) ++ Source.futureSource(inFuture.map(_ => Source.empty))
     }
 
     def enqueueAssignment(assignment: Req): UIO[WorkResult[Res]] = {

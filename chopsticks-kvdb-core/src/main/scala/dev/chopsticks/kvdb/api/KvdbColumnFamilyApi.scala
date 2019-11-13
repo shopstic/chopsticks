@@ -172,18 +172,18 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def batchedRawSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, Future[NotUsed]] = {
+  ): Source[KvdbBatch, NotUsed] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateSource(cf, range)
   }
 
-  def batchedSource(implicit clientOptions: KvdbClientOptions): Source[List[(K, V)], Future[NotUsed]] = {
+  def batchedSource(implicit clientOptions: KvdbClientOptions): Source[List[(K, V)], NotUsed] = {
     batchedSource(_.first, _.last)
   }
 
   def batchedSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[List[(K, V)], Future[NotUsed]] = {
+  ): Source[List[(K, V)], NotUsed] = {
     batchedRawSource(from, to)
       .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
@@ -192,26 +192,26 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
   }
 
-  def source(implicit clientOptions: KvdbClientOptions): Source[(K, V), Future[NotUsed]] = {
+  def source(implicit clientOptions: KvdbClientOptions): Source[(K, V), NotUsed] = {
     source(_.first, _.last)
   }
 
   def source(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[(K, V), Future[NotUsed]] = {
+  ): Source[(K, V), NotUsed] = {
     batchedSource(from, to).mapConcat(identity)
   }
 
   def batchedRawValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, Future[NotUsed]] = {
+  ): Source[KvdbValueBatch, NotUsed] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateValuesSource(cf, range)
   }
 
   def batchedValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[List[V], Future[NotUsed]] = {
+  ): Source[List[V], NotUsed] = {
     batchedRawValueSource(from, to)
       .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
@@ -222,15 +222,15 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def valueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[V, Future[NotUsed]] = {
+  ): Source[V, NotUsed] = {
     batchedValueSource(from, to).mapConcat(identity)
   }
 
-  def batchedValueSource(implicit clientOptions: KvdbClientOptions): Source[List[V], Future[NotUsed]] = {
+  def batchedValueSource(implicit clientOptions: KvdbClientOptions): Source[List[V], NotUsed] = {
     batchedValueSource(_.first, _.last)
   }
 
-  def valueSource(implicit clientOptions: KvdbClientOptions): Source[V, Future[NotUsed]] = {
+  def valueSource(implicit clientOptions: KvdbClientOptions): Source[V, NotUsed] = {
     valueSource(_.first, _.last)
   }
 
@@ -391,7 +391,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def tailBatchedRawValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, Future[NotUsed]] = {
+  ): Source[KvdbValueBatch, NotUsed] = {
     db.tailValueSource(cf, KeyConstraints.range[K](from, to))
       .collect {
         case Right(b) => b
@@ -401,7 +401,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def tailValueSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[V, Future[NotUsed]] = {
+  )(implicit clientOptions: KvdbClientOptions): Source[V, NotUsed] = {
     tailBatchedRawValueSource(from, to)
       .mapAsync(clientOptions.serdesParallelism) { b =>
         Future {
@@ -411,14 +411,14 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
-  def tailValueSource(implicit clientOptions: KvdbClientOptions): Source[V, Future[NotUsed]] = {
+  def tailValueSource(implicit clientOptions: KvdbClientOptions): Source[V, NotUsed] = {
     tailValueSource(_.first, _.last)
   }
 
   def tailBatchedRawSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[KvdbBatch, Future[NotUsed]] = {
+  )(implicit clientOptions: KvdbClientOptions): Source[KvdbBatch, NotUsed] = {
     db.tailSource(cf, KeyConstraints.range[K](from, to))
       .collect {
         case Right(b) => b
@@ -428,7 +428,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def tailSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[(K, V), Future[NotUsed]] = {
+  )(implicit clientOptions: KvdbClientOptions): Source[(K, V), NotUsed] = {
     tailBatchedRawSource(from, to)
       .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
@@ -438,14 +438,14 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
-  def tailSource(implicit clientOptions: KvdbClientOptions): Source[(K, V), Future[NotUsed]] = {
+  def tailSource(implicit clientOptions: KvdbClientOptions): Source[(K, V), NotUsed] = {
     tailSource(_.first, _.last)
   }
 
   def tailVerboseSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, (K, V)], Future[NotUsed]] = {
+  )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, (K, V)], NotUsed] = {
     import cats.syntax.either._
     db.tailSource(cf, KeyConstraints.range[K](from, to))
       .mapAsync(clientOptions.serdesParallelism) {
@@ -464,7 +464,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def concurrentTailVerboseRawSource(
     ranges: ConstraintsRangesBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[(Int, KvdbTailBatch), Future[NotUsed]] = {
+  )(implicit clientOptions: KvdbClientOptions): Source[(Int, KvdbTailBatch), NotUsed] = {
     val builtRanges = ranges(KeyConstraints.seed[K]).map {
       case (from, to) =>
         KeyConstraints.toRange[K](from, to)
@@ -477,7 +477,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     ranges: ConstraintsRangesBuilder[K]
   )(
     implicit clientOptions: KvdbClientOptions
-  ): Source[(Int, Either[Instant, List[(K, V)]]), Future[NotUsed]] = {
+  ): Source[(Int, Either[Instant, List[(K, V)]]), NotUsed] = {
     import cats.syntax.either._
 
     concurrentTailVerboseRawSource(ranges)
@@ -496,7 +496,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def tailVerboseValueSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, V], Future[NotUsed]] = {
+  )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, V], NotUsed] = {
     import cats.syntax.either._
     db.tailValueSource(cf, KeyConstraints.range[K](from, to))
       .mapAsync(clientOptions.serdesParallelism) {

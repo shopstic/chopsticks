@@ -3,7 +3,7 @@ package dev.chopsticks.stream
 import akka.NotUsed
 import akka.actor.Status
 import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
-import akka.stream.{Attributes, KillSwitch, KillSwitches, OverflowStrategy}
+import akka.stream._
 import dev.chopsticks.fp.{AkkaEnv, LogCtx, LogEnv}
 import zio.{RIO, Task, UIO, ZIO}
 
@@ -13,15 +13,31 @@ import scala.util.{Failure, Success}
 object ZAkkaStreams {
   def recursiveSource[R, Out, State](seed: => RIO[R, State], nextState: (State, Out) => State)(
     makeSource: State => Source[Out, NotUsed]
-  )(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Out, Future[NotUsed]] = {
+  )(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Out, NotUsed] = {
     val env = rt.Environment
     val akkaService = env.akkaService
-    import akkaService._
+    import akkaService.{actorSystem, dispatcher}
 
     Source
-      .lazilyAsync(() => {
+      .lazyFuture(() => {
         rt.unsafeRunToFuture(seed.provide(env)).map { seedState =>
-          val (actorRef, source) = Source.actorRef[State](1, OverflowStrategy.fail).preMaterialize()
+          val completionMatcher: PartialFunction[Any, CompletionStrategy] = {
+            case Status.Success(s: CompletionStrategy) => s
+            case Status.Success(_) => CompletionStrategy.draining
+          }
+
+          val failureMatcher: PartialFunction[Any, Throwable] = {
+            case Status.Failure(cause) => cause
+          }
+
+          val (actorRef, source) = Source
+            .actorRef[State](
+              completionMatcher,
+              failureMatcher,
+              1,
+              OverflowStrategy.fail
+            )
+            .preMaterialize()
 
           actorRef ! seedState
 
@@ -31,7 +47,7 @@ object ZAkkaStreams {
                 .viaMat(LastStateFlow[Out, State, State](state, nextState, identity))(Keep.right)
                 .preMaterialize()
 
-              subSource ++ Source.fromFutureSource(future.map {
+              subSource ++ Source.futureSource(future.map {
                 case (state, Success(_)) =>
                   actorRef ! state
                   Source.empty[Out]
@@ -55,15 +71,18 @@ object ZAkkaStreams {
     make: RIO[R, RunnableGraph[Future[A]]]
   ): RIO[AkkaEnv with LogEnv with R, A] = {
     ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
+      val akkaService = env.akkaService
+      import akkaService.{actorSystem, dispatcher}
+
       make.flatMap { graph =>
-        val f = graph.run()(env.akkaService.materializer)
+        val f = graph.run()
         f.value
           .fold(
             Task.effectAsync { cb: (Task[A] => Unit) =>
               f.onComplete {
                 case Success(a) => cb(Task.succeed(a))
                 case Failure(t) => cb(Task.fail(t))
-              }(env.akkaService.dispatcher)
+              }
             }
           )(Task.fromTry(_))
       }
@@ -75,15 +94,18 @@ object ZAkkaStreams {
     graceful: Boolean
   )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv with R, A] = {
     ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
+      val akkaService = env.akkaService
+      import akkaService.{actorSystem, dispatcher}
+
       make.flatMap { graph =>
-        val (ks, f) = graph.run()(env.akkaService.materializer)
+        val (ks, f) = graph.run()
         val task = f.value
           .fold(
             Task.effectAsync { cb: (Task[A] => Unit) =>
               f.onComplete {
                 case Success(a) => cb(Task.succeed(a))
                 case Failure(t) => cb(Task.fail(t))
-              }(env.akkaService.dispatcher)
+              }
             }
           )(Task.fromTry(_))
 
@@ -111,7 +133,7 @@ object ZAkkaStreams {
       import akkaService._
 
       Flow
-        .lazyInitAsync(() => {
+        .lazyFutureFlow(() => {
           val completionPromise = rt.unsafeRun(zio.Promise.make[Nothing, Unit])
 
           Future.successful(
@@ -154,7 +176,7 @@ object ZAkkaStreams {
       import akkaService._
 
       Flow
-        .lazyInitAsync(() => {
+        .lazyFutureFlow(() => {
           val completionPromise = rt.unsafeRun(zio.Promise.make[Nothing, Unit])
           val interruption = completionPromise.await
 
@@ -193,7 +215,7 @@ object ZAkkaStreams {
       import akkaService._
 
       Source
-        .lazily(() => {
+        .lazySource(() => {
           val completionPromise = rt.unsafeRun(zio.Promise.make[Nothing, Unit])
 
           val interruptibleTask = for {
@@ -204,7 +226,7 @@ object ZAkkaStreams {
           } yield ret
 
           Source
-            .fromFuture(rt.unsafeRunToFuture(interruptibleTask.provide(env)))
+            .future(rt.unsafeRunToFuture(interruptibleTask.provide(env)))
             .watchTermination() { (_, f) =>
               f.onComplete { _ =>
                 val _ = rt.unsafeRun(completionPromise.succeed(()))
@@ -221,7 +243,7 @@ object ZAkkaStreams {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       val env = rt.Environment
       val akkaService = env.akkaService
-      import akkaService._
+      import akkaService.actorSystem
 
       Flow[In]
         .statefulMapConcat(() => {

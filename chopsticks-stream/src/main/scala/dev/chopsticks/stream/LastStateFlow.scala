@@ -52,9 +52,9 @@ final class LastStateFlow[E, S, R] private (seed: => S, next: (S, E) => S, resul
         new OutHandler {
           override def onPull(): Unit = pull(in)
 
-          override def onDownstreamFinish(): Unit = {
+          override def onDownstreamFinish(cause: Throwable): Unit = {
             val _ = matValue.success((result(currentState), Success(Done)))
-            super.onDownstreamFinish()
+            super.onDownstreamFinish(cause)
           }
         }
       )

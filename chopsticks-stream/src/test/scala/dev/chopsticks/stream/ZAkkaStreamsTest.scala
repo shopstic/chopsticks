@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
-import akka.stream.{ActorMaterializer, Attributes, KillSwitches, Materializer}
+import akka.stream.{Attributes, KillSwitches}
 import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LogEnv}
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
@@ -26,8 +26,6 @@ final class ZAkkaStreamsTest
     with Matchers
     with AkkaTestKitAutoShutDown
     with ScalaFutures {
-  implicit val mat: Materializer = ActorMaterializer()
-
   type Env = AkkaEnv with TestClock with Blocking
 
   private def createRuntime: zio.Runtime[Env] = {
@@ -171,7 +169,7 @@ final class ZAkkaStreamsTest
         sink.request(2)
         source.sendNext {
           Source
-            .fromFuture(
+            .future(
               akka.pattern
                 .after(3.seconds, akkaService.actorSystem.scheduler)(Future.successful(1))(akkaService.dispatcher)
             )

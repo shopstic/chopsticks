@@ -1,6 +1,5 @@
 package dev.chopsticks.stream
 
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
@@ -15,8 +14,6 @@ class AkkaStreamUtilsTest
     with WordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-  implicit val mat: ActorMaterializer = ActorMaterializer()
-
   "statefulMapConcatWithCompleteFlow" should {
     "emit with complete" in {
       val source = Source(1 to 10)

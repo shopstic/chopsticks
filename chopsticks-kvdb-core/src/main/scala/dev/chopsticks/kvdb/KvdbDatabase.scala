@@ -12,7 +12,6 @@ import dev.chopsticks.kvdb.util.KvdbException.KvdbAlreadyClosedException
 import zio.clock.Clock
 import zio.{RIO, Task, ZIO, ZManaged}
 
-import scala.concurrent.Future
 import scala.language.higherKinds
 
 object KvdbDatabase {
@@ -82,11 +81,11 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, Future[NotUsed]]
+  ): Source[KvdbBatch, NotUsed]
 
   def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, Future[NotUsed]]
+  ): Source[KvdbValueBatch, NotUsed]
 
   def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit]
 
@@ -98,15 +97,15 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailBatch, Future[NotUsed]]
+  ): Source[KvdbTailBatch, NotUsed]
 
   def tailValueSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailValueBatch, Future[NotUsed]]
+  ): Source[KvdbTailValueBatch, NotUsed]
 
   def concurrentTailSource[Col <: CF](column: Col, ranges: List[KvdbKeyRange])(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbIndexedTailBatch, Future[NotUsed]]
+  ): Source[KvdbIndexedTailBatch, NotUsed]
 
   def dropColumnFamily[Col <: CF](column: Col): Task[Unit]
 

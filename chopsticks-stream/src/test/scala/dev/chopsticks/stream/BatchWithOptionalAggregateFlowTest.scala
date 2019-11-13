@@ -1,6 +1,5 @@
 package dev.chopsticks.stream
 
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.testkit.ImplicitSender
@@ -16,8 +15,6 @@ class BatchWithOptionalAggregateFlowTest
     with WordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-  implicit val mat: ActorMaterializer = ActorMaterializer()
-
   "original Akka tests" should {
     "pass-through elements unchanged when there is no rate difference" in {
       val (source, sink) = TestSource

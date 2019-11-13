@@ -38,7 +38,6 @@ import zio.clock.Clock
 import zio.{RIO, Task, ZIO, ZSchedule}
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Future
 import scala.language.higherKinds
 import scala.util.Failure
 
@@ -735,16 +734,16 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
   def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, Future[NotUsed]] = {
+  ): Source[KvdbValueBatch, NotUsed] = {
     iterateSource(column, range)
       .map(_.map(_._2))
   }
 
   def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, Future[NotUsed]] = {
+  ): Source[KvdbBatch, NotUsed] = {
     Source
-      .lazilyAsync(() => {
+      .lazyFuture(() => {
         val task = references
           .map {
             refs =>
@@ -921,9 +920,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     ranges: List[KvdbKeyRange]
   )(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbIndexedTailBatch, Future[NotUsed]] = {
+  ): Source[KvdbIndexedTailBatch, NotUsed] = {
     Source
-      .lazilyAsync(() => {
+      .lazyFuture(() => {
         val task = references
           .map {
             refs =>
@@ -965,9 +964,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailBatch, Future[NotUsed]] = {
+  ): Source[KvdbTailBatch, NotUsed] = {
     Source
-      .lazilyAsync(() => {
+      .lazyFuture(() => {
         val task = references
           .map { refs =>
             if (range.from.isEmpty) {
@@ -990,7 +989,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   def tailValueSource[Col <: CF](
     column: Col,
     range: KvdbKeyRange
-  )(implicit clientOptions: KvdbClientOptions): Source[KvdbTailValueBatch, Future[NotUsed]] = {
+  )(implicit clientOptions: KvdbClientOptions): Source[KvdbTailValueBatch, NotUsed] = {
     tailSource(column, range)
       .map(_.map(_.map(_._2)))
   }

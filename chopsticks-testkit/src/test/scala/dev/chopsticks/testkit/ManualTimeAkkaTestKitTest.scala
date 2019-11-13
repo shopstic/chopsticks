@@ -1,6 +1,5 @@
 package dev.chopsticks.testkit
 
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
@@ -14,8 +13,6 @@ final class ManualTimeAkkaTestKitTest
     with WordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-  implicit val materializer: ActorMaterializer = ActorMaterializer()
-
   "plain Akka stream" in {
     import system.dispatcher
     val clock = new ManualClock()

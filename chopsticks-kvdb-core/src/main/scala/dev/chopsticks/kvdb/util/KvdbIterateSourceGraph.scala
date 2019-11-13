@@ -82,9 +82,9 @@ class KvdbIterateSourceGraph(
             }
           }
 
-          override def onDownstreamFinish(): Unit = {
+          override def onDownstreamFinish(cause: Throwable): Unit = {
             completeStage()
-            super.onDownstreamFinish()
+            super.onDownstreamFinish(cause)
           }
         }
       )

@@ -35,7 +35,7 @@ object Dstreams extends LoggingContext {
     val acquire = for {
       service <- makeService
       binding <- ZIO.access[AkkaEnv](_.akkaService).flatMap { env =>
-        import env._
+        import env.actorSystem
         val settings = ServerSettings(actorSystem)
 
         Task
@@ -115,7 +115,9 @@ object Dstreams extends LoggingContext {
           .accessM[DstreamEnv[Req, Res]](_.dstreamService.enqueueAssignment(assignment))
       } { worker =>
         val cleanup = for {
-          _ <- ZIO.access[AkkaEnv](env => worker.source.runWith(Sink.cancelled)(env.akkaService.materializer))
+          _ <- ZIO.access[AkkaEnv](_.akkaService.actorSystem).map { implicit as =>
+            worker.source.runWith(Sink.cancelled)
+          }
           _ <- ZIO.accessM[DstreamEnv[Req, Res]](_.dstreamService.report(assignment))
         } yield ()
 
@@ -130,7 +132,7 @@ object Dstreams extends LoggingContext {
       val promise = Promise[Source[Res, NotUsed]]()
 
       requestBuilder
-        .invoke(Source.fromFutureSource(promise.future).mapMaterializedValue(_ => NotUsed))
+        .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
         .viaMat(KillSwitches.single)(Keep.right)
         .via(ZAkkaStreams.interruptibleMapAsync(1) { assignment: Req =>
           makeSource(assignment).map(s => promise.success(s)) *> Task.fromFuture(_ => promise.future)
@@ -165,14 +167,14 @@ object Dstreams extends LoggingContext {
   ): Source[Req, NotUsed] = {
     val env = rt.Environment
     val akkaService = env.akkaService
-    import akkaService._
+    import akkaService.{actorSystem, dispatcher}
 
     val (ks, inSource) = in
       .viaMat(KillSwitches.single)(Keep.right)
       .preMaterialize()
 
     Source
-      .fromFutureSource(rt.unsafeRunToFuture(env.dstreamService.enqueueWorker(inSource, metadata)))
+      .futureSource(rt.unsafeRunToFuture(env.dstreamService.enqueueWorker(inSource, metadata)))
       .watchTermination() {
         case (_, f) =>
           f.onComplete {

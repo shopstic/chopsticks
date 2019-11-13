@@ -8,6 +8,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.stream.scaladsl.{Balance, Flow, GraphDSL, Keep, Merge, Sink, Source}
 import akka.stream.typed.scaladsl.ActorSource
 import akka.stream.{Attributes, FlowShape, Materializer, OverflowStrategy}
+import org.slf4j.Logger
 
 import scala.collection.immutable
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -45,8 +46,8 @@ object AkkaStreamUtils {
 
   def monotonicTimestampFlow[In, Out](
     seedTask: => Future[Instant]
-  )(stamp: (Instant, In) => Out)(implicit ec: ExecutionContext): Flow[In, Out, Future[Option[NotUsed]]] = {
-    Flow.lazyInitAsync(() => {
+  )(stamp: (Instant, In) => Out)(implicit ec: ExecutionContext): Flow[In, Out, Future[NotUsed]] = {
+    Flow.lazyFutureFlow(() => {
       seedTask.map { seed =>
         Flow[In]
           .via(statefulMapFlow(() => {
@@ -165,64 +166,6 @@ object AkkaStreamUtils {
     )
   }
 
-  final class HandlerLogger(name: String, logger: Logger) {
-    def tag(message: String): String = {
-      s"[$name] $message"
-    }
-
-    def debug(message: String): Unit = {
-      if (logger.isDebugEnabled) {
-        logger.debug(tag(message))
-      }
-    }
-
-    def debug(template: String, arg1: Any): Unit = {
-      if (logger.isDebugEnabled) {
-        logger.debug(tag(template), arg1)
-      }
-    }
-
-    def debug(template: String, arg1: Any, arg2: Any): Unit = {
-      if (logger.isDebugEnabled) {
-        logger.debug(tag(template), arg1, arg2)
-      }
-    }
-
-    def debug(template: String, arg1: Any, arg2: Any, arg3: Any): Unit = {
-      if (logger.isDebugEnabled) {
-        logger.debug(tag(template), arg1, arg2, arg3)
-      }
-    }
-
-    def debug(template: String, arg1: Any, arg2: Any, arg3: Any, arg4: Any): Unit = {
-      if (logger.isDebugEnabled) {
-        logger.debug(tag(template), arg1, arg2, arg3, arg4)
-      }
-    }
-
-    def info(message: String): Unit = {
-      logger.info(tag(message))
-    }
-
-    def warning(message: String): Unit = {
-      logger.warning(tag(message))
-    }
-
-    def error(message: String): Unit = {
-      logger.error(tag(message))
-    }
-
-    def error(message: String, cause: Throwable): Unit = {
-      logger.error(tag(message), cause)
-    }
-
-    def fatal(message: String): Unit = {
-      val tagged = tag(message)
-      logger.error(tagged)
-      throw new IllegalStateException(tagged)
-    }
-  }
-
   type SignalHandler[T] = PartialFunction[(ActorContext[T], Signal), Behavior[T]]
 
   def createHandler[T](name: String)(
@@ -243,14 +186,14 @@ object AkkaStreamUtils {
     else b
   }
 
-  type HandlerWithLogger[T] = HandlerLogger => PartialFunction[T, Behavior[T]]
-  type SignalHandlerWithLogger[T] = HandlerLogger => PartialFunction[Signal, Behavior[T]]
+  type HandlerWithLogger[T] = Logger => PartialFunction[T, Behavior[T]]
+  type SignalHandlerWithLogger[T] = Logger => PartialFunction[Signal, Behavior[T]]
 
   def createHandlerWithLogger[T](name: String, handler: HandlerWithLogger[T])(
-    signalHandler: HandlerLogger => PartialFunction[Signal, Behavior[T]] = PartialFunction.empty
+    signalHandler: Logger => PartialFunction[Signal, Behavior[T]] = PartialFunction.empty
   ): Behavior[T] = {
     Behaviors.setup { ctx =>
-      val logger = new HandlerLogger(name, ctx.log)
+      val logger = ctx.log
       val onMessage = handler(logger)
       val onSignal = if (signalHandler != PartialFunction.empty) signalHandler(logger) else PartialFunction.empty
 

@@ -30,7 +30,7 @@ object ChildProcessFlow {
     implicit system: ActorSystem
   ): Flow[ByteString, Out, Future[ProcessExitIOResult]] = {
     Flow
-      .lazyInitAsync(() => {
+      .lazyFutureFlow(() => {
         val command = config.command
         val workingDir = new File(config.workingDir)
         val environment = config.environment
@@ -77,9 +77,7 @@ object ChildProcessFlow {
           }
       })
       .mapMaterializedValue(
-        _.flatMap(_.getOrElse(Future.failed(new IllegalStateException("Supposed to have materialized value"))))(
-          system.dispatcher
-        )
+        _.flatMap(identity)(system.dispatcher)
       )
   }
 

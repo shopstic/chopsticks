@@ -2,6 +2,7 @@ package dev.chopsticks.kvdb
 
 import java.nio.charset.StandardCharsets.UTF_8
 
+import akka.actor.Status
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.testkit.{ImplicitSender, TestProbe}
@@ -108,8 +109,6 @@ abstract private[kvdb] class KvdbDatabaseTest
   private def assertValues(values: Seq[Array[Byte]], vs: Seq[String]): Assertion = {
     values.map(p => byteArrayToString(p)) should equal(vs)
   }
-
-  import runtime.Environment.akkaService.materializer
 
   "wrong column family" should {
     "not compile" in withDb { db =>
@@ -815,7 +814,7 @@ abstract private[kvdb] class KvdbDatabaseTest
       val probe = TestProbe()
       val ks = source
         .viaMat(KillSwitches.single)(Keep.right)
-        .to(Sink.actorRef(probe.ref, "completed"))
+        .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
         .run()
 
       for {
@@ -852,7 +851,7 @@ abstract private[kvdb] class KvdbDatabaseTest
 
       source
         .take(1)
-        .runWith(Sink.actorRef(probe.ref, "completed"))
+        .runWith(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
 
       for {
         _ <- Task(probe.expectNoMessage(100.millis))
@@ -918,7 +917,7 @@ abstract private[kvdb] class KvdbDatabaseTest
       val probe = TestProbe()
       val ks = source
         .viaMat(KillSwitches.single)(Keep.right)
-        .to(Sink.actorRef(probe.ref, "completed"))
+        .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
         .run()
 
       for {
@@ -952,7 +951,7 @@ abstract private[kvdb] class KvdbDatabaseTest
       val probe = TestProbe()
       val ks = source
         .viaMat(KillSwitches.single)(Keep.right)
-        .to(Sink.actorRef(probe.ref, "completed"))
+        .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
         .run()
 
       for {
