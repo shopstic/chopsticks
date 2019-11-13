@@ -126,7 +126,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.3.3"
+    "io.scalaland" %% "chimney" % "0.3.4"
   )
 
   val snappyDeps = Seq(
@@ -159,6 +159,6 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.3"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.4"
   )
 }
