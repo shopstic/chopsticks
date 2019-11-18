@@ -1,5 +1,6 @@
 package dev.chopsticks.sample.app
 
+import akka.actor.ActorSystem
 import akka.grpc.GrpcClientSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
@@ -47,6 +48,7 @@ object DstreamSampleApp extends AkkaApp {
   private val runServer = {
     val graphTask = ZIO.runtime[AkkaEnv with DsEnv with MeasuredLogging].map { implicit rt =>
       val ks = KillSwitches.shared("server shared killswitch")
+      implicit val as: ActorSystem = rt.Environment.akkaService.actorSystem
 
       Source(1 to Int.MaxValue)
         .map(Assignment(_))
@@ -59,7 +61,7 @@ object DstreamSampleApp extends AkkaApp {
                   .take(1)
                   .runForeach { _ =>
                     //                    println(s"Server < [worker=$workerId][assignment=${assignment.valueIn}] $r")
-                  }(rt.Environment.akkaService.materializer)
+                  }
               }
             }
             .retry(ZSchedule.logInput((e: Throwable) => ZLogger.error("Distribute failed", e)))
@@ -96,14 +98,14 @@ object DstreamSampleApp extends AkkaApp {
   def run: ZIO[Env, Throwable, Unit] = {
     val createService = ZIO.runtime[AkkaEnv with DsEnv].map { rt =>
       val akkaEnv = rt.Environment.akkaService
-      import akkaEnv._
+      import akkaEnv.actorSystem
       DstreamSampleAppPowerApiHandler(Dstreams.handle(rt, _, _))
     }
     val port = 9999
     val managedServer =
       Dstreams.createManagedServer(DstreamServerConfig(port = port, idleTimeout = 5.seconds), createService)
     val managedClient = Dstreams.createManagedClient(ZIO.access[AkkaEnv](_.akkaService).map { env =>
-      import env._
+      import env.{actorSystem, dispatcher}
       DstreamSampleAppClient(
         GrpcClientSettings
           .connectToServiceAt("localhost", port)

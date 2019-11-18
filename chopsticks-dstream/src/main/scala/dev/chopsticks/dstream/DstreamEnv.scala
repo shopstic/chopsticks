@@ -1,8 +1,8 @@
 package dev.chopsticks.dstream
 
 import akka.NotUsed
+import akka.actor.ActorSystem
 import akka.grpc.scaladsl.Metadata
-import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import io.prometheus.client.{Counter, Gauge}
 import zio.stm.{STM, TRef}
@@ -34,7 +34,7 @@ object DstreamEnv {
   }
 
   abstract class LiveService[Req, Res](rt: zio.Runtime[Any], metrics: Metrics)(
-    implicit mat: Materializer,
+    implicit as: ActorSystem,
     ec: ExecutionContext
   ) extends Service[Req, Res] {
     protected val workerGauge = metrics.workerGauge
