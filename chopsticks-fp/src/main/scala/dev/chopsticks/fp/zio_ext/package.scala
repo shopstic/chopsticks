@@ -45,8 +45,8 @@ package object zio_ext {
     }
 
     def retryForever[R1 <: R](
-      retryPolicy: ZSchedule[R1, Any, Any],
-      repeatSchedule: ZSchedule[R1, Any, Any],
+      retryPolicy: Schedule[R1, Any, Any],
+      repeatSchedule: Schedule[R1, Any, Any],
       retryResetMinDuration: zio.duration.Duration
     ): ZIO[R1 with Clock, Nothing, Unit] = {
       io.either.timed

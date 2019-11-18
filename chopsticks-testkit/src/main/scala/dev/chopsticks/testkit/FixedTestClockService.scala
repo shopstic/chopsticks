@@ -38,4 +38,6 @@ final case class FixedTestClockService(original: TestClock.Test) extends TestClo
     } yield ret
 
   override def scheduler: ZIO[Any, Nothing, Scheduler] = original.scheduler
+
+  override def setDateTime(dateTime: OffsetDateTime): UIO[Unit] = original.setDateTime(dateTime)
 }

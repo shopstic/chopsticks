@@ -13,9 +13,8 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{Assertion, AsyncWordSpecLike, Matchers, Succeeded}
 import zio.blocking._
 import zio.clock.Clock
-import zio.internal.PlatformLive
 import zio.test.environment.TestClock
-import zio.{Task, UIO, ZIO}
+import zio.{CancelableFuture, Task, UIO, ZIO}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
@@ -28,26 +27,36 @@ final class ZAkkaStreamsTest
     with ScalaFutures {
   type Env = AkkaEnv with TestClock with Blocking
 
-  private def createRuntime: zio.Runtime[Env] = {
-    AkkaApp.createRuntime(new AkkaEnv with LogEnv.Live with TestClock with Blocking.Live {
+  private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Throwable, Assertion] = {
+    val rt = AkkaApp.createRuntime(new AkkaEnv with LogEnv.Live {
       val akkaService: AkkaEnv.Service = AkkaEnv.Service.Live(system)
-      private val fixedTestClockService = FixedTestClockService(
-        zio
-          .Runtime[Unit]((), PlatformLive.fromExecutionContext(akkaService.dispatcher))
-          .unsafeRun(TestClock.makeTest(TestClock.DefaultData))
-      )
-      val clock: TestClock.Service[Any] = fixedTestClockService
-      val scheduler: TestClock.Service[Any] = fixedTestClockService
     })
+
+    val task: ZIO[Any, Throwable, Assertion] = TestClock
+      .makeTest(TestClock.DefaultData, None)
+      .map { testClock =>
+        new AkkaEnv with LogEnv.Live with TestClock with Blocking.Live {
+          val akkaService: AkkaEnv.Service = AkkaEnv.Service.Live(system)
+          private val fixedTestClockService = FixedTestClockService(testClock)
+          val clock: TestClock.Service[Any] = fixedTestClockService
+          val scheduler: TestClock.Service[Any] = fixedTestClockService
+        }
+      }
+      .use { env =>
+        run.provide(env)
+      }
+
+    rt.unsafeRunToFuture(task)
   }
 
   def withRuntime(test: zio.Runtime[Env] => Assertion): Future[Assertion] = {
-    Future(test(createRuntime))
+    runToFutureWithRuntime(ZIO.runtime[Env].flatMap { env =>
+      UIO(test(env))
+    })
   }
 
   def withEffect[E, A](test: ZIO[Env, Throwable, Assertion]): Future[Assertion] = {
-    val rt = createRuntime
-    rt.unsafeRunToFuture(test.provide(rt.Environment))
+    runToFutureWithRuntime(test)
   }
 
   "interruptibleLazySource" should {
@@ -80,7 +89,7 @@ final class ZAkkaStreamsTest
   }
 
   "manual time" in withRuntime { implicit rt =>
-    val clock = new ManualClock(Some(rt.Environment))
+    val clock = new ManualClock(Some(rt.environment))
 
     val (source, sink) = TestSource
       .probe[Int]
@@ -157,7 +166,7 @@ final class ZAkkaStreamsTest
       }
 
       "cancel the prior source and switch to the new one" in withRuntime { implicit rt =>
-        val akkaService = rt.Environment.akkaService
+        val akkaService = rt.environment.akkaService
 
         val promise = Promise[Boolean]()
         val (source, sink) = TestSource

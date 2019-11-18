@@ -28,7 +28,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 )(
   implicit rt: zio.Runtime[AkkaEnv]
 ) {
-  private val akkaEnv = rt.Environment.akkaService
+  private val akkaEnv = rt.environment.akkaService
   import akkaEnv._
 
   def estimateCountTask: Task[Long] = {

@@ -44,7 +44,7 @@ object AkkaApp extends LoggingContext {
     val shutdown: CoordinatedShutdown = CoordinatedShutdown(env.akkaService.actorSystem)
 
     new zio.Runtime[R] {
-      val Platform: zio.internal.Platform = new zio.internal.Platform.Proxy(
+      val platform: zio.internal.Platform = new zio.internal.Platform.Proxy(
         PlatformLive
           .fromExecutionContext(env.akkaService.actorSystem.dispatcher)
           .withTracingConfig(tracingConfig)
@@ -53,12 +53,12 @@ object AkkaApp extends LoggingContext {
 
         override def reportFailure(cause: Cause[Any]): Unit = {
           if (!cause.interrupted && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
-            Environment.logger.error("Application failure:\n" + cause.prettyPrint)
+            environment.logger.error("Application failure:\n" + cause.prettyPrint)
             val _ = shutdown.run(JvmExitReason)
           }
         }
       }
-      val Environment: R = env
+      val environment: R = env
     }
   }
 }
@@ -115,7 +115,7 @@ trait AkkaApp extends LoggingContext {
       sys.exit(0)
     } catch {
       case NonFatal(e) =>
-        runtime.Platform.reportFailure(Die(e))
+        runtime.platform.reportFailure(Die(e))
     }
   }
 }

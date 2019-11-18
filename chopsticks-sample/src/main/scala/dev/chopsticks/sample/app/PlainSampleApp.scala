@@ -6,7 +6,7 @@ import com.typesafe.config.Config
 import dev.chopsticks.fp._
 import dev.chopsticks.util.config.PureconfigLoader
 import zio.duration._
-import zio.{Task, ZIO, ZManaged, ZSchedule}
+import zio.{Schedule, Task, ZIO, ZManaged}
 import dev.chopsticks.fp.zio_ext._
 
 object PlainSampleApp extends AkkaApp {
@@ -43,10 +43,10 @@ object PlainSampleApp extends AkkaApp {
             .delay(duration)
         }
         .retryForever(
-          retryPolicy = (ZSchedule.exponential(500.millis) || ZSchedule.spaced(4.seconds)).onDecision { (_: Any, d) =>
+          retryPolicy = (Schedule.exponential(500.millis) || Schedule.spaced(4.seconds)).onDecision { (_: Any, d) =>
             ZLogger.info(s"Retry backoff: $d").provide(logEnv)
           },
-          repeatSchedule = ZSchedule.forever.logOutput(i => ZLogger.info(s"Success $i")),
+          repeatSchedule = Schedule.forever.tapOutput(i => ZLogger.info(s"Success $i")),
           retryResetMinDuration = 750.millis
         )
     } yield ()

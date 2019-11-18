@@ -35,7 +35,7 @@ import org.rocksdb._
 import pureconfig.ConfigConvert
 import zio.blocking._
 import zio.clock.Clock
-import zio.{RIO, Task, ZIO, ZSchedule}
+import zio.{RIO, Schedule, Task, ZIO}
 
 import scala.collection.JavaConverters._
 import scala.language.higherKinds
@@ -832,7 +832,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       }
       _ <- Task(dbCloseSignal.tryComplete(Failure(KvdbClosedException)))
       _ <- Task(dbCloseSignal.hasNoListeners)
-        .repeat(ZSchedule.fixed(100.millis).untilInput[Boolean](identity))
+        .repeat(Schedule.fixed(100.millis).untilInput[Boolean](identity))
       _ <- ioTask(Task {
         val KvdbReferences(db, columnHandleMap, _, stats) = refs
         stats.close()

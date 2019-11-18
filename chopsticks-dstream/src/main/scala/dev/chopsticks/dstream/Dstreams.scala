@@ -155,7 +155,7 @@ object Dstreams extends LoggingContext {
           makeSource
         ).logResult(s"dstream-worker-$id", _.toString)
           .forever
-          .retry(ZSchedule.exponential(100.millis) || ZSchedule.fixed(1.second))
+          .retry(Schedule.exponential(100.millis) || Schedule.fixed(1.second))
       }
       .unit
   }
@@ -165,7 +165,7 @@ object Dstreams extends LoggingContext {
     in: Source[Res, NotUsed],
     metadata: Metadata
   ): Source[Req, NotUsed] = {
-    val env = rt.Environment
+    val env = rt.environment
     val akkaService = env.akkaService
     import akkaService.{actorSystem, dispatcher}
 

@@ -48,7 +48,7 @@ object KvdbTestSampleApp extends AkkaApp {
   }
 
   def run: RIO[Env, Unit] = {
-    val task = for {
+    for {
       db <- ZIO.access[SampleDb.Env](_.sampleDb)
       dbApi <- KvdbDatabaseApi(db)
       stats <- dbApi.statsTask
@@ -79,7 +79,5 @@ object KvdbTestSampleApp extends AkkaApp {
       _ <- ZLogger.info(s"Got last: $pair")
       _ <- tailFiber.join
     } yield ()
-
-    task.supervised
   }
 }

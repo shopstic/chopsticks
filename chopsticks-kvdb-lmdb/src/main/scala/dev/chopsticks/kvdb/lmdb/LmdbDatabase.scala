@@ -46,7 +46,7 @@ import pureconfig.ConfigConvert
 import squants.information.Information
 import zio.clock.Clock
 import zio.internal.Executor
-import zio.{RIO, Task, ZIO, ZSchedule}
+import zio.{RIO, Schedule, Task, ZIO}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
@@ -758,7 +758,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       })
       _ <- Task(dbCloseSignal.tryComplete(Failure(ClosedException)))
       _ <- Task(dbCloseSignal.hasNoListeners)
-        .repeat(ZSchedule.fixed(100.millis).untilInput[Boolean](identity))
+        .repeat(Schedule.fixed(100.millis).untilInput[Boolean](identity))
       _ <- readTask(Task {
         refs.dbiMap.foreach(_._2.close())
         refs.env.close()

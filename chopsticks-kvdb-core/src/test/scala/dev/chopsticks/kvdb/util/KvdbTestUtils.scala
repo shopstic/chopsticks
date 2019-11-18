@@ -26,7 +26,7 @@ object KvdbTestUtils {
   ): (Db => RIO[AkkaApp.Env, Assertion]) => Future[Assertion] = { (testCode: Db => RIO[AkkaApp.Env, Assertion]) =>
     val task = managed
       .use(testCode(_))
-      .provide(rt.Environment)
+      .provide(rt.environment)
 
     rt.unsafeRunToFuture(task)
   }

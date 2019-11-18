@@ -295,7 +295,7 @@ object DeleteIntensiveDbBenchApp extends AkkaApp {
               s"res-ms=${responseMetrics.duration.longValue()} "
           )
         }
-        .repeat(ZSchedule.fixed(zio.duration.Duration(1, TimeUnit.SECONDS)))
+        .repeat(Schedule.fixed(zio.duration.Duration(1, TimeUnit.SECONDS)))
         .fork
 
       populateSource <- createPopulateSource(

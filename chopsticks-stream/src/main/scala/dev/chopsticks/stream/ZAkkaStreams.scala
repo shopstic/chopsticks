@@ -14,7 +14,7 @@ object ZAkkaStreams {
   def recursiveSource[R, Out, State](seed: => RIO[R, State], nextState: (State, Out) => State)(
     makeSource: State => Source[Out, NotUsed]
   )(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Out, NotUsed] = {
-    val env = rt.Environment
+    val env = rt.environment
     val akkaService = env.akkaService
     import akkaService.{actorSystem, dispatcher}
 
@@ -128,7 +128,7 @@ object ZAkkaStreams {
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
-      val env = rt.Environment
+      val env = rt.environment
       val akkaService = env.akkaService
       import akkaService._
 
@@ -163,7 +163,7 @@ object ZAkkaStreams {
   def interruptibleMapAsync[R, A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, Future[NotUsed]] = {
-    rt.unsafeRun(interruptibleMapAsyncM(parallelism)(runTask).provide(rt.Environment))
+    rt.unsafeRun(interruptibleMapAsyncM(parallelism)(runTask).provide(rt.environment))
   }
 
   def interruptibleMapAsyncUnorderedM[R, A, B](
@@ -171,7 +171,7 @@ object ZAkkaStreams {
     attributes: Option[Attributes] = None
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
-      val env = rt.Environment
+      val env = rt.environment
       val akkaService = env.akkaService
       import akkaService._
 
@@ -210,7 +210,7 @@ object ZAkkaStreams {
 
   def interruptibleLazySource[R, A, B](effect: RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Source[B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
-      val env = rt.Environment
+      val env = rt.environment
       val akkaService = env.akkaService
       import akkaService._
 
@@ -241,7 +241,7 @@ object ZAkkaStreams {
     f: In => RIO[R, Source[Out, Any]]
   ): ZIO[AkkaEnv with R, Nothing, Flow[In, Out, NotUsed]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
-      val env = rt.Environment
+      val env = rt.environment
       val akkaService = env.akkaService
       import akkaService.actorSystem
 
@@ -269,14 +269,14 @@ object ZAkkaStreams {
   def switchFlatMapConcat[R, In, Out](
     f: In => RIO[R, Source[Out, Any]]
   )(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Out, NotUsed] = {
-    rt.unsafeRun(switchFlatMapConcatM[R, In, Out](f).provide(rt.Environment))
+    rt.unsafeRun(switchFlatMapConcatM[R, In, Out](f).provide(rt.environment))
   }
 
   def interruptibleMapAsyncUnordered[R, A, B](
     parallelism: Int,
     attributes: Option[Attributes] = None
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, Future[NotUsed]] = {
-    rt.unsafeRun(interruptibleMapAsyncUnorderedM(parallelism, attributes)(runTask).provide(rt.Environment))
+    rt.unsafeRun(interruptibleMapAsyncUnorderedM(parallelism, attributes)(runTask).provide(rt.environment))
   }
 
   def mapAsyncM[R, A, B](
@@ -285,7 +285,7 @@ object ZAkkaStreams {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       Flow[A]
         .mapAsync(parallelism) { a =>
-          rt.unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(rt.Environment)).flatten
+          rt.unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(rt.environment)).flatten
         }
     }
   }
@@ -293,7 +293,7 @@ object ZAkkaStreams {
   def mapAsync[R, A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, NotUsed] = {
-    rt.unsafeRun(mapAsyncM(parallelism)(runTask).provide(rt.Environment))
+    rt.unsafeRun(mapAsyncM(parallelism)(runTask).provide(rt.environment))
   }
 
   def mapAsyncUnorderedM[R, A, B](
@@ -302,7 +302,7 @@ object ZAkkaStreams {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       Flow[A]
         .mapAsyncUnordered(parallelism) { a: A =>
-          rt.unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(rt.Environment)).flatten
+          rt.unsafeRunToFuture(runTask(a).fold(Future.failed, Future.successful).provide(rt.environment)).flatten
         }
     }
   }
@@ -310,7 +310,7 @@ object ZAkkaStreams {
   def mapAsyncUnordered[R, A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, NotUsed] = {
-    rt.unsafeRun(mapAsyncUnorderedM(parallelism)(runTask).provide(rt.Environment))
+    rt.unsafeRun(mapAsyncUnorderedM(parallelism)(runTask).provide(rt.environment))
   }
 
   private val ecTask = Task.descriptor.map(_.executor.asEC)

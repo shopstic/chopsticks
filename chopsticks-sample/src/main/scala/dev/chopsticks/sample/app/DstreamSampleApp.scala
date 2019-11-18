@@ -38,7 +38,7 @@ object DstreamSampleApp extends AkkaApp {
       new AkkaApp.LiveEnv with DsEnv {
         val akkaService: AkkaEnv.Service = env.akkaService
         object dstreamService extends DstreamEnv.LiveService[Assignment, Result](rt, dstreamMetrics) {
-          rt.unsafeRunToFuture(updateQueueGauge.repeat(ZSchedule.fixed(1.second)).provide(env))
+          rt.unsafeRunToFuture(updateQueueGauge.repeat(Schedule.fixed(1.second)).provide(env))
             .onComplete(t => s"METRICS COMLETED ===================== $t")
         }
       }
@@ -48,7 +48,7 @@ object DstreamSampleApp extends AkkaApp {
   private val runServer = {
     val graphTask = ZIO.runtime[AkkaEnv with DsEnv with MeasuredLogging].map { implicit rt =>
       val ks = KillSwitches.shared("server shared killswitch")
-      implicit val as: ActorSystem = rt.Environment.akkaService.actorSystem
+      implicit val as: ActorSystem = rt.environment.akkaService.actorSystem
 
       Source(1 to Int.MaxValue)
         .map(Assignment(_))
@@ -64,7 +64,7 @@ object DstreamSampleApp extends AkkaApp {
                   }
               }
             }
-            .retry(ZSchedule.logInput((e: Throwable) => ZLogger.error("Distribute failed", e)))
+            .retry(Schedule.tapInput((e: Throwable) => ZLogger.error("Distribute failed", e)))
         })
         .via(ks.flow)
         //        .wireTap(a => println(s"Server < completed $a"))
@@ -97,7 +97,7 @@ object DstreamSampleApp extends AkkaApp {
 
   def run: ZIO[Env, Throwable, Unit] = {
     val createService = ZIO.runtime[AkkaEnv with DsEnv].map { rt =>
-      val akkaEnv = rt.Environment.akkaService
+      val akkaEnv = rt.environment.akkaService
       import akkaEnv.actorSystem
       DstreamSampleAppPowerApiHandler(Dstreams.handle(rt, _, _))
     }
@@ -121,20 +121,18 @@ object DstreamSampleApp extends AkkaApp {
 
     resources.use {
       case (_, client) =>
-        val task = for {
+        for {
           s <- runServer
             .log("server graph")
             .fork
           _ <- ZIO.forkAll_ {
             (1 to 8).map { id =>
               runWorker(client, id).either
-                .repeat(ZSchedule.forever)
+                .repeat(Schedule.forever)
             }
           }
           _ <- s.join
         } yield ()
-
-        task.interruptChildren
     }
   }
 }
