@@ -52,6 +52,7 @@ lazy val stream = Build
 lazy val dstream = Build
   .defineProject("dstream")
   .settings(
+    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
     libraryDependencies ++= akkaGrpcRuntimeDeps
   )
   .dependsOn(stream)
@@ -115,6 +116,7 @@ lazy val sample = Build
   .defineProject("sample")
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
+    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
     libraryDependencies ++= janinoDeps ++ silencerDeps ++ pprintDeps,
     publish / skip := true,
     bintrayRelease := {},

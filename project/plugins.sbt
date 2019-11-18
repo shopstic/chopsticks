@@ -2,7 +2,7 @@ resolvers += Resolver.bintrayRepo("shopstic", "sbt-plugins")
 
 addSbtPlugin("org.foundweekends" % "sbt-bintray" % "0.5.5")
 addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.5.0")
-addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.9.2")
+addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.10.0-RC1")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.2.1")
 addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.4.3")
 

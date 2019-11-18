@@ -26,6 +26,12 @@ object Dependencies {
     "com.typesafe.akka" %% p % AKKA_VERSION
   }
 
+  val akkaDiscoveryOverrideDeps = Seq(
+    "akka-discovery"
+  ).map { p =>
+    "com.typesafe.akka" %% p % AKKA_VERSION
+  }
+
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
   val zioDeps = Seq(
