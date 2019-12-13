@@ -4,7 +4,7 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.12.10"
-  val AKKA_VERSION = "2.6.0"
+  val AKKA_VERSION = "2.6.1"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.0-RC17"
 
@@ -43,7 +43,7 @@ object Dependencies {
   )
 
   val squantsDeps = Seq(
-    "org.typelevel" %% "squants" % "1.5.0"
+    "org.typelevel" %% "squants" % "1.6.0"
   )
 
   val prometheusClientDeps = Seq(
@@ -92,8 +92,9 @@ object Dependencies {
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.0.8",
-    "org.scalatest" %% "scalatest" % "3.0.8",
+    "org.scalactic" %% "scalactic" % "3.1.0",
+    "org.scalatest" %% "scalatest" % "3.1.0",
+    "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.14.2",
     "org.scalamock" %% "scalamock" % "4.4.0"
   )
@@ -132,7 +133,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.3.4"
+    "io.scalaland" %% "chimney" % "0.3.5"
   )
 
   val snappyDeps = Seq(
@@ -157,7 +158,7 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.12.0"
+    "com.propensive" %% "magnolia" % "0.12.3"
   )
 
   val pprintDeps = Seq(

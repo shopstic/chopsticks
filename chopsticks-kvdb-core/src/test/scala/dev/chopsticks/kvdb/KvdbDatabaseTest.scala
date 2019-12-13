@@ -17,7 +17,9 @@ import dev.chopsticks.kvdb.util.KvdbTestUtils.populateColumn
 import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
-import org.scalatest._
+import org.scalatest.{Assertion, Inside}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AsyncWordSpecLike
 import squants.information.InformationConversions._
 import zio.{RIO, Task, UIO, ZManaged}
 

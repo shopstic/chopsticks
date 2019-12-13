@@ -10,7 +10,9 @@ import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClockService, ManualTimeAkkaTestKit}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{Assertion, AsyncWordSpecLike, Matchers, Succeeded}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AsyncWordSpecLike
+import org.scalatest.{Assertion, Succeeded}
 import zio.blocking._
 import zio.clock.Clock
 import zio.test.environment.TestClock

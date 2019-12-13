@@ -6,7 +6,8 @@ import dev.chopsticks.kvdb.TestDatabase.DbApi
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbTestUtils
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
-import org.scalatest.{AsyncWordSpecLike, Matchers}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AsyncWordSpecLike
 import zio.ZManaged
 
 abstract class KvdbDatabaseApiTest

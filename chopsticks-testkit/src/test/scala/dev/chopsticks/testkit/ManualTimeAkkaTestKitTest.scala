@@ -3,14 +3,15 @@ package dev.chopsticks.testkit
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
 final class ManualTimeAkkaTestKitTest
     extends ManualTimeAkkaTestKit
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
   "plain Akka stream" in {

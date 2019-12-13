@@ -4,15 +4,16 @@ import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.testkit.ImplicitSender
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
-import org.scalatest.{Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 import AkkaStreamUtils.ops._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 class BatchWithOptionalAggregateFlowTest
     extends AkkaTestKit
     with ImplicitSender
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
   "original Akka tests" should {

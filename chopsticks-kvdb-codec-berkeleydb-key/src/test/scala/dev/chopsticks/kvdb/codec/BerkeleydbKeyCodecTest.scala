@@ -4,8 +4,6 @@ import java.time.{LocalDate, LocalDateTime, LocalTime, YearMonth}
 import java.util.UUID
 
 import dev.chopsticks.kvdb.codec.BerkeleydbKeyCodecTest.TestKeyWithRefined
-import org.scalatest.{Assertions, Matchers, WordSpecLike}
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import dev.chopsticks.testkit.ArbitraryTime._
 import enumeratum.EnumEntry
 import enumeratum.values.{ByteEnum, ByteEnumEntry, IntEnum, IntEnumEntry}
@@ -13,6 +11,10 @@ import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.string.NonEmptyString
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalactic.anyvals.{PosInt, PosZDouble}
+import org.scalatest.Assertions
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 import scala.language.higherKinds
 
@@ -67,7 +69,7 @@ object BerkeleydbKeyCodecTest {
 }
 
 //noinspection TypeAnnotation
-class BerkeleydbKeyCodecTest extends WordSpecLike with Assertions with Matchers with ScalaCheckDrivenPropertyChecks {
+class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with ScalaCheckDrivenPropertyChecks {
   "Scala tuple" should {
     import berkeleydb_key._
 

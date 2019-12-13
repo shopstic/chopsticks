@@ -1,8 +1,10 @@
 package dev.chopsticks.kvdb.codec
 
-import org.scalatest.{Matchers, WordSpecLike}
 import cats.syntax.show._
 import dev.chopsticks.kvdb.codec.berkeleydb_key._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
+
 import scala.language.higherKinds
 
 object KeyConstraintsTest {
@@ -13,7 +15,7 @@ object KeyConstraintsTest {
   }
 }
 
-final class KeyConstraintsTest extends WordSpecLike with Matchers {
+final class KeyConstraintsTest extends AnyWordSpecLike with Matchers {
   import KeyConstraintsTest._
   import KeyConstraints.Implicits._
 
