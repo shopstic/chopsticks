@@ -51,11 +51,11 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.7.2"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.7.3"
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.0.0"
+    "org.typelevel" %% "cats-core" % "2.1.0"
   )
 
   val kittensDeps = Seq(
@@ -83,8 +83,8 @@ object Dependencies {
   val loggingDeps = Seq(
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
     "ch.qos.logback" % "logback-classic" % "1.2.3",
-    "org.slf4j" % "log4j-over-slf4j" % "1.7.29",
-    "org.slf4j" % "jul-to-slf4j" % "1.7.29"
+    "org.slf4j" % "log4j-over-slf4j" % "1.7.30",
+    "org.slf4j" % "jul-to-slf4j" % "1.7.30"
   )
 
   val janinoDeps = Seq(
@@ -95,7 +95,7 @@ object Dependencies {
     "org.scalactic" %% "scalactic" % "3.1.0",
     "org.scalatest" %% "scalatest" % "3.1.0",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
-    "org.scalacheck" %% "scalacheck" % "1.14.2",
+    "org.scalacheck" %% "scalacheck" % "1.14.3",
     "org.scalamock" %% "scalamock" % "4.4.0"
   )
 
@@ -121,7 +121,7 @@ object Dependencies {
   )
 
   val enumeratumDeps = Seq(
-    "com.beachape" %% "enumeratum" % "1.5.13"
+    "com.beachape" %% "enumeratum" % "1.5.14"
   )
 
   val refinedCoreDeps = Seq(
@@ -158,7 +158,7 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.12.3"
+    "com.propensive" %% "magnolia" % "0.12.5"
   )
 
   val pprintDeps = Seq(
