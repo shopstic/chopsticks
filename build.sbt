@@ -13,8 +13,6 @@ ThisBuild / Test / javaOptions += "-Xmx768m"
 ThisBuild / Build.ITest / fork := Build.forkTests
 ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
-ThisBuild / symlinkTargetRoot := Build.symlinkTargetRoot
-
 ThisBuild / licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
 ThisBuild / bintrayReleaseOnPublish := false
 
@@ -129,7 +127,6 @@ lazy val sample = Build
   .dependsOn(kvdbLmdb, kvdbRocksdb, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, dstream)
 
 lazy val root = (project in file("."))
-  .enablePlugins(SymlinkTargetPlugin)
   .settings(
     name := "chopsticks",
     publish / skip := true,

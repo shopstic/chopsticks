@@ -1,4 +1,3 @@
-import com.shopstic.sbt.SymlinkTargetPlugin
 import com.timushev.sbt.updates.UpdatesPlugin.autoImport._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
 import wartremover.WartRemover.autoImport._
@@ -14,8 +13,6 @@ object Build {
   val ItTagName = "dev.chopsticks.test.tags.IntegrationTest"
 
   val forkTests = sys.env.get("FORK_TESTS").forall(_ == "true")
-
-  val symlinkTargetRoot = file(sys.env("HOME")) / ".sbt-targets" / "dev" / "chopsticks"
 
   val scalacLintingOptions = Seq(
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
@@ -57,7 +54,6 @@ object Build {
 
   def defineProject(projectName: String) = {
     Project(projectName, file(s"chopsticks-$projectName"))
-      .enablePlugins(SymlinkTargetPlugin)
       .settings(
         name := s"chopsticks-$projectName",
         version := buildVersion,
