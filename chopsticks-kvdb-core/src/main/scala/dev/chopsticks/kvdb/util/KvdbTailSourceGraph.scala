@@ -144,7 +144,8 @@ class KvdbTailSourceGraph(
       override def postStop(): Unit = {
         try {
           cleanUp()
-        } finally {
+        }
+        finally {
           shutdownListener.unregister()
           super.postStop()
         }

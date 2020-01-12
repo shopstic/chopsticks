@@ -96,7 +96,8 @@ class KvdbIterateSourceGraph(
             refs.close()
           }
           // scalastyle:on null
-        } finally {
+        }
+        finally {
           shutdownListener.unregister()
           super.postStop()
         }

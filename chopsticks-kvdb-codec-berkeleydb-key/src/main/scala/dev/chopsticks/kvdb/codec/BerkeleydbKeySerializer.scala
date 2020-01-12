@@ -34,27 +34,22 @@ object BerkeleydbKeySerializer {
   implicit val doubleBerkeleydbKeyEncoder: BerkeleydbKeySerializer[Double] = create((o, v) => o.writeSortedDouble(v))
   implicit val floatBerkeleydbKeyEncoder: BerkeleydbKeySerializer[Float] = create((o, v) => o.writeSortedFloat(v))
 
-  implicit val ldBerkeleydbKeyEncoder: BerkeleydbKeySerializer[LocalDate] = create(
-    (o, v) => longBerkeleydbKeyEncoder.serialize(o, v.toEpochDay)
-  )
+  implicit val ldBerkeleydbKeyEncoder: BerkeleydbKeySerializer[LocalDate] =
+    create((o, v) => longBerkeleydbKeyEncoder.serialize(o, v.toEpochDay))
   implicit val ldtBerkeleydbKeyEncoder: BerkeleydbKeySerializer[LocalDateTime] = create { (o, v) =>
     o.writeBigInteger(KvdbSerdesUtils.localDateTimeToEpochNanos(v).underlying)
   }
   implicit val instantBerkeleydbKeyEncoder: BerkeleydbKeySerializer[Instant] = create { (o, v) =>
     o.writeBigInteger(KvdbSerdesUtils.instantToEpochNanos(v).underlying)
   }
-  implicit val ltBerkeleydbKeyEncoder: BerkeleydbKeySerializer[LocalTime] = create(
-    (o, v) => longBerkeleydbKeyEncoder.serialize(o, v.toNanoOfDay)
-  )
-  implicit val ymBerkeleydbKeyEncoder: BerkeleydbKeySerializer[YearMonth] = create(
-    (o, v) => longBerkeleydbKeyEncoder.serialize(o, v.getYear.toLong * 100 + v.getMonthValue)
-  )
-  implicit val bigDecimalBerkeleydbKeyEncoder: BerkeleydbKeySerializer[BigDecimal] = create(
-    (o, v) => o.writeSortedBigDecimal(v.underlying)
-  )
-  implicit val uuidBerkeleydbKeyEncoder: BerkeleydbKeySerializer[UUID] = create(
-    (o, v) => o.writeLong(v.getMostSignificantBits).writeLong(v.getLeastSignificantBits)
-  )
+  implicit val ltBerkeleydbKeyEncoder: BerkeleydbKeySerializer[LocalTime] =
+    create((o, v) => longBerkeleydbKeyEncoder.serialize(o, v.toNanoOfDay))
+  implicit val ymBerkeleydbKeyEncoder: BerkeleydbKeySerializer[YearMonth] =
+    create((o, v) => longBerkeleydbKeyEncoder.serialize(o, v.getYear.toLong * 100 + v.getMonthValue))
+  implicit val bigDecimalBerkeleydbKeyEncoder: BerkeleydbKeySerializer[BigDecimal] =
+    create((o, v) => o.writeSortedBigDecimal(v.underlying))
+  implicit val uuidBerkeleydbKeyEncoder: BerkeleydbKeySerializer[UUID] =
+    create((o, v) => o.writeLong(v.getMostSignificantBits).writeLong(v.getLeastSignificantBits))
 
   implicit def protobufEnumBerkeleydbKeyEncoder[T <: GeneratedEnum]: BerkeleydbKeySerializer[T] =
     create((o, v) => intBerkeleydbKeyEncoder.serialize(o, v.value))

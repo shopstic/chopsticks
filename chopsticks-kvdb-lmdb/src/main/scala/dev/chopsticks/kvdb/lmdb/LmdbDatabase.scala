@@ -201,7 +201,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       val txn = createTxn(env)
       val cursor = openCursor(refs.getKvdbi(column), txn)
       ReadTxnContext(env, txn, cursor)
-    } catch {
+    }
+    catch {
       case NonFatal(ex) =>
         throw FatalError(
           s"Fatal db error while trying to createTxnContext for column: ${column.id}: ${ex.toString}",
@@ -214,7 +215,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     try {
       closeCursor(ctx.cursor)
       closeTxn(ctx.txn)
-    } catch {
+    }
+    catch {
       case NonFatal(ex) => throw FatalError(s"Fatal db error while trying to closeTxnContext: ${ex.toString}", ex)
     }
   }
@@ -354,7 +356,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
         count
       }
       else 0L
-    } finally closeCursor(cursor)
+    }
+    finally closeCursor(cursor)
   }
 
   private def doDeletePrefix(txn: Txn[ByteBuffer], dbi: Dbi[ByteBuffer], prefix: Array[Byte]): Long = {
@@ -379,7 +382,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
         count
       }
       else 0L
-    } finally closeCursor(cursor)
+    }
+    finally closeCursor(cursor)
   }
 
   val isLocal: Boolean = true
@@ -390,18 +394,20 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       val info = refs.env.info()
 
       val txn = createTxn(refs.env)
-      val statsMap = try {
-        val allStats = refs.dbiMap.values.map(_.stat(txn))
+      val statsMap =
+        try {
+          val allStats = refs.dbiMap.values.map(_.stat(txn))
 
-        Map(
-          ("lmdb_branch_pages", emptyLabels) -> allStats.map(_.branchPages.toDouble).sum,
-          ("lmdb_depth", emptyLabels) -> allStats.map(_.depth.toDouble).sum,
-          ("lmdb_leaf_pages", emptyLabels) -> allStats.map(_.leafPages.toDouble).sum,
-          ("lmdb_overflow_pages", emptyLabels) -> allStats.map(_.overflowPages.toDouble).sum,
-          ("lmdb_page_size", emptyLabels) -> allStats.map(_.pageSize.toDouble).sum,
-          ("lmdb_entries", emptyLabels) -> allStats.map(_.entries.toDouble).sum
-        )
-      } finally closeTxn(txn)
+          Map(
+            ("lmdb_branch_pages", emptyLabels) -> allStats.map(_.branchPages.toDouble).sum,
+            ("lmdb_depth", emptyLabels) -> allStats.map(_.depth.toDouble).sum,
+            ("lmdb_leaf_pages", emptyLabels) -> allStats.map(_.leafPages.toDouble).sum,
+            ("lmdb_overflow_pages", emptyLabels) -> allStats.map(_.overflowPages.toDouble).sum,
+            ("lmdb_page_size", emptyLabels) -> allStats.map(_.pageSize.toDouble).sum,
+            ("lmdb_entries", emptyLabels) -> allStats.map(_.entries.toDouble).sum
+          )
+        }
+        finally closeTxn(txn)
 
       Map(
         ("lmdb_last_page_number", emptyLabels) -> info.lastPageNumber.toDouble,
@@ -429,8 +435,10 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
         try {
           val reuseableBuffer = allocateDirect(refs.env.getMaxKeySize)
           doGet(cursor, reuseableBuffer, constraints.constraints).toOption
-        } finally closeCursor(cursor)
-      } finally closeTxn(txn)
+        }
+        finally closeCursor(cursor)
+      }
+      finally closeTxn(txn)
     })
   }
 
@@ -447,8 +455,10 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
         try {
           val reuseableBuffer = allocateDirect(refs.env.getMaxKeySize)
           requests.map(r => doGet(cursor, reuseableBuffer, r.constraints).toOption)
-        } finally closeCursor(cursor)
-      } finally closeTxn(txn)
+        }
+        finally closeCursor(cursor)
+      }
+      finally closeTxn(txn)
     })
   }
 
@@ -457,7 +467,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       val txn = createTxn(refs.env)
       try {
         refs.getKvdbi(column).stat(txn).entries
-      } finally closeTxn(txn)
+      }
+      finally closeTxn(txn)
     })
   }
 
@@ -469,7 +480,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
           try {
             assert(doPut(txn, refs.getKvdbi(column), key, value))
             txn.commit()
-          } finally closeTxn(txn)
+          }
+          finally closeTxn(txn)
         }
     )
   }
@@ -484,7 +496,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
           val dbi = refs.getKvdbi(column)
           val _ = doDelete(txn, dbi, key)
           txn.commit()
-        } finally closeTxn(txn)
+        }
+        finally closeTxn(txn)
       }
     } yield ())
   }
@@ -500,7 +513,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
           val deletedCount = doDeletePrefix(txn, dbi, prefix)
           txn.commit()
           deletedCount
-        } finally closeTxn(txn)
+        }
+        finally closeTxn(txn)
       }
     } yield count)
   }
@@ -738,7 +752,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
           }
 
           txn.commit()
-        } finally closeTxn(txn)
+        }
+        finally closeTxn(txn)
       }
     } yield ())
   }
@@ -779,7 +794,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
           logger.info(s"Dropping column family: ${column.id}")
           dbi.drop(txn)
           txn.commit()
-        } finally closeTxn(txn)
+        }
+        finally closeTxn(txn)
       }
     } yield ())
   }

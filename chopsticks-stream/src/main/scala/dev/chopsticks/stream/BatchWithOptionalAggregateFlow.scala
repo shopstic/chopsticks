@@ -36,7 +36,8 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
             agg = seed(pending)
             left -= costFn(pending)
             pending = null.asInstanceOf[In]
-          } catch {
+          }
+          catch {
             case NonFatal(ex) =>
               decider(ex) match {
                 case Supervision.Stop => failStage(ex)
@@ -61,7 +62,8 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
           try {
             agg = seed(elem)
             left -= cost
-          } catch {
+          }
+          catch {
             case NonFatal(ex) =>
               decider(ex) match {
                 case Supervision.Stop => failStage(ex)
@@ -83,7 +85,8 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
               case None =>
                 pending = elem
             }
-          } catch {
+          }
+          catch {
             case NonFatal(ex) =>
               decider(ex) match {
                 case Supervision.Stop => failStage(ex)
@@ -113,7 +116,8 @@ final case class BatchWithOptionalAggregateFlow[In, Out](
           else {
             try {
               agg = seed(pending)
-            } catch {
+            }
+            catch {
               case NonFatal(ex) =>
                 decider(ex) match {
                   case Supervision.Stop => failStage(ex)

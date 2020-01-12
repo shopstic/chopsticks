@@ -13,7 +13,8 @@ final class ProtobufEnumValueSerdes[T <: GeneratedEnum](implicit comp: Generated
   def deserialize(bytes: Array[Byte]): ValueDeserializationResult[T] = {
     try {
       Right(comp.fromValue(bytes(0).toInt))
-    } catch {
+    }
+    catch {
       case NonFatal(e) =>
         Left(
           GenericValueDeserializationException(s"Failed decoding to ${comp.scalaDescriptor.fullName}: ${e.toString}", e)

@@ -588,7 +588,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
           try {
             doGet(iter, constraints).toOption
-          } finally {
+          }
+          finally {
             options.close()
             iter.close()
           }
@@ -618,7 +619,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
               doGet(iter, r.constraints).toOption
           }
         }
-      } finally {
+      }
+      finally {
         options.close()
         iter.close()
       }
@@ -684,7 +686,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
         else (0L, None, None)
       }
       else (0L, None, None)
-    } finally {
+    }
+    finally {
       iter.close()
     }
   }
@@ -703,12 +706,14 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
           try {
             db.write(writeOptions, writeBatch)
-          } finally {
+          }
+          finally {
             writeOptions.close()
           }
         }
         count
-      } finally {
+      }
+      finally {
         writeBatch.close()
       }
     })
@@ -1025,10 +1030,12 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
         try {
           db.write(writeOptions, writeBatch)
-        } finally {
+        }
+        finally {
           writeOptions.close()
         }
-      } finally {
+      }
+      finally {
         writeBatch.close()
       }
     })

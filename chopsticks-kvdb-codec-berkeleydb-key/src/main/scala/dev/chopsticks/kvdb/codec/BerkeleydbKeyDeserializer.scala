@@ -47,15 +47,12 @@ object BerkeleydbKeyDeserializer {
   implicit val floatBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[Float] = createTry(_.readSortedFloat)
   implicit val booleanBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[Boolean] = createTry(_.readBoolean)
 
-  implicit val ldBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalDate] = createTry(
-    t => LocalDate.ofEpochDay(t.readLong())
-  )
-  implicit val ldtBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalDateTime] = createTry(
-    t => KvdbSerdesUtils.epochNanosToLocalDateTime(BigInt(t.readBigInteger()))
-  )
-  implicit val ltBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalTime] = createTry(
-    t => LocalTime.ofNanoOfDay(t.readLong())
-  )
+  implicit val ldBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalDate] =
+    createTry(t => LocalDate.ofEpochDay(t.readLong()))
+  implicit val ldtBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalDateTime] =
+    createTry(t => KvdbSerdesUtils.epochNanosToLocalDateTime(BigInt(t.readBigInteger())))
+  implicit val ltBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalTime] =
+    createTry(t => LocalTime.ofNanoOfDay(t.readLong()))
   implicit val ymBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[YearMonth] = createTry { t =>
     val v = t.readLong()
 
@@ -71,12 +68,10 @@ object BerkeleydbKeyDeserializer {
     KvdbSerdesUtils.epochNanosToInstant(BigInt(in.readBigInteger()))
   }
 
-  implicit val bigDecimalBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[BigDecimal] = createTry(
-    in => BigDecimal(in.readSortedBigDecimal)
-  )
-  implicit val uuidBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[UUID] = createTry(
-    in => new UUID(in.readLong(), in.readLong())
-  )
+  implicit val bigDecimalBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[BigDecimal] =
+    createTry(in => BigDecimal(in.readSortedBigDecimal))
+  implicit val uuidBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[UUID] =
+    createTry(in => new UUID(in.readLong(), in.readLong()))
 
   implicit def protobufEnumBerkeleydbKeyDecoder[T <: GeneratedEnum](
     implicit underlyingDecoder: BerkeleydbKeyDeserializer[Int],

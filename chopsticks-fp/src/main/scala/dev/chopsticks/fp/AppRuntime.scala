@@ -2,6 +2,7 @@ package dev.chopsticks.fp
 import zio.{IO, ZIO}
 
 trait AppRuntime[R] extends zio.Runtime[R] {
+
   /**
     * The main function of the application, which will be passed the command-line
     * arguments to the program and has to return an `IO` with the errors fully handled.

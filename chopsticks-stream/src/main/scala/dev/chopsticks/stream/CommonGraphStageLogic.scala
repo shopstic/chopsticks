@@ -26,7 +26,8 @@ trait CommonGraphStageLogic extends StageLogging {
     (event: (ActorRef, Any)) => {
       try {
         combined(event._2)
-      } catch {
+      }
+      catch {
         case ex: Throwable =>
           log.error(s"Bad handler with uncaught exception: {}", ex)
           failStage(ex)

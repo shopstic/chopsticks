@@ -40,7 +40,8 @@ final class StatefulMapWithCompleteFlow[In, Out](val funs: () => (In => Out, () 
       try {
         val item = plainFun(grab(in))
         push(out, item)
-      } catch {
+      }
+      catch {
         case NonFatal(ex) =>
           decider(ex) match {
             case Supervision.Stop => failStage(ex)

@@ -452,8 +452,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
           Future {
-            batch.map[Either[Instant, (K, V)], List[Either[Instant, (K, V)]]](
-              p => Either.right(cf.unsafeDeserialize(p))
+            batch.map[Either[Instant, (K, V)], List[Either[Instant, (K, V)]]](p => Either.right(cf.unsafeDeserialize(p))
             )(
               breakOut
             )
@@ -503,9 +502,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
           Future {
-            batch.map[Either[Instant, V], List[Either[Instant, V]]](
-              p => Either.right(cf.unsafeDeserializeValue(p))
-            )(
+            batch.map[Either[Instant, V], List[Either[Instant, V]]](p => Either.right(cf.unsafeDeserializeValue(p)))(
               breakOut
             )
           }

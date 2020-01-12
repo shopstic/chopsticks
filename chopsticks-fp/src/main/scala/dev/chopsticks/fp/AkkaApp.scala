@@ -113,7 +113,8 @@ trait AkkaApp extends LoggingContext {
     try {
       runtime.unsafeRun(main)
       sys.exit(0)
-    } catch {
+    }
+    catch {
       case NonFatal(e) =>
         runtime.platform.reportFailure(Die(e))
     }

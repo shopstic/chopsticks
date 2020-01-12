@@ -58,7 +58,8 @@ final class StatefulMapConcatWithCompleteFlow[In, Out](
       try {
         currentIterator = plainFun(grab(in)).iterator
         pushPull()
-      } catch {
+      }
+      catch {
         case NonFatal(ex) ⇒
           decider(ex) match {
             case Supervision.Stop ⇒ failStage(ex)

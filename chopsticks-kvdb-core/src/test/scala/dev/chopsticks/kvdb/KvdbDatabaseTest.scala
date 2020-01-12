@@ -544,9 +544,7 @@ abstract private[kvdb] class KvdbDatabaseTest
 
   "batchGetTask" should {
     "return batched result" in withDb { db =>
-      val batchGet = Vector("a", "b", "c", "d").map(
-        p => $(_ ^= p)
-      )
+      val batchGet = Vector("a", "b", "c", "d").map(p => $(_ ^= p))
 
       for {
         _ <- db.putTask(defaultCf, "aaa", "aaa")

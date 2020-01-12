@@ -13,7 +13,8 @@ final class ProtobufValueSerdes[T <: GeneratedMessage with Message[T]](implicit 
   def deserialize(bytes: Array[Byte]): ValueDeserializationResult[T] = {
     try {
       Right(comp.parseFrom(bytes))
-    } catch {
+    }
+    catch {
       case NonFatal(e) =>
         Left(
           GenericValueDeserializationException(s"Failed decoding to ${comp.scalaDescriptor.fullName}: ${e.toString}", e)
