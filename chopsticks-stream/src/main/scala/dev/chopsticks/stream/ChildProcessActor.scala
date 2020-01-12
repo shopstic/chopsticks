@@ -10,7 +10,7 @@ import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.stream.{ActorAttributes, IOResult}
 import akka.util.{ByteString, Helpers}
 
-import scala.collection.{immutable, JavaConverters}
+import scala.collection.immutable
 import scala.concurrent.Future
 import scala.util.control.NoStackTrace
 
@@ -77,7 +77,7 @@ class ChildProcessActor(
   override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
 
   private val process: JavaProcess = {
-    import JavaConverters._
+    import scala.jdk.CollectionConverters._
     val preparedCommand = if (Helpers.isWindows) command.map(winQuote) else command
     val pb = new JavaProcessBuilder(preparedCommand.asJava)
     pb.environment().putAll(environment.asJava)

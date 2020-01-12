@@ -77,22 +77,22 @@ class MultiMergeSortedTest
   }
 
   "sort union type with custom ordering" in {
-    import io.github.hamsters.{Union3, Union3Type}
-
     import scala.concurrent.duration._
 
-    case class Event1(time: LocalDateTime)
+    sealed trait EventType
 
-    case class Event2(time: LocalDateTime)
+    case class Event1(time: LocalDateTime) extends EventType
 
-    case class Event3(time: LocalDateTime)
+    case class Event2(time: LocalDateTime) extends EventType
 
-    type EventType = Union3[Event1, Event2, Event3]
+    case class Event3(time: LocalDateTime) extends EventType
 
     def getEventTime(event: EventType): LocalDateTime = {
-      if (event.v1.nonEmpty) event.v1.get.time
-      else if (event.v2.nonEmpty) event.v2.get.time
-      else event.v3.get.time
+      event match {
+        case Event1(time) => time
+        case Event2(time) => time
+        case Event3(time) => time
+      }
     }
 
     implicit object eventsOrdering extends Ordering[EventType] {
@@ -104,8 +104,6 @@ class MultiMergeSortedTest
     val startTime = LocalDateTime.of(2016, 1, 1, 0, 0)
 
     val source = {
-      val eventsUnion = new Union3Type[Event1, Event2, Event3]
-      import eventsUnion._
       MultiMergeSorted.merge[EventType](
         List(
           Source(1 to 1001 by 2).map(i => Event1(startTime.plusDays(i.toLong))),

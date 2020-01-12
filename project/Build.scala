@@ -19,18 +19,21 @@ object Build {
     "-explaintypes", // Explain type errors in more detail.
     "-Xcheckinit", // Wrap field accessors to throw an exception on uninitialized access.
     "-Xlint:_",
-    "-Yno-adapted-args", // Do not adapt an argument list (either by inserting () or creating a tuple) to match the receiver.
-    "-Ypartial-unification", // Enable partial unification in type constructor inference
-    "-Ywarn-dead-code", // Warn when dead code is identified.
-    "-Ywarn-extra-implicit", // Warn when more than one implicit parameter section is defined.
-    "-Ywarn-inaccessible", // Warn about inaccessible types in method signatures.
-    "-Ywarn-infer-any", // Warn when a type argument is inferred to be `Any`.
-    "-Ywarn-nullary-override", // Warn when non-nullary `def f()' overrides nullary `def f'.
-    "-Ywarn-nullary-unit", // Warn when nullary methods return Unit.
-    "-Ywarn-numeric-widen", // Warn when numerics are widened.
-    "-Ywarn-unused:_",
-    "-Ywarn-value-discard", // Warn when non-Unit expression results are unused.
-    "-Ywarn-macros:after"
+    "-Wdead-code", // Warn when dead code is identified.
+//    "-Werror", // Fail the compilation if there are any warnings.
+    "-Wextra-implicit", // Warn when more than one implicit parameter section is defined.
+    "-Wnumeric-widen", // Warn when numerics are widened.
+    "-Woctal-literal", // Warn on obsolete octal syntax.
+//    "-Wself-implicit", // Warn when an implicit resolves to an enclosing self-definition.
+    "-Wunused:imports", // Warn if an import selector is not referenced.
+    "-Wunused:patvars", // Warn if a variable bound in a pattern is unused.
+    "-Wunused:privates", // Warn if a private member is unused.
+    "-Wunused:locals", // Warn if a local definition is unused.
+    "-Wunused:explicits", // Warn if an explicit parameter is unused.
+    "-Wunused:implicits", // Warn if an implicit parameter is unused.
+    "-Wunused:params", // Enable -Wunused:explicits,implicits.
+    "-Wunused:linted", // -Xlint:unused.
+    "-Wvalue-discard" // Warn when non-Unit expression results are unused.
   ) ++ scala.sys.env.get("FATAL_WARNINGS").map(_ => Seq("-Xfatal-warnings")).getOrElse(Seq.empty[String])
 
   val javacOptions = Seq("-encoding", "UTF-8")
@@ -38,12 +41,12 @@ object Build {
     "-unchecked",
     "-feature",
     "-encoding",
-    "utf-8",
-    "-Xfuture",
-    "-Ycache-plugin-class-loader:last-modified",
-    "-Ycache-macro-class-loader:last-modified",
-    "-Ybackend-parallelism",
-    Math.min(16, java.lang.Runtime.getRuntime.availableProcessors()).toString
+    "utf-8"
+//    "-Xfuture",
+//    "-Ycache-plugin-class-loader:last-modified",
+//    "-Ycache-macro-class-loader:last-modified",
+//    "-Ybackend-parallelism",
+//    Math.min(16, java.lang.Runtime.getRuntime.availableProcessors()).toString
   ) ++ scala.sys.env
     .get("SCALAC_OPTIMIZE")
     .map(_.split(" ").toVector)

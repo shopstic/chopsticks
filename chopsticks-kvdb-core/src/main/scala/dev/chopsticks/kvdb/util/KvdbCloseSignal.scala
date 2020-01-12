@@ -20,14 +20,14 @@ final class KvdbCloseSignal {
 
   def tryComplete(result: Try[Done]): Unit = {
     if (_completedWith.compareAndSet(None, Some(result))) {
-      for ((listener, _) ← _listeners) listener.promise.tryComplete(result)
+      for ((listener, _) <- _listeners) listener.promise.tryComplete(result)
     }
   }
 
   def createListener(): Listener = {
     val listener = new Listener
     if (_completedWith.get.isEmpty) {
-      val _ = _listeners += (listener → NotUsed)
+      val _ = _listeners += (listener -> NotUsed)
     }
     _completedWith.get match {
       case Some(result) => val _ = listener.promise.tryComplete(result)

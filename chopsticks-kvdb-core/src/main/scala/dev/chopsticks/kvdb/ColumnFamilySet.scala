@@ -1,7 +1,5 @@
 package dev.chopsticks.kvdb
 
-import scala.language.higherKinds
-
 object ColumnFamilySet {
   def apply[CF[A, B] <: ColumnFamily[A, B]] = new ColumnFamilySet[CF, CF[_, _]](Set.empty)
 }

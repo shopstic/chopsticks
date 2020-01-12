@@ -6,8 +6,6 @@ import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilyTransactionBuilder, KvdbDa
 import zio.clock.Clock
 import zio.{RIO, Task, ZIO}
 
-import scala.language.higherKinds
-
 object KvdbDatabaseApi {
   def apply[BCF[A, B] <: ColumnFamily[A, B]](
     db: KvdbDatabase[BCF, _]

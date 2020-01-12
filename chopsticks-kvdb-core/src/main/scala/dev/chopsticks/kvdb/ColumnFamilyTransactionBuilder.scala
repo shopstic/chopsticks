@@ -3,7 +3,6 @@ package dev.chopsticks.kvdb
 import dev.chopsticks.kvdb.codec.KeyTransformer
 
 import scala.collection.mutable
-import scala.language.higherKinds
 
 object ColumnFamilyTransactionBuilder {
   sealed trait TransactionAction

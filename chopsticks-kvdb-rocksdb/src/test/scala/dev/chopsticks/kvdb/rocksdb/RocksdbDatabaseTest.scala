@@ -6,9 +6,8 @@ import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern}
 import dev.chopsticks.kvdb.util.KvdbTestUtils
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabase, KvdbDatabaseTest}
-import eu.timepit.refined._
 import eu.timepit.refined.auto._
-import eu.timepit.refined.collection.NonEmpty
+import eu.timepit.refined.types.string.NonEmptyString
 import squants.information.InformationConversions._
 import zio.ZManaged
 
@@ -48,7 +47,7 @@ object RocksdbDatabaseTest {
         RocksdbDatabase(
           dbMaterialization,
           RocksdbDatabase.Config(
-            path = refineV[NonEmpty](dir.pathAsString).right.get,
+            path = NonEmptyString.unsafeFrom(dir.pathAsString),
             readOnly = false,
             startWithBulkInserts = false,
             checksumOnRead = true,

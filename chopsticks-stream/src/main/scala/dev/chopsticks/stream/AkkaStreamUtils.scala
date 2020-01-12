@@ -94,22 +94,6 @@ object AkkaStreamUtils {
     statefulMapFlow[In, Option[Out]](f).collect { case Some(out) => out }
   }
 
-  def collectAsListSink[T]: Sink[T, Future[List[T]]] = {
-    Sink.fromGraph[T, Future[List[T]]](new CollectSink[T, List[T]]())
-  }
-
-  def collectAsSetSink[T]: Sink[T, Future[Set[T]]] = {
-    Sink.fromGraph[T, Future[Set[T]]](new CollectSink[T, Set[T]]())
-  }
-
-  def collectAsVectorSink[T]: Sink[T, Future[Vector[T]]] = {
-    Sink.fromGraph[T, Future[Vector[T]]](new CollectSink[T, Vector[T]]())
-  }
-
-  def collectAsMapSink[K, V]: Sink[(K, V), Future[Map[K, V]]] = {
-    Sink.fromGraph[(K, V), Future[Map[K, V]]](new CollectSink[(K, V), Map[K, V]]())
-  }
-
   def distinctUntilChangedFlow[V]: Flow[V, V, NotUsed] = {
     distinctUntilChangedFlow((a, b) => a == b)
   }

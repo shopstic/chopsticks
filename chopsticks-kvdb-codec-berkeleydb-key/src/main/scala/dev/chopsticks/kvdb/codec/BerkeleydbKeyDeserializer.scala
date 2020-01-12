@@ -15,7 +15,7 @@ import shapeless.Typeable
 
 import scala.annotation.implicitNotFound
 import scala.language.experimental.macros
-import scala.language.higherKinds
+
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 

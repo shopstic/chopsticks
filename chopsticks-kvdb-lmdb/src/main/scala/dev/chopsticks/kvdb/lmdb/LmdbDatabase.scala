@@ -49,7 +49,7 @@ import zio.internal.Executor
 import zio.{RIO, Schedule, Task, ZIO}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.language.higherKinds
+
 import scala.util.Failure
 import scala.util.control.{ControlThrowable, NonFatal}
 
@@ -69,7 +69,7 @@ object LmdbDatabase extends StrictLogging {
     implicit val configConvert = ConfigConvert[Config]
   }
 
-  final case class FatalError(message: String, cause: Throwable) extends Error(message, cause) with ControlThrowable
+  final case class FatalError(message: String, cause: Throwable) extends ControlThrowable(message)
 
   final case class ReadTxnContext(env: Env[ByteBuffer], txn: Txn[ByteBuffer], cursor: Cursor[ByteBuffer])
 

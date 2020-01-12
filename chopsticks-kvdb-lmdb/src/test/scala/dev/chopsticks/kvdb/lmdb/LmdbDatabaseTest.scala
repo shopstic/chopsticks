@@ -5,9 +5,8 @@ import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, LookupCf, PlainCf}
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbTestUtils
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabase, KvdbDatabaseTest, TestDatabase}
-import eu.timepit.refined._
 import eu.timepit.refined.auto._
-import eu.timepit.refined.collection.NonEmpty
+import eu.timepit.refined.types.string.NonEmptyString
 import squants.information.InformationConversions._
 import zio.ZManaged
 
@@ -27,7 +26,7 @@ object LmdbDatabaseTest {
         LmdbDatabase(
           dbMaterialization,
           LmdbDatabase.Config(
-            path = refineV[NonEmpty](dir.pathAsString).right.get,
+            path = NonEmptyString.unsafeFrom(dir.pathAsString),
             maxSize = 64.mib,
             noSync = false,
             ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"

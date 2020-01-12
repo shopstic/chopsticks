@@ -3,7 +3,7 @@ import scalapb.compiler.Version.scalapbVersion
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
-  val SCALA_VERSION = "2.12.10"
+  val SCALA_VERSION = "2.13.1"
   val AKKA_VERSION = "2.6.1"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.0-RC17"
@@ -145,12 +145,14 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "1.22"
+    "com.github.japgolly.microlibs" %% "utils" % "2.0"
   )
 
+  val silencerVersion = "1.4.4"
+
   val silencerDeps = Seq(
-    compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.2"),
-    "com.github.ghik" %% "silencer-lib" % "1.4.2" % Provided
+    compilerPlugin("com.github.ghik" % "silencer-plugin" % silencerVersion cross CrossVersion.full),
+    "com.github.ghik" % "silencer-lib" % silencerVersion % Provided cross CrossVersion.full
   )
 
   val berkeleyDbDeps = Seq(

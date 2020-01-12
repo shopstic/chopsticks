@@ -796,7 +796,7 @@ abstract private[kvdb] class KvdbDatabaseTest
                 testKvdbClientOptions.copy(maxBatchBytes = maxBatchBytes)
               )
               .takeWhile(
-                (b: KvdbTailBatch) => b.right.forall(a => KvdbSerdesUtils.byteArrayToString(a.last._1) != "10000"),
+                (b: KvdbTailBatch) => b.forall(a => KvdbSerdesUtils.byteArrayToString(a.last._1) != "10000"),
                 inclusive = true
               )
               .toMat(Sink.seq)(Keep.right)

@@ -5,8 +5,6 @@ import dev.chopsticks.kvdb.codec.berkeleydb_key._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
-import scala.language.higherKinds
-
 object KeyConstraintsTest {
   final case class StockDbKeyTest(symbol: String, year: Int, month: Int)
   object StockDbKeyTest {

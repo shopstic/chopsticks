@@ -3,8 +3,6 @@ package dev.chopsticks.kvdb.rocksdb
 import dev.chopsticks.kvdb.ColumnFamily
 import org.rocksdb.ColumnFamilyOptions
 
-import scala.language.higherKinds
-
 object RocksdbColumnFamilyOptionsMap {
   def apply[CF[A, B] <: ColumnFamily[A, B]] = new RocksdbColumnFamilyOptionsMap[CF, CF[_, _]](Map.empty)
 }

@@ -10,8 +10,6 @@ import shapeless.Refute
 
 import scala.annotation.implicitNotFound
 import scala.language.experimental.macros
-import scala.language.higherKinds
-
 @implicitNotFound(
   msg = "Implicit OptimizedEncoder[${T}] not found. Try supplying an implicit instance of OptimizedEncoder[${T}]"
 )
@@ -45,7 +43,7 @@ object OptimizedEncoder extends LowPriorityOptimizedEncoder {
   }
 
   def combine[T](klass: CaseClass[Typeclass, T]): OptimizedEncoder[T] = {
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
 
     //    println("OPTIMIZED: " + klass.typeName)
 

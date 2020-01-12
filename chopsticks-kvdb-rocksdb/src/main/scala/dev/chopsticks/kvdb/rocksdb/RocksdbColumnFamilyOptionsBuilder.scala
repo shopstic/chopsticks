@@ -3,7 +3,7 @@ package dev.chopsticks.kvdb.rocksdb
 import org.rocksdb._
 import squants.information.Mebibytes
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import eu.timepit.refined.auto._
 
 object RocksdbColumnFamilyOptionsBuilder {

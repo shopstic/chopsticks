@@ -3,8 +3,6 @@ package dev.chopsticks.kvdb.rocksdb
 import dev.chopsticks.kvdb.ColumnFamily
 import dev.chopsticks.kvdb.KvdbMaterialization.DuplicatedColumnFamilyIdsException
 
-import scala.language.higherKinds
-
 trait RocksdbMaterialization[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
   def defaultColumnFamily: BCF[_, _]
   def columnFamilyConfigMap: RocksdbColumnFamilyOptionsMap[BCF, CFS]

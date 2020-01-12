@@ -3,12 +3,12 @@ package dev.chopsticks.testkit
 import java.time._
 
 import org.scalacheck.{Arbitrary, Gen}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object ArbitraryTime {
-  lazy val uniformMonth: Gen[Month] = Gen.oneOf(Month.values())
+  lazy val uniformMonth: Gen[Month] = Gen.oneOf(Month.values().toIndexedSeq)
 
-  lazy val uniformDayOfWeek: Gen[DayOfWeek] = Gen.oneOf(DayOfWeek.values())
+  lazy val uniformDayOfWeek: Gen[DayOfWeek] = Gen.oneOf(DayOfWeek.values().toIndexedSeq)
 
   lazy val uniformPeriod: Gen[Period] = Gen.choose(Int.MinValue, Int.MaxValue) map { d =>
     Period.ofDays(d)

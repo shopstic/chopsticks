@@ -17,10 +17,9 @@ import dev.chopsticks.stream.AkkaStreamUtils
 import zio.Task
 
 import scala.collection.immutable.Queue
-import scala.collection.{breakOut, mutable}
+import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.language.higherKinds
 
 final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V] private[kvdb] (
   db: KvdbDatabase[BCF, _],
@@ -187,7 +186,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     batchedRawSource(from, to)
       .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
-          batch.map[(K, V), List[(K, V)]](cf.unsafeDeserialize)(breakOut)
+          batch.view.map(cf.unsafeDeserialize).to(List)
         }
       }
   }
@@ -215,7 +214,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     batchedRawValueSource(from, to)
       .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
-          batch.map[V, List[V]](cf.unsafeDeserializeValue)(breakOut)
+          batch.view.map(cf.unsafeDeserializeValue).to(List)
         }
       }
   }
@@ -405,7 +404,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     tailBatchedRawValueSource(from, to)
       .mapAsync(clientOptions.serdesParallelism) { b =>
         Future {
-          b.map[V, List[V]](cf.unsafeDeserializeValue)(breakOut)
+          b.view.map(cf.unsafeDeserializeValue).to(List)
         }
       }
       .mapConcat(identity)
@@ -432,7 +431,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     tailBatchedRawSource(from, to)
       .mapAsync(clientOptions.serdesParallelism) { batch =>
         Future {
-          batch.map[(K, V), List[(K, V)]](cf.unsafeDeserialize)(breakOut)
+          batch.view.map(cf.unsafeDeserialize).to(List)
         }
       }
       .mapConcat(identity)
@@ -452,10 +451,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
           Future {
-            batch.map[Either[Instant, (K, V)], List[Either[Instant, (K, V)]]](p => Either.right(cf.unsafeDeserialize(p))
-            )(
-              breakOut
-            )
+            batch.view.map(p => Either.right(cf.unsafeDeserialize(p))).to(List)
           }
       }
       .mapConcat(identity)
@@ -484,9 +480,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         case (index, Left(e)) => Future.successful((index, Either.left(e.time)))
         case (index, Right(batch)) =>
           Future {
-            val r = Either.right[Instant, List[(K, V)]](batch.map { p =>
-              cf.unsafeDeserialize(p)
-            }(breakOut))
+            val r = Either.right[Instant, List[(K, V)]](batch.view.map(cf.unsafeDeserialize).to(List))
             (index, r)
           }
       }
@@ -502,9 +496,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
           Future {
-            batch.map[Either[Instant, V], List[Either[Instant, V]]](p => Either.right(cf.unsafeDeserializeValue(p)))(
-              breakOut
-            )
+            batch.view.map(p => Either.right(cf.unsafeDeserializeValue(p))).to(List)
           }
       }
       .mapConcat(identity)

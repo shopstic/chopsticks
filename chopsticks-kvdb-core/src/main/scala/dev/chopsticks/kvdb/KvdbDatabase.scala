@@ -12,8 +12,6 @@ import dev.chopsticks.kvdb.util.KvdbException.KvdbAlreadyClosedException
 import zio.clock.Clock
 import zio.{RIO, Task, ZIO, ZManaged}
 
-import scala.language.higherKinds
-
 object KvdbDatabase {
   def keySatisfies(key: Array[Byte], constraints: List[KvdbKeyConstraint]): Boolean = {
     constraints.forall { c =>

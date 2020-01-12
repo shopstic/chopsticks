@@ -13,8 +13,6 @@ import scalapb.GeneratedEnum
 
 import scala.annotation.implicitNotFound
 import scala.language.experimental.macros
-import scala.language.higherKinds
-
 @implicitNotFound(
   msg = "Implicit BerkeleydbKeySerializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeySerializer[${T}]"
 )

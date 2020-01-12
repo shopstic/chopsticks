@@ -7,7 +7,7 @@ import org.apache.avro.generic.{GenericContainer, GenericData, GenericEnumSymbol
 import shapeless.Refute
 
 import scala.annotation.implicitNotFound
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.concurrent.TrieMap
 import scala.language.experimental.macros
 import scala.reflect.runtime.universe

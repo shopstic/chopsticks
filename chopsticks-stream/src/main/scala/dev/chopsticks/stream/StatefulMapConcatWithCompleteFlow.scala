@@ -8,7 +8,7 @@ import scala.collection.immutable
 import scala.util.control.NonFatal
 
 final class StatefulMapConcatWithCompleteFlow[In, Out](
-  val funs: () ⇒ (In ⇒ immutable.Iterable[Out], () ⇒ immutable.Iterable[Out])
+  val funs: () => (In => immutable.Iterable[Out], () => immutable.Iterable[Out])
 ) extends GraphStage[FlowShape[In, Out]] {
   val in: Inlet[In] = Inlet[In]("StatefulMapConcatWithCompleteFlow.in")
   val out: Outlet[Out] = Outlet[Out]("StatefulMapConcatWithCompleteFlow.out")
@@ -60,11 +60,11 @@ final class StatefulMapConcatWithCompleteFlow[In, Out](
         pushPull()
       }
       catch {
-        case NonFatal(ex) ⇒
+        case NonFatal(ex) =>
           decider(ex) match {
-            case Supervision.Stop ⇒ failStage(ex)
-            case Supervision.Resume ⇒ if (!hasBeenPulled(in)) pull(in)
-            case Supervision.Restart ⇒
+            case Supervision.Stop => failStage(ex)
+            case Supervision.Resume => if (!hasBeenPulled(in)) pull(in)
+            case Supervision.Restart =>
               restartState()
               if (!hasBeenPulled(in)) pull(in)
           }

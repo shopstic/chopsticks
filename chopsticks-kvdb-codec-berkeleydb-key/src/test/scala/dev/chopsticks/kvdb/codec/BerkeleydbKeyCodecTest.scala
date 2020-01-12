@@ -16,8 +16,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-import scala.language.higherKinds
-
 object BerkeleydbKeyCodecTest {
   final case class Sym(symbol: String) extends AnyVal
 

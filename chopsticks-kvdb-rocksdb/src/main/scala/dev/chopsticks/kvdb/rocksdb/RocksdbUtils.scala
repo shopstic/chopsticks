@@ -10,7 +10,7 @@ object RocksdbUtils extends StrictLogging {
   private val optionsSectionRegex = """^\[(.+)\]$""".r
   private val optionsValueRegex = """^([^=]+)=(.+)$""".r
 
-  def parseOptions(lines: Traversable[String]): List[OptionsFileSection] = {
+  def parseOptions(lines: Iterable[String]): List[OptionsFileSection] = {
     val (all, lastSection) = lines
       .map(_.trim)
       .foldLeft[(List[OptionsFileSection], Option[OptionsFileSection])]((List.empty[OptionsFileSection], None)) {

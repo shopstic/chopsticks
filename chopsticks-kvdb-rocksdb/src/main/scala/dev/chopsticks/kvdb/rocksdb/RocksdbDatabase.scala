@@ -37,8 +37,8 @@ import zio.blocking._
 import zio.clock.Clock
 import zio.{RIO, Schedule, Task, ZIO}
 
-import scala.collection.JavaConverters._
-import scala.language.higherKinds
+import scala.jdk.CollectionConverters._
+
 import scala.util.Failure
 
 object RocksdbDatabase extends StrictLogging {
