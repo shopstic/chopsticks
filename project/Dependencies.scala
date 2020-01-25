@@ -47,7 +47,7 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.8.0"
+    "io.prometheus" % "simpleclient" % "0.8.1"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
@@ -104,7 +104,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.5.2"
+    "org.rocksdb" % "rocksdbjni" % "6.5.3"
   )
 
   val lmdbDeps = Seq(
@@ -125,15 +125,15 @@ object Dependencies {
   )
 
   val refinedCoreDeps = Seq(
-    "eu.timepit" %% "refined" % "0.9.10"
+    "eu.timepit" %% "refined" % "0.9.12"
   )
 
   val refinedDeps = refinedCoreDeps ++ Seq(
-    "eu.timepit" %% "refined-pureconfig" % "0.9.10"
+    "eu.timepit" %% "refined-pureconfig" % "0.9.12"
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.3.5"
+    "io.scalaland" %% "chimney" % "0.4.0"
   )
 
   val snappyDeps = Seq(
@@ -164,7 +164,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.5.7"
+    "com.lihaoyi" %% "pprint" % "0.5.8"
   )
 
   val avro4sDeps = Seq(
