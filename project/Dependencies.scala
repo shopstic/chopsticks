@@ -104,7 +104,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.5.3"
+    "org.rocksdb" % "rocksdbjni" % "6.6.4"
   )
 
   val lmdbDeps = Seq(
@@ -133,7 +133,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.4.0"
+    "io.scalaland" %% "chimney" % "0.4.1"
   )
 
   val snappyDeps = Seq(
@@ -159,15 +159,19 @@ object Dependencies {
     "com.sleepycat" % "je" % "18.3.12"
   )
 
+  val fdbDeps = Seq(
+    "org.foundationdb" % "fdb-java" % "6.2.10"
+  )
+
   val magnoliaDeps = Seq(
     "com.propensive" %% "magnolia" % "0.12.6"
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.5.8"
+    "com.lihaoyi" %% "pprint" % "0.5.9"
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.4"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.6"
   )
 }

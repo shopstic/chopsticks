@@ -1,6 +1,5 @@
 package dev.chopsticks.avro4s
 
-import com.sksamuel.avro4s.Encoder.buildRecord
 import com.sksamuel.avro4s._
 import eu.timepit.refined.api.RefType
 import magnolia._
@@ -40,6 +39,18 @@ object OptimizedEncoder extends LowPriorityOptimizedEncoder {
   implicit def refinedEncoder[T: OptimizedEncoder, P, F[_, _]: RefType]: OptimizedEncoder[F[T, P]] = {
     (t: F[T, P], schema: Schema, fieldMapper: FieldMapper) =>
       implicitly[OptimizedEncoder[T]].encode(RefType[F].unwrap(t), schema, fieldMapper)
+  }
+
+  private def buildRecord(schema: Schema, values: List[AnyRef], fullName: String): AnyRef = {
+    schema.getType match {
+      case Schema.Type.UNION =>
+        val subschema = SchemaHelper.extractTraitSubschema(fullName, schema)
+        ImmutableRecord(subschema, values.toVector)
+      case Schema.Type.RECORD =>
+        ImmutableRecord(schema, values.toVector)
+      case _ =>
+        sys.error(s"Trying to encode a field from schema $schema which is neither a RECORD nor a UNION")
+    }
   }
 
   def combine[T](klass: CaseClass[Typeclass, T]): OptimizedEncoder[T] = {
