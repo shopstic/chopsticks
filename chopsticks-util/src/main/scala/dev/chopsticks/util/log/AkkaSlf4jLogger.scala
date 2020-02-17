@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter
 
 import akka.event.slf4j.Slf4jLogger
 
-class AkkaSlf4jLogger extends Slf4jLogger {
+final class AkkaSlf4jLogger extends Slf4jLogger {
   private val timestampFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS")
   private val defaultZoneId = ZoneId.systemDefault()
 
