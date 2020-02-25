@@ -7,6 +7,7 @@ import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{Attributes, KillSwitches}
 import dev.chopsticks.fp.AkkaApp
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClock, ManualTimeAkkaTestKit}
@@ -32,13 +33,15 @@ final class ZAkkaStreamsTest
 
   private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Throwable, Assertion] = {
     val testClock = zio.ZEnv.live >>> zio.test.environment.Live.default >>> FixedTestClock.live
-    val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live
+    val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live ++ LogEnv.live
     val rt = AkkaApp.createRuntime(env)
     rt.unsafeRunToFuture(run)
   }
 
   def withRuntime(test: zio.Runtime[Env] => Assertion): Future[Assertion] = {
-    runToFutureWithRuntime(ZIO.runtime[Env].flatMap { env => UIO(test(env)) })
+    runToFutureWithRuntime(ZIO.runtime[Env].flatMap { env =>
+      UIO(test(env))
+    })
   }
 
   def withEffect[E, A](test: ZIO[Env, Throwable, Assertion]): Future[Assertion] = {
@@ -111,7 +114,9 @@ final class ZAkkaStreamsTest
     "recursiveSource" should {
       "repeat" in withRuntime { implicit env =>
         val sink = ZAkkaStreams
-          .recursiveSource(ZIO.succeed(1), (_: Int, o: Int) => o) { s => Source(s to s + 2) }
+          .recursiveSource(ZIO.succeed(1), (_: Int, o: Int) => o) { s =>
+            Source(s to s + 2)
+          }
           .toMat(TestSink.probe[Int])(Keep.right)
           .run()
 
@@ -174,7 +179,9 @@ final class ZAkkaStreamsTest
         source.sendNext(Source.single(2))
         sink.expectNext(2)
 
-        whenReady(promise.future) { r => r should be(true) }
+        whenReady(promise.future) { r =>
+          r should be(true)
+        }
 
         source.sendComplete()
         sink.expectComplete()
