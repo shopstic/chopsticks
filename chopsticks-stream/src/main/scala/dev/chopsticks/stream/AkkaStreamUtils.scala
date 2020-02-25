@@ -250,14 +250,10 @@ object AkkaStreamUtils {
         overflowStrategy = OverflowStrategy.fail
       )
       .throttle(elements, per)
-      .toMat(Sink.foreach { v =>
-        child ! v
-      })(Keep.both)
+      .toMat(Sink.foreach { v => child ! v })(Keep.both)
       .run()
 
-    sourceFuture.failed.foreach { _ =>
-      ctx.self ! terminateMessage
-    }(ctx.system.executionContext)
+    sourceFuture.failed.foreach { _ => ctx.self ! terminateMessage }(ctx.system.executionContext)
 
     Behaviors.receive[T] { (_, m) =>
       if (m == terminateMessage) {

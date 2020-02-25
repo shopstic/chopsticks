@@ -5,7 +5,7 @@ import java.time.Instant
 import akka.NotUsed
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
-import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
@@ -27,7 +27,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 )(
   implicit rt: zio.Runtime[AkkaEnv]
 ) {
-  private val akkaEnv = rt.environment.akkaService
+  private val akkaEnv = rt.environment.get[AkkaEnv.Service]
   import akkaEnv._
 
   def estimateCountTask: Task[Long] = {
@@ -138,9 +138,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
             else {
               rt.unsafeRunToFuture(
                 db.batchGetTask(cf, requests)
-                  .map { maybePairs =>
-                    keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2))))
-                  }
+                  .map { maybePairs => keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2)))) }
               )
             }
 
@@ -305,9 +303,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       maxBatchSize,
       groupWithin,
       batchEncodingParallelism
-    ) { seq =>
-      Vector(aggregateCheckpoint(seq))
-    }
+    ) { seq => Vector(aggregateCheckpoint(seq)) }
   }
 
   def putInBatchesWithCheckpointsFlow[CCF <: BCF[CK, CV], CK, CV](

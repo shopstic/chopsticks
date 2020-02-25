@@ -2,20 +2,22 @@ package dev.chopsticks.stream
 
 import akka.NotUsed
 import akka.actor.Status
-import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
 import akka.stream._
-import dev.chopsticks.fp.{AkkaEnv, LogCtx, LogEnv}
-import zio.{RIO, Task, UIO, ZIO}
+import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
+import dev.chopsticks.fp.ZService
+import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.log_env.{LogCtx, LogEnv}
+import zio.{Has, RIO, Task, UIO, ZIO}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 object ZAkkaStreams {
-  def recursiveSource[R, Out, State](seed: => RIO[R, State], nextState: (State, Out) => State)(
+  def recursiveSource[R <: Has[_], Out, State](seed: => RIO[R, State], nextState: (State, Out) => State)(
     makeSource: State => Source[Out, NotUsed]
   )(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Out, NotUsed] = {
     val env = rt.environment
-    val akkaService = env.akkaService
+    val akkaService = env.get[AkkaEnv.Service]
     import akkaService.{actorSystem, dispatcher}
 
     Source
@@ -61,75 +63,77 @@ object ZAkkaStreams {
       .flatMapConcat(identity)
   }
 
-  def graph[R, A](
+  def graph[R <: Has[_], A](
     make: RIO[R, RunnableGraph[Future[A]]]
   ): RIO[AkkaEnv with LogEnv with R, A] = {
     graphM(make)
   }
 
-  def graphM[R, A](
+  def graphM[R <: Has[_], A](
     make: RIO[R, RunnableGraph[Future[A]]]
   ): RIO[AkkaEnv with LogEnv with R, A] = {
     ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
-      val akkaService = env.akkaService
+      val akkaService = env.get[AkkaEnv.Service]
       import akkaService.{actorSystem, dispatcher}
 
       make.flatMap { graph =>
         val f = graph.run()
         f.value
-          .fold(
+          .fold {
             Task.effectAsync { cb: (Task[A] => Unit) =>
               f.onComplete {
                 case Success(a) => cb(Task.succeed(a))
                 case Failure(t) => cb(Task.fail(t))
               }
             }
-          )(Task.fromTry(_))
+          }(Task.fromTry(_))
       }
     }
   }
 
-  def interruptibleGraph[R, A](
+  def interruptibleGraph[R <: Has[_], A](
     make: RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
     graceful: Boolean
   )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv with R, A] = {
-    ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
-      val akkaService = env.akkaService
-      import akkaService.{actorSystem, dispatcher}
-
-      make.flatMap { graph =>
-        val (ks, f) = graph.run()
-        val task = f.value
-          .fold(
-            Task.effectAsync { cb: (Task[A] => Unit) =>
-              f.onComplete {
-                case Success(a) => cb(Task.succeed(a))
-                case Failure(t) => cb(Task.fail(t))
+    for {
+      akkaService <- ZService[AkkaEnv.Service]
+      logService <- ZService[LogEnv.Service]
+      ret <- {
+        make.flatMap { graph =>
+          import akkaService.{actorSystem, dispatcher}
+          val (ks, f) = graph.run()
+          val task = f.value
+            .fold {
+              Task.effectAsync { cb: (Task[A] => Unit) =>
+                f.onComplete {
+                  case Success(a) => cb(Task.succeed(a))
+                  case Failure(t) => cb(Task.fail(t))
+                }
               }
-            }
-          )(Task.fromTry(_))
+            }(Task.fromTry(_))
 
-        task.onInterrupt(
-          UIO {
-            if (graceful) ks.shutdown()
-            else ks.abort(new InterruptedException("Stream (interruptibleGraph) was interrupted"))
-          } *> task.fold(
-            e =>
-              env.logger
-                .error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}", e),
-            _ => ()
+          task.onInterrupt(
+            UIO {
+              if (graceful) ks.shutdown()
+              else ks.abort(new InterruptedException("Stream (interruptibleGraph) was interrupted"))
+            } *> task.fold(
+              e =>
+                logService.logger
+                  .error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}", e),
+              _ => ()
+            )
           )
-        )
+        }
       }
-    }
+    } yield ret
   }
 
-  def interruptibleMapAsyncM[R, A, B](
+  def interruptibleMapAsyncM[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       val env = rt.environment
-      val akkaService = env.akkaService
+      val akkaService = env.get[AkkaEnv.Service]
       import akkaService._
 
       Flow
@@ -149,9 +153,7 @@ object ZAkkaStreams {
                 rt.unsafeRunToFuture(interruptibleTask.provide(env))
               }
               .watchTermination() { (_, f) =>
-                f.onComplete { _ =>
-                  val _ = rt.unsafeRun(completionPromise.succeed(()))
-                }
+                f.onComplete { _ => val _ = rt.unsafeRun(completionPromise.succeed(())) }
                 NotUsed
               }
           )
@@ -160,19 +162,19 @@ object ZAkkaStreams {
     }
   }
 
-  def interruptibleMapAsync[R, A, B](
+  def interruptibleMapAsync[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, Future[NotUsed]] = {
     rt.unsafeRun(interruptibleMapAsyncM(parallelism)(runTask).provide(rt.environment))
   }
 
-  def interruptibleMapAsyncUnorderedM[R, A, B](
+  def interruptibleMapAsyncUnorderedM[R <: Has[_], A, B](
     parallelism: Int,
     attributes: Option[Attributes] = None
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       val env = rt.environment
-      val akkaService = env.akkaService
+      val akkaService = env.get[AkkaEnv.Service]
       import akkaService._
 
       Flow
@@ -197,21 +199,21 @@ object ZAkkaStreams {
           Future.successful(
             flowWithAttrs
               .watchTermination() { (_, f) =>
-                f.onComplete { _ =>
-                  val _ = rt.unsafeRun(completionPromise.succeed(()))
-                }
+                f.onComplete { _ => val _ = rt.unsafeRun(completionPromise.succeed(())) }
                 NotUsed
               }
           )
         })
-        .mapMaterializedValue(_.map(_ => NotUsed)(env.akkaService.dispatcher))
+        .mapMaterializedValue(_.map(_ => NotUsed)(akkaService.dispatcher))
     }
   }
 
-  def interruptibleLazySource[R, A, B](effect: RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Source[B, Future[NotUsed]]] = {
+  def interruptibleLazySource[R <: Has[_], A, B](
+    effect: RIO[R, B]
+  ): ZIO[AkkaEnv with R, Nothing, Source[B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       val env = rt.environment
-      val akkaService = env.akkaService
+      val akkaService = env.get[AkkaEnv.Service]
       import akkaService._
 
       Source
@@ -228,21 +230,19 @@ object ZAkkaStreams {
           Source
             .future(rt.unsafeRunToFuture(interruptibleTask.provide(env)))
             .watchTermination() { (_, f) =>
-              f.onComplete { _ =>
-                val _ = rt.unsafeRun(completionPromise.succeed(()))
-              }
+              f.onComplete { _ => val _ = rt.unsafeRun(completionPromise.succeed(())) }
               NotUsed
             }
         })
     }
   }
 
-  def switchFlatMapConcatM[R, In, Out](
+  def switchFlatMapConcatM[R <: Has[_], In, Out](
     f: In => RIO[R, Source[Out, Any]]
   ): ZIO[AkkaEnv with R, Nothing, Flow[In, Out, NotUsed]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       val env = rt.environment
-      val akkaService = env.akkaService
+      val akkaService = env.get[AkkaEnv.Service]
       import akkaService.actorSystem
 
       Flow[In]
@@ -266,7 +266,7 @@ object ZAkkaStreams {
     }
   }
 
-  def switchFlatMapConcat[R, In, Out](
+  def switchFlatMapConcat[R <: Has[_], In, Out](
     f: In => RIO[R, Source[Out, Any]]
   )(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Out, NotUsed] = {
     rt.unsafeRun(switchFlatMapConcatM[R, In, Out](f).provide(rt.environment))
@@ -279,7 +279,7 @@ object ZAkkaStreams {
     rt.unsafeRun(interruptibleMapAsyncUnorderedM(parallelism, attributes)(runTask).provide(rt.environment))
   }
 
-  def mapAsyncM[R, A, B](
+  def mapAsyncM[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, NotUsed]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
@@ -290,13 +290,13 @@ object ZAkkaStreams {
     }
   }
 
-  def mapAsync[R, A, B](
+  def mapAsync[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, NotUsed] = {
     rt.unsafeRun(mapAsyncM(parallelism)(runTask).provide(rt.environment))
   }
 
-  def mapAsyncUnorderedM[R, A, B](
+  def mapAsyncUnorderedM[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, NotUsed]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
@@ -307,7 +307,7 @@ object ZAkkaStreams {
     }
   }
 
-  def mapAsyncUnordered[R, A, B](
+  def mapAsyncUnordered[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, NotUsed] = {
     rt.unsafeRun(mapAsyncUnorderedM(parallelism)(runTask).provide(rt.environment))
@@ -321,35 +321,35 @@ object ZAkkaStreams {
 
   object ops {
     implicit class AkkaStreamFlowZioOps[-In, +Out, +Mat](flow: Flow[In, Out, Mat]) {
-      def effectMapAsync[R, Next](
+      def effectMapAsync[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
         flow
           .via(mapAsync[R, Out, Next](parallelism)(runTask))
       }
 
-      def effectMapAsyncUnordered[R, Next](
+      def effectMapAsyncUnordered[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
         flow
           .via(mapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
-      def interruptibleEffectMapAsync[R, Next](
+      def interruptibleEffectMapAsync[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
         flow
           .via(interruptibleMapAsync[R, Out, Next](parallelism)(runTask))
       }
 
-      def interruptibleEffectMapAsyncUnordered[R, Next](
+      def interruptibleEffectMapAsyncUnordered[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
         flow
           .via(interruptibleMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
-      def switchFlatMapConcat[R, Next](
+      def switchFlatMapConcat[R <: Has[_], Next](
         f: Out => RIO[R, Source[Next, Any]]
       )(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
         flow
@@ -358,35 +358,35 @@ object ZAkkaStreams {
     }
 
     implicit class AkkaStreamSourceZioOps[+Out, +Mat](source: Source[Out, Mat]) {
-      def effectMapAsync[R, Next](
+      def effectMapAsync[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
         source
           .via(mapAsync[R, Out, Next](parallelism)(runTask))
       }
 
-      def effectMapAsyncUnordered[R, Next](
+      def effectMapAsyncUnordered[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
         source
           .via(mapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
-      def interruptibleEffectMapAsync[R, Next](
+      def interruptibleEffectMapAsync[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
         source
           .via(interruptibleMapAsync[R, Out, Next](parallelism)(runTask))
       }
 
-      def interruptibleEffectMapAsyncUnordered[R, Next](
+      def interruptibleEffectMapAsyncUnordered[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
         source
           .via(interruptibleMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
-      def switchFlatMapConcat[R, Next](
+      def switchFlatMapConcat[R <: Has[_], Next](
         f: Out => RIO[R, Source[Next, Any]]
       )(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
         source

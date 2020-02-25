@@ -6,7 +6,7 @@ object Dependencies {
   val SCALA_VERSION = "2.13.1"
   val AKKA_VERSION = "2.6.3"
   val AKKA_HTTP_VERSION = "10.1.10"
-  val ZIO_VERSION = "1.0.0-RC17"
+  val ZIO_VERSION = "1.0.0-RC17+435-20b7c970-SNAPSHOT"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -92,8 +92,8 @@ object Dependencies {
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.1.0",
-    "org.scalatest" %% "scalatest" % "3.1.0",
+    "org.scalactic" %% "scalactic" % "3.1.1",
+    "org.scalatest" %% "scalatest" % "3.1.1",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.14.3",
     "org.scalamock" %% "scalamock" % "4.4.0"
@@ -148,7 +148,7 @@ object Dependencies {
     "com.github.japgolly.microlibs" %% "utils" % "2.0"
   )
 
-  val silencerVersion = "1.4.4"
+  val silencerVersion = "1.6.0"
 
   val silencerDeps = Seq(
     compilerPlugin("com.github.ghik" % "silencer-plugin" % silencerVersion cross CrossVersion.full),
@@ -172,6 +172,6 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.6"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.7"
   )
 }

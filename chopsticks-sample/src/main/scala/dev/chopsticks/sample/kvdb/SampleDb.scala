@@ -3,6 +3,7 @@ package dev.chopsticks.sample.kvdb
 import java.time.Instant
 
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDefinition, KvdbMaterialization}
+import zio.Has
 
 object SampleDb extends KvdbDefinition {
   trait Default extends BaseCf[String, String]
@@ -18,7 +19,5 @@ object SampleDb extends KvdbDefinition {
     }
   }
 
-  trait Env {
-    def sampleDb: Db
-  }
+  type Env = Has[Db]
 }

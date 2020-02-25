@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.api
 
-import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.TransactionAction
 import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilyTransactionBuilder, KvdbDatabase}
 import zio.clock.Clock

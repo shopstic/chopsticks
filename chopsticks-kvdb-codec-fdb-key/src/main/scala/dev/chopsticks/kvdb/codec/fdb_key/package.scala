@@ -1,18 +1,18 @@
 package dev.chopsticks.kvdb.codec
 
-import java.time._
+import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, YearMonth}
 import java.util.UUID
 
-import com.sleepycat.bind.tuple.{TupleInput, TupleOutput}
+import com.apple.foundationdb.tuple.Tuple
 
-//noinspection TypeAnnotation
-package object berkeleydb_key {
-  implicit def berkeleydbKeySerializer[T](
-    implicit serializer: BerkeleydbKeySerializer[T]
-  ): KeySerializer[T] = (key: T) => serializer.serialize(new TupleOutput(), key).toByteArray
+package object fdb_key {
+  implicit def fdbKeySerializer[T](
+    implicit serializer: FdbKeySerializer[T]
+  ): KeySerializer[T] = (key: T) => serializer.serialize(new Tuple(), key).pack()
 
-  implicit def berkeleydbKeyDeserializer[T](implicit deserializer: BerkeleydbKeyDeserializer[T]): KeyDeserializer[T] = {
-    bytes: Array[Byte] => deserializer.deserialize(new TupleInput(bytes))
+  implicit def fdbKeyDeserializer[T](implicit deserializer: FdbKeyDeserializer[T]): KeyDeserializer[T] = {
+    bytes: Array[Byte] =>
+      deserializer.deserialize(new FdbTupleReader(Tuple.fromBytes(bytes)))
   }
 
   implicit val stringKeySerdes = KeySerdes[String]
@@ -29,6 +29,5 @@ package object berkeleydb_key {
   implicit val instantKeySerdes = KeySerdes[Instant]
   implicit val ltKeySerdes = KeySerdes[LocalTime]
   implicit val ymKeySerdes = KeySerdes[YearMonth]
-  implicit val bigDecimalKeySerdes = KeySerdes[BigDecimal]
   implicit val uuidKeySerdes = KeySerdes[UUID]
 }

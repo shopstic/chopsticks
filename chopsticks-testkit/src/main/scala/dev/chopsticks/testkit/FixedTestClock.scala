@@ -3,13 +3,31 @@ package dev.chopsticks.testkit
 import java.time.{OffsetDateTime, ZoneId}
 import java.util.concurrent.TimeUnit
 
+import zio.clock.Clock
 import zio.duration.Duration
-import zio.{UIO, ZIO}
-import zio.internal.Scheduler
-import zio.test.environment.TestClock
-import zio.test.environment.TestClock.FiberData
+import zio.test.environment.TestClock.{Data, FiberData, Test, WarningData}
+import zio.test.environment.{Live, TestClock}
+import zio._
 
-final case class FixedTestClockService(original: TestClock.Test) extends TestClock.Service[Any] {
+object FixedTestClock {
+  def live: ZLayer[Live, Nothing, Clock with TestClock] = {
+    ZLayer.fromServiceManyManaged { (live: Live.Service) =>
+      for {
+        ref <- Ref.make(Data(0, Nil)).toManaged_
+        fiberRef <- FiberRef.make(FiberData(0, 0, ZoneId.of("UTC")), FiberData.combine).toManaged_
+        refM <- RefM.make(WarningData.start).toManaged_
+        test <- Managed.make(UIO(new FixedTestClock(Test(ref, fiberRef, live, refM)))) { _ =>
+          refM.updateSome[Any, Nothing] {
+            case WarningData.Start => ZIO.succeed(WarningData.done)
+            case WarningData.Pending(fiber) => fiber.interrupt.as(WarningData.done)
+          }
+        }
+      } yield Has.allOf[Clock.Service, TestClock.Service](test, test)
+    }
+  }
+}
+
+final case class FixedTestClock(original: TestClock.Test) extends TestClock.Service with Clock.Service {
   override def fiberTime: UIO[Duration] = original.fiberTime
 
   override def adjust(duration: zio.duration.Duration): UIO[Unit] = original.adjust(duration)
@@ -32,12 +50,12 @@ final case class FixedTestClockService(original: TestClock.Test) extends TestClo
     for {
       currentNanoTime <- original.clockState.get.map(_.nanoTime)
       _ <- original.fiberState.updateSome {
-        case FiberData(0) => FiberData(currentNanoTime)
+        case FiberData(0, 0, tz) => FiberData(currentNanoTime, currentNanoTime / 1000000, tz)
       }
       ret <- original.sleep(duration)
     } yield ret
 
-  override def scheduler: ZIO[Any, Nothing, Scheduler] = original.scheduler
-
   override def setDateTime(dateTime: OffsetDateTime): UIO[Unit] = original.setDateTime(dateTime)
+
+  override val save: UIO[UIO[Unit]] = original.save
 }

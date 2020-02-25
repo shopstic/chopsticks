@@ -1,5 +1,6 @@
 package dev.chopsticks.fp
 
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import zio._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -10,16 +11,16 @@ object ZAkka {
     ZIO.accessM((env: R) => ZIO.fromFuture(ec => make(env, ec)))
   }
 
-  def fromAkkaFuture[A](make: AkkaEnv => Future[A]): RIO[AkkaEnv, A] = {
-    ZIO.accessM[AkkaEnv] { env =>
-      val f = make(env)
+  def fromAkkaFuture[A](make: AkkaEnv.Service => Future[A]): RIO[AkkaEnv, A] = {
+    ZIO.access[AkkaEnv](_.get).flatMap { akkaService =>
+      val f = make(akkaService)
       f.value
         .fold(
           Task.effectAsync { cb: (Task[A] => Unit) =>
             f.onComplete {
               case Success(a) => cb(Task.succeed(a))
               case Failure(t) => cb(Task.fail(t))
-            }(env.akkaService.dispatcher)
+            }(akkaService.dispatcher)
           }
         )(Task.fromTry(_))
     }

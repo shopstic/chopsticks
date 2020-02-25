@@ -11,6 +11,8 @@ import akka.{Done, NotUsed}
 import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp._
+import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaStreams
 import zio._
@@ -34,7 +36,7 @@ object Dstreams extends LoggingContext {
   ): ZManaged[R with AkkaEnv with MeasuredLogging, Throwable, Http.ServerBinding] = {
     val acquire = for {
       service <- makeService
-      binding <- ZIO.access[AkkaEnv](_.akkaService).flatMap { env =>
+      binding <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service]).flatMap { env =>
         import env.actorSystem
         val settings = ServerSettings(actorSystem)
 
@@ -69,7 +71,7 @@ object Dstreams extends LoggingContext {
   )(make: GrpcClientSettings => ZIO[R, E, Client]): ZManaged[R with AkkaEnv with MeasuredLogging, E, Client] = {
     ZManaged.make(
       ZIO
-        .access[AkkaEnv](_.akkaService)
+        .access[AkkaEnv](_.get[AkkaEnv.Service])
         .map { env =>
           import env._
           GrpcClientSettings
@@ -112,20 +114,20 @@ object Dstreams extends LoggingContext {
     ZIO
       .bracket {
         ZIO
-          .accessM[DstreamEnv[Req, Res]](_.dstreamService.enqueueAssignment(assignment))
+          .accessM[DstreamEnv[Req, Res]](_.get[DstreamEnv.Service[Req, Res]].enqueueAssignment(assignment))
       } { worker =>
         val cleanup = for {
-          _ <- ZIO.access[AkkaEnv](_.akkaService.actorSystem).map { implicit as =>
+          _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
             worker.source.runWith(Sink.cancelled)
           }
-          _ <- ZIO.accessM[DstreamEnv[Req, Res]](_.dstreamService.report(assignment))
+          _ <- ZIO.accessM[DstreamEnv[Req, Res]](_.get.report(assignment))
         } yield ()
 
         cleanup.orDie
       }(run)
   }
 
-  def work[R, Req, Res](
+  def work[R <: Has[_], Req, Res](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with LogEnv with R, Done] = {
     val graph = ZIO.runtime[AkkaEnv with R].map { implicit rt =>
@@ -166,7 +168,7 @@ object Dstreams extends LoggingContext {
     metadata: Metadata
   ): Source[Req, NotUsed] = {
     val env = rt.environment
-    val akkaService = env.akkaService
+    val akkaService = env.get[AkkaEnv.Service]
     import akkaService.{actorSystem, dispatcher}
 
     val (ks, inSource) = in
@@ -174,7 +176,7 @@ object Dstreams extends LoggingContext {
       .preMaterialize()
 
     Source
-      .futureSource(rt.unsafeRunToFuture(env.dstreamService.enqueueWorker(inSource, metadata)))
+      .futureSource(rt.unsafeRunToFuture(env.get[DstreamEnv.Service[Req, Res]].enqueueWorker(inSource, metadata)))
       .watchTermination() {
         case (_, f) =>
           f.onComplete {

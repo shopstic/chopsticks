@@ -14,7 +14,8 @@ import scalapb.GeneratedEnum
 import scala.annotation.implicitNotFound
 import scala.language.experimental.macros
 @implicitNotFound(
-  msg = "Implicit BerkeleydbKeySerializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeySerializer[${T}]"
+  msg =
+    "Implicit BerkeleydbKeySerializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeySerializer[${T}]"
 )
 trait BerkeleydbKeySerializer[T] {
   def serialize(o: TupleOutput, t: T): TupleOutput
@@ -76,15 +77,11 @@ object BerkeleydbKeySerializer {
 
   def apply[V](implicit f: BerkeleydbKeySerializer[V]): BerkeleydbKeySerializer[V] = f
 
-  def create[T](f: (TupleOutput, T) => TupleOutput): BerkeleydbKeySerializer[T] = { (o: TupleOutput, t: T) =>
-    f(o, t)
-  }
+  def create[T](f: (TupleOutput, T) => TupleOutput): BerkeleydbKeySerializer[T] = { (o: TupleOutput, t: T) => f(o, t) }
 
   def combine[A](ctx: CaseClass[BerkeleydbKeySerializer, A]): BerkeleydbKeySerializer[A] =
     (o: TupleOutput, a: A) =>
-      ctx.parameters.foldLeft(o) { (tuple, p) =>
-        p.typeclass.serialize(tuple, p.dereference(a))
-      }
+      ctx.parameters.foldLeft(o) { (tuple, p) => p.typeclass.serialize(tuple, p.dereference(a)) }
 
   //noinspection MatchToPartialFunction
   implicit def deriveOption[T](implicit encoder: BerkeleydbKeySerializer[T]): BerkeleydbKeySerializer[Option[T]] = {

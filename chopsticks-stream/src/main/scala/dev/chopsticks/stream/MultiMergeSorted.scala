@@ -15,9 +15,7 @@ object MultiMergeSorted {
       implicit b => merge =>
         import GraphDSL.Implicits._
 
-        sources.foreach { source =>
-          source ~> merge
-        }
+        sources.foreach { source => source ~> merge }
 
         SourceShape(merge.out)
     })

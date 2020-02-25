@@ -13,9 +13,7 @@ object RocksdbMaterialization {
     mat: RocksdbMaterialization[BCF, CFS]
   ): Either[DuplicatedColumnFamilyIdsException, RocksdbMaterialization[BCF, CFS]] = {
     val dups = mat.columnFamilyConfigMap.map.keys
-      .groupBy { cf =>
-        if (cf == mat.defaultColumnFamily) RocksdbDatabase.DEFAULT_COLUMN_NAME else cf.id
-      }
+      .groupBy { cf => if (cf == mat.defaultColumnFamily) RocksdbDatabase.DEFAULT_COLUMN_NAME else cf.id }
       .filter(_._2.size > 1)
 
     if (dups.nonEmpty) {

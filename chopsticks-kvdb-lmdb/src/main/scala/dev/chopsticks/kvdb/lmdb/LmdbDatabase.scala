@@ -11,7 +11,7 @@ import akka.stream.scaladsl.{Merge, Source}
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
   TransactionAction,
   TransactionDelete,
@@ -49,7 +49,6 @@ import zio.internal.Executor
 import zio.{RIO, Schedule, Task, ZIO}
 
 import scala.concurrent.{ExecutionContext, Future}
-
 import scala.util.Failure
 import scala.util.control.{ControlThrowable, NonFatal}
 
@@ -110,9 +109,7 @@ object LmdbDatabase extends StrictLogging {
     KvdbMaterialization.validate(materialization) match {
       case Left(ex) => ZIO.fail(ex)
       case Right(mat) =>
-        ZIO.runtime[AkkaEnv].map { implicit rt =>
-          new LmdbDatabase[BCF, CFS](mat, config)
-        }
+        ZIO.runtime[AkkaEnv].map { implicit rt => new LmdbDatabase[BCF, CFS](mat, config) }
     }
   }
 }
@@ -566,9 +563,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
                       if (k.nonEmpty) {
                         column
                           .deserializeKey(k)
-                          .map { d =>
-                            s"Starting key: [$d] does not satisfy constraints: [${fromConstraints.show}]"
-                          }
+                          .map { d => s"Starting key: [$d] does not satisfy constraints: [${fromConstraints.show}]" }
                           .getOrElse(
                             s"Failed decoding key with bytes: [${k.mkString(",")}]. Constraints: [${fromConstraints.show}]"
                           )

@@ -20,7 +20,8 @@ import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
 @implicitNotFound(
-  msg = "Implicit BerkeleydbKeyDeserializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeyDeserializer[${T}]"
+  msg =
+    "Implicit BerkeleydbKeyDeserializer[${T}] not found. Try supplying an implicit instance of BerkeleydbKeyDeserializer[${T}]"
 )
 trait BerkeleydbKeyDeserializer[T] {
   def deserialize(in: TupleInput): KeyDeserializationResult[T]
@@ -146,8 +147,6 @@ object BerkeleydbKeyDeserializer {
   implicit def gen[T]: BerkeleydbKeyDeserializer[T] = macro Magnolia.gen[T]
 
   def combine[A](ctx: CaseClass[BerkeleydbKeyDeserializer, A]): BerkeleydbKeyDeserializer[A] = (in: TupleInput) => {
-    ctx.constructMonadic { param =>
-      param.typeclass.deserialize(in)
-    }
+    ctx.constructMonadic { param => param.typeclass.deserialize(in) }
   }
 }

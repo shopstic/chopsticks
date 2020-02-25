@@ -20,7 +20,7 @@ abstract class KvdbDatabaseApiTest
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.Live(system))
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.live(system))
   private lazy val withDb = KvdbTestUtils.createTestRunner(runtime, managedDb)
   private lazy val withCf = KvdbTestUtils.createTestRunner(runtime, managedDb.map(_.columnFamily(dbMat.plain)))
 

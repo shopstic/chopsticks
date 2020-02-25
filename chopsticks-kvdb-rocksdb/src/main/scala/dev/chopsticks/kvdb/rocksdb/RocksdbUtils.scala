@@ -23,9 +23,7 @@ object RocksdbUtils extends StrictLogging {
               else (list, s)
 
             case optionsValueRegex(key, value, _*) =>
-              (list, section.map { s =>
-                s.copy(values = s.values.updated(key, value))
-              })
+              (list, section.map { s => s.copy(values = s.values.updated(key, value)) })
             case _ => state
           }
       }

@@ -5,10 +5,11 @@ import java.util.concurrent.TimeUnit
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{Attributes, KillSwitches}
-import dev.chopsticks.fp.{AkkaApp, AkkaEnv, LogEnv}
+import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
-import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClockService, ManualTimeAkkaTestKit}
+import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClock, ManualTimeAkkaTestKit}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
@@ -27,34 +28,17 @@ final class ZAkkaStreamsTest
     with Matchers
     with AkkaTestKitAutoShutDown
     with ScalaFutures {
-  type Env = AkkaEnv with TestClock with Blocking
+  type Env = AkkaEnv with TestClock with Clock with Blocking
 
   private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Throwable, Assertion] = {
-    val rt = AkkaApp.createRuntime(new AkkaEnv with LogEnv.Live {
-      val akkaService: AkkaEnv.Service = AkkaEnv.Service.Live(system)
-    })
-
-    val task: ZIO[Any, Throwable, Assertion] = TestClock
-      .makeTest(TestClock.DefaultData, None)
-      .map { testClock =>
-        new AkkaEnv with LogEnv.Live with TestClock with Blocking.Live {
-          val akkaService: AkkaEnv.Service = AkkaEnv.Service.Live(system)
-          private val fixedTestClockService = FixedTestClockService(testClock)
-          val clock: TestClock.Service[Any] = fixedTestClockService
-          val scheduler: TestClock.Service[Any] = fixedTestClockService
-        }
-      }
-      .use { env =>
-        run.provide(env)
-      }
-
-    rt.unsafeRunToFuture(task)
+    val testClock = zio.ZEnv.live >>> zio.test.environment.Live.default >>> FixedTestClock.live
+    val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live
+    val rt = AkkaApp.createRuntime(env)
+    rt.unsafeRunToFuture(run)
   }
 
   def withRuntime(test: zio.Runtime[Env] => Assertion): Future[Assertion] = {
-    runToFutureWithRuntime(ZIO.runtime[Env].flatMap { env =>
-      UIO(test(env))
-    })
+    runToFutureWithRuntime(ZIO.runtime[Env].flatMap { env => UIO(test(env)) })
   }
 
   def withEffect[E, A](test: ZIO[Env, Throwable, Assertion]): Future[Assertion] = {
@@ -64,7 +48,7 @@ final class ZAkkaStreamsTest
   "interruptibleLazySource" should {
     "interrupt effect" in withEffect {
       for {
-        clock <- ZIO.access[TestClock](c => new ManualClock(Some(c)))
+        clock <- ZIO.access[TestClock](_.get[TestClock.Service]).map(c => new ManualClock(Some(c)))
         startP <- zio.Promise.make[Nothing, Unit]
         startFuture <- startP.await.toFuture
         interruptedP <- zio.Promise.make[Nothing, Unit]
@@ -91,14 +75,13 @@ final class ZAkkaStreamsTest
   }
 
   "manual time" in withRuntime { implicit rt =>
-    val clock = new ManualClock(Some(rt.environment))
+    val clock = new ManualClock(Some(rt.unsafeRun(ZIO.access[TestClock](_.get[TestClock.Service]))))
 
     val (source, sink) = TestSource
       .probe[Int]
       .effectMapAsync(1) { i =>
-        ZIO.accessM[Clock] { env =>
-          val c = env.clock
-          c.sleep(zio.duration.Duration(10, TimeUnit.SECONDS)) *> UIO(i + 1)
+        ZIO.access[Clock](_.get[Clock.Service]).flatMap { clock =>
+          clock.sleep(zio.duration.Duration(10, TimeUnit.SECONDS)) *> UIO(i + 1)
         }
       }
       .withAttributes(Attributes.inputBuffer(initial = 0, max = 1))
@@ -128,9 +111,7 @@ final class ZAkkaStreamsTest
     "recursiveSource" should {
       "repeat" in withRuntime { implicit env =>
         val sink = ZAkkaStreams
-          .recursiveSource(ZIO.succeed(1), (_: Int, o: Int) => o) { s =>
-            Source(s to s + 2)
-          }
+          .recursiveSource(ZIO.succeed(1), (_: Int, o: Int) => o) { s => Source(s to s + 2) }
           .toMat(TestSink.probe[Int])(Keep.right)
           .run()
 
@@ -168,7 +149,7 @@ final class ZAkkaStreamsTest
       }
 
       "cancel the prior source and switch to the new one" in withRuntime { implicit rt =>
-        val akkaService = rt.environment.akkaService
+        val akkaService = rt.environment.get[AkkaEnv.Service]
 
         val promise = Promise[Boolean]()
         val (source, sink) = TestSource
@@ -193,9 +174,7 @@ final class ZAkkaStreamsTest
         source.sendNext(Source.single(2))
         sink.expectNext(2)
 
-        whenReady(promise.future) { r =>
-          r should be(true)
-        }
+        whenReady(promise.future) { r => r should be(true) }
 
         source.sendComplete()
         sink.expectComplete()

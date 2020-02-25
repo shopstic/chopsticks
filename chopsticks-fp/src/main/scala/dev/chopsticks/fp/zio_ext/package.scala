@@ -1,5 +1,6 @@
 package dev.chopsticks.fp
 
+import dev.chopsticks.fp.log_env.{LogCtx, LogEnv}
 import dev.chopsticks.util.implicits.SquantsImplicits._
 import squants.time.Nanoseconds
 import zio._
@@ -9,7 +10,7 @@ import scala.concurrent.duration.Duration
 import scala.language.implicitConversions
 
 package object zio_ext {
-  private val nanoTime = ZIO.accessM((e: Clock) => e.clock.nanoTime)
+  private val nanoTime = ZIO.accessM[Clock](_.get.nanoTime)
 
   implicit def scalaToZioDuration(d: Duration): zio.duration.Duration =
     zio.duration.Duration.fromScala(d)

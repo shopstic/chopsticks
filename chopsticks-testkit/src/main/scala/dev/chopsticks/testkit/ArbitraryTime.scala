@@ -10,21 +10,15 @@ object ArbitraryTime {
 
   lazy val uniformDayOfWeek: Gen[DayOfWeek] = Gen.oneOf(DayOfWeek.values().toIndexedSeq)
 
-  lazy val uniformPeriod: Gen[Period] = Gen.choose(Int.MinValue, Int.MaxValue) map { d =>
-    Period.ofDays(d)
-  }
+  lazy val uniformPeriod: Gen[Period] = Gen.choose(Int.MinValue, Int.MaxValue) map { d => Period.ofDays(d) }
 
-  lazy val uniformDuration: Gen[Duration] = Gen.choose(Long.MinValue, Long.MaxValue) map { n =>
-    Duration.ofNanos(n)
-  }
+  lazy val uniformDuration: Gen[Duration] = Gen.choose(Long.MinValue, Long.MaxValue) map { n => Duration.ofNanos(n) }
 
   lazy val uniformLocalDateTime: Gen[LocalDateTime] = uniformDuration map { n: Duration =>
     LocalDateTime.of(1970, Month.JANUARY, 1, 0, 0, 0, 0).plus(n)
   }
 
-  lazy val uniformLocalDate: Gen[LocalDate] = uniformPeriod map { d =>
-    LocalDate.of(1970, Month.JANUARY, 1).plus(d)
-  }
+  lazy val uniformLocalDate: Gen[LocalDate] = uniformPeriod map { d => LocalDate.of(1970, Month.JANUARY, 1).plus(d) }
 
   lazy val uniformLocalTime: Gen[LocalTime] = Gen.choose(0L, 24L * 60L * 60L - 1L) map { n =>
     LocalTime.ofSecondOfDay(n)
@@ -63,9 +57,7 @@ object ArbitraryTime {
     zoneOffset <- uniformZoneOffset
   } yield OffsetTime.of(localTime, zoneOffset)
 
-  lazy val uniformYear: Gen[Year] = Gen.choose(Year.MIN_VALUE, Year.MAX_VALUE) map { y =>
-    Year.of(y)
-  }
+  lazy val uniformYear: Gen[Year] = Gen.choose(Year.MIN_VALUE, Year.MAX_VALUE) map { y => Year.of(y) }
 
   lazy val uniformYearMonth: Gen[YearMonth] = for {
     year <- uniformYear
@@ -77,13 +69,9 @@ object ArbitraryTime {
     zoneId <- uniformZoneId
   } yield ZonedDateTime.of(localDateTime, zoneId)
 
-  lazy val maxZonedDateTimes: Gen[ZonedDateTime] = uniformZoneId map { zid =>
-    ZonedDateTime.of(LocalDateTime.MAX, zid)
-  }
+  lazy val maxZonedDateTimes: Gen[ZonedDateTime] = uniformZoneId map { zid => ZonedDateTime.of(LocalDateTime.MAX, zid) }
 
-  lazy val minZonedDateTimes: Gen[ZonedDateTime] = uniformZoneId map { zid =>
-    ZonedDateTime.of(LocalDateTime.MIN, zid)
-  }
+  lazy val minZonedDateTimes: Gen[ZonedDateTime] = uniformZoneId map { zid => ZonedDateTime.of(LocalDateTime.MIN, zid) }
 
   implicit lazy val arbitraryMonth: Arbitrary[Month] = Arbitrary(uniformMonth)
 

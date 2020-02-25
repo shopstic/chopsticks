@@ -94,9 +94,7 @@ class BatchWithOptionalAggregateFlowTest
         .run()
       val sub = subscriber.expectSubscription()
 
-      List(1, 2, 3, 4, 3, 4, 5, 6, 1, 6, 7, 7, 8).foreach { n =>
-        publisher.sendNext(n)
-      }
+      List(1, 2, 3, 4, 3, 4, 5, 6, 1, 6, 7, 7, 8).foreach { n => publisher.sendNext(n) }
 
       subscriber.expectNoMessage(100.millis)
       sub.request(1)

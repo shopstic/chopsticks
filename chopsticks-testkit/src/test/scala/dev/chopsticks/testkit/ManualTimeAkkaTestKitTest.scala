@@ -20,9 +20,7 @@ final class ManualTimeAkkaTestKitTest
 
     val (source, sink) = TestSource
       .probe[Int]
-      .mapAsync(1) { i =>
-        akka.pattern.after(10.seconds, system.scheduler)(Future.successful(i + 1))
-      }
+      .mapAsync(1) { i => akka.pattern.after(10.seconds, system.scheduler)(Future.successful(i + 1)) }
       .toMat(TestSink.probe[Int])(Keep.both)
       .run
 

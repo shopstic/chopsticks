@@ -15,6 +15,9 @@ ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
 ThisBuild / licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
 ThisBuild / bintrayReleaseOnPublish := false
+ThisBuild / resolvers ++= Seq(
+  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+)
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
@@ -47,13 +50,13 @@ lazy val stream = Build
   )
   .dependsOn(fp, testkit % "test->compile")
 
-lazy val dstream = Build
-  .defineProject("dstream")
-  .settings(
-    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= akkaGrpcRuntimeDeps
-  )
-  .dependsOn(stream)
+//lazy val dstream = Build
+//  .defineProject("dstream")
+//  .settings(
+//    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
+//    libraryDependencies ++= akkaGrpcRuntimeDeps
+//  )
+//  .dependsOn(stream)
 
 lazy val kvdbCore = Build
   .defineProject("kvdb-core")
@@ -99,6 +102,13 @@ lazy val avro4s = Build
   )
   .dependsOn(util)
 
+lazy val kvdbCodecFdbKey = Build
+  .defineProject("kvdb-codec-fdb-key")
+  .settings(
+    libraryDependencies ++= fdbDeps ++ magnoliaDeps ++ enumeratumDeps ++ refinedCoreDeps
+  )
+  .dependsOn(kvdbCore, testkit % "test->compile")
+
 lazy val kvdbCodecBerkeleydbKey = Build
   .defineProject("kvdb-codec-berkeleydb-key")
   .settings(
@@ -124,7 +134,7 @@ lazy val sample = Build
       "-P:silencer:pathFilters=dev/chopsticks/sample/app/proto"
     )
   )
-  .dependsOn(kvdbLmdb, kvdbRocksdb, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue, dstream)
+  .dependsOn(kvdbLmdb, kvdbRocksdb, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue /*, dstream*/ )
 
 lazy val root = (project in file("."))
   .settings(
@@ -138,7 +148,7 @@ lazy val root = (project in file("."))
     testkit,
     fp,
     stream,
-    dstream,
+//    dstream,
     kvdbCore,
     kvdbLmdb,
     kvdbRocksdb,

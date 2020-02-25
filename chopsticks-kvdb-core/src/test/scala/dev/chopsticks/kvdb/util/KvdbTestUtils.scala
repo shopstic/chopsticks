@@ -15,9 +15,7 @@ object KvdbTestUtils {
   def managedTempDir: ZManaged[Blocking, Throwable, File] = {
     ZManaged.make {
       blocking(Task(File.newTemporaryDirectory().deleteOnExit()))
-    } { f =>
-      blocking(Task(f.delete())).orDie
-    }
+    } { f => blocking(Task(f.delete())).orDie }
   }
 
   def createTestRunner[Db](

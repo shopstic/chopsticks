@@ -10,7 +10,7 @@ import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbClientOptions
 import dev.chopsticks.kvdb.util.KvdbException.KvdbAlreadyClosedException
 import zio.clock.Clock
-import zio.{RIO, Task, ZIO, ZManaged}
+import zio.{Has, RIO, Task, ZIO, ZManaged}
 
 object KvdbDatabase {
   def keySatisfies(key: Array[Byte], constraints: List[KvdbKeyConstraint]): Boolean = {
@@ -38,10 +38,10 @@ object KvdbDatabase {
     }
   }
 
-  def manage[R, BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
+  def manage[R <: Has[_], BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     db: ZIO[R, Throwable, KvdbDatabase[BCF, CFS]]
   ): ZManaged[R with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
-    ZManaged.make[R with Clock, Throwable, KvdbDatabase[BCF, CFS]](db) {
+    ZManaged.make(db) {
       _.closeTask().catchAll {
         case _: KvdbAlreadyClosedException => ZIO.unit
         case t => ZIO.die(t)

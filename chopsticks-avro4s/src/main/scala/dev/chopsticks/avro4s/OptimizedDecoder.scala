@@ -112,9 +112,7 @@ object OptimizedDecoder extends LowPriorityOptimizedDecoder {
               }
               ctx.rawConstruct(values)
             case _: GenericData.EnumSymbol =>
-              val res = ctx.parameters.map { p =>
-                tryDecode(fieldMapper, schema, p, value)
-              }
+              val res = ctx.parameters.map { p => tryDecode(fieldMapper, schema, p, value) }
               ctx.rawConstruct(res)
             case _ =>
               sys.error(
@@ -186,15 +184,11 @@ object OptimizedDecoder extends LowPriorityOptimizedDecoder {
             val subtype = container match {
               case enum: GenericEnumSymbol[_] =>
                 ctx.subtypes
-                  .find { subtype =>
-                    nameCache(Schema.Type.ENUM -> subtype.typeName) == enum.toString
-                  }
+                  .find { subtype => nameCache(Schema.Type.ENUM -> subtype.typeName) == enum.toString }
                   .getOrElse(sys.error(s"Could not find subtype for enum $enum"))
               case str: String =>
                 ctx.subtypes
-                  .find { subtype =>
-                    nameCache(Schema.Type.ENUM -> subtype.typeName) == str
-                  }
+                  .find { subtype => nameCache(Schema.Type.ENUM -> subtype.typeName) == str }
                   .getOrElse(sys.error(s"Could not find subtype for enum $str"))
             }
 

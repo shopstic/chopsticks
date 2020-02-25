@@ -3,9 +3,10 @@ package dev.chopsticks.kvdb.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{SynchronousQueue, ThreadFactory, ThreadPoolExecutor, TimeUnit}
 
-import zio.ZIO
+import zio.ZLayer.NoDeps
 import zio.blocking.Blocking
 import zio.internal.Executor
+import zio.{Has, ZLayer}
 
 object KvdbIoThreadPool {
   final class KvdbIoThreadFactory(name: String, daemon: Boolean) extends ThreadFactory {
@@ -47,9 +48,9 @@ object KvdbIoThreadPool {
     threadPool
   }
 
-  lazy val blockingEnv: Blocking = new Blocking {
-    val blocking: Blocking.Service[Any] = new Blocking.Service[Any] {
-      val blockingExecutor: ZIO[Any, Nothing, Executor] = ZIO.succeed(executor)
+  lazy val blockingEnv: NoDeps[Nothing, Has[Blocking.Service]] = ZLayer.succeed {
+    new Blocking.Service {
+      val blockingExecutor: Executor = executor
     }
   }
 }

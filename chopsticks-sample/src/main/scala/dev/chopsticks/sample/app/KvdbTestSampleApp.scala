@@ -6,6 +6,7 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink}
 import com.typesafe.config.Config
 import dev.chopsticks.fp._
+import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.kvdb.KvdbDatabase
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.berkeleydb_key._
@@ -15,41 +16,33 @@ import dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits._
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
-import zio.{RIO, ZIO, ZManaged}
+import zio.{Has, RIO, ZLayer}
 
 object KvdbTestSampleApp extends AkkaApp {
   final case class AppConfig(
     db: LmdbDatabase.Config
   )
 
-  type CfgEnv = ConfigEnv[AppConfig]
-  type Env = AkkaApp.Env with CfgEnv with SampleDb.Env
+  type Env = AkkaApp.Env with Has[AppConfig] with SampleDb.Env
 
   object sampleDb extends SampleDb.Materialization {
     object default extends SampleDb.Default
     object time extends SampleDb.Time
   }
 
-  protected def createEnv(untypedConfig: Config): ZManaged[AkkaApp.Env, Nothing, Env] = {
-//    import pureconfig.generic.auto._
+  protected def createEnv(untypedConfig: Config): ZLayer[AkkaApp.Env, Nothing, Env] = {
     import dev.chopsticks.util.config.PureconfigConverters._
 
-    val envR = for {
-      akkaEnv <- ZManaged.environment[AkkaApp.Env]
-      typedConfig = PureconfigLoader.unsafeLoad[AppConfig](untypedConfig, "app")
-      db <- KvdbDatabase.manage(LmdbDatabase(sampleDb, typedConfig.db))
-    } yield new AkkaApp.LiveEnv with CfgEnv with SampleDb.Env {
-      val akkaService: AkkaEnv.Service = akkaEnv.akkaService
-      val config: AppConfig = typedConfig
-      val sampleDb: SampleDb.Db = db
-    }
+    val appConfig = PureconfigLoader.unsafeLoad[AppConfig](untypedConfig, "app")
+    val configEnv = ZLayer.succeed(appConfig)
+    val dbEnv = KvdbDatabase.manage(LmdbDatabase(sampleDb, appConfig.db)).orDie.toLayer
 
-    envR.orDie
+    ZLayer.requires[AkkaApp.Env] ++ configEnv ++ dbEnv
   }
 
   def run: RIO[Env, Unit] = {
     for {
-      db <- ZIO.access[SampleDb.Env](_.sampleDb)
+      db <- ZService[SampleDb.Db]
       dbApi <- KvdbDatabaseApi(db)
       stats <- dbApi.statsTask
       _ <- ZLogger.info(
@@ -61,9 +54,9 @@ object KvdbTestSampleApp extends AkkaApp {
       defaultCf = dbApi.columnFamily(sampleDb.default)
       tailFiber <- ZAkkaStreams
         .interruptibleGraph(
-          ZIO.access[AkkaEnv with LogEnv] { env =>
-            val log = env.logger
-
+          for {
+            log <- ZService[LogEnv.Service].map(_.logger)
+          } yield {
             defaultCf
               .tailSource(_ >= LocalDate.now.getYear.toString, _.last)
               .viaMat(KillSwitches.single)(Keep.right)

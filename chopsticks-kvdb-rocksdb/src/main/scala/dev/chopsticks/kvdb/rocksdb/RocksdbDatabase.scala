@@ -11,7 +11,7 @@ import better.files.File
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.fp.AkkaEnv
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
   TransactionAction,
   TransactionDelete,
@@ -38,7 +38,6 @@ import zio.clock.Clock
 import zio.{RIO, Schedule, Task, ZIO}
 
 import scala.jdk.CollectionConverters._
-
 import scala.util.Failure
 
 object RocksdbDatabase extends StrictLogging {
@@ -149,9 +148,7 @@ object RocksdbDatabase extends StrictLogging {
     RocksdbMaterialization.validate(materialization) match {
       case Left(ex) => ZIO.fail(ex)
       case Right(_) =>
-        ZIO.runtime[AkkaEnv].map { implicit env =>
-          new RocksdbDatabase[BCF, CFS](materialization, config)
-        }
+        ZIO.runtime[AkkaEnv].map { implicit env => new RocksdbDatabase[BCF, CFS](materialization, config) }
     }
   }
 }
@@ -222,9 +219,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       if (nonDefaultColumns.nonEmpty) {
         val db = RocksDB.open(new Options().setCreateIfMissing(true), config.path)
 
-        val columns = nonDefaultColumns.map { d =>
-          db.createColumnFamily(d)
-        }
+        val columns = nonDefaultColumns.map { d => db.createColumnFamily(d) }
 
         columns.foreach(_.close())
         db.close()
@@ -340,7 +335,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
           }
     }
 
-    rt.unsafeRunToFuture(task.provide(KvdbIoThreadPool.blockingEnv))
+    rt.unsafeRunToFuture(task.provideLayer(KvdbIoThreadPool.blockingEnv))
   }
 
   private def ioTask[T](task: Task[T]): Task[T] = {
@@ -362,9 +357,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
   def compactTask(): Task[Unit] = references.flatMap { refs =>
     ioTask(Task {
-      refs.columnHandleMap.values.foreach { col =>
-        refs.db.compactRange(col)
-      }
+      refs.columnHandleMap.values.foreach { col => refs.db.compactRange(col) }
     })
   }
 
@@ -639,9 +632,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   }
 
   def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
-    ioTask(references.map { refs =>
-      doPut(refs.db, refs.getColumnHandle(column), key, value)
-    })
+    ioTask(references.map { refs => doPut(refs.db, refs.getColumnHandle(column), key, value) })
   }
 
   private def doDelete(db: RocksDB, columnHandle: ColumnFamilyHandle, key: Array[Byte]): Unit = {
@@ -649,9 +640,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   }
 
   def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit] = {
-    ioTask(references.map { refs =>
-      doDelete(refs.db, refs.getColumnHandle(column), key)
-    })
+    ioTask(references.map { refs => doDelete(refs.db, refs.getColumnHandle(column), key) })
   }
 
   private def determineDeletePrefixRange(
@@ -802,9 +791,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                       if (k.nonEmpty) {
                         column
                           .deserializeKey(k)
-                          .map { d =>
-                            s"Starting key: [$d] does not satisfy constraints: [${fromConstraints.show}]"
-                          }
+                          .map { d => s"Starting key: [$d] does not satisfy constraints: [${fromConstraints.show}]" }
                           .getOrElse(
                             s"Failed decoding key with bytes: [${k.mkString(",")}]. Constraints: [${fromConstraints.show}]"
                           )
@@ -841,9 +828,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       _ <- ioTask(Task {
         val KvdbReferences(db, columnHandleMap, _, stats) = refs
         stats.close()
-        columnHandleMap.values.foreach { c =>
-          db.flush(new FlushOptions().setWaitForFlush(true), c)
-        }
+        columnHandleMap.values.foreach { c => db.flush(new FlushOptions().setWaitForFlush(true), c) }
         columnHandleMap.foreach(_._2.close())
         db.flushWal(true)
         db.closeE()
