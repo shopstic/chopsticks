@@ -15,16 +15,22 @@ object Dependencies {
   val akkaStreamDeps = Seq(
     "akka-stream",
     "akka-stream-typed"
-  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
+  ).map { p =>
+    "com.typesafe.akka" %% p % AKKA_VERSION
+  }
 
   val akkaActorDeps = Seq(
     "akka-actor",
     "akka-actor-typed"
-  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
+  ).map { p =>
+    "com.typesafe.akka" %% p % AKKA_VERSION
+  }
 
   val akkaDiscoveryOverrideDeps = Seq(
     "akka-discovery"
-  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
+  ).map { p =>
+    "com.typesafe.akka" %% p % AKKA_VERSION
+  }
 
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
@@ -49,7 +55,7 @@ object Dependencies {
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.1.0"
+    "org.typelevel" %% "cats-core" % "2.1.1"
   )
 
   val kittensDeps = Seq(
@@ -158,7 +164,7 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.12.6"
+    "com.propensive" %% "magnolia" % "0.12.7"
   )
 
   val pprintDeps = Seq(
@@ -166,6 +172,6 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.7"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.8"
   )
 }
