@@ -68,7 +68,7 @@ trait AkkaApp extends LoggingContext {
 
   protected def createActorSystem(appName: String, config: Config): ActorSystem = ActorSystem(appName, config)
 
-  protected def createEnv(untypedConfig: Config): ZLayer[AkkaApp.Env, Nothing, Env]
+  protected def createEnv(untypedConfig: Config): ZLayer[AkkaApp.Env, Throwable, Env]
 
   def run: RIO[Env, Unit]
 
@@ -114,8 +114,7 @@ trait AkkaApp extends LoggingContext {
     try {
       runtime.unsafeRun(main)
       sys.exit(0)
-    }
-    catch {
+    } catch {
       case NonFatal(e) =>
         runtime.platform.reportFailure(Die(e))
     }
