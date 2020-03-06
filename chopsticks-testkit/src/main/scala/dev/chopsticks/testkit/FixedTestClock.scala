@@ -13,8 +13,8 @@ object FixedTestClock {
   def live: ZLayer[Live, Nothing, Clock with TestClock] = {
     ZLayer.fromServiceManyManaged { (live: Live.Service) =>
       for {
-        ref <- Ref.make(Data(0, Nil)).toManaged_
-        fiberRef <- FiberRef.make(FiberData(0, 0, ZoneId.of("UTC")), FiberData.combine).toManaged_
+        ref <- Ref.make(Data(Duration.Zero, Nil)).toManaged_
+        fiberRef <- FiberRef.make(FiberData(Duration.Zero, ZoneId.of("UTC")), FiberData.combine).toManaged_
         refM <- RefM.make(WarningData.start).toManaged_
         test <- Managed.make(UIO(new FixedTestClock(Test(ref, fiberRef, live, refM)))) { _ =>
           refM.updateSome[Any, Nothing] {
@@ -29,6 +29,8 @@ object FixedTestClock {
 
 final case class FixedTestClock(original: TestClock.Test) extends TestClock.Service with Clock.Service {
   override def fiberTime: UIO[Duration] = original.fiberTime
+
+  override def runAll: UIO[Unit] = original.runAll
 
   override def adjust(duration: zio.duration.Duration): UIO[Unit] = original.adjust(duration)
 
@@ -48,9 +50,9 @@ final case class FixedTestClock(original: TestClock.Test) extends TestClock.Serv
 
   override def sleep(duration: zio.duration.Duration): ZIO[Any, Nothing, Unit] =
     for {
-      currentNanoTime <- original.clockState.get.map(_.nanoTime)
+      currentDuration <- original.clockState.get.map(_.duration)
       _ <- original.fiberState.updateSome {
-        case FiberData(0, 0, tz) => FiberData(currentNanoTime, currentNanoTime / 1000000, tz)
+        case FiberData(durtion, tz) if durtion.isZero => FiberData(currentDuration, tz)
       }
       ret <- original.sleep(duration)
     } yield ret

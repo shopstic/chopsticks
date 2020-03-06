@@ -6,7 +6,7 @@ object Dependencies {
   val SCALA_VERSION = "2.13.1"
   val AKKA_VERSION = "2.6.3"
   val AKKA_HTTP_VERSION = "10.1.10"
-  val ZIO_VERSION = "1.0.0-RC17+437-68ccb44d-SNAPSHOT"
+  val ZIO_VERSION = "1.0.0-RC18-1+16-d7f74236-SNAPSHOT"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -15,22 +15,16 @@ object Dependencies {
   val akkaStreamDeps = Seq(
     "akka-stream",
     "akka-stream-typed"
-  ).map { p =>
-    "com.typesafe.akka" %% p % AKKA_VERSION
-  }
+  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
 
   val akkaActorDeps = Seq(
     "akka-actor",
     "akka-actor-typed"
-  ).map { p =>
-    "com.typesafe.akka" %% p % AKKA_VERSION
-  }
+  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
 
   val akkaDiscoveryOverrideDeps = Seq(
     "akka-discovery"
-  ).map { p =>
-    "com.typesafe.akka" %% p % AKKA_VERSION
-  }
+  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
 
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
@@ -63,7 +57,7 @@ object Dependencies {
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.12.2")
+    .map(p => "com.github.pureconfig" %% p % "0.12.3")
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
@@ -164,7 +158,7 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.12.7"
+    "com.propensive" %% "magnolia" % "0.12.8"
   )
 
   val pprintDeps = Seq(
