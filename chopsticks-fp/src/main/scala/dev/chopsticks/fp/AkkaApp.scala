@@ -33,7 +33,7 @@ object AkkaApp extends LoggingContext {
   private val factoryRuntime = Runtime((), Platform.global)
 
   def createRuntime[R <: AkkaEnv with LogEnv](
-    layer: ZLayer.NoDeps[Any, R],
+    layer: ZLayer[Any, Any, R],
     tracingConfig: TracingConfig = TracingConfig.enabled
   ): zio.Runtime[R] = {
     val task = ZIO.environment[R].map { r =>
@@ -114,7 +114,8 @@ trait AkkaApp extends LoggingContext {
     try {
       runtime.unsafeRun(main)
       sys.exit(0)
-    } catch {
+    }
+    catch {
       case NonFatal(e) =>
         runtime.platform.reportFailure(Die(e))
     }

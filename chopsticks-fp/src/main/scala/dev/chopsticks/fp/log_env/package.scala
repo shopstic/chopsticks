@@ -15,7 +15,7 @@ package object log_env {
     val any: ZLayer[LogEnv, Nothing, LogEnv] =
       ZLayer.requires[LogEnv]
 
-    val live: ZLayer.NoDeps[Nothing, LogEnv] = ZLayer.succeed { (ctx: LogCtx) =>
+    val live: ZLayer[Any, Nothing, LogEnv] = ZLayer.succeed { (ctx: LogCtx) =>
       Logger(LoggerFactory.getLogger(ctx.name))
     }
   }

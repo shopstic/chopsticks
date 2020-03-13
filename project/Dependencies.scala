@@ -6,7 +6,7 @@ object Dependencies {
   val SCALA_VERSION = "2.13.1"
   val AKKA_VERSION = "2.6.3"
   val AKKA_HTTP_VERSION = "10.1.10"
-  val ZIO_VERSION = "1.0.0-RC18-1+16-d7f74236-SNAPSHOT"
+  val ZIO_VERSION = "1.0.0-RC18-2"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -82,7 +82,7 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.1.0"
+    "org.codehaus.janino" % "janino" % "3.1.1"
   )
 
   val scalatestDeps = Seq(
@@ -119,15 +119,15 @@ object Dependencies {
   )
 
   val refinedCoreDeps = Seq(
-    "eu.timepit" %% "refined" % "0.9.12"
+    "eu.timepit" %% "refined" % "0.9.13"
   )
 
   val refinedDeps = refinedCoreDeps ++ Seq(
-    "eu.timepit" %% "refined-pureconfig" % "0.9.12"
+    "eu.timepit" %% "refined-pureconfig" % "0.9.13"
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.4.1"
+    "io.scalaland" %% "chimney" % "0.4.2"
   )
 
   val snappyDeps = Seq(
@@ -166,6 +166,6 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.8"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.9"
   )
 }

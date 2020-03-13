@@ -20,6 +20,6 @@ package object akka_env {
 
     val any: ZLayer[AkkaEnv, Nothing, AkkaEnv] = ZLayer.requires[AkkaEnv]
 
-    def live(implicit actorSystem: ActorSystem): ZLayer.NoDeps[Nothing, AkkaEnv] = ZLayer.succeed(Live(actorSystem))
+    def live(implicit actorSystem: ActorSystem): ZLayer[Any, Nothing, AkkaEnv] = ZLayer.succeed(Live(actorSystem))
   }
 }
