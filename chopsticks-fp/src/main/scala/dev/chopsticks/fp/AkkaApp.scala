@@ -102,7 +102,10 @@ trait AkkaApp extends LoggingContext {
     )
 
     val main = for {
-      appFib <- run.provideLayer(appLayer).fork
+      appFib <- run
+        .ensuring(ZIO.interruptAllChildren)
+        .provideLayer(appLayer)
+        .fork
       _ <- UIO {
         shutdown.addTask("app-interruption", "interrupt app") { () =>
           runtime.unsafeRunToFuture(appFib.interrupt.ignore *> UIO(Done))
