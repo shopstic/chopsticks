@@ -38,7 +38,13 @@ package object zio_ext {
               ZLogger.info(s"[$name] [took $formattedElapse] ${result(r)}")
           }
         } yield ()
-      }((_: Long) => io)
+      } { startTime =>
+        io.onInterrupt(for {
+          elapse <- nanoTime.map(endTime => endTime - startTime)
+          formattedElapse = Nanoseconds(elapse).inBestUnit.rounded(2)
+          _ <- ZLogger.info(s"[$name] [elapsed $formattedElapse] interrupting...")
+        } yield ())
+      }
     }
 
     def log(name: String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
