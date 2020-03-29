@@ -33,7 +33,10 @@ object Dependencies {
   )
 
   val zioTestDeps = Seq(
-    "dev.zio" %% "zio-test" % ZIO_VERSION
+    "dev.zio" %% "zio-test" % ZIO_VERSION,
+    "dev.zio" %% "zio-test-sbt" % ZIO_VERSION,
+    "dev.zio" %% "zio-test-magnolia" % ZIO_VERSION,
+    "dev.zio" %% "zio-test-junit" % ZIO_VERSION
   )
 
   val squantsDeps = Seq(
@@ -105,6 +108,10 @@ object Dependencies {
     "org.lmdbjava" % "lmdbjava" % "0.7.0"
   )
 
+  val fdbDeps = Seq(
+    "org.foundationdb" % "fdb-java" % "6.2.15"
+  )
+
   val shapelessDeps = Seq(
     "com.chuusai" %% "shapeless" % "2.3.3"
   )
@@ -151,10 +158,6 @@ object Dependencies {
 
   val berkeleyDbDeps = Seq(
     "com.sleepycat" % "je" % "18.3.12"
-  )
-
-  val fdbDeps = Seq(
-    "org.foundationdb" % "fdb-java" % "6.2.10"
   )
 
   val magnoliaDeps = Seq(

@@ -15,9 +15,10 @@ ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
 ThisBuild / licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
 ThisBuild / bintrayReleaseOnPublish := false
-//ThisBuild / resolvers ++= Seq(
+ThisBuild / resolvers ++= Seq(
+  Resolver.bintrayRepo("shopstic", "maven")
 //  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
-//)
+)
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
@@ -94,6 +95,13 @@ lazy val kvdbRemote = Build
     libraryDependencies ++= akkaHttpDeps ++ snappyDeps
   )
   .dependsOn(kvdbCore)
+
+lazy val kvdbFdb = Build
+  .defineProject("kvdb-fdb")
+  .settings(
+    libraryDependencies ++= fdbDeps
+  )
+  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->compile")
 
 lazy val avro4s = Build
   .defineProject("avro4s")
