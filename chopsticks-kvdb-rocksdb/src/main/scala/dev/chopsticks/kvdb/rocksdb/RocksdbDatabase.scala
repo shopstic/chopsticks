@@ -173,8 +173,6 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
     val tunedOptions = options
       .setIncreaseParallelism(coreCount)
-      .setMaxBackgroundFlushes(coreCount)
-      .setMaxBackgroundCompactions(coreCount)
       .setMaxBackgroundJobs(coreCount)
       .setMaxSubcompactions(coreCount)
       .setMaxOpenFiles(-1)
