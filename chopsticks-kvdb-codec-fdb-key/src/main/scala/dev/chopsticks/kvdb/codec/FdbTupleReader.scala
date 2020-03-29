@@ -9,7 +9,7 @@ import com.apple.foundationdb.tuple.{Tuple, Versionstamp}
   * Intentionally not thread-safe.
   * @param tuple
   */
-final private[codec] class FdbTupleReader(tuple: Tuple) {
+final class FdbTupleReader(tuple: Tuple) {
   private var currentIndex = 0
 
   private def advanceIndex(): Int = {

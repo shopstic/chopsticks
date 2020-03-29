@@ -25,9 +25,9 @@ object FdbKeySerializer {
 
   implicit val stringFdbKeyEncoder: FdbKeySerializer[String] = create((o, v) => o.add(v))
   implicit val booleanFdbKeyEncoder: FdbKeySerializer[Boolean] = create((o, v) => o.add(v))
-  implicit val byteFdbKeyEncoder: FdbKeySerializer[Byte] = create((o, v) => o.add(v))
-  implicit val shortFdbKeyEncoder: FdbKeySerializer[Short] = create((o, v) => o.add(v))
-  implicit val intFdbKeyEncoder: FdbKeySerializer[Int] = create((o, v) => o.add(v))
+  implicit val byteFdbKeyEncoder: FdbKeySerializer[Byte] = create((o, v) => o.add(v.toLong))
+  implicit val shortFdbKeyEncoder: FdbKeySerializer[Short] = create((o, v) => o.add(v.toLong))
+  implicit val intFdbKeyEncoder: FdbKeySerializer[Int] = create((o, v) => o.add(v.toLong))
   implicit val longFdbKeyEncoder: FdbKeySerializer[Long] = create((o, v) => o.add(v))
   implicit val doubleFdbKeyEncoder: FdbKeySerializer[Double] = create((o, v) => o.add(v))
   implicit val floatFdbKeyEncoder: FdbKeySerializer[Float] = create((o, v) => o.add(v))
@@ -51,13 +51,13 @@ object FdbKeySerializer {
     create((o, v) => intFdbKeyEncoder.serialize(o, v.value))
 
   implicit def enumeratumByteEnumKeyEncoder[E <: ByteEnumEntry]: FdbKeySerializer[E] =
-    (o: Tuple, t: E) => o.add(t.value)
+    (o: Tuple, t: E) => o.add(t.value.toLong)
 
   implicit def enumeratumShortEnumKeyEncoder[E <: ShortEnumEntry]: FdbKeySerializer[E] =
-    (o: Tuple, t: E) => o.add(t.value)
+    (o: Tuple, t: E) => o.add(t.value.toLong)
 
   implicit def enumeratumIntEnumKeyEncoder[E <: IntEnumEntry]: FdbKeySerializer[E] =
-    (o: Tuple, t: E) => o.add(t.value)
+    (o: Tuple, t: E) => o.add(t.value.toLong)
 
   implicit def enumeratumEnumKeyEncoder[E <: EnumEntry]: FdbKeySerializer[E] =
     (o: Tuple, t: E) => o.add(t.entryName)
@@ -74,15 +74,10 @@ object FdbKeySerializer {
 
   def apply[V](implicit f: FdbKeySerializer[V]): FdbKeySerializer[V] = f
 
-  def create[T](f: (Tuple, T) => Tuple): FdbKeySerializer[T] = { (o: Tuple, t: T) =>
-    f(o, t)
-  }
+  def create[T](f: (Tuple, T) => Tuple): FdbKeySerializer[T] = { (o: Tuple, t: T) => f(o, t) }
 
   def combine[A](ctx: CaseClass[FdbKeySerializer, A]): FdbKeySerializer[A] =
-    (o: Tuple, a: A) =>
-      ctx.parameters.foldLeft(o) { (tuple, p) =>
-        p.typeclass.serialize(tuple, p.dereference(a))
-      }
+    (o: Tuple, a: A) => ctx.parameters.foldLeft(o) { (tuple, p) => p.typeclass.serialize(tuple, p.dereference(a)) }
 
   //noinspection MatchToPartialFunction
   implicit def deriveOption[T](implicit encoder: FdbKeySerializer[T]): FdbKeySerializer[Option[T]] = {
