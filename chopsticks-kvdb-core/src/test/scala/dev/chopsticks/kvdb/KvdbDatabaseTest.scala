@@ -94,7 +94,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   private lazy val lookupCf = dbMat.lookup
 
   private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
-  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](runtime, managedDb)
+  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](managedDb)(runtime)
 
   private def assertPair(pair: Option[KvdbPair], key: String, value: String): Assertion = {
     inside(pair) {

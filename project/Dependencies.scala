@@ -29,7 +29,9 @@ object Dependencies {
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
   val zioDeps = Seq(
-    "dev.zio" %% "zio" % ZIO_VERSION
+    "dev.zio" %% "zio" % ZIO_VERSION,
+    "dev.zio" %% "zio-streams" % ZIO_VERSION,
+    "dev.zio" %% "zio-logging-slf4j" % "0.2.6"
   )
 
   val zioTestDeps = Seq(

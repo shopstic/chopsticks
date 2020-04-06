@@ -163,10 +163,9 @@ object Dstreams extends LoggingContext {
   }
 
   def handle[Req, Res](
-    rt: zio.Runtime[AkkaEnv with DstreamEnv[Req, Res]],
     in: Source[Res, NotUsed],
     metadata: Metadata
-  ): Source[Req, NotUsed] = {
+  )(implicit rt: zio.Runtime[AkkaEnv with DstreamEnv[Req, Res]]): Source[Req, NotUsed] = {
     val env = rt.environment
     val akkaService = env.get[AkkaEnv.Service]
     import akkaService.{actorSystem, dispatcher}
@@ -176,7 +175,7 @@ object Dstreams extends LoggingContext {
       .preMaterialize()
 
     Source
-      .futureSource(rt.unsafeRunToFuture(env.get[DstreamEnv.Service[Req, Res]].enqueueWorker(inSource, metadata)))
+      .futureSource(env.get[DstreamEnv.Service[Req, Res]].enqueueWorker(inSource, metadata)).unsafeRunToFuture)
       .watchTermination() {
         case (_, f) =>
           f.onComplete {

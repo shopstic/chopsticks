@@ -60,9 +60,7 @@ object KvdbTestSampleApp extends AkkaApp {
             defaultCf
               .tailSource(_ >= LocalDate.now.getYear.toString, _.last)
               .viaMat(KillSwitches.single)(Keep.right)
-              .toMat(Sink.foreach { pair =>
-                log.info(s"tail: $pair")
-              })(Keep.both)
+              .toMat(Sink.foreach { pair => log.info(s"tail: $pair") })(Keep.both)
           },
           graceful = true
         )

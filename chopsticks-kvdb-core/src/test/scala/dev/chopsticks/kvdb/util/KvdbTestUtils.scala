@@ -7,6 +7,7 @@ import dev.chopsticks.kvdb.TestDatabase.BaseCf
 import org.scalatest.Assertion
 import zio.blocking.{blocking, Blocking}
 import zio.{RIO, Task, ZManaged}
+import dev.chopsticks.fp.zio_ext._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -19,14 +20,12 @@ object KvdbTestUtils {
   }
 
   def createTestRunner[Db](
-    rt: zio.Runtime[AkkaApp.Env],
     managed: ZManaged[AkkaApp.Env, Throwable, Db]
-  ): (Db => RIO[AkkaApp.Env, Assertion]) => Future[Assertion] = { (testCode: Db => RIO[AkkaApp.Env, Assertion]) =>
-    val task = managed
-      .use(testCode(_))
-      .provide(rt.environment)
-
-    rt.unsafeRunToFuture(task)
+  )(implicit rt: zio.Runtime[AkkaApp.Env]): (Db => RIO[AkkaApp.Env, Assertion]) => Future[Assertion] = {
+    (testCode: Db => RIO[AkkaApp.Env, Assertion]) =>
+      managed
+        .use(testCode(_))
+        .unsafeRunToFuture
   }
 
   def populateColumn[CF <: BaseCf[K, V], K, V](

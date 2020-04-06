@@ -91,6 +91,13 @@ trait AkkaApp extends LoggingContext {
         ConfigResolveOptions.defaults
       )
     )
+
+    if (!config.getBoolean("akka.coordinated-shutdown.run-by-jvm-shutdown-hook")) {
+      throw new IllegalArgumentException(
+        "'akka.coordinated-shutdown.run-by-jvm-shutdown-hook' is not set to 'on'. Check your HOCON application config."
+      )
+    }
+
     val akkaActorSystem = createActorSystem(appName, config)
     val appLayer = createEnv(config)
     val zioTracingEnabled = Try(config.getBoolean("zio.trace")).recover { case _ => true }.getOrElse(true)

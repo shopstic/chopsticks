@@ -14,6 +14,7 @@ import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbTailBatch, KvdbValue
 import dev.chopsticks.kvdb.util.KvdbClientOptions
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase}
 import dev.chopsticks.stream.AkkaStreamUtils
+import dev.chopsticks.fp.zio_ext._
 import zio.Task
 
 import scala.collection.immutable.Queue
@@ -121,25 +122,23 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
               else {
                 val uncachedIndices = uncachedIndicesBuilder.result()
 
-                rt.unsafeRunToFuture(
-                  db.batchGetTask(cf, uncachedRequests.toList)
-                    .map { pairs =>
-                      for ((maybePair, index) <- pairs.zipWithIndex) {
-                        val maybeValue = maybePair.map(p => cf.unsafeDeserializeValue(p._2))
-                        maybeValues(uncachedIndices(index)) = maybeValue
-                        cache.update(uncachedRequests(index), maybeValue)
-                      }
-
-                      keyBatch.zip(maybeValues)
+                db.batchGetTask(cf, uncachedRequests.toList)
+                  .map { pairs =>
+                    for ((maybePair, index) <- pairs.zipWithIndex) {
+                      val maybeValue = maybePair.map(p => cf.unsafeDeserializeValue(p._2))
+                      maybeValues(uncachedIndices(index)) = maybeValue
+                      cache.update(uncachedRequests(index), maybeValue)
                     }
-                )
+
+                    keyBatch.zip(maybeValues)
+                  }
+                  .unsafeRunToFuture
               }
             }
             else {
-              rt.unsafeRunToFuture(
-                db.batchGetTask(cf, requests)
-                  .map { maybePairs => keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2)))) }
-              )
+              db.batchGetTask(cf, requests)
+                .map { maybePairs => keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2)))) }
+                .unsafeRunToFuture
             }
 
             Some(future)
@@ -270,10 +269,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
       .mapAsync(1) {
         case (batch, serialized) =>
-          rt.unsafeRunToFuture(
-            db.transactionTask(serialized, sync)
-              .map(_ => batch)
-          )
+          db.transactionTask(serialized, sync)
+            .map(_ => batch)
+            .unsafeRunToFuture
       }
   }
 
@@ -329,10 +327,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
       .mapAsync(1) {
         case (batch, serialized) =>
-          rt.unsafeRunToFuture(
-            db.transactionTask(serialized, sync)
-              .as(batch)
-          )
+          db.transactionTask(serialized, sync)
+            .as(batch)
+            .unsafeRunToFuture
       }
   }
 

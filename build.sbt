@@ -42,14 +42,14 @@ lazy val fp = Build
   .settings(
     libraryDependencies ++= akkaStreamDeps ++ zioDeps
   )
-  .dependsOn(util, testkit % "test->compile")
+  .dependsOn(util, testkit % "test->test")
 
 lazy val stream = Build
   .defineProject("stream")
   .settings(
     libraryDependencies ++= catsCoreDeps /* ++ hamstersDeps.map(_ % Test)*/
   )
-  .dependsOn(fp, testkit % "test->compile")
+  .dependsOn(fp, testkit % "test->test")
 
 //lazy val dstream = Build
 //  .defineProject("dstream")
@@ -73,21 +73,21 @@ lazy val kvdbCore = Build
       "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
     )
   )
-  .dependsOn(util, fp, stream, testkit % "test->compile")
+  .dependsOn(util, fp, stream, testkit % "test->test")
 
 lazy val kvdbLmdb = Build
   .defineProject("kvdb-lmdb")
   .settings(
     libraryDependencies ++= lmdbDeps
   )
-  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->compile")
+  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
 
 lazy val kvdbRocksdb = Build
   .defineProject("kvdb-rocksdb")
   .settings(
     libraryDependencies ++= rocksdbDeps
   )
-  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->compile")
+  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
 
 lazy val kvdbRemote = Build
   .defineProject("kvdb-remote")
@@ -99,9 +99,11 @@ lazy val kvdbRemote = Build
 lazy val kvdbFdb = Build
   .defineProject("kvdb-fdb")
   .settings(
-    libraryDependencies ++= fdbDeps
+    libraryDependencies ++= fdbDeps,
+    testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
+    logBuffered := false
   )
-  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->compile")
+  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
 
 lazy val avro4s = Build
   .defineProject("avro4s")
@@ -115,14 +117,14 @@ lazy val kvdbCodecFdbKey = Build
   .settings(
     libraryDependencies ++= fdbDeps ++ magnoliaDeps ++ enumeratumDeps ++ refinedCoreDeps
   )
-  .dependsOn(kvdbCore, testkit % "test->compile")
+  .dependsOn(kvdbCore, testkit % "test->test")
 
 lazy val kvdbCodecBerkeleydbKey = Build
   .defineProject("kvdb-codec-berkeleydb-key")
   .settings(
     libraryDependencies ++= berkeleyDbDeps ++ magnoliaDeps ++ enumeratumDeps ++ refinedCoreDeps
   )
-  .dependsOn(kvdbCore, testkit % "test->compile")
+  .dependsOn(kvdbCore, testkit % "test->test")
 
 lazy val kvdbCodecProtobufValue = Build
   .defineProject("kvdb-codec-protobuf-value")
@@ -142,7 +144,14 @@ lazy val sample = Build
       "-P:silencer:pathFilters=dev/chopsticks/sample/app/proto"
     )
   )
-  .dependsOn(kvdbLmdb, kvdbRocksdb, kvdbCodecBerkeleydbKey, kvdbCodecProtobufValue /*, dstream*/ )
+  .dependsOn(
+    kvdbLmdb,
+    kvdbRocksdb,
+    kvdbCodecBerkeleydbKey,
+    kvdbCodecProtobufValue,
+    kvdbCodecFdbKey,
+    kvdbFdb /*, dstream*/
+  )
 
 lazy val root = (project in file("."))
   .settings(

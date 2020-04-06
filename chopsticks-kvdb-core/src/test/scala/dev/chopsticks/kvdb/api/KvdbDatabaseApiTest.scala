@@ -21,8 +21,8 @@ abstract class KvdbDatabaseApiTest
 //  protected def anotherCf: AnotherCf1
 
   private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
-  private lazy val withDb = KvdbTestUtils.createTestRunner(runtime, managedDb)
-  private lazy val withCf = KvdbTestUtils.createTestRunner(runtime, managedDb.map(_.columnFamily(dbMat.plain)))
+  private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb)(runtime)
+  private lazy val withCf = KvdbTestUtils.createTestRunner(managedDb.map(_.columnFamily(dbMat.plain)))(runtime)
 
   "open" should {
     "work" in withDb { db =>

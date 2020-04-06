@@ -39,6 +39,7 @@ import dev.chopsticks.kvdb.util.{
   KvdbTailSourceGraph
 }
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
+import dev.chopsticks.fp.zio_ext._
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import org.lmdbjava._
@@ -579,7 +580,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
                 .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, config.ioDispatcher))
           }
 
-        rt.unsafeRunToFuture(task)
+        task.unsafeRunToFuture
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -633,7 +634,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
               }
           }
 
-        rt.unsafeRunToFuture(task)
+        task.unsafeRunToFuture
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -714,7 +715,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
             }
           }
 
-        rt.unsafeRunToFuture(task)
+        task.unsafeRunToFuture
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
