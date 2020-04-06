@@ -6,6 +6,7 @@ import squants.time.Nanoseconds
 import zio._
 import zio.clock.Clock
 
+import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.language.implicitConversions
 
@@ -16,6 +17,17 @@ package object zio_ext {
     zio.duration.Duration.fromScala(d)
 
   type MeasuredLogging = LogEnv with Clock
+
+  implicit final class TaskExtensions[R >: Nothing, E <: Throwable, A](io: ZIO[R, E, A]) {
+    def unsafeRunToFuture(implicit rt: Runtime[R]): Future[A] = {
+      val promise = scala.concurrent.Promise[A]()
+      rt.unsafeRunAsync(io) {
+        case Exit.Success(value) => promise.success(value)
+        case Exit.Failure(cause) => promise.failure(cause.squashTrace)
+      }
+      promise.future
+    }
+  }
 
   implicit final class ZIOExtensions[R >: Nothing, E <: Any, A](io: ZIO[R, E, A]) {
     def logResult(name: String, result: A => String)(
