@@ -24,12 +24,12 @@ abstract class KvdbDatabaseApiTest
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb)(runtime)
   private lazy val withCf = KvdbTestUtils.createTestRunner(managedDb.map(_.columnFamily(dbMat.plain)))(runtime)
 
-  "open" should {
-    "work" in withDb { db =>
-      db.openTask()
-        .map(_ => assert(true))
-    }
-  }
+//  "open" should {
+//    "work" in withDb { db =>
+//      db.openTask()
+//        .map(_ => assert(true))
+//    }
+//  }
 
   "columnFamily" when {
     "getTask" should {

@@ -8,9 +8,7 @@ import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbClientOptions
-import dev.chopsticks.kvdb.util.KvdbException.KvdbAlreadyClosedException
-import zio.clock.Clock
-import zio.{Has, RIO, Task, ZIO, ZManaged}
+import zio.Task
 
 object KvdbDatabase {
   def keySatisfies(key: Array[Byte], constraints: List[KvdbKeyConstraint]): Boolean = {
@@ -37,17 +35,6 @@ object KvdbDatabase {
       }
     }
   }
-
-  def manage[R <: Has[_], BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
-    db: ZIO[R, Throwable, KvdbDatabase[BCF, CFS]]
-  ): ZManaged[R with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
-    ZManaged.make(db) {
-      _.closeTask().catchAll {
-        case _: KvdbAlreadyClosedException => ZIO.unit
-        case t => ZIO.die(t)
-      }
-    }
-  }
 }
 
 trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
@@ -65,8 +52,6 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
     materialization.columnFamilySet.value.map(c => (c.id, c)).toMap
 
   def columnFamilyWithId(id: String): Option[CF] = columnFamilyByIdMap.get(id)
-
-  def openTask(): Task[Unit]
 
   def getTask[Col <: CF](column: Col, constraints: KvdbKeyConstraintList): Task[Option[KvdbPair]]
 
@@ -106,6 +91,4 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
   ): Source[KvdbIndexedTailBatch, NotUsed]
 
   def dropColumnFamily[Col <: CF](column: Col): Task[Unit]
-
-  def closeTask(): RIO[Clock, Unit]
 }
