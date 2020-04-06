@@ -114,15 +114,15 @@ abstract private[kvdb] class KvdbDatabaseTest
 
   "wrong column family" should {
     "not compile" in withDb { db =>
-      db.openTask()
-        .map { _ =>
-          assertDoesNotCompile(
-            """
-            |object anotherCf extends dev.chopsticks.kvdb.TestDatabase.AnotherCf1
-            |db.putTask(anotherCf, "foo", "foo")
-            |""".stripMargin
-          )
-        }
+      Task {
+        val _ = db
+        assertDoesNotCompile(
+          """
+          |object anotherCf extends dev.chopsticks.kvdb.TestDatabase.AnotherCf1
+          |db.putTask(anotherCf, "foo", "foo")
+          |""".stripMargin
+        )
+      }
     }
   }
 
@@ -1055,18 +1055,18 @@ abstract private[kvdb] class KvdbDatabaseTest
       }
     }
 
-    "throw KvdbAlreadyClosedException if the (local) db is already closed" in withDb { db =>
-      for {
-        _ <- db.closeTask()
-        correctBehavior <- db.statsTask
-          .map(_ => !db.isLocal)
-          .catchAll {
-            case _: KvdbAlreadyClosedException => UIO.succeed(true)
-            case _ => UIO.succeed(false)
-          }
-      } yield {
-        correctBehavior should equal(true)
-      }
-    }
+//    "throw KvdbAlreadyClosedException if the (local) db is already closed" in withDb { db =>
+//      for {
+//        _ <- db.closeTask()
+//        correctBehavior <- db.statsTask
+//          .map(_ => !db.isLocal)
+//          .catchAll {
+//            case _: KvdbAlreadyClosedException => UIO.succeed(true)
+//            case _ => UIO.succeed(false)
+//          }
+//      } yield {
+//        correctBehavior should equal(true)
+//      }
+//    }
   }
 }

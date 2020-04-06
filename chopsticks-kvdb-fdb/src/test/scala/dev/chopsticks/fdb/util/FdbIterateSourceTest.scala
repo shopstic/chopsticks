@@ -7,7 +7,6 @@ import zio.duration._
 import zio.logging.Logging.Logging
 import zio.logging.slf4j.Slf4jLogger
 import zio.logging.{log, LogAnnotation, LogLevel}
-import zio.stream.Stream
 import zio.test.Assertion._
 import zio.test._
 import zio.test.environment.{testEnvironment, TestEnvironment}
@@ -49,13 +48,13 @@ object FdbIterateSourceTest extends RunnableSpec[TestEnvironment with Logging, A
         _ <- log("foo end")
       } yield assert(foo)(equalTo("foo"))
 
-//      log.locally(
-//        LogAnnotation.Level(LogLevel.Info) andThen
-//          LogAnnotation.Name("logger-name-here" :: "bleh" :: Nil) andThen
-//          LogAnnotation.CorrelationId(Some(UUID.randomUUID()))
-//      ) {
-      eff
-//      }
+      log.locally(
+        LogAnnotation.Level(LogLevel.Info) andThen
+          LogAnnotation.Name("logger-name-here" :: "bleh" :: Nil) andThen
+          LogAnnotation.CorrelationId(Some(UUID.randomUUID()))
+      ) {
+        eff
+      }
     },
     testM("bar") {
       for {

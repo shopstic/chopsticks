@@ -4,7 +4,7 @@ import dev.chopsticks.fp.AkkaApp
 import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, LookupCf, PlainCf}
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbTestUtils
-import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabase, KvdbDatabaseTest, TestDatabase}
+import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest, TestDatabase}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import squants.information.InformationConversions._
@@ -22,15 +22,13 @@ object LmdbDatabaseTest {
   val managedDb: ZManaged[AkkaApp.Env, Throwable, TestDatabase.Db] = {
     for {
       dir <- KvdbTestUtils.managedTempDir
-      db <- KvdbDatabase.manage(
-        LmdbDatabase(
-          dbMaterialization,
-          LmdbDatabase.Config(
-            path = NonEmptyString.unsafeFrom(dir.pathAsString),
-            maxSize = 64.mib,
-            noSync = false,
-            ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
-          )
+      db <- LmdbDatabase.manage(
+        dbMaterialization,
+        LmdbDatabase.Config(
+          path = NonEmptyString.unsafeFrom(dir.pathAsString),
+          maxSize = 64.mib,
+          noSync = false,
+          ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
         )
       )
     } yield db

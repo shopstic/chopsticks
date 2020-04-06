@@ -3,8 +3,7 @@ package dev.chopsticks.kvdb.api
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.TransactionAction
 import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilyTransactionBuilder, KvdbDatabase}
-import zio.clock.Clock
-import zio.{RIO, Task, ZIO}
+import zio.{Task, ZIO}
 
 object KvdbDatabaseApi {
   def apply[BCF[A, B] <: ColumnFamily[A, B]](
@@ -21,14 +20,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (val db: Kv
     new KvdbColumnFamilyApi[BCF, CF2, K, V](db, col)
   }
 
-  def openTask(): Task[this.type] = {
-    db.openTask()
-      .as(this)
-  }
-
   def statsTask: Task[Map[(String, Map[String, String]), Double]] = db.statsTask
-
-  def closeTask(): RIO[Clock, Unit] = db.closeTask()
 
   def transactionTask(actions: Seq[TransactionAction], sync: Boolean = false): Task[Seq[TransactionAction]] = {
     db.transactionTask(actions, sync)

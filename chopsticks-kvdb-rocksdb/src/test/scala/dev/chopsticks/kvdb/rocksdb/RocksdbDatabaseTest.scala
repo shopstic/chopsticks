@@ -5,7 +5,7 @@ import dev.chopsticks.kvdb.TestDatabase._
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern}
 import dev.chopsticks.kvdb.util.KvdbTestUtils
-import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabase, KvdbDatabaseTest}
+import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import squants.information.InformationConversions._
@@ -43,20 +43,18 @@ object RocksdbDatabaseTest {
   val managedDb: ZManaged[AkkaApp.Env, Throwable, Db] = {
     for {
       dir <- KvdbTestUtils.managedTempDir
-      db <- KvdbDatabase.manage {
-        RocksdbDatabase(
-          dbMaterialization,
-          RocksdbDatabase.Config(
-            path = NonEmptyString.unsafeFrom(dir.pathAsString),
-            readOnly = false,
-            startWithBulkInserts = false,
-            checksumOnRead = true,
-            syncWriteBatch = true,
-            useDirectIo = true,
-            ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
-          )
+      db <- RocksdbDatabase.manage(
+        dbMaterialization,
+        RocksdbDatabase.Config(
+          path = NonEmptyString.unsafeFrom(dir.pathAsString),
+          readOnly = false,
+          startWithBulkInserts = false,
+          checksumOnRead = true,
+          syncWriteBatch = true,
+          useDirectIo = true,
+          ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
         )
-      }
+      )
     } yield db
   }
 }
