@@ -6,7 +6,7 @@ variables:
 build:
   stage: build
   cache:
-    key: test-cache-key
+    key: coursier-cache
     paths:
       - ${COURSIER_CACHE}
   script:
