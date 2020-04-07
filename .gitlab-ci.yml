@@ -1,0 +1,16 @@
+image: shopstic/jre11-sbt:1.3.9
+
+variables:
+  COURSIER_CACHE: "${CI_PROJECT_DIR}/.coursier/"
+
+build:
+  stage: build
+  cache:
+    key: test-cache-key
+    paths:
+      - ${COURSIER_CACHE}
+  script:
+    - sbt compile test:compile test cq
+
+stages:
+  - build
