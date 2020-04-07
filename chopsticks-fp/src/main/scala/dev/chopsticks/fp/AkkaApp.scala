@@ -49,7 +49,7 @@ object AkkaApp extends LoggingContext {
         private val isShuttingDown = new AtomicBoolean(false)
 
         override def reportFailure(cause: Cause[Any]): Unit = {
-          if (!cause.interrupted && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
+          if (cause.died && shutdown.shutdownReason.isEmpty && isShuttingDown.compareAndSet(false, true)) {
             loggerService.logger.error("Application failure:\n" + cause.prettyPrint)
             val _ = shutdown.run(JvmExitReason)
           }

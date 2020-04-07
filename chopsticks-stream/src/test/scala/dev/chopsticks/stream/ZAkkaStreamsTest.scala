@@ -5,9 +5,10 @@ import java.util.concurrent.TimeUnit
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{Attributes, KillSwitches}
-import dev.chopsticks.fp.AkkaApp
+import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
+import dev.chopsticks.fp.{AkkaApp, ZService}
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClock, ManualTimeAkkaTestKit}
@@ -30,7 +31,8 @@ final class ZAkkaStreamsTest
     with AsyncWordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown
-    with ScalaFutures {
+    with ScalaFutures
+    with StrictLogging {
   type Env = AkkaEnv with TestClock with Clock with Blocking
 
   private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Assertion] = {
@@ -49,31 +51,42 @@ final class ZAkkaStreamsTest
   }
 
   "interruptibleLazySource" should {
-    "interrupt effect" in withEffect {
+    "behaves like a normal source" in withEffect {
       for {
-        clock <- ZIO.access[TestClock](_.get[TestClock.Service]).map(c => new ManualClock(Some(c)))
-        startP <- zio.Promise.make[Nothing, Unit]
-        startFuture <- startP.await.toFuture
-        interruptedP <- zio.Promise.make[Nothing, Unit]
-        interruptedFuture <- interruptedP.await.toFuture
         source <- ZAkkaStreams.interruptibleLazySource {
-          startP.succeed(()) *> ZIO
-            .succeed(1)
-            .delay(zio.duration.Duration(3, TimeUnit.SECONDS))
-            .onInterrupt(interruptedP.succeed(()))
+          ZIO.succeed(1)
         }
-        _ <- blocking(Task {
-          val ks = source
-            .viaMat(KillSwitches.single)(Keep.right)
-            .toMat(Sink.ignore)(Keep.left)
-            .run
+        ret <- Task.fromFuture(_ => source.runWith(Sink.head))
+      } yield ret shouldBe 1
+    }
 
-          whenReady(startFuture, Timeout(Span(1, Seconds)))(identity)
-          ks.shutdown()
-          clock.timePasses(3.seconds)
-          whenReady(interruptedFuture, Timeout(Span(1, Seconds)))(identity)
-        })
-      } yield Succeeded
+    "interrupt the effect if the stream completes before the source emits" in withEffect {
+      for {
+        startP <- zio.Promise.make[Nothing, Unit]
+        interruptedP <- zio.Promise.make[Nothing, Unit]
+        source <- ZAkkaStreams.interruptibleLazySource {
+          startP.succeed(()) *>
+            ZIO
+              .succeed(1)
+              .delay(zio.duration.Duration(3, TimeUnit.SECONDS))
+              .onInterrupt(interruptedP.succeed(()))
+        }
+        mat <- UIO {
+          source
+            .viaMat(KillSwitches.single)(Keep.right)
+            .toMat(Sink.ignore)(Keep.both)
+            .run
+        }
+        (ks, future) = mat
+        _ <- startP.await
+        _ <- UIO(ks.shutdown())
+        _ <- interruptedP.await
+        ret <- Task.fromFuture(_ => future).either
+      } yield {
+        ret should matchPattern {
+          case Right(akka.Done) =>
+        }
+      }
     }
   }
 
