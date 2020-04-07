@@ -11,8 +11,10 @@ import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClock, ManualTimeAkkaTestKit}
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Seconds, Span}
 import org.scalatest.wordspec.AsyncWordSpecLike
 import org.scalatest.{Assertion, Succeeded}
 import zio.blocking._
@@ -66,10 +68,10 @@ final class ZAkkaStreamsTest
             .toMat(Sink.ignore)(Keep.left)
             .run
 
-          whenReady(startFuture)(identity)
+          whenReady(startFuture, Timeout(Span(1, Seconds)))(identity)
           ks.shutdown()
           clock.timePasses(3.seconds)
-          whenReady(interruptedFuture)(identity)
+          whenReady(interruptedFuture, Timeout(Span(1, Seconds)))(identity)
         })
       } yield Succeeded
     }
