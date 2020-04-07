@@ -6,9 +6,7 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink}
 import com.typesafe.config.Config
 import dev.chopsticks.fp._
-import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
-import dev.chopsticks.kvdb.KvdbDatabase
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.berkeleydb_key._
 import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
@@ -17,8 +15,6 @@ import dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits._
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
-import zio.blocking.Blocking
-import zio.clock.Clock
 import zio.{Has, RIO, ZLayer}
 
 object KvdbTestSampleApp extends AkkaApp {
