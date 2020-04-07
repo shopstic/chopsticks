@@ -10,8 +10,7 @@ build:
     paths:
       - ${COURSIER_CACHE}
   script:
-#    - sbt compile test:compile test cq
-    - ./test.sh
+    - sbt compile test:compile test cq
 
 stages:
   - build
