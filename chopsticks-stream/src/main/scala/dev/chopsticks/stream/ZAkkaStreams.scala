@@ -219,19 +219,16 @@ object ZAkkaStreams {
 
       Source
         .lazySource(() => {
-          val completionPromise = rt.unsafeRun(zio.Promise.make[Nothing, Unit])
-
-          val interruptibleTask = for {
-            fib <- effect.fork
-            c <- (completionPromise.await *> fib.interrupt).fork
-            ret <- fib.join
-            _ <- c.interrupt
-          } yield ret
+          val completionPromise = scala.concurrent.Promise[Either[Throwable, B]]()
+          val task = effect.either race Task.fromFuture(_ => completionPromise.future)
 
           Source
-            .future(interruptibleTask.unsafeRunToFuture)
+            .future(task.flatMap(Task.fromEither(_)).unsafeRunToFuture)
             .watchTermination() { (_, f) =>
-              f.onComplete { _ => val _ = rt.unsafeRun(completionPromise.succeed(())) }
+              f.onComplete { _ =>
+                val _ =
+                  completionPromise.success(Left(new InterruptedException("interruptibleLazySource was interrupted")))
+              }
               NotUsed
             }
         })

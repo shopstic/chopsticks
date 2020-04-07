@@ -32,7 +32,9 @@ final case class FixedTestClock(original: TestClock.Test) extends TestClock.Serv
 
   override def runAll: UIO[Unit] = original.runAll
 
-  override def adjust(duration: zio.duration.Duration): UIO[Unit] = original.adjust(duration)
+  override def adjust(duration: zio.duration.Duration): UIO[Unit] = {
+    original.adjust(duration)
+  }
 
   override def setTime(duration: zio.duration.Duration): UIO[Unit] = original.setTime(duration)
 
@@ -52,7 +54,7 @@ final case class FixedTestClock(original: TestClock.Test) extends TestClock.Serv
     for {
       currentDuration <- original.clockState.get.map(_.duration)
       _ <- original.fiberState.updateSome {
-        case FiberData(durtion, tz) if durtion.isZero => FiberData(currentDuration, tz)
+        case FiberData(duration, tz) if duration.isZero => FiberData(currentDuration, tz)
       }
       ret <- original.sleep(duration)
     } yield ret
