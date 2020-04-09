@@ -3,7 +3,10 @@ package dev.chopsticks.kvdb.codec
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, YearMonth}
 import java.util.UUID
 
-import com.apple.foundationdb.tuple.Tuple
+import com.apple.foundationdb.tuple.{ByteArrayUtil, Tuple}
+import dev.chopsticks.kvdb.codec.KeyDeserializer.GenericKeyDeserializationException
+
+import scala.util.control.NonFatal
 
 package object fdb_key {
   implicit def fdbKeySerializer[T](
@@ -12,7 +15,26 @@ package object fdb_key {
 
   implicit def fdbKeyDeserializer[T](implicit deserializer: FdbKeyDeserializer[T]): KeyDeserializer[T] = {
     bytes: Array[Byte] =>
-      deserializer.deserialize(new FdbTupleReader(Tuple.fromBytes(bytes)))
+      {
+        val reader =
+          try {
+            new FdbTupleReader(Tuple.fromBytes(bytes))
+          }
+          catch {
+            case NonFatal(e) =>
+              throw GenericKeyDeserializationException(
+                s"""
+               |Failed decoding tuple: ${e.toString}
+               |------------------------------------------------
+               |Raw bytes: ${ByteArrayUtil.printable(bytes)}
+               |------------------------------------------------
+               |""".stripMargin,
+                e
+              )
+          }
+
+        deserializer.deserialize(reader)
+      }
   }
 
   implicit val stringKeySerdes = KeySerdes[String]

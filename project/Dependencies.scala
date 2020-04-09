@@ -163,7 +163,7 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.12.8"
+    "com.propensive" %% "magnolia" % "0.14.1"
   )
 
   val pprintDeps = Seq(

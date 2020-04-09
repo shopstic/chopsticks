@@ -1,4 +1,4 @@
-package dev.chopsticks.fdb.util
+package dev.chopsticks.kvdb.fdb
 
 import akka.stream.stage.{AsyncCallback, GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
@@ -6,8 +6,10 @@ import com.apple.foundationdb.async.{AsyncIterator, AsyncUtil}
 import com.apple.foundationdb.{Database, ReadTransaction, Transaction}
 
 import scala.concurrent.ExecutionContextExecutor
+import scala.jdk.FutureConverters._
+import scala.util.{Failure, Success}
 
-final class FdbIterateGraphStage[V](db: Database, iterate: ReadTransaction => AsyncIterator[V])
+final class FdbIterateSourceGraphStage[V](db: Database, iterate: ReadTransaction => AsyncIterator[V])
     extends GraphStage[SourceShape[V]] {
   private val out: Outlet[V] = Outlet[V]("FdbIterateGraphStage.out")
   override val shape: SourceShape[V] = SourceShape(out)
@@ -62,14 +64,12 @@ final class FdbIterateGraphStage[V](db: Database, iterate: ReadTransaction => As
                 completeStage()
               }
               else {
-                val _ = future.whenComplete { (hasNext, exception) =>
-                  if (exception eq null) {
+                future.asScala onComplete {
+                  case Success(hasNext) =>
                     if (hasNext) onIteratorNext.invoke(iterator.next())
                     else onIteratorComplete.invoke(())
-                  }
-                  else {
+                  case Failure(exception) =>
                     onIteratorFailure.invoke(exception)
-                  }
                 }
               }
             }

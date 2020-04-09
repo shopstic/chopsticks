@@ -40,8 +40,6 @@ object KvdbDatabase {
 trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
   type CF = BCF[_, _]
 
-  def isLocal: Boolean
-
   def materialization: KvdbMaterialization[BCF, CFS]
 
   def transactionBuilder(): ColumnFamilyTransactionBuilder[BCF] = new ColumnFamilyTransactionBuilder[BCF]

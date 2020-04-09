@@ -50,12 +50,12 @@ object KeyConstraints {
       val decodedDisplay = r.operandDisplay
 
       r.operator match {
-        case Operator.GREATER => s"> $decodedDisplay"
-        case Operator.GREATER_EQUAL => s">= $decodedDisplay"
-        case Operator.LESS => s"< $decodedDisplay"
-        case Operator.LESS_EQUAL => s"<= $decodedDisplay"
+        case Operator.GREATER => s"GREATER_THAN $decodedDisplay"
+        case Operator.GREATER_EQUAL => s"GREATER_OR_EQUAL $decodedDisplay"
+        case Operator.LESS => s"LESS_THAN $decodedDisplay"
+        case Operator.LESS_EQUAL => s"LESS_OR_EQUAL $decodedDisplay"
         case Operator.EQUAL => s"== $decodedDisplay"
-        case Operator.PREFIX => s"^= $decodedDisplay"
+        case Operator.PREFIX => s"STARTS_WITH $decodedDisplay"
         case Operator.FIRST => "FIRST"
         case Operator.LAST => "LAST"
         case _ => "UNKNOWN"
@@ -87,9 +87,13 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
     )
   }
 
+  def gtEq[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = >=(v)
+
   def >[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(constraints enqueue KvdbKeyConstraint(Operator.GREATER, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
   }
+
+  def gt[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = >(v)
 
   def is(v: K)(implicit e: KeySerdes[K]): KeyConstraints[K] = {
     copy(constraints enqueue KvdbKeyConstraint(Operator.EQUAL, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
@@ -106,9 +110,13 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
     )
   }
 
+  def ltEq[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = <=(v)
+
   def <[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(constraints enqueue KvdbKeyConstraint(Operator.LESS, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
   }
+
+  def lt[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = <(v)
 
   def ^<=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(
@@ -123,6 +131,8 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
   def ^=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(constraints enqueue KvdbKeyConstraint(Operator.PREFIX, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
   }
+
+  def startsWith[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = ^=(v)
 
   def first: KeyConstraints[K] = {
     assert(constraints.isEmpty, s"Calling first with a non-empty constraint list: $constraints")

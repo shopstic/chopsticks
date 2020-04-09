@@ -414,10 +414,9 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     finally closeCursor(cursor)
   }
 
-  val isLocal: Boolean = true
   private val emptyLabels = Map.empty[String, String]
 
-  def statsTask: Task[Map[(String, Map[String, String]), Double]] = {
+  override def statsTask: Task[Map[(String, Map[String, String]), Double]] = {
     readTask(obtainContext.map { refs =>
       val info = refs.env.info()
 
@@ -450,9 +449,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     })
   }
 
-  def openTask(): Task[Unit] = obtainContext.map(_ => ())
-
-  def getTask[Col <: CF](column: Col, constraints: KvdbKeyConstraintList): Task[Option[KvdbPair]] = {
+  override def getTask[Col <: CF](column: Col, constraints: KvdbKeyConstraintList): Task[Option[KvdbPair]] = {
     readTask(obtainContext.map { refs =>
       val txn = createTxn(refs.env)
 
@@ -470,7 +467,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     })
   }
 
-  def batchGetTask[Col <: CF](
+  override def batchGetTask[Col <: CF](
     column: Col,
     requests: Seq[KvdbKeyConstraintList]
   ): Task[Seq[Option[KvdbPair]]] = {
@@ -490,7 +487,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     })
   }
 
-  def estimateCount[Col <: CF](column: Col): Task[Long] = {
+  override def estimateCount[Col <: CF](column: Col): Task[Long] = {
     readTask(obtainContext.map { refs =>
       val txn = createTxn(refs.env)
       try {
@@ -500,7 +497,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     })
   }
 
-  def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
+  override def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
     writeTask(
       obtainContext
         .map { refs =>
@@ -514,7 +511,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     )
   }
 
-  def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit] = {
+  override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit] = {
     writeTask(for {
       refs <- obtainContext
       _ <- Task {
@@ -530,7 +527,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     } yield ())
   }
 
-  def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long] = {
+  override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long] = {
     writeTask(for {
       refs <- obtainContext
       count <- Task {
@@ -547,7 +544,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     } yield count)
   }
 
-  def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbBatch, NotUsed] = {
     Source
@@ -616,14 +613,14 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  override def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbValueBatch, NotUsed] = {
     iterateSource(column, range)
       .map(_.map(_._2))
   }
 
-  def concurrentTailSource[Col <: CF](
+  override def concurrentTailSource[Col <: CF](
     column: Col,
     ranges: List[KvdbKeyRange]
   )(
@@ -726,7 +723,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       .fromGraph(new KvdbTailSourceGraph(init, refs.dbCloseSignal, config.ioDispatcher))
   }
 
-  def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbTailBatch, NotUsed] = {
     Source
@@ -751,7 +748,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  def tailValueSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  override def tailValueSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbTailValueBatch, NotUsed] = {
     tailSource(column, range)
@@ -759,7 +756,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  def transactionTask(actions: Seq[TransactionAction], sync: Boolean): Task[Unit] = {
+  override def transactionTask(actions: Seq[TransactionAction], sync: Boolean): Task[Unit] = {
     writeTask(for {
       refs <- obtainContext
       _ <- Task {
@@ -784,7 +781,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     } yield ())
   }
 
-  def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {
+  override def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {
     writeTask(for {
       refs <- obtainContext
       _ <- Task {
