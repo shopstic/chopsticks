@@ -26,6 +26,7 @@ object KvdbTestSampleApp extends AkkaApp {
 
   object sampleDb extends SampleDb.Materialization {
     object default extends SampleDb.Default
+    object test extends SampleDb.Test
     object time extends SampleDb.Time
   }
 

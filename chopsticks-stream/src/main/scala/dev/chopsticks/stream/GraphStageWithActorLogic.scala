@@ -3,7 +3,7 @@ package dev.chopsticks.stream
 import akka.actor.ActorRef
 import akka.stream.stage.{GraphStageLogic, StageLogging}
 
-trait CommonGraphStageLogic extends StageLogging {
+trait GraphStageWithActorLogic extends StageLogging {
   this: GraphStageLogic =>
 
   type Receive = PartialFunction[Any, Unit]

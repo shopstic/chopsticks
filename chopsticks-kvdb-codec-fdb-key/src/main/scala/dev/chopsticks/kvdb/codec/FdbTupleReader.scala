@@ -53,4 +53,6 @@ final class FdbTupleReader(tuple: Tuple) {
   def getVersionStamp: Versionstamp = {
     tuple.getVersionstamp(advanceIndex())
   }
+
+  override def toString: String = s"currentIndex=${currentIndex} tuple=${tuple.toString}"
 }

@@ -145,7 +145,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     "block-cache-pinned-usage"
   ).map(n => (n, "rocksdb_cf_" + n.replaceAllLiterally("-", "_")))
 
-  def statsTask: Task[Map[(String, Map[String, String]), Double]] = references.map { refs =>
+  override def statsTask: Task[Map[(String, Map[String, String]), Double]] = references.map { refs =>
     val tickers = TickerType
       .values()
       .filter(_ != TickerType.TICKER_ENUM_MAX)
@@ -315,7 +315,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     }
   }
 
-  def getTask[Col <: CF](column: Col, constraintList: KvdbKeyConstraintList): Task[Option[KvdbPair]] = {
+  override def getTask[Col <: CF](column: Col, constraintList: KvdbKeyConstraintList): Task[Option[KvdbPair]] = {
     ioTask(references.map { refs =>
       val db = refs.db
       val columnHandle = refs.getColumnHandle(column)
@@ -342,7 +342,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     })
   }
 
-  def batchGetTask[Col <: CF](
+  override def batchGetTask[Col <: CF](
     column: Col,
     requests: Seq[KvdbKeyConstraintList]
   ): Task[Seq[Option[KvdbPair]]] = {
@@ -372,7 +372,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     })
   }
 
-  def estimateCount[Col <: CF](column: Col): Task[Long] = {
+  override def estimateCount[Col <: CF](column: Col): Task[Long] = {
     ioTask(references.map { refs =>
       val columnHandle = refs.getColumnHandle(column)
       refs.db.getProperty(columnHandle, ESTIMATE_NUM_KEYS).toLong
@@ -383,7 +383,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     db.put(columnHandle, key, value)
   }
 
-  def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
+  override def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
     ioTask(references.map { refs => doPut(refs.db, refs.getColumnHandle(column), key, value) })
   }
 
@@ -391,7 +391,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     db.delete(columnHandle, key)
   }
 
-  def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit] = {
+  override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit] = {
     ioTask(references.map { refs => doDelete(refs.db, refs.getColumnHandle(column), key) })
   }
 
@@ -433,7 +433,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     }
   }
 
-  def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long] = {
+  override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long] = {
     ioTask(references.map { refs =>
       val columnHandle = refs.getColumnHandle(column)
       val db = refs.db
@@ -478,14 +478,14 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     }
   }
 
-  def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  override def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbValueBatch, NotUsed] = {
     iterateSource(column, range)
       .map(_.map(_._2))
   }
 
-  def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbBatch, NotUsed] = {
     Source
@@ -634,7 +634,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .fromGraph(new KvdbTailSourceGraph(init, dbCloseSignal, config.ioDispatcher))
   }
 
-  def concurrentTailSource[Col <: CF](
+  override def concurrentTailSource[Col <: CF](
     column: Col,
     ranges: List[KvdbKeyRange]
   )(
@@ -681,7 +681,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
+  override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbTailBatch, NotUsed] = {
     Source
@@ -705,7 +705,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .flatMapConcat(identity)
   }
 
-  def tailValueSource[Col <: CF](
+  override def tailValueSource[Col <: CF](
     column: Col,
     range: KvdbKeyRange
   )(implicit clientOptions: KvdbClientOptions): Source[KvdbTailValueBatch, NotUsed] = {
@@ -714,7 +714,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   }
 
 //  @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  def transactionTask(actions: Seq[TransactionAction], sync: Boolean): Task[Unit] = {
+  override def transactionTask(actions: Seq[TransactionAction], sync: Boolean): Task[Unit] = {
     ioTask(references.map { refs =>
       val db = refs.db
       val writeBatch = new WriteBatch()
@@ -763,7 +763,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     })
   }
 
-  def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {
+  override def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {
     ioTask(references.map { refs =>
       logger.info(s"Dropping column family: ${getColumnFamilyName(column)}")
       refs.db.dropColumnFamily(refs.getColumnHandle(column))

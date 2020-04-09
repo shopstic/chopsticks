@@ -32,7 +32,17 @@ object FdbKeyDeserializer {
       try Right(f(in))
       catch {
         case NonFatal(e) =>
-          Left(GenericKeyDeserializationException(s"Failed decoding to ${typ.describe}: ${e.toString}", e))
+          Left(
+            GenericKeyDeserializationException(
+              s"""
+                |Failed decoding to ${typ.describe}: ${e.toString}
+                |------------------------------------------------
+                |Details: ${in.toString}
+                |------------------------------------------------
+                |""".stripMargin,
+              e
+            )
+          )
       }
     }
 
@@ -87,7 +97,7 @@ object FdbKeyDeserializer {
           case NonFatal(e) =>
             Left(GenericKeyDeserializationException(s"Failed decoding to proto enum ${typ.describe}: ${e.toString}", e))
         }
-    }
+      }
 
   implicit def enumeratumByteEnumKeyDecoder[E <: ByteEnumEntry](
     implicit e: ByteEnum[E]
@@ -148,8 +158,6 @@ object FdbKeyDeserializer {
   implicit def gen[T]: FdbKeyDeserializer[T] = macro Magnolia.gen[T]
 
   def combine[A](ctx: CaseClass[FdbKeyDeserializer, A]): FdbKeyDeserializer[A] = (in: FdbTupleReader) => {
-    ctx.constructMonadic { param =>
-      param.typeclass.deserialize(in)
-    }
+    ctx.constructMonadic { param => param.typeclass.deserialize(in) }
   }
 }
