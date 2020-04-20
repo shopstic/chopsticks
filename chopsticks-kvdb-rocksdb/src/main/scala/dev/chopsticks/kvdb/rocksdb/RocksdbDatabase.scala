@@ -478,13 +478,6 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     }
   }
 
-  override def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, NotUsed] = {
-    iterateSource(column, range)
-      .map(_.map(_._2))
-  }
-
   override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbBatch, NotUsed] = {
@@ -703,14 +696,6 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
         rt.unsafeRunToFuture(task)
       })
       .flatMapConcat(identity)
-  }
-
-  override def tailValueSource[Col <: CF](
-    column: Col,
-    range: KvdbKeyRange
-  )(implicit clientOptions: KvdbClientOptions): Source[KvdbTailValueBatch, NotUsed] = {
-    tailSource(column, range)
-      .map(_.map(_.map(_._2)))
   }
 
 //  @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))

@@ -24,7 +24,7 @@ object LmdbDatabaseTest {
       dir <- KvdbTestUtils.managedTempDir
       db <- LmdbDatabase.manage(
         dbMaterialization,
-        LmdbDatabase.Config(
+        LmdbDatabase.LmdbDatabaseConfig(
           path = NonEmptyString.unsafeFrom(dir.pathAsString),
           maxSize = 64.mib,
           noSync = false,

@@ -77,7 +77,7 @@ object KeyConstraints {
 //noinspection ScalaStyle
 // scalastyle:off
 final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue.empty) {
-  def >=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
+  def gtEq[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(
       constraints enqueue KvdbKeyConstraint(
         Operator.GREATER_EQUAL,
@@ -87,13 +87,13 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
     )
   }
 
-  def gtEq[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = >=(v)
+  def >=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = gtEq(v)
 
-  def >[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
+  def gt[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(constraints enqueue KvdbKeyConstraint(Operator.GREATER, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
   }
 
-  def gt[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = >(v)
+  def >[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = gt(v)
 
   def is(v: K)(implicit e: KeySerdes[K]): KeyConstraints[K] = {
     copy(constraints enqueue KvdbKeyConstraint(Operator.EQUAL, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
@@ -104,21 +104,21 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
     copy(constraints enqueue KvdbKeyConstraint(Operator.EQUAL, ProtoByteString.copyFrom(e.encode(v)), v.toString))
   }*/
 
-  def <=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
+  def ltEq[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(
       constraints enqueue KvdbKeyConstraint(Operator.LESS_EQUAL, ProtoByteString.copyFrom(e.serialize(v)), v.toString)
     )
   }
 
-  def ltEq[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = <=(v)
+  def <=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = ltEq(v)
 
-  def <[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
+  def lt[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(constraints enqueue KvdbKeyConstraint(Operator.LESS, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
   }
 
-  def lt[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = <(v)
+  def <[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = lt(v)
 
-  def ^<=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
+  def lastStartsWith[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(
       constraints enqueue KvdbKeyConstraint(
         Operator.LESS_EQUAL,
@@ -128,11 +128,13 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
     )
   }
 
-  def ^=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
+  def ^<=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = lastStartsWith(v)
+
+  def startsWith[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(constraints enqueue KvdbKeyConstraint(Operator.PREFIX, ProtoByteString.copyFrom(e.serialize(v)), v.toString))
   }
 
-  def startsWith[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = ^=(v)
+  def ^=[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = startsWith(v)
 
   def first: KeyConstraints[K] = {
     assert(constraints.isEmpty, s"Calling first with a non-empty constraint list: $constraints")

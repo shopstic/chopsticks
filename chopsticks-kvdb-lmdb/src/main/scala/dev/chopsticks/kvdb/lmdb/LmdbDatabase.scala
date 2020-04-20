@@ -50,17 +50,18 @@ import scala.util.control.{ControlThrowable, NonFatal}
 object LmdbDatabase extends StrictLogging {
   type PutBatch = Seq[(Dbi[ByteBuffer], Array[Byte], Array[Byte])]
 
-  final case class Config(
+  final case class LmdbDatabaseConfig(
     path: NonEmptyString,
     maxSize: Information,
     noSync: Boolean,
     ioDispatcher: NonEmptyString
   )
-  object Config {
+
+  object LmdbDatabaseConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
     import eu.timepit.refined.pureconfig._
     //noinspection TypeAnnotation
-    implicit val configConvert = ConfigConvert[Config]
+    implicit val configConvert = ConfigConvert[LmdbDatabaseConfig]
   }
 
   final case class FatalError(message: String, cause: Throwable) extends ControlThrowable(message)
@@ -135,7 +136,7 @@ object LmdbDatabase extends StrictLogging {
 
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS],
-    config: Config
+    config: LmdbDatabaseConfig
   ): ZManaged[AkkaEnv with Blocking with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
     KvdbMaterialization.validate(materialization) match {
       case Left(ex) => ZManaged.fail(ex)
@@ -182,7 +183,7 @@ object LmdbDatabase extends StrictLogging {
 final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS],
   dbContext: LmdbDatabase.LmdbContext[BCF[_, _]],
-  config: LmdbDatabase.Config
+  config: LmdbDatabase.LmdbDatabaseConfig
 )(
   implicit rt: zio.Runtime[AkkaEnv]
 ) extends KvdbDatabase[BCF, CFS]
@@ -613,13 +614,6 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  override def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, NotUsed] = {
-    iterateSource(column, range)
-      .map(_.map(_._2))
-  }
-
   override def concurrentTailSource[Col <: CF](
     column: Col,
     ranges: List[KvdbKeyRange]
@@ -746,13 +740,6 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
-  }
-
-  override def tailValueSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailValueBatch, NotUsed] = {
-    tailSource(column, range)
-      .map(_.map(_.map(_._2)))
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
