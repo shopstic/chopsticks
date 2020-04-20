@@ -19,7 +19,7 @@ import zio.{Has, RIO, ZLayer}
 
 object KvdbTestSampleApp extends AkkaApp {
   final case class AppConfig(
-    db: LmdbDatabase.Config
+    db: LmdbDatabase.LmdbDatabaseConfig
   )
 
   type Env = AkkaApp.Env with Has[AppConfig] with SampleDb.Env

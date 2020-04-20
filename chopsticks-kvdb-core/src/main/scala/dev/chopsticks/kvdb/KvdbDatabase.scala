@@ -16,7 +16,7 @@ object KvdbDatabase {
       val operator = c.operator
 
       // Micro optimization to avoid "operand.toByteArray" for first and last operator
-      if (operator == Operator.FIRST || operator == Operator.LAST) {
+      if ((operator == Operator.FIRST || operator == Operator.LAST) && c.operand.isEmpty) {
         true
       }
       else {
@@ -28,7 +28,11 @@ object KvdbDatabase {
           case Operator.GREATER => KeySerdes.compare(key, operand) > 0
           case Operator.GREATER_EQUAL => KeySerdes.compare(key, operand) >= 0
           case Operator.PREFIX => KeySerdes.isPrefix(operand, key)
-          case Operator.FIRST | Operator.LAST => true
+          case Operator.FIRST | Operator.LAST =>
+            if (operand.isEmpty) true
+            else {
+              KeySerdes.isPrefix(operand, key)
+            }
           case Operator.Unrecognized(v) =>
             throw new IllegalArgumentException(s"Got Operator.Unrecognized($v)")
         }
@@ -64,10 +68,6 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbBatch, NotUsed]
 
-  def iterateValuesSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, NotUsed]
-
   def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit]
 
   def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit]
@@ -79,10 +79,6 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
     implicit clientOptions: KvdbClientOptions
   ): Source[KvdbTailBatch, NotUsed]
-
-  def tailValueSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailValueBatch, NotUsed]
 
   def concurrentTailSource[Col <: CF](column: Col, ranges: List[KvdbKeyRange])(
     implicit clientOptions: KvdbClientOptions

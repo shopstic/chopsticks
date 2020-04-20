@@ -17,9 +17,11 @@ import zio.{Has, RIO, UIO, ZLayer}
 import dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits._
 import dev.chopsticks.sample.kvdb.SampleDb.TestKey
 
+import scala.concurrent.duration._
+
 object FdbTestSampleApp extends AkkaApp {
   final case class AppConfig(
-    db: FdbDatabase.Config
+    db: FdbDatabase.FdbDatabaseConfig
   )
 
   type Env = AkkaApp.Env with Has[AppConfig] with SampleDb.Env
@@ -79,7 +81,7 @@ object FdbTestSampleApp extends AkkaApp {
 
       _ <- ZAkkaStreams
         .graph(UIO {
-          Source(1 to 100)
+          Source(1 to 100000)
             .map(i => TestKey("bar", i) -> s"bar$i")
             .via(dbApi.columnFamily(sampleDb.test).putInBatchesFlow(sync = false))
             .toMat(Sink.ignore)(Keep.right)
@@ -91,13 +93,57 @@ object FdbTestSampleApp extends AkkaApp {
           UIO(
             dbApi
               .columnFamily(sampleDb.test)
-              .source(_ < TestKey("bar", 10), _ < TestKey("bar", 15))
+              .source(_ startsWith "bar", _ ltEq TestKey("bar", 50000))
               .viaMat(KillSwitches.single)(Keep.right)
-              .toMat(Sink.foreach(println))(Keep.both)
+              .toMat(Sink.fold(0)((s, _) => s + 1))(Keep.both)
           ),
           graceful = true
         )
-        .log("Range scan")
+        //        .repeat(Schedule.forever)
+        .logResult("Range scan", r => s"counted $r")
+
+      _ <- ZAkkaStreams
+        .interruptibleGraph(
+          {
+            for {
+              lastKey <- dbApi
+                .columnFamily(sampleDb.test)
+                .getKeyTask(_ lastStartsWith "bar")
+                .logResult("Get last test key", _.toString)
+              source <- UIO(
+                Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
+                  .throttle(1, 1.second)
+                  .map(i => TestKey("bar", i) -> s"bar$i")
+                  .viaMat(KillSwitches.single)(Keep.right)
+                  .via(
+                    dbApi
+                      .columnFamily(sampleDb.test)
+                      .putInBatchesFlow(sync = false)
+                  )
+                  .toMat(Sink.ignore)(Keep.both)
+              )
+            } yield source
+          },
+          graceful = true
+        )
+        .log("Append")
+        .fork
+
+      _ <- ZAkkaStreams
+        .interruptibleGraph(
+          UIO(
+            dbApi
+              .columnFamily(sampleDb.test)
+              .tailSource(_ gtEq TestKey("bar", 99990), _ startsWith "bar")
+              .viaMat(KillSwitches.single)(Keep.right)
+              .toMat(Sink.foreach {
+                case (k, v) =>
+                  println(s"Tail got: k=$k v=$v")
+              })(Keep.both)
+          ),
+          graceful = true
+        )
+        .log("Tail")
 //      stats <- dbApi.statsTask
 //      _ <- ZLogger.info(
 //        stats.toVector

@@ -6,16 +6,14 @@ import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{Attributes, KillSwitches}
 import com.typesafe.scalalogging.StrictLogging
+import dev.chopsticks.fp.AkkaApp
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
-import dev.chopsticks.fp.{AkkaApp, ZService}
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClock, ManualTimeAkkaTestKit}
-import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.time.{Seconds, Span}
 import org.scalatest.wordspec.AsyncWordSpecLike
 import org.scalatest.{Assertion, Succeeded}
 import zio.blocking._
