@@ -31,7 +31,7 @@ object Dependencies {
   val zioDeps = Seq(
     "dev.zio" %% "zio" % ZIO_VERSION,
     "dev.zio" %% "zio-streams" % ZIO_VERSION,
-    "dev.zio" %% "zio-logging-slf4j" % "0.2.6"
+    "dev.zio" %% "zio-logging-slf4j" % "0.2.7"
   )
 
   val zioTestDeps = Seq(
@@ -148,7 +148,7 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "2.0"
+    "com.github.japgolly.microlibs" %% "utils" % "2.2"
   )
 
   val silencerVersion = "1.6.0"
@@ -163,7 +163,7 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.14.1"
+    "com.propensive" %% "magnolia" % "0.15.0"
   )
 
   val pprintDeps = Seq(
