@@ -9,7 +9,6 @@ build:
     - |
       kubectl exec -i -n sbt "${SBT_POD}" -- bash <<EOF
         export COURSIER_CACHE="${COURSIER_CACHE}"
-        export LD_LIBRARY_PATH="/opt"
         cd "${CI_PROJECT_DIR}"
         sbt compile test:compile test cq
       EOF
