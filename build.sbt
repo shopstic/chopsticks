@@ -99,9 +99,7 @@ lazy val kvdbRemote = Build
 lazy val kvdbFdb = Build
   .defineProject("kvdb-fdb")
   .settings(
-    libraryDependencies ++= fdbDeps,
-    testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
-    logBuffered := false
+    libraryDependencies ++= fdbDeps
   )
   .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
 
