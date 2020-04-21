@@ -169,7 +169,9 @@ lazy val root = (project in file("."))
     kvdbCore,
     kvdbLmdb,
     kvdbRocksdb,
+    kvdbFdb,
     kvdbCodecBerkeleydbKey,
+    kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
     avro4s,
     sample
