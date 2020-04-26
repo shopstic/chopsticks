@@ -3,8 +3,7 @@ package dev.chopsticks.kvdb.codec
 import scalapb._
 
 package object protobuf_value {
-  implicit def protobufMessageValueSerdes[T <: GeneratedMessage with Message[T]: GeneratedMessageCompanion]
-    : ValueSerdes[T] =
+  implicit def protobufMessageValueSerdes[T <: GeneratedMessage: GeneratedMessageCompanion]: ValueSerdes[T] =
     new ProtobufValueSerdes[T]
   implicit def protobufEnumValueSerdes[T <: GeneratedEnum: GeneratedEnumCompanion]: ValueSerdes[T] =
     new ProtobufEnumValueSerdes[T]
