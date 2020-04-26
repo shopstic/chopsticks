@@ -37,8 +37,8 @@ object AkkaApp extends LoggingContext {
     tracingConfig: TracingConfig = TracingConfig.enabled
   ): zio.Runtime[R] = {
     val task = ZIO.environment[R].map { r =>
-      val akkaService = r.get[AkkaEnv.Service]
-      val loggerService = r.get[LogEnv.Service]
+      val akkaService = ZService.get[AkkaEnv.Service](r)
+      val loggerService = ZService.get[LogEnv.Service](r)
 
       val shutdown: CoordinatedShutdown = CoordinatedShutdown(akkaService.actorSystem)
       val platform: Platform = new zio.internal.Platform.Proxy(
