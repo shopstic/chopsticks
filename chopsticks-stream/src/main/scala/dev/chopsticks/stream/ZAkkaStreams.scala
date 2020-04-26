@@ -18,7 +18,7 @@ object ZAkkaStreams {
     makeSource: State => Source[Out, NotUsed]
   )(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Out, NotUsed] = {
     val env = rt.environment
-    val akkaService = env.get[AkkaEnv.Service]
+    val akkaService = ZService.get[AkkaEnv.Service](env)
     import akkaService.{actorSystem, dispatcher}
 
     Source
@@ -74,7 +74,7 @@ object ZAkkaStreams {
     make: RIO[R, RunnableGraph[Future[A]]]
   ): RIO[AkkaEnv with LogEnv with R, A] = {
     ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
-      val akkaService = env.get[AkkaEnv.Service]
+      val akkaService = ZService.get[AkkaEnv.Service](env)
       import akkaService.{actorSystem, dispatcher}
 
       make.flatMap { graph =>
@@ -134,7 +134,7 @@ object ZAkkaStreams {
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { implicit rt =>
       val env = rt.environment
-      val akkaService = env.get[AkkaEnv.Service]
+      val akkaService = ZService.get[AkkaEnv.Service](env)
       import akkaService._
 
       Flow
@@ -175,7 +175,7 @@ object ZAkkaStreams {
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { implicit rt =>
       val env = rt.environment
-      val akkaService = env.get[AkkaEnv.Service]
+      val akkaService = ZService.get[AkkaEnv.Service](env)
       import akkaService._
 
       Flow
@@ -214,7 +214,7 @@ object ZAkkaStreams {
   ): ZIO[AkkaEnv with R, Nothing, Source[B, Future[NotUsed]]] = {
     ZIO.runtime[AkkaEnv with R].map { implicit rt =>
       val env = rt.environment
-      val akkaService = env.get[AkkaEnv.Service]
+      val akkaService = ZService.get[AkkaEnv.Service](env)
       import akkaService._
 
       Source
@@ -240,7 +240,7 @@ object ZAkkaStreams {
   ): ZIO[AkkaEnv with R, Nothing, Flow[In, Out, NotUsed]] = {
     ZIO.runtime[AkkaEnv with R].map { rt =>
       val env = rt.environment
-      val akkaService = env.get[AkkaEnv.Service]
+      val akkaService = ZService.get[AkkaEnv.Service](env)
       import akkaService.actorSystem
 
       Flow[In]

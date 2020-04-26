@@ -5,6 +5,7 @@ import java.time.Instant
 import akka.NotUsed
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
+import dev.chopsticks.fp.ZService
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
@@ -28,7 +29,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 )(
   implicit rt: zio.Runtime[AkkaEnv]
 ) {
-  private val akkaEnv = rt.environment.get[AkkaEnv.Service]
+  private val akkaEnv = ZService.get[AkkaEnv.Service](rt.environment)
   import akkaEnv._
 
   def estimateCountTask: Task[Long] = {

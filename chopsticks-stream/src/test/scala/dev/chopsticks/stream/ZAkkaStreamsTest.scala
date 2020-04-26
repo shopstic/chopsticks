@@ -6,7 +6,7 @@ import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{Attributes, KillSwitches}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.fp.{AkkaApp, ZService}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.stream.ZAkkaStreams.ops._
@@ -89,12 +89,12 @@ final class ZAkkaStreamsTest
   }
 
   "manual time" in withRuntime { implicit rt =>
-    val clock = new ManualClock(Some(rt.unsafeRun(ZIO.access[TestClock](_.get[TestClock.Service]))))
+    val clock = new ManualClock(Some(rt.unsafeRun(ZService[TestClock.Service])))
 
     val (source, sink) = TestSource
       .probe[Int]
       .effectMapAsync(1) { i =>
-        ZIO.access[Clock](_.get[Clock.Service]).flatMap { clock =>
+        ZService[Clock.Service].flatMap { clock =>
           clock.sleep(zio.duration.Duration(10, TimeUnit.SECONDS)) *> UIO(i + 1)
         }
       }
@@ -163,7 +163,7 @@ final class ZAkkaStreamsTest
       }
 
       "cancel the prior source and switch to the new one" in withRuntime { implicit rt =>
-        val akkaService = rt.environment.get[AkkaEnv.Service]
+        val akkaService = ZService.get[AkkaEnv.Service](rt.environment)
 
         val promise = Promise[Boolean]()
         val (source, sink) = TestSource
