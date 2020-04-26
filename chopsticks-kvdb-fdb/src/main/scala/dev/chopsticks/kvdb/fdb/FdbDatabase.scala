@@ -3,6 +3,7 @@ package dev.chopsticks.kvdb.fdb
 import java.time.Instant
 import java.util
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 
 import akka.NotUsed
 import akka.stream.Attributes
@@ -16,7 +17,6 @@ import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.LoggingContext
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{TransactionDelete, TransactionDeleteRange, TransactionPut}
 import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
@@ -24,21 +24,48 @@ import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
 import dev.chopsticks.kvdb.util.KvdbAliases._
-import dev.chopsticks.kvdb.util.KvdbException.{SeekFailure, UnsupportedKvdbOperationException}
+import dev.chopsticks.kvdb.util.KvdbException.{
+  KvdbAlreadyClosedException,
+  SeekFailure,
+  UnsupportedKvdbOperationException
+}
 import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal}
 import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilyTransactionBuilder, KvdbDatabase, KvdbMaterialization}
 import pureconfig.ConfigConvert
 import zio.blocking.{blocking, Blocking}
-import zio.{Task, ZManaged}
+import zio.clock.Clock
+import zio.{Schedule, Task, ZIO, ZManaged}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, TimeoutException}
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
+import scala.util.Failure
+import dev.chopsticks.fp.zio_ext._
 
 object FdbDatabase extends LoggingContext {
   final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](db: Database, prefixMap: Map[BCF[_, _], Array[Byte]]) {
     val dbCloseSignal = new KvdbCloseSignal
+
+    private val isClosed = new AtomicBoolean(false)
+
+    def close(): ZIO[Blocking with Clock, Throwable, Unit] = {
+      val task = for {
+        _ <- Task(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
+          if (isClosed) Task.unit
+          else Task.fail(KvdbAlreadyClosedException("Database was already closed"))
+        }
+        _ <- Task(dbCloseSignal.tryComplete(Failure(KvdbAlreadyClosedException("Database was already closed"))))
+        _ <- Task(dbCloseSignal.hasNoListeners)
+          .repeat(
+            Schedule
+              .fixed(100.millis)
+              .untilInput[Boolean](identity)
+          )
+      } yield ()
+
+      task
+    }
 
     private val columnIdPrefixMap = prefixMap.map {
       case (k, v) =>
@@ -154,13 +181,18 @@ object FdbDatabase extends LoggingContext {
     db: Database,
     config: FdbDatabaseConfig
   ): ZManaged[AkkaEnv with Blocking with MeasuredLogging, Throwable, KvdbDatabase[BCF, CFS]] = {
-    for {
-      prefixMap <- ZManaged.fromEffect(
+    ZManaged
+      .makeInterruptible[AkkaEnv with Blocking with MeasuredLogging, Throwable, FdbContext[BCF]] {
         buildPrefixMap(db, materialization, config)
           .timeoutFail(new TimeoutException("Timed out building directory layer. Check connection to FDB?"))(2.seconds)
           .log("Build FDB directory map")
-      )
-    } yield new FdbDatabase(materialization, FdbContext[BCF](db, prefixMap))
+          .map { prefixMap => FdbContext[BCF](db, prefixMap) }
+      } {
+        _.close()
+          .log("Close FDB context")
+          .orDie
+      }
+      .map(ctx => new FdbDatabase(materialization, ctx))
   }
 
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
