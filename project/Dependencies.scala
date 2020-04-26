@@ -58,7 +58,7 @@ object Dependencies {
   )
 
   val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "2.0.0"
+    "org.typelevel" %% "kittens" % "2.1.0"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
@@ -128,15 +128,15 @@ object Dependencies {
   )
 
   val refinedCoreDeps = Seq(
-    "eu.timepit" %% "refined" % "0.9.13"
+    "eu.timepit" %% "refined" % "0.9.14"
   )
 
   val refinedDeps = refinedCoreDeps ++ Seq(
-    "eu.timepit" %% "refined-pureconfig" % "0.9.13"
+    "eu.timepit" %% "refined-pureconfig" % "0.9.14"
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.5.0"
+    "io.scalaland" %% "chimney" % "0.5.1"
   )
 
   val snappyDeps = Seq(
