@@ -140,9 +140,11 @@ final class FdbTailSourceStage(
       override def postStop(): Unit = {
         super.postStop()
         timer.foreach(_.cancel())
+        shutdownListener.unregister()
       }
 
       override def preStart(): Unit = {
+        super.preStart()
         val _ = getStageActor(makeHandler(pendingPull(initialRange)))
       }
     }
