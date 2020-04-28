@@ -4,6 +4,7 @@ import akka.stream.KillSwitches.KillableGraphStageLogic
 import akka.stream.{ActorAttributes, Attributes, Outlet, SourceShape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbPair}
+import squants.information.Information
 
 import scala.collection.mutable
 
@@ -14,12 +15,12 @@ object KvdbIterateSourceGraph {
 class KvdbIterateSourceGraph(
   createRefs: () => Either[Exception, KvdbIterateSourceGraph.Refs],
   closeSignal: KvdbCloseSignal,
-  dispatcher: String
-)(implicit clientOptions: KvdbClientOptions)
-    extends GraphStage[SourceShape[KvdbBatch]] {
+  dispatcher: String,
+  maxBatchBytes: Information
+) extends GraphStage[SourceShape[KvdbBatch]] {
   import KvdbIterateSourceGraph._
-  private val maxBatchBytes = clientOptions.maxBatchBytes.toBytes.toInt
 
+  private val maxBatchBytesInt = maxBatchBytes.toBytes.toInt
   val outlet: Outlet[KvdbBatch] = Outlet("KvdbIterateSourceGraph.out")
 
   override protected def initialAttributes = ActorAttributes.dispatcher(dispatcher)
@@ -64,7 +65,7 @@ class KvdbIterateSourceGraph(
               val iterator = refs.iterator
               var isEmpty = true
 
-              while (batchSizeSoFar < maxBatchBytes && iterator.hasNext) {
+              while (batchSizeSoFar < maxBatchBytesInt && iterator.hasNext) {
                 val next = iterator.next()
                 batchSizeSoFar += next._1.length + next._2.length
                 val _ = reusableBuffer += next

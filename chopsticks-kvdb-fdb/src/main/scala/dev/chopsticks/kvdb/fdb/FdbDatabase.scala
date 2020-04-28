@@ -18,7 +18,7 @@ import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.LoggingContext
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{TransactionDelete, TransactionDeleteRange, TransactionPut}
-import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
+import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
@@ -29,7 +29,7 @@ import dev.chopsticks.kvdb.util.KvdbException.{
   SeekFailure,
   UnsupportedKvdbOperationException
 }
-import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal}
+import dev.chopsticks.kvdb.util.KvdbCloseSignal
 import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilyTransactionBuilder, KvdbDatabase, KvdbMaterialization}
 import pureconfig.ConfigConvert
 import zio.blocking.{blocking, Blocking}
@@ -114,7 +114,8 @@ object FdbDatabase extends LoggingContext {
   final case class FdbDatabaseConfig(
     clusterFilePath: Option[String],
     rootDirectoryPath: String,
-    stopNetworkOnClose: Boolean = true
+    stopNetworkOnClose: Boolean = true,
+    clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
   object FdbDatabaseConfig {
@@ -192,7 +193,7 @@ object FdbDatabase extends LoggingContext {
           .log("Close FDB context")
           .orDie
       }
-      .map(ctx => new FdbDatabase(materialization, ctx))
+      .map(ctx => new FdbDatabase(materialization, config.clientOptions, ctx))
   }
 
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
@@ -212,9 +213,16 @@ import dev.chopsticks.kvdb.fdb.FdbDatabase._
 
 final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS],
+  val clientOptions: KvdbClientOptions,
   dbContext: FdbContext[BCF]
 ) extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
+
+  override def withOptions(modifier: KvdbClientOptions => KvdbClientOptions): KvdbDatabase[BCF, CFS] = {
+    val newOptions = modifier(clientOptions)
+    new FdbDatabase[BCF, CFS](materialization, newOptions, dbContext)
+  }
+
   override def statsTask: Task[Map[(String, Map[String, String]), Double]] = Task {
     Map(
       ("timestamp", Map.empty[String, String]) -> Instant.now.toEpochMilli.toDouble
@@ -292,11 +300,14 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
           val tailConstraints = if (op == Operator.PREFIX) prefixedConstraints else prefixedConstraints.tail
 
           val ret: CompletableFuture[_ <: Either[Array[Byte], KvdbPair]] = keyFuture.thenCompose { key: Array[Byte] =>
-            if (KeySerdes.isPrefix(dbContext.columnPrefix(column), key) && keySatisfies(key, tailConstraints)) {
+            if (key != null && key.length > 0 && KeySerdes.isPrefix(dbContext.columnPrefix(column), key) && keySatisfies(
+                key,
+                tailConstraints
+              )) {
               tx.get(key).thenApply(value => Either.right[Array[Byte], KvdbPair]((key, value)))
             }
             else {
-              CompletableFuture.completedFuture(Either.left[Array[Byte], KvdbPair](key))
+              CompletableFuture.completedFuture(Either.left[Array[Byte], KvdbPair](Array.emptyByteArray))
             }
           }
 
@@ -388,9 +399,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
   override def estimateCount[Col <: CF](column: Col): Task[Long] = ???
 
-  override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, NotUsed] = {
+  override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source
       .lazyFuture(() => {
         val tx = dbContext.db.createTransaction()
@@ -422,7 +431,8 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                       keyValidator,
                       keyTransformer,
                       closeTx,
-                      dbContext.dbCloseSignal
+                      dbContext.dbCloseSignal,
+                      clientOptions.batchReadMaxBatchBytes
                     )
                   )
 
@@ -453,8 +463,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   }
 
   override def transactionTask(
-    actions: Seq[ColumnFamilyTransactionBuilder.TransactionAction],
-    sync: Boolean
+    actions: Seq[ColumnFamilyTransactionBuilder.TransactionAction]
   ): Task[Unit] = {
     Task
       .fromCompletionStage {
@@ -472,9 +481,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       }
   }
 
-  override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailBatch, NotUsed] = {
+  override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed] = {
     Source
       .lazySource(() => {
         if (range.from.isEmpty) {
@@ -521,7 +528,10 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                 iterate,
                 keyValidator,
                 keyTransformer,
-                dbContext.dbCloseSignal
+                dbContext.dbCloseSignal,
+                clientOptions.batchReadMaxBatchBytes,
+                clientOptions.tailPollingMaxInterval,
+                clientOptions.tailPollingBackoffFactor
               )
             )
         }
@@ -530,8 +540,9 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  override def concurrentTailSource[Col <: CF](column: Col, ranges: List[KvdbKeyRange])(
-    implicit clientOptions: KvdbClientOptions
+  override def concurrentTailSource[Col <: CF](
+    column: Col,
+    ranges: List[KvdbKeyRange]
   ): Source[(Int, KvdbTailBatch), NotUsed] = {
     Source
       .lazySource(() => {
@@ -577,4 +588,5 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       }
     }
   }
+
 }

@@ -7,9 +7,11 @@ import akka.stream.KillSwitches.KillableGraphStageLogic
 import akka.stream.stage._
 import akka.stream.{ActorAttributes, Attributes, Outlet, SourceShape}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbPair, KvdbTailBatch}
+import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric.Positive
+import eu.timepit.refined.numeric.Greater
+import squants.information.Information
 
 import scala.collection.mutable
 import scala.concurrent.duration._
@@ -28,13 +30,13 @@ class KvdbTailSourceGraph(
   init: () => KvdbTailSourceGraph.Refs,
   closeSignal: KvdbCloseSignal,
   dispatcher: String,
-  pollingBackoffFactor: Double Refined Positive = 1.15d
-)(implicit clientOptions: KvdbClientOptions)
-    extends GraphStage[SourceShape[KvdbTailBatch]] {
+  maxBatchBytes: Information,
+  tailPollingInterval: FiniteDuration,
+  tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d
+) extends GraphStage[SourceShape[KvdbTailBatch]] {
   import KvdbTailSourceGraph._
-  private val maxBatchBytes = clientOptions.maxBatchBytes.toBytes.toInt
-
   val outlet: Outlet[KvdbTailBatch] = Outlet("KvdbIterateSourceGraph.out")
+  private val maxBatchBytesInt = maxBatchBytes.toBytes.toInt
 
   override protected def initialAttributes = ActorAttributes.dispatcher(dispatcher)
 
@@ -100,7 +102,7 @@ class KvdbTailSourceGraph(
           var batchSizeSoFar = 0
           var isEmpty = true
 
-          while (batchSizeSoFar < maxBatchBytes && iterator.hasNext) {
+          while (batchSizeSoFar < maxBatchBytesInt && iterator.hasNext) {
             val next = iterator.next()
             batchSizeSoFar += next._1.length + next._2.length
             val _ = reusableBuffer += next
@@ -110,9 +112,9 @@ class KvdbTailSourceGraph(
           if (isEmpty) {
             pollingDelay = {
               if (pollingDelay.length == 0) 1.milli
-              else if (pollingDelay < clientOptions.tailPollingInterval)
-                Duration.fromNanos((pollingDelay.toNanos * pollingBackoffFactor).toLong)
-              else clientOptions.tailPollingInterval
+              else if (pollingDelay < tailPollingInterval)
+                Duration.fromNanos((pollingDelay.toNanos * tailPollingBackoffFactor).toLong)
+              else tailPollingInterval
             }
 
             clearIterator()

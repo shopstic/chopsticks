@@ -6,21 +6,22 @@ import akka.actor.Cancellable
 import akka.stream.KillSwitches.KillableGraphStageLogic
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.apple.foundationdb.KeyValue
 import com.apple.foundationdb.async.AsyncIterator
+import com.apple.foundationdb.{FDBException, KeyValue}
 import com.google.protobuf.ByteString
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyRange}
 import dev.chopsticks.kvdb.util.KvdbAliases.KvdbTailBatch
+import dev.chopsticks.kvdb.util.KvdbCloseSignal
 import dev.chopsticks.kvdb.util.KvdbTailSourceGraph.EmptyTail
-import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal}
 import dev.chopsticks.stream.GraphStageWithActorLogic
+import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
-import eu.timepit.refined.numeric.Positive
 import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric.Greater
+import squants.information.Information
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import scala.concurrent.duration._
+import scala.concurrent.duration.{Duration, FiniteDuration, _}
 
 object FdbTailSourceStage {
   final private[fdb] case class EmitEmptyTail(emptyTail: EmptyTail)
@@ -32,13 +33,14 @@ final class FdbTailSourceStage(
   keyValidator: Array[Byte] => Boolean,
   keyTransformer: Array[Byte] => Array[Byte],
   shutdownSignal: KvdbCloseSignal,
-  pollingBackoffFactor: Double Refined Positive = 1.15d
-)(implicit clientOptions: KvdbClientOptions)
-    extends GraphStage[SourceShape[KvdbTailBatch]] {
+  maxBatchBytes: Information,
+  tailPollingInterval: FiniteDuration,
+  tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d
+) extends GraphStage[SourceShape[KvdbTailBatch]] {
   import FdbIterateSourceStage._
   import FdbTailSourceStage._
 
-  private val maxBatchBytes = clientOptions.maxBatchBytes.toBytes.toInt
+  private val maxBatchBytesInt = maxBatchBytes.toBytes.toInt
   private val out: Outlet[KvdbTailBatch] = Outlet[KvdbTailBatch]("FdbAsyncIteratorToSourceStage.out")
   override val shape: SourceShape[KvdbTailBatch] = SourceShape(out)
 
@@ -66,7 +68,7 @@ final class FdbTailSourceStage(
           val batchEmitter = new BatchEmitter(
             actor = self,
             iterator = iterator,
-            maxBatchBytes = maxBatchBytes,
+            maxBatchBytes = maxBatchBytesInt,
             keyValidator = keyValidator,
             keyTransformer = keyTransformer,
             emit = batch => {
@@ -99,9 +101,9 @@ final class FdbTailSourceStage(
 
           pollingDelay = {
             if (pollingDelay.length == 0) 1.milli
-            else if (pollingDelay < clientOptions.tailPollingInterval)
-              Duration.fromNanos((pollingDelay.toNanos * pollingBackoffFactor).toLong)
-            else clientOptions.tailPollingInterval
+            else if (pollingDelay < tailPollingInterval)
+              Duration.fromNanos((pollingDelay.toNanos * tailPollingBackoffFactor).toLong)
+            else tailPollingInterval
           }
 
           val emptyTail = EmptyTail(Instant.now, maybeLastKey)
@@ -114,10 +116,13 @@ final class FdbTailSourceStage(
             pollingDelay = Duration.Zero
           }
 
+        case IteratorFailure(ex: FDBException) if ex.getCode == 1007 /* Transaction too old */ =>
+          close()
+          self ! IteratorComplete
+
         case IteratorFailure(ex) =>
           close()
-          log.info(s"Got ${ex.getMessage}, will retry")
-          self ! IteratorComplete
+          failStage(ex)
 
         case DownstreamFinish =>
           close()

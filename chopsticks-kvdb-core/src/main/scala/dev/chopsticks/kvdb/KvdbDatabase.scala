@@ -3,12 +3,21 @@ package dev.chopsticks.kvdb
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.TransactionAction
+import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.KvdbAliases._
-import dev.chopsticks.kvdb.util.KvdbClientOptions
+import eu.timepit.refined.W
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric.Greater
+import pureconfig.ConfigConvert
+import squants.information.Information
+import squants.information.InformationConversions._
 import zio.Task
+
+import scala.concurrent.duration._
 
 object KvdbDatabase {
   def keySatisfies(key: Array[Byte], constraints: List[KvdbKeyConstraint]): Boolean = {
@@ -39,10 +48,28 @@ object KvdbDatabase {
       }
     }
   }
+
+  final case class KvdbClientOptions(
+    forceSync: Boolean = false,
+    batchReadMaxBatchBytes: Information = 32.kb,
+    tailPollingMaxInterval: FiniteDuration = 100.millis,
+    tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d
+  )
+
+  object KvdbClientOptions {
+    import dev.chopsticks.util.config.PureconfigConverters._
+    import eu.timepit.refined.pureconfig._
+    //noinspection TypeAnnotation
+    implicit val configConvert = ConfigConvert[KvdbClientOptions]
+  }
 }
 
 trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
   type CF = BCF[_, _]
+
+  protected def clientOptions: KvdbClientOptions
+
+  def withOptions(modifier: KvdbClientOptions => KvdbClientOptions): KvdbDatabase[BCF, CFS]
 
   def materialization: KvdbMaterialization[BCF, CFS]
 
@@ -50,7 +77,7 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]]
 
-  private lazy val columnFamilyByIdMap: Map[String, CF] =
+  protected lazy val columnFamilyByIdMap: Map[String, CF] =
     materialization.columnFamilySet.value.map(c => (c.id, c)).toMap
 
   def columnFamilyWithId(id: String): Option[CF] = columnFamilyByIdMap.get(id)
@@ -64,9 +91,7 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def estimateCount[Col <: CF](column: Col): Task[Long]
 
-  def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, NotUsed]
+  def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed]
 
   def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit]
 
@@ -74,15 +99,11 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long]
 
-  def transactionTask(actions: Seq[TransactionAction], sync: Boolean = false): Task[Unit]
+  def transactionTask(actions: Seq[TransactionAction]): Task[Unit]
 
-  def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailBatch, NotUsed]
+  def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed]
 
-  def concurrentTailSource[Col <: CF](column: Col, ranges: List[KvdbKeyRange])(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbIndexedTailBatch, NotUsed]
+  def concurrentTailSource[Col <: CF](column: Col, ranges: List[KvdbKeyRange]): Source[KvdbIndexedTailBatch, NotUsed]
 
   def dropColumnFamily[Col <: CF](column: Col): Task[Unit]
 }

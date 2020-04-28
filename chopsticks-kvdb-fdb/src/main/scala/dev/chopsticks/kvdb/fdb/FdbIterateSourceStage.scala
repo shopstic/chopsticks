@@ -7,8 +7,9 @@ import akka.stream.{Attributes, Outlet, SourceShape}
 import com.apple.foundationdb.KeyValue
 import com.apple.foundationdb.async.AsyncIterator
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbPair}
-import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbCloseSignal}
+import dev.chopsticks.kvdb.util.KvdbCloseSignal
 import dev.chopsticks.stream.GraphStageWithActorLogic
+import squants.information.Information
 
 import scala.collection.mutable
 
@@ -119,12 +120,12 @@ final class FdbIterateSourceStage(
   keyValidator: Array[Byte] => Boolean,
   keyTransformer: Array[Byte] => Array[Byte],
   close: () => Unit,
-  shutdownSignal: KvdbCloseSignal
-)(implicit clientOptions: KvdbClientOptions)
-    extends GraphStage[SourceShape[KvdbBatch]] {
+  shutdownSignal: KvdbCloseSignal,
+  maxBatchBytes: Information
+) extends GraphStage[SourceShape[KvdbBatch]] {
   import FdbIterateSourceStage._
 
-  private val maxBatchBytes = clientOptions.maxBatchBytes.toBytes.toInt
+  private val maxBatchBytesInt = maxBatchBytes.toBytes.toInt
   private val out: Outlet[KvdbBatch] = Outlet[KvdbBatch]("FdbAsyncIteratorToSourceStage.out")
   override val shape: SourceShape[KvdbBatch] = SourceShape(out)
 
@@ -135,7 +136,7 @@ final class FdbIterateSourceStage(
       private lazy val batchEmitter = new BatchEmitter(
         actor = self,
         iterator = iterator,
-        maxBatchBytes = maxBatchBytes,
+        maxBatchBytes = maxBatchBytesInt,
         keyValidator = keyValidator,
         keyTransformer = keyTransformer,
         emit = emit(out, _)

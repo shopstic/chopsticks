@@ -2,15 +2,14 @@ package dev.chopsticks.kvdb.util
 
 import better.files.File
 import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.BaseCf
 import org.scalatest.Assertion
 import zio.blocking.{blocking, Blocking}
 import zio.{RIO, Task, ZManaged}
-import dev.chopsticks.fp.zio_ext._
 
 import scala.concurrent.Future
-import scala.concurrent.duration._
 
 object KvdbTestUtils {
   def managedTempDir: ZManaged[Blocking, Throwable, File] = {
@@ -41,7 +40,4 @@ object KvdbTestUtils {
       .result
     db.transactionTask(batch)
   }
-
-  implicit val testKvdbClientOptions: KvdbClientOptions =
-    dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits.defaultClientOptions.copy(tailPollingInterval = 10.millis)
 }

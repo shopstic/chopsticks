@@ -15,7 +15,7 @@ import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
   TransactionDeleteRange,
   TransactionPut
 }
-import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
+import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
@@ -25,7 +25,6 @@ import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util._
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
-import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import org.rocksdb._
 import pureconfig.ConfigConvert
@@ -42,10 +41,9 @@ object RocksdbDatabase extends StrictLogging {
     path: NonEmptyString,
     readOnly: Boolean,
     startWithBulkInserts: Boolean,
-    checksumOnRead: Boolean,
     useDirectIo: Boolean,
-    syncWriteBatch: Boolean,
-    ioDispatcher: NonEmptyString
+    ioDispatcher: NonEmptyString,
+    clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
   object Config {
@@ -66,7 +64,7 @@ object RocksdbDatabase extends StrictLogging {
           context <- RocksdbDatabaseManager[BCF, CFS](materialization, config).managedContext
           rt <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv])
         } yield {
-          new RocksdbDatabase[BCF, CFS](materialization, context, config)(rt)
+          new RocksdbDatabase[BCF, CFS](materialization, config.clientOptions, context)(rt)
         }
     }
   }
@@ -74,14 +72,19 @@ object RocksdbDatabase extends StrictLogging {
 
 final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
-  dbContext: RocksdbContext[BCF[_, _]],
-  config: RocksdbDatabase.Config
+  val clientOptions: KvdbClientOptions,
+  dbContext: RocksdbContext[BCF[_, _]]
 )(implicit rt: zio.Runtime[AkkaEnv])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
   import RocksdbDatabase._
 
   val isLocal: Boolean = true
+
+  override def withOptions(modifier: KvdbClientOptions => KvdbClientOptions): KvdbDatabase[BCF, CFS] = {
+    val newOptions = modifier(clientOptions)
+    new RocksdbDatabase[BCF, CFS](materialization, newOptions, dbContext)
+  }
 
   private def getColumnFamilyName(cf: CF): String = {
     if (cf == materialization.defaultColumnFamily) DEFAULT_COLUMN_NAME else cf.id
@@ -90,13 +93,12 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   private val columnOptions: Map[CF, ColumnFamilyOptions] = materialization.columnFamilyConfigMap.map
 
   private def newReadOptions(): ReadOptions = {
-    val o = new ReadOptions()
-    if (config.checksumOnRead) o.setVerifyChecksums(config.checksumOnRead) else o
+    new ReadOptions()
   }
 
-  private def newWriteOptions(sync: Boolean = false): WriteOptions = {
+  private def newWriteOptions(): WriteOptions = {
     val o = new WriteOptions()
-    if (sync || config.syncWriteBatch) o.setSync(true) else o
+    if (clientOptions.forceSync) o.setSync(true) else o
   }
 
   private val dbCloseSignal = new KvdbCloseSignal
@@ -478,9 +480,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     }
   }
 
-  override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, NotUsed] = {
+  override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source
       .lazyFuture(() => {
         val task = references
@@ -549,7 +549,14 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
               }
 
               Source
-                .fromGraph(new KvdbIterateSourceGraph(init, dbCloseSignal, config.ioDispatcher))
+                .fromGraph(
+                  new KvdbIterateSourceGraph(
+                    init,
+                    dbCloseSignal,
+                    refs.ioDispatcher,
+                    clientOptions.batchReadMaxBatchBytes
+                  )
+                )
           }
 
         rt.unsafeRunToFuture(task)
@@ -562,7 +569,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     refs: RocksdbContext[CF],
     column: Col,
     range: KvdbKeyRange
-  )(implicit clientOptions: KvdbClientOptions): Source[KvdbTailBatch, NotUsed] = {
+  ): Source[KvdbTailBatch, NotUsed] = {
     val init = () => {
       val columnHandle = refs.getColumnHandle(column)
       val db = refs.db
@@ -624,14 +631,21 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     }
 
     Source
-      .fromGraph(new KvdbTailSourceGraph(init, dbCloseSignal, config.ioDispatcher))
+      .fromGraph(
+        new KvdbTailSourceGraph(
+          init,
+          dbCloseSignal,
+          refs.ioDispatcher,
+          clientOptions.batchReadMaxBatchBytes,
+          clientOptions.tailPollingMaxInterval,
+          clientOptions.tailPollingBackoffFactor
+        )
+      )
   }
 
   override def concurrentTailSource[Col <: CF](
     column: Col,
     ranges: List[KvdbKeyRange]
-  )(
-    implicit clientOptions: KvdbClientOptions
   ): Source[KvdbIndexedTailBatch, NotUsed] = {
     Source
       .lazyFuture(() => {
@@ -674,9 +688,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailBatch, NotUsed] = {
+  override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed] = {
     Source
       .lazyFuture(() => {
         val task = references
@@ -698,8 +710,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .flatMapConcat(identity)
   }
 
-//  @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  override def transactionTask(actions: Seq[TransactionAction], sync: Boolean): Task[Unit] = {
+  override def transactionTask(actions: Seq[TransactionAction]): Task[Unit] = {
     ioTask(references.map { refs =>
       val db = refs.db
       val writeBatch = new WriteBatch()
@@ -725,7 +736,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
             )
         }
 
-        val writeOptions = newWriteOptions(sync)
+        val writeOptions = newWriteOptions()
 
         try {
           db.write(writeOptions, writeBatch)

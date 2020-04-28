@@ -35,7 +35,8 @@ object RocksdbDatabaseManager {
     db: RocksDB,
     columnHandleMap: Map[CF, ColumnFamilyHandle],
     columnPrefixExtractorOptionMap: Map[CF, String],
-    stats: Statistics
+    stats: Statistics,
+    ioDispatcher: String
   ) {
     val dbCloseSignal = new KvdbCloseSignal
     private val isClosed = new AtomicBoolean(false)
@@ -296,7 +297,13 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
                 (cf, prefixExtractor)
             }.toMap
 
-            RocksdbContext[CF](db, columnHandleMap, columnHasPrefixExtractorMap, stats)
+            RocksdbContext[CF](
+              db = db,
+              columnHandleMap = columnHandleMap,
+              columnPrefixExtractorOptionMap = columnHasPrefixExtractorMap,
+              stats = stats,
+              ioDispatcher = config.ioDispatcher
+            )
           }
     }
   }
