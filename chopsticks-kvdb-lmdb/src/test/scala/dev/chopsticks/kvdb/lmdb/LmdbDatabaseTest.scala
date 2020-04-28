@@ -1,6 +1,7 @@
 package dev.chopsticks.kvdb.lmdb
 
 import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, LookupCf, PlainCf}
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbTestUtils
@@ -9,6 +10,7 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import squants.information.InformationConversions._
 import zio.ZManaged
+import scala.concurrent.duration._
 
 object LmdbDatabaseTest {
   object dbMaterialization extends TestDatabase.Materialization {
@@ -28,7 +30,8 @@ object LmdbDatabaseTest {
           path = NonEmptyString.unsafeFrom(dir.pathAsString),
           maxSize = 64.mib,
           noSync = false,
-          ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
+          ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher",
+          clientOptions = KvdbClientOptions(tailPollingMaxInterval = 10.millis)
         )
       )
     } yield db

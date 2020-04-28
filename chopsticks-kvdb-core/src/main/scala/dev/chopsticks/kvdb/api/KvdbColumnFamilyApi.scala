@@ -7,15 +7,16 @@ import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
 import dev.chopsticks.fp.ZService
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.zio_ext._
+import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
 import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbTailBatch, KvdbValueBatch}
-import dev.chopsticks.kvdb.util.KvdbClientOptions
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase}
 import dev.chopsticks.stream.AkkaStreamUtils
-import dev.chopsticks.fp.zio_ext._
+import eu.timepit.refined.auto._
 import zio.Task
 
 import scala.collection.immutable.Queue
@@ -25,12 +26,20 @@ import scala.concurrent.duration._
 
 final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V] private[kvdb] (
   db: KvdbDatabase[BCF, _],
-  cf: CF
+  cf: CF,
+  options: KvdbApiClientOptions
 )(
   implicit rt: zio.Runtime[AkkaEnv]
 ) {
   private val akkaEnv = ZService.get[AkkaEnv.Service](rt.environment)
   import akkaEnv._
+
+  def withOptions(
+    modifier: KvdbApiClientOptions => KvdbApiClientOptions
+  ): KvdbColumnFamilyApi[BCF, CF, K, V] = {
+    val newOptions = modifier(options)
+    new KvdbColumnFamilyApi[BCF, CF, K, V](db, cf, newOptions)
+  }
 
   def estimateCountTask: Task[Long] = {
     db.estimateCount(cf)
@@ -63,10 +72,11 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def batchGetFlow[O](
     constraintsMapper: O => ConstraintsBuilder[K],
-    maxBatchSize: Int = 8096,
-    groupWithin: FiniteDuration = Duration.Zero,
     useCache: Boolean = false
   ): Flow[O, (O, Option[V]), NotUsed] = {
+    val maxBatchSize = options.batchWriteMaxBatchSize
+    val groupWithin = options.batchWriteBatchingGroupWithin
+
     val flow = if (groupWithin > Duration.Zero) {
       Flow[O]
         .groupedWithin(maxBatchSize, groupWithin)
@@ -151,8 +161,6 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def batchGetByKeysFlow[In, Out](
     extractor: In => Out,
-    maxBatchSize: Int = 8096,
-    groupWithin: FiniteDuration = Duration.Zero,
     useCache: Boolean = false
   )(implicit transformer: KeyTransformer[Out, K]): Flow[In, (In, Option[V]), NotUsed] = {
     batchGetFlow(
@@ -161,74 +169,60 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
           val key = transformer.transform(extractor(in))
           KeyConstraints[K](Queue(KvdbKeyConstraint(Operator.EQUAL, ByteString.copyFrom(cf.serializeKey(key)))))
         },
-      maxBatchSize,
-      groupWithin,
       useCache
     )
   }
 
-  def batchedRawSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, NotUsed] = {
+  def batchedRawSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[KvdbBatch, NotUsed] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateSource(cf, range)
   }
 
-  def batchedSource(implicit clientOptions: KvdbClientOptions): Source[List[(K, V)], NotUsed] = {
+  def batchedSource: Source[List[(K, V)], NotUsed] = {
     batchedSource(_.first, _.last)
   }
 
-  def batchedSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[List[(K, V)], NotUsed] = {
+  def batchedSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[List[(K, V)], NotUsed] = {
     batchedRawSource(from, to)
-      .mapAsync(clientOptions.serdesParallelism) { batch =>
+      .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserialize).to(List)
         }
       }
   }
 
-  def source(implicit clientOptions: KvdbClientOptions): Source[(K, V), NotUsed] = {
+  def source: Source[(K, V), NotUsed] = {
     source(_.first, _.last)
   }
 
-  def source(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[(K, V), NotUsed] = {
+  def source(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[(K, V), NotUsed] = {
     batchedSource(from, to).mapConcat(identity)
   }
 
-  def batchedRawValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbValueBatch, NotUsed] = {
+  def batchedRawValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[KvdbValueBatch, NotUsed] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateSource(cf, range)
       .map(_.map(_._2))
   }
 
-  def batchedValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[List[V], NotUsed] = {
+  def batchedValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[List[V], NotUsed] = {
     batchedRawValueSource(from, to)
-      .mapAsync(clientOptions.serdesParallelism) { batch =>
+      .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserializeValue).to(List)
         }
       }
   }
 
-  def valueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[V, NotUsed] = {
+  def valueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[V, NotUsed] = {
     batchedValueSource(from, to).mapConcat(identity)
   }
 
-  def batchedValueSource(implicit clientOptions: KvdbClientOptions): Source[List[V], NotUsed] = {
+  def batchedValueSource: Source[List[V], NotUsed] = {
     batchedValueSource(_.first, _.last)
   }
 
-  def valueSource(implicit clientOptions: KvdbClientOptions): Source[V, NotUsed] = {
+  def valueSource: Source[V, NotUsed] = {
     valueSource(_.first, _.last)
   }
 
@@ -251,15 +245,10 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .map(v => (kt.transform(v), v))
   }
 
-  def putInBatchesFlow(
-    sync: Boolean,
-    maxBatchSize: Int = 4096,
-    groupWithin: FiniteDuration = Duration.Zero,
-    batchEncodingParallelism: Int = 2
-  ): Flow[(K, V), Seq[(K, V)], NotUsed] = {
+  def putInBatchesFlow: Flow[(K, V), Seq[(K, V)], NotUsed] = {
     Flow[(K, V)]
-      .via(AkkaStreamUtils.batchFlow(maxBatchSize, groupWithin))
-      .mapAsync(batchEncodingParallelism) { batch =>
+      .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
+      .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch
             .foldLeft(db.transactionBuilder()) {
@@ -271,53 +260,34 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
       .mapAsync(1) {
         case (batch, serialized) =>
-          db.transactionTask(serialized, sync)
+          db.transactionTask(serialized)
             .map(_ => batch)
             .unsafeRunToFuture
       }
   }
 
-  def putValuesInBatchesFlow(
-    sync: Boolean,
-    maxBatchSize: Int = 4096,
-    groupWithin: FiniteDuration = Duration.Zero,
-    batchEncodingParallelism: Int = 2
-  )(implicit kt: KeyTransformer[V, K]): Flow[V, Seq[(K, V)], NotUsed] = {
+  def putValuesInBatchesFlow(implicit kt: KeyTransformer[V, K]): Flow[V, Seq[(K, V)], NotUsed] = {
     Flow[V]
       .via(transformValueToPairFlow)
-      .via(putInBatchesFlow(sync, maxBatchSize, groupWithin, batchEncodingParallelism))
+      .via(putInBatchesFlow)
   }
 
   def putInBatchesWithCheckpointFlow[CCF <: BCF[CK, CV], CK, CV](
-    checkpointColumn: CCF,
-    sync: Boolean,
-    maxBatchSize: Int = 4096,
-    groupWithin: FiniteDuration = Duration.Zero,
-    batchEncodingParallelism: Int = 1
+    checkpointColumn: CCF
   )(
     aggregateCheckpoint: Seq[(K, V)] => (CK, CV)
   ): Flow[(K, V), Seq[(K, V)], NotUsed] = {
     putInBatchesWithCheckpointsFlow[CCF, CK, CV](
-      checkpointColumn,
-      sync,
-      maxBatchSize,
-      groupWithin,
-      batchEncodingParallelism
+      checkpointColumn
     ) { seq => Vector(aggregateCheckpoint(seq)) }
   }
 
-  def putInBatchesWithCheckpointsFlow[CCF <: BCF[CK, CV], CK, CV](
-    checkpointColumn: CCF,
-    sync: Boolean,
-    maxBatchSize: Int = 4096,
-    groupWithin: FiniteDuration = Duration.Zero,
-    batchEncodingParallelism: Int = 1
-  )(
+  def putInBatchesWithCheckpointsFlow[CCF <: BCF[CK, CV], CK, CV](checkpointColumn: CCF)(
     aggregateCheckpoints: Seq[(K, V)] => Seq[(CK, CV)]
   ): Flow[(K, V), Seq[(K, V)], NotUsed] = {
     Flow[(K, V)]
-      .via(AkkaStreamUtils.batchFlow(maxBatchSize, groupWithin))
-      .mapAsync(batchEncodingParallelism) { batch =>
+      .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
+      .mapAsync(options.serdesParallelism) { batch =>
         Future {
           val txn = db.transactionBuilder()
 
@@ -329,18 +299,14 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
       .mapAsync(1) {
         case (batch, serialized) =>
-          db.transactionTask(serialized, sync)
+          db.transactionTask(serialized)
             .as(batch)
             .unsafeRunToFuture
       }
   }
 
   def putValuesInBatchesWithCheckpointFlow[CCF <: BCF[CK, CV], CK, CV](
-    checkpointColumn: CCF,
-    sync: Boolean,
-    maxBatchSize: Int = 4096,
-    groupWithin: FiniteDuration = Duration.Zero,
-    batchEncodingParallelism: Int = 1
+    checkpointColumn: CCF
   )(
     aggregateCheckpoint: Seq[(K, V)] => (CK, CV)
   )(implicit kt: KeyTransformer[V, K]): Flow[V, Seq[(K, V)], NotUsed] = {
@@ -348,11 +314,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .via(transformValueToPairFlow)
       .via(
         putInBatchesWithCheckpointFlow[CCF, CK, CV](
-          checkpointColumn,
-          sync,
-          maxBatchSize,
-          groupWithin,
-          batchEncodingParallelism
+          checkpointColumn
         )(
           aggregateCheckpoint
         )
@@ -360,11 +322,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   def putValuesInBatchesWithCheckpointsFlow[CCF <: BCF[CK, CV], CK, CV](
-    checkpointColumn: CCF,
-    sync: Boolean,
-    maxBatchSize: Int = 4096,
-    groupWithin: FiniteDuration = Duration.Zero,
-    batchEncodingParallelism: Int = 1
+    checkpointColumn: CCF
   )(
     aggregateCheckpoints: Seq[(K, V)] => Seq[(CK, CV)]
   )(implicit kt: KeyTransformer[V, K]): Flow[V, Seq[(K, V)], NotUsed] = {
@@ -372,19 +330,16 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .via(transformValueToPairFlow)
       .via(
         putInBatchesWithCheckpointsFlow[CCF, CK, CV](
-          checkpointColumn,
-          sync,
-          maxBatchSize,
-          groupWithin,
-          batchEncodingParallelism
+          checkpointColumn
         )(
           aggregateCheckpoints
         )
       )
   }
 
-  def tailBatchedRawValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K])(
-    implicit clientOptions: KvdbClientOptions
+  def tailBatchedRawValueSource(
+    from: ConstraintsBuilder[K],
+    to: ConstraintsBuilder[K]
   ): Source[KvdbValueBatch, NotUsed] = {
     db.tailSource(cf, KeyConstraints.range[K](from, to))
       .collect {
@@ -395,9 +350,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def tailValueSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[V, NotUsed] = {
+  ): Source[V, NotUsed] = {
     tailBatchedRawValueSource(from, to)
-      .mapAsync(clientOptions.serdesParallelism) { b =>
+      .mapAsync(options.serdesParallelism) { b =>
         Future {
           b.view.map(cf.unsafeDeserializeValue).to(List)
         }
@@ -405,14 +360,14 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
-  def tailValueSource(implicit clientOptions: KvdbClientOptions): Source[V, NotUsed] = {
+  def tailValueSource: Source[V, NotUsed] = {
     tailValueSource(_.first, _.last)
   }
 
   def tailBatchedRawSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[KvdbBatch, NotUsed] = {
+  ): Source[KvdbBatch, NotUsed] = {
     db.tailSource(cf, KeyConstraints.range[K](from, to))
       .collect {
         case Right(b) => b
@@ -422,9 +377,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def tailSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[(K, V), NotUsed] = {
+  ): Source[(K, V), NotUsed] = {
     tailBatchedRawSource(from, to)
-      .mapAsync(clientOptions.serdesParallelism) { batch =>
+      .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserialize).to(List)
         }
@@ -432,17 +387,17 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
-  def tailSource(implicit clientOptions: KvdbClientOptions): Source[(K, V), NotUsed] = {
+  def tailSource: Source[(K, V), NotUsed] = {
     tailSource(_.first, _.last)
   }
 
   def tailVerboseSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, (K, V)], NotUsed] = {
+  ): Source[Either[Instant, (K, V)], NotUsed] = {
     import cats.syntax.either._
     db.tailSource(cf, KeyConstraints.range[K](from, to))
-      .mapAsync(clientOptions.serdesParallelism) {
+      .mapAsync(options.serdesParallelism) {
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
           Future {
@@ -454,7 +409,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def concurrentTailVerboseRawSource(
     ranges: ConstraintsRangesBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[(Int, KvdbTailBatch), NotUsed] = {
+  ): Source[(Int, KvdbTailBatch), NotUsed] = {
     val builtRanges = ranges(KeyConstraints.seed[K]).map {
       case (from, to) =>
         KeyConstraints.toRange[K](from, to)
@@ -465,13 +420,11 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def concurrentTailVerboseSource(
     ranges: ConstraintsRangesBuilder[K]
-  )(
-    implicit clientOptions: KvdbClientOptions
   ): Source[(Int, Either[Instant, List[(K, V)]]), NotUsed] = {
     import cats.syntax.either._
 
     concurrentTailVerboseRawSource(ranges)
-      .mapAsync(clientOptions.serdesParallelism) {
+      .mapAsync(options.serdesParallelism) {
         case (index, Left(e)) => Future.successful((index, Either.left(e.time)))
         case (index, Right(batch)) =>
           Future {
@@ -484,10 +437,10 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def tailVerboseValueSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  )(implicit clientOptions: KvdbClientOptions): Source[Either[Instant, V], NotUsed] = {
+  ): Source[Either[Instant, V], NotUsed] = {
     import cats.syntax.either._
     db.tailSource(cf, KeyConstraints.range[K](from, to))
-      .mapAsync(clientOptions.serdesParallelism) {
+      .mapAsync(options.serdesParallelism) {
         case Left(e) => Future.successful(List(Either.left(e.time)))
         case Right(batch) =>
           Future {

@@ -19,7 +19,7 @@ import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
   TransactionDeleteRange,
   TransactionPut
 }
-import dev.chopsticks.kvdb.KvdbDatabase.keySatisfies
+import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
@@ -54,7 +54,8 @@ object LmdbDatabase extends StrictLogging {
     path: NonEmptyString,
     maxSize: Information,
     noSync: Boolean,
-    ioDispatcher: NonEmptyString
+    ioDispatcher: NonEmptyString,
+    clientOptions: KvdbClientOptions
   )
 
   object LmdbDatabaseConfig {
@@ -70,7 +71,8 @@ object LmdbDatabase extends StrictLogging {
 
   final case class LmdbContext[BaseCol <: ColumnFamily[_, _]](
     env: Env[ByteBuffer],
-    dbiMap: Map[BaseCol, Dbi[ByteBuffer]]
+    dbiMap: Map[BaseCol, Dbi[ByteBuffer]],
+    ioDispatcher: String
   ) {
     val dbCloseSignal = new KvdbCloseSignal
     lazy val writeExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -165,7 +167,7 @@ object LmdbDatabase extends StrictLogging {
                 (col, env.openDbi(col.id, DbiFlags.MDB_CREATE))
               }.toMap
 
-              LmdbContext[BCF[_, _]](env, columnRefs)
+              LmdbContext[BCF[_, _]](env, columnRefs, config.ioDispatcher)
             })
           } { refs => refs.close().orDie }
 
@@ -173,7 +175,7 @@ object LmdbDatabase extends StrictLogging {
           refs <- managed
           rt <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv])
         } yield {
-          new LmdbDatabase[BCF, CFS](mat, refs, config)(rt)
+          new LmdbDatabase[BCF, CFS](mat, config.clientOptions, refs)(rt)
         }
     }
 
@@ -182,8 +184,8 @@ object LmdbDatabase extends StrictLogging {
 
 final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS],
-  dbContext: LmdbDatabase.LmdbContext[BCF[_, _]],
-  config: LmdbDatabase.LmdbDatabaseConfig
+  val clientOptions: KvdbClientOptions,
+  dbContext: LmdbDatabase.LmdbContext[BCF[_, _]]
 )(
   implicit rt: zio.Runtime[AkkaEnv]
 ) extends KvdbDatabase[BCF, CFS]
@@ -198,6 +200,11 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
   val activeTxnCounter = new LongAdder
   val activeCursorCounter = new LongAdder
+
+  def withOptions(modifier: KvdbClientOptions => KvdbClientOptions): LmdbDatabase[BCF, CFS] = {
+    val newOptions = modifier(clientOptions)
+    new LmdbDatabase[BCF, CFS](materialization, newOptions, dbContext)
+  }
 
   private def obtainContext: Task[Refs] = dbContext.obtain()
 
@@ -545,9 +552,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     } yield count)
   }
 
-  override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbBatch, NotUsed] = {
+  override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source
       .lazyFuture(() => {
         val task = obtainContext
@@ -605,7 +610,14 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
               }
 
               Source
-                .fromGraph(new KvdbIterateSourceGraph(init, dbContext.dbCloseSignal, config.ioDispatcher))
+                .fromGraph(
+                  new KvdbIterateSourceGraph(
+                    init,
+                    dbContext.dbCloseSignal,
+                    dbContext.ioDispatcher,
+                    clientOptions.batchReadMaxBatchBytes
+                  )
+                )
           }
 
         task.unsafeRunToFuture
@@ -617,8 +629,6 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   override def concurrentTailSource[Col <: CF](
     column: Col,
     ranges: List[KvdbKeyRange]
-  )(
-    implicit clientOptions: KvdbClientOptions
   ): Source[KvdbIndexedTailBatch, NotUsed] = {
     Source
       .lazyFuture(() => {
@@ -665,7 +675,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     refs: Refs,
     column: Col,
     range: KvdbKeyRange
-  )(implicit clientOptions: KvdbClientOptions): Source[KvdbTailBatch, NotUsed] = {
+  ): Source[KvdbTailBatch, NotUsed] = {
     val fromConstraints = range.from
     val toConstraints = range.to
 
@@ -714,12 +724,19 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     }
 
     Source
-      .fromGraph(new KvdbTailSourceGraph(init, refs.dbCloseSignal, config.ioDispatcher))
+      .fromGraph(
+        new KvdbTailSourceGraph(
+          init,
+          refs.dbCloseSignal,
+          dbContext.ioDispatcher,
+          clientOptions.batchReadMaxBatchBytes,
+          clientOptions.tailPollingMaxInterval,
+          clientOptions.tailPollingBackoffFactor
+        )
+      )
   }
 
-  override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange)(
-    implicit clientOptions: KvdbClientOptions
-  ): Source[KvdbTailBatch, NotUsed] = {
+  override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed] = {
     Source
       .lazyFuture(() => {
         val task = obtainContext
@@ -743,7 +760,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  override def transactionTask(actions: Seq[TransactionAction], sync: Boolean): Task[Unit] = {
+  override def transactionTask(actions: Seq[TransactionAction]): Task[Unit] = {
     writeTask(for {
       refs <- obtainContext
       _ <- Task {

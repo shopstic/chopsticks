@@ -6,26 +6,28 @@ import akka.actor.Status
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.testkit.{ImplicitSender, TestProbe}
+import com.google.protobuf.ByteString
 import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.codec.KeyConstraints
 import dev.chopsticks.kvdb.codec.primitive._
-import dev.chopsticks.kvdb.proto.{KvdbKeyConstraintList, KvdbKeyRange}
+import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
 import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
 import dev.chopsticks.kvdb.util.KvdbTestUtils.populateColumn
-import dev.chopsticks.kvdb.util.{KvdbClientOptions, KvdbSerdesUtils, KvdbTestUtils}
+import dev.chopsticks.kvdb.util.{KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.{Assertion, Inside}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import squants.information.InformationConversions._
 import zio.{RIO, Task, UIO, ZManaged}
 
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.language.implicitConversions
+import eu.timepit.refined.auto._
+import squants.information.InformationConversions._
 
 object KvdbDatabaseTest {
   private def flattenFlow[T] = Flow[Array[T]].mapConcat { b =>
@@ -84,9 +86,6 @@ object KvdbDatabaseTest {
     KeyConstraints.range[String]
 
   implicit def stringToByteArray(s: String): Array[Byte] = s.getBytes(UTF_8)
-
-  implicit val testKvdbClientOptions: KvdbClientOptions =
-    dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits.defaultClientOptions.copy(tailPollingInterval = 10.millis)
 }
 
 abstract private[kvdb] class KvdbDatabaseTest
@@ -193,6 +192,23 @@ abstract private[kvdb] class KvdbDatabaseTest
     }
 
     "single constraint" should {
+      "return None if column family is empty" in withDb { db =>
+        for {
+          pair <- db.getTask(
+            defaultCf,
+            KvdbKeyConstraintList(
+              KvdbKeyConstraint(
+                KvdbKeyConstraint.Operator.GREATER,
+                operand = ByteString.copyFrom(Array[Byte](Byte.MaxValue, Byte.MaxValue, Byte.MaxValue, Byte.MaxValue)),
+                ""
+              ) :: Nil
+            )
+          )
+        } yield {
+          pair should be(None)
+        }
+      }
+
       "[^=] seek and return pair with matching key" in withDb { db =>
         val key = "aaa"
         val value = "bbb"
@@ -606,7 +622,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     "respect given MaxKvdbBatchBytes" in withDb { db =>
       val count = 10000
       val pad = 5
-      val maxBatchBytes = 10.kib
+      val maxBatchBytes = 10.kb
 
       for {
         tx <- Task {
@@ -619,9 +635,8 @@ abstract private[kvdb] class KvdbDatabaseTest
         }
         _ <- db.transactionTask(tx)
         batches <- ZAkkaStreams.graphM(UIO {
-          db.iterateSource(defaultCf, $$(_.first, _.last))(
-              testKvdbClientOptions.copy(maxBatchBytes = maxBatchBytes)
-            )
+          db.withOptions(_.copy(batchReadMaxBatchBytes = maxBatchBytes))
+            .iterateSource(defaultCf, $$(_.first, _.last))
             .toMat(Sink.seq)(Keep.right)
         })
       } yield {
@@ -800,7 +815,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     "respect given MaxKvdbBatchBytes" in withDb { db =>
       val count = 10000
       val pad = 5
-      val maxBatchBytes = 10.kib
+      val maxBatchBytes = 10.kb
 
       for {
         tx <- Task {
@@ -814,9 +829,8 @@ abstract private[kvdb] class KvdbDatabaseTest
         _ <- db.transactionTask(tx)
         batches <- ZAkkaStreams
           .graphM(UIO {
-            db.tailSource(defaultCf, $$(_.first, _.last))(
-                testKvdbClientOptions.copy(maxBatchBytes = maxBatchBytes)
-              )
+            db.withOptions(_.copy(batchReadMaxBatchBytes = maxBatchBytes))
+              .tailSource(defaultCf, $$(_.first, _.last))
               .takeWhile(
                 (b: KvdbTailBatch) => b.forall(a => KvdbSerdesUtils.byteArrayToString(a.last._1) != "10000"),
                 inclusive = true
