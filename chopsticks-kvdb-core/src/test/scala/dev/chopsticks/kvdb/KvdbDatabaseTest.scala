@@ -29,7 +29,7 @@ import scala.language.implicitConversions
 import eu.timepit.refined.auto._
 import squants.information.InformationConversions._
 
-object KvdbDatabaseTest {
+object KvdbDatabaseTest extends Matchers with Inside {
   private def flattenFlow[T] = Flow[Array[T]].mapConcat { b =>
     new scala.collection.immutable.Iterable[T] {
       val iterator: Iterator[T] = b.iterator
@@ -76,14 +76,30 @@ object KvdbDatabaseTest {
     })
   }
 
-  private val $ : (KeyConstraints[String] => KeyConstraints[String]) => KvdbKeyConstraintList =
+  private[kvdb] val $ : (KeyConstraints[String] => KeyConstraints[String]) => KvdbKeyConstraintList =
     KeyConstraints.constrain[String]
 
-  private val $$ : (
+  private[kvdb] val $$ : (
     KeyConstraints[String] => KeyConstraints[String],
     KeyConstraints[String] => KeyConstraints[String]
   ) => KvdbKeyRange =
     KeyConstraints.range[String]
+
+  private[kvdb] def assertPair(pair: Option[KvdbPair], key: String, value: String): Assertion = {
+    inside(pair) {
+      case Some((k, v)) =>
+        byteArrayToString(k) should equal(key)
+        byteArrayToString(v) should equal(value)
+    }
+  }
+
+  private[kvdb] def assertPairs(pairs: Seq[KvdbPair], vs: Seq[(String, String)]): Assertion = {
+    pairs.map(p => (byteArrayToString(p._1), byteArrayToString(p._2))) should equal(vs)
+  }
+
+  private[kvdb] def assertValues(values: Seq[Array[Byte]], vs: Seq[String]): Assertion = {
+    values.map(p => byteArrayToString(p)) should equal(vs)
+  }
 
   implicit def stringToByteArray(s: String): Array[Byte] = s.getBytes(UTF_8)
 }
@@ -108,22 +124,6 @@ abstract private[kvdb] class KvdbDatabaseTest
 
   private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
   private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](managedDb)(runtime)
-
-  private def assertPair(pair: Option[KvdbPair], key: String, value: String): Assertion = {
-    inside(pair) {
-      case Some((k, v)) =>
-        byteArrayToString(k) should equal(key)
-        byteArrayToString(v) should equal(value)
-    }
-  }
-
-  private def assertPairs(pairs: Seq[KvdbPair], vs: Seq[(String, String)]): Assertion = {
-    pairs.map(p => (byteArrayToString(p._1), byteArrayToString(p._2))) should equal(vs)
-  }
-
-  private def assertValues(values: Seq[Array[Byte]], vs: Seq[String]): Assertion = {
-    values.map(p => byteArrayToString(p)) should equal(vs)
-  }
 
   "wrong column family" should {
     "not compile" in withDb { db =>
@@ -1032,7 +1032,7 @@ abstract private[kvdb] class KvdbDatabaseTest
           db.transactionBuilder()
             .delete(defaultCf, "aaaa1")
             .put(lookupCf, "dddd1", "dddd1")
-            .delete(lookupCf, "bbbb1", single = true)
+            .delete(lookupCf, "bbbb1")
             .put(defaultCf, "cccc1", "cccc1")
             .deleteRange(defaultCf, "pppp1", "pppp4")
             .result
@@ -1081,6 +1081,55 @@ abstract private[kvdb] class KvdbDatabaseTest
           Vector(
             ("aaaa1", "aaaa1"),
             ("aaaa5", "aaaa5")
+          )
+        )
+      }
+    }
+  }
+
+  "conditionalTransactionTask" should {
+    "perform writes if condition returns false" in withDb { db =>
+      for {
+        _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
+        _ <- db.conditionalTransactionTask(
+          db.readTransactionBuilder()
+            .get(defaultCf, "aaaa1")
+            .result,
+          _ => true,
+          db.transactionBuilder()
+            .delete(defaultCf, "aaaa1")
+            .result
+        )
+        ret <- db.getTask(defaultCf, $(_ is "aaaa1"))
+      } yield {
+        ret should be(None)
+      }
+    }
+
+    "not perform writes if condition returns false" in withDb { db =>
+      for {
+        _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
+        ret <- db
+          .conditionalTransactionTask(
+            db.readTransactionBuilder()
+              .get(defaultCf, "aaaa1")
+              .result,
+            _ => false,
+            db.transactionBuilder()
+              .delete(defaultCf, "aaaa1")
+              .result
+          )
+          .either
+        allDefault <- collectPairs(db.iterateSource(defaultCf, $$(_.first, _.last)))
+      } yield {
+        ret should matchPattern {
+          case Left(ConditionalTransactionFailedException(_)) =>
+        }
+
+        assertPairs(
+          allDefault,
+          Vector(
+            ("aaaa1", "aaaa1")
           )
         )
       }

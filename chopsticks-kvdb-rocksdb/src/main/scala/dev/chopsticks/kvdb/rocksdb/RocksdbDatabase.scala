@@ -9,13 +9,14 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
-  TransactionAction,
+import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
+import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
   TransactionDelete,
   TransactionDeleteRange,
-  TransactionPut
+  TransactionPut,
+  TransactionWrite
 }
-import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
@@ -39,7 +40,6 @@ object RocksdbDatabase extends StrictLogging {
 
   final case class Config(
     path: NonEmptyString,
-    readOnly: Boolean,
     startWithBulkInserts: Boolean,
     useDirectIo: Boolean,
     ioDispatcher: NonEmptyString,
@@ -710,7 +710,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       .flatMapConcat(identity)
   }
 
-  override def transactionTask(actions: Seq[TransactionAction]): Task[Unit] = {
+  override def transactionTask(actions: Seq[TransactionWrite]): Task[Unit] = {
     ioTask(references.map { refs =>
       val db = refs.db
       val writeBatch = new WriteBatch()
@@ -720,13 +720,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
           case TransactionPut(columnId, key, value) =>
             writeBatch.put(refs.getColumnHandle(columnFamilyWithId(columnId).get), key, value)
 
-          case TransactionDelete(columnId, key, single) =>
-            if (single) {
-              writeBatch.singleDelete(refs.getColumnHandle(columnFamilyWithId(columnId).get), key)
-            }
-            else {
-              writeBatch.delete(refs.getColumnHandle(columnFamilyWithId(columnId).get), key)
-            }
+          case TransactionDelete(columnId, key) =>
+            writeBatch.delete(refs.getColumnHandle(columnFamilyWithId(columnId).get), key)
 
           case TransactionDeleteRange(columnId, fromKey, toKey) =>
             writeBatch.deleteRange(
@@ -747,6 +742,72 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
       }
       finally {
         writeBatch.close()
+      }
+    })
+  }
+
+  override def conditionalTransactionTask(
+    reads: List[TransactionGet],
+    condition: List[Option[(Array[Byte], Array[Byte])]] => Boolean,
+    actions: Seq[TransactionWrite]
+  ): Task[Unit] = {
+    ioTask(references.flatMap { refs =>
+      val db = refs.txDb
+      val writeOptions = newWriteOptions()
+      val tx = db.beginTransaction(writeOptions)
+
+      try {
+        val pairs = for (read <- reads) yield {
+          val columnHandle = refs.getColumnHandle(columnFamilyWithId(read.columnId).get)
+          val key = read.key
+          val options = newReadOptions()
+
+          val value =
+            try {
+              tx.getForUpdate(options, columnHandle, key, true)
+            }
+            finally {
+              options.close()
+            }
+
+          if (value != null) Some(key -> value)
+          else None
+        }
+
+        val okToWrite = condition(pairs)
+
+        if (okToWrite) {
+          actions.foreach {
+            case TransactionPut(columnId, key, value) =>
+              tx.put(refs.getColumnHandle(columnFamilyWithId(columnId).get), key, value)
+
+            case TransactionDelete(columnId, key) =>
+              tx.delete(refs.getColumnHandle(columnFamilyWithId(columnId).get), key)
+
+            case TransactionDeleteRange(_, _, _) =>
+              throw UnsupportedKvdbOperationException(
+                "TransactionDeleteRange is not yet supported in conditionalTransactionTask"
+              )
+          }
+
+          try {
+            tx.commit()
+            Task.succeed(())
+          }
+          catch {
+            case ex: RocksDBException if ex.getStatus.getCode == org.rocksdb.Status.Code.Busy =>
+              Task.fail(ConditionalTransactionFailedException("Writes conflicted"))
+            case ex =>
+              Task.fail(ConditionalTransactionFailedException(s"Commit failed with ${ex.getMessage}"))
+          }
+        }
+        else {
+          Task.fail(ConditionalTransactionFailedException("Condition returns false"))
+        }
+      }
+      finally {
+        tx.close()
+        writeOptions.close()
       }
     })
   }

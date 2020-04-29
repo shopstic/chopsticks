@@ -8,10 +8,10 @@ import com.typesafe.config.Config
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
+import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
 import dev.chopsticks.kvdb.codec.berkeleydb_key._
 import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
 import dev.chopsticks.kvdb.lmdb.LmdbDatabase
-import dev.chopsticks.kvdb.util.KvdbClientOptions.Implicits._
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
@@ -43,7 +43,7 @@ object KvdbTestSampleApp extends AkkaApp {
   def run: RIO[Env, Unit] = {
     for {
       db <- ZService[SampleDb.Db]
-      dbApi <- KvdbDatabaseApi(db)
+      dbApi <- KvdbDatabaseApi(db, KvdbApiClientOptions.default)
       stats <- dbApi.statsTask
       _ <- ZLogger.info(
         stats.toVector

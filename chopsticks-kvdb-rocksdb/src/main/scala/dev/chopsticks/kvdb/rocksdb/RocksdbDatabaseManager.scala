@@ -32,6 +32,7 @@ object RocksdbDatabaseManager {
   }
 
   final case class RocksdbContext[CF <: ColumnFamily[_, _]](
+    txDb: OptimisticTransactionDB,
     db: RocksDB,
     columnHandleMap: Map[CF, ColumnFamilyHandle],
     columnPrefixExtractorOptionMap: Map[CF, String],
@@ -102,10 +103,10 @@ object RocksdbDatabaseManager {
           .repeat(Schedule.fixed(100.millis).untilInput(identity))
         _ <- blocking(Task {
           stats.close()
-          columnHandleMap.values.foreach { c => db.flush(new FlushOptions().setWaitForFlush(true), c) }
+          columnHandleMap.values.foreach { c => txDb.flush(new FlushOptions().setWaitForFlush(true), c) }
           columnHandleMap.foreach(_._2.close())
-          db.flushWal(true)
-          db.closeE()
+          txDb.flushWal(true)
+          txDb.closeE()
         })
       } yield ()
     }
@@ -169,7 +170,7 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
         .filterNot(_.getName.sameElements(RocksDB.DEFAULT_COLUMN_FAMILY))
 
       if (nonDefaultColumns.nonEmpty) {
-        val db = RocksDB.open(new Options().setCreateIfMissing(true), config.path)
+        val db = OptimisticTransactionDB.open(new Options().setCreateIfMissing(true), config.path)
 
         val columns = nonDefaultColumns.map { d => db.createColumnFamily(d) }
 
@@ -182,7 +183,7 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
       val existingDescriptor = descriptors.filter(d => existingColumnNames.contains(byteArrayToString(d.getName)))
       val toCreateDescriptors = descriptors.filter(d => !existingColumnNames.contains(byteArrayToString(d.getName)))
 
-      val db = RocksDB.open(new DBOptions(), config.path, existingDescriptor.asJava, handles)
+      val db = OptimisticTransactionDB.open(new DBOptions(), config.path, existingDescriptor.asJava, handles)
 
       val newHandles = toCreateDescriptors.map { d =>
         logger.info(s"Creating column family: ${byteArrayToString(d.getName)}")
@@ -236,9 +237,6 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
 
       val exists = File(config.path + "/CURRENT").exists
 
-      if (!exists && config.readOnly)
-        throw InvalidKvdbArgumentException(s"Opening database at ${config.path} as readyOnly but it doesn't exist")
-
       def openKvdb() = {
         val handles = new JavaArrayList[ColumnFamilyHandle]
 
@@ -247,8 +245,7 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
           .setStatistics(new Statistics())
 
         val db = {
-          if (config.readOnly) RocksDB.openReadOnly(dbOptions, config.path, descriptors.asJava, handles)
-          else RocksDB.open(dbOptions.setCreateIfMissing(true), config.path, descriptors.asJava, handles)
+          OptimisticTransactionDB.open(dbOptions.setCreateIfMissing(true), config.path, descriptors.asJava, handles)
         }
 
         val columnHandles = handles.asScala.toList
@@ -298,7 +295,8 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
             }.toMap
 
             RocksdbContext[CF](
-              db = db,
+              txDb = db,
+              db = db.getBaseDB,
               columnHandleMap = columnHandleMap,
               columnPrefixExtractorOptionMap = columnHasPrefixExtractorMap,
               stats = stats,

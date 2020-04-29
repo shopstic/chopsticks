@@ -79,6 +79,7 @@ message KvdbOperationException {
     INVALID_ARGUMENT = 4;
     UNSUPPORTED_OPERATION = 5;
     ALREADY_CLOSED = 6;
+    CONDITIONAL_TRANSACTION_FAILED = 7;
   }
   ExceptionType exception_type = 1;
   string message = 2;

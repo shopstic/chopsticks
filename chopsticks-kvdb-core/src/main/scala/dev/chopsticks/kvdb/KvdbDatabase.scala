@@ -2,8 +2,9 @@ package dev.chopsticks.kvdb
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.TransactionAction
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
+import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
@@ -53,7 +54,8 @@ object KvdbDatabase {
     forceSync: Boolean = false,
     batchReadMaxBatchBytes: Information = 32.kb,
     tailPollingMaxInterval: FiniteDuration = 100.millis,
-    tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d
+    tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d,
+    disableWriteConflictChecking: Boolean = false
   )
 
   object KvdbClientOptions {
@@ -73,7 +75,9 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def materialization: KvdbMaterialization[BCF, CFS]
 
-  def transactionBuilder(): ColumnFamilyTransactionBuilder[BCF] = new ColumnFamilyTransactionBuilder[BCF]
+  def transactionBuilder(): KvdbWriteTransactionBuilder[BCF] = new KvdbWriteTransactionBuilder[BCF]
+
+  def readTransactionBuilder(): KvdbReadTransactionBuilder[BCF] = new KvdbReadTransactionBuilder[BCF]
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]]
 
@@ -99,7 +103,13 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long]
 
-  def transactionTask(actions: Seq[TransactionAction]): Task[Unit]
+  def transactionTask(actions: Seq[TransactionWrite]): Task[Unit]
+
+  def conditionalTransactionTask(
+    reads: List[TransactionGet],
+    condition: List[Option[KvdbPair]] => Boolean,
+    actions: Seq[TransactionWrite]
+  ): Task[Unit]
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed]
 
