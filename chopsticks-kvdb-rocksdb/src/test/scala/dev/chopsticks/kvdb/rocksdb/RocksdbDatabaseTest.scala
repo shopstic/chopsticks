@@ -1,6 +1,7 @@
 package dev.chopsticks.kvdb.rocksdb
 
 import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.TestDatabase._
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern}
@@ -10,6 +11,8 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import squants.information.InformationConversions._
 import zio.ZManaged
+
+import scala.concurrent.duration._
 
 object RocksdbDatabaseTest {
   object dbMaterialization extends Materialization with RocksdbMaterialization[BaseCf, CfSet] {
@@ -47,12 +50,10 @@ object RocksdbDatabaseTest {
         dbMaterialization,
         RocksdbDatabase.Config(
           path = NonEmptyString.unsafeFrom(dir.pathAsString),
-          readOnly = false,
           startWithBulkInserts = false,
-          checksumOnRead = true,
-          syncWriteBatch = true,
           useDirectIo = true,
-          ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher"
+          ioDispatcher = "dev.chopsticks.kvdb.test-db-io-dispatcher",
+          clientOptions = KvdbClientOptions(tailPollingMaxInterval = 10.millis)
         )
       )
     } yield db

@@ -13,19 +13,21 @@ import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.{
-  TransactionAction,
+import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
+import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
   TransactionDelete,
   TransactionDeleteRange,
-  TransactionPut
+  TransactionPut,
+  TransactionWrite
 }
-import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException.{
+  ConditionalTransactionFailedException,
   InvalidKvdbArgumentException,
   KvdbAlreadyClosedException,
   SeekFailure,
@@ -759,30 +761,73 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
+  private def doTransaction(refs: Refs, txn: Txn[ByteBuffer], actions: Seq[TransactionWrite]): Unit = {
+    actions.foreach {
+      case TransactionPut(columnId, key, value) =>
+        val _ = doPut(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key, value)
+
+      case TransactionDelete(columnId, key) =>
+        val _ = doDelete(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key)
+
+      case TransactionDeleteRange(columnId, fromKey, toKey) =>
+        val _ = doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey)
+    }
+  }
+
   @SuppressWarnings(Array("org.wartremover.warts.AnyVal"))
-  override def transactionTask(actions: Seq[TransactionAction]): Task[Unit] = {
+  override def transactionTask(actions: Seq[TransactionWrite]): Task[Unit] = {
     writeTask(for {
       refs <- obtainContext
       _ <- Task {
         val txn: Txn[ByteBuffer] = createTxn(refs.env, forWrite = true)
 
         try {
-          actions.foreach {
-            case TransactionPut(columnId, key, value) =>
-              doPut(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key, value)
-
-            case TransactionDelete(columnId, key, _) =>
-              doDelete(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key)
-
-            case TransactionDeleteRange(columnId, fromKey, toKey) =>
-              doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey)
-          }
-
+          doTransaction(refs, txn, actions)
           txn.commit()
         }
         finally closeTxn(txn)
       }
     } yield ())
+  }
+
+  override def conditionalTransactionTask(
+    reads: List[TransactionGet],
+    condition: List[Option[(Array[Byte], Array[Byte])]] => Boolean,
+    actions: Seq[TransactionWrite]
+  ): Task[Unit] = {
+    writeTask(obtainContext.flatMap { refs =>
+      val txn: Txn[ByteBuffer] = createTxn(refs.env, forWrite = true)
+
+      try {
+        val reuseableBuffer = allocateDirect(refs.env.getMaxKeySize)
+
+        val pairs = for (read <- reads) yield {
+          val dbi = refs.getKvdbi(columnFamilyWithId(read.columnId).get)
+          val cursor = openCursor(dbi, txn)
+
+          try {
+            doGet(
+              cursor,
+              reuseableBuffer,
+              List(KvdbKeyConstraint(operator = Operator.EQUAL, operand = ProtoByteString.copyFrom(read.key)))
+            ).toOption
+          }
+          finally closeCursor(cursor)
+        }
+
+        val okToWrite = condition(pairs)
+
+        if (okToWrite) {
+          doTransaction(refs, txn, actions)
+          txn.commit()
+          Task.succeed(())
+        }
+        else {
+          Task.fail(ConditionalTransactionFailedException("Condition returns false"))
+        }
+      }
+      finally closeTxn(txn)
+    })
   }
 
   override def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {

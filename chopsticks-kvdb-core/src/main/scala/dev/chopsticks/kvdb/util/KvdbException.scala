@@ -26,4 +26,7 @@ object KvdbException {
 
   final case class KvdbAlreadyClosedException(msg: String)
       extends KvdbException(KvdbOperationException.ExceptionType.ALREADY_CLOSED, msg)
+
+  final case class ConditionalTransactionFailedException(msg: String)
+      extends KvdbException(KvdbOperationException.ExceptionType.CONDITIONAL_TRANSACTION_FAILED, msg)
 }

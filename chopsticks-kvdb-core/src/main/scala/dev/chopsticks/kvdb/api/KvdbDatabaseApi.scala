@@ -1,9 +1,11 @@
 package dev.chopsticks.kvdb.api
 
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.kvdb.ColumnFamilyTransactionBuilder.TransactionAction
+import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
-import dev.chopsticks.kvdb.{ColumnFamily, ColumnFamilyTransactionBuilder, KvdbDatabase}
+import dev.chopsticks.kvdb.util.KvdbAliases.KvdbPair
+import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbReadTransactionBuilder, KvdbWriteTransactionBuilder}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import squants.information.Information
@@ -73,10 +75,20 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]] = db.statsTask
 
-  def transactionTask(actions: Seq[TransactionAction]): Task[Seq[TransactionAction]] = {
+  def transactionTask(actions: Seq[TransactionWrite]): Task[Seq[TransactionWrite]] = {
     db.transactionTask(actions)
       .as(actions)
   }
 
-  def transactionBuilder: ColumnFamilyTransactionBuilder[BCF] = db.transactionBuilder()
+  def conditionalTransactionTask(
+    reads: List[TransactionGet],
+    condition: List[Option[KvdbPair]] => Boolean,
+    actions: Seq[TransactionWrite]
+  ): Task[Seq[TransactionWrite]] = {
+    db.conditionalTransactionTask(reads, condition, actions)
+      .as(actions)
+  }
+
+  def readTransactionBuilder: KvdbReadTransactionBuilder[BCF] = db.readTransactionBuilder()
+  def transactionBuilder: KvdbWriteTransactionBuilder[BCF] = db.transactionBuilder()
 }
