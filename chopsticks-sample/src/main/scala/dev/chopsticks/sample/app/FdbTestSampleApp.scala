@@ -6,16 +6,15 @@ import com.typesafe.config.Config
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
-import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
 import dev.chopsticks.kvdb.codec.fdb_key._
-import dev.chopsticks.kvdb.codec.protobuf_value._
 import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
+import dev.chopsticks.kvdb.codec.protobuf_value._
 import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.sample.kvdb.SampleDb
+import dev.chopsticks.sample.kvdb.SampleDb.TestKey
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
 import zio.{Has, RIO, UIO, ZLayer}
-import dev.chopsticks.sample.kvdb.SampleDb.TestKey
 
 import scala.concurrent.duration._
 
@@ -45,7 +44,7 @@ object FdbTestSampleApp extends AkkaApp {
   def run: RIO[Env, Unit] = {
     for {
       db <- ZService[SampleDb.Db]
-      dbApi <- KvdbDatabaseApi(db, KvdbApiClientOptions.default)
+      dbApi <- KvdbDatabaseApi(db)
       _ <- dbApi
         .columnFamily(sampleDb.default)
         .putTask("foo0000", "foo0000")

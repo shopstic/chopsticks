@@ -40,10 +40,11 @@ final class SpecificFdbDatabaseTest
         counter = new AtomicLong()
         fib <- db
           .conditionalTransactionTask(
-            db.readTransactionBuilder()
+            reads = db
+              .readTransactionBuilder()
               .get(defaultCf, "aaaa")
               .result,
-            test => {
+            condition = test => {
               val _ = counter.getAndIncrement()
               rt.unsafeRun(promise.await)
               test match {
@@ -53,7 +54,8 @@ final class SpecificFdbDatabaseTest
                   false
               }
             },
-            db.transactionBuilder()
+            actions = db
+              .transactionBuilder()
               .delete(defaultCf, "aaaa")
               .result
           )
