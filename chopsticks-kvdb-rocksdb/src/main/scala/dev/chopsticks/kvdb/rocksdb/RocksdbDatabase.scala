@@ -33,6 +33,8 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.{Task, ZIO, ZManaged}
 
+import scala.util.control.NonFatal
+
 object RocksdbDatabase extends StrictLogging {
   final val DEFAULT_COLUMN_NAME: String = new String(RocksDB.DEFAULT_COLUMN_FAMILY, UTF_8)
 
@@ -797,7 +799,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
           catch {
             case ex: RocksDBException if ex.getStatus.getCode == org.rocksdb.Status.Code.Busy =>
               Task.fail(ConditionalTransactionFailedException("Writes conflicted"))
-            case ex =>
+            case NonFatal(ex) =>
               Task.fail(ConditionalTransactionFailedException(s"Commit failed with ${ex.getMessage}"))
           }
         }
