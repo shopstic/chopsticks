@@ -69,7 +69,7 @@ object KvdbDatabase {
 trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
   type CF = BCF[_, _]
 
-  protected def clientOptions: KvdbClientOptions
+  def clientOptions: KvdbClientOptions
 
   def withOptions(modifier: KvdbClientOptions => KvdbClientOptions): KvdbDatabase[BCF, CFS]
 
