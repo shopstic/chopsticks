@@ -4,7 +4,7 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.1"
-  val AKKA_VERSION = "2.6.4"
+  val AKKA_VERSION = "2.6.5"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.0-RC18-2"
 
@@ -31,7 +31,7 @@ object Dependencies {
   val zioDeps = Seq(
     "dev.zio" %% "zio" % ZIO_VERSION,
     "dev.zio" %% "zio-streams" % ZIO_VERSION,
-    "dev.zio" %% "zio-logging-slf4j" % "0.2.7"
+    "dev.zio" %% "zio-logging-slf4j" % "0.2.8"
   )
 
   val zioTestDeps = Seq(
@@ -103,7 +103,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.7.3"
+    "org.rocksdb" % "rocksdbjni" % "6.8.1"
   )
 
   val lmdbDeps = Seq(
@@ -148,7 +148,7 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "2.2"
+    "com.github.japgolly.microlibs" %% "utils" % "2.3"
   )
 
   val silencerVersion = "1.6.0"
@@ -163,7 +163,7 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.15.0"
+    "com.propensive" %% "magnolia" % "0.16.0"
   )
 
   val pprintDeps = Seq(
