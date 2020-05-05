@@ -10,8 +10,9 @@ object PureconfigLoader {
   implicit def hint[T]: ProductHint[T] = ProductHint[T](allowUnknownKeys = false)
 
   private def sanitizeReason(reason: String) = {
-    reason.replaceAllLiterally("\n", " ")
+    reason.replace("\n", " ")
   }
+
   def load[Cfg: ConfigReader](config: Config, namespace: String): Either[String, Cfg] = {
     ConfigSource.fromConfig(config).at(namespace).load[Cfg] match {
       case Left(failures: ConfigReaderFailures) =>
