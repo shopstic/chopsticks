@@ -124,7 +124,7 @@ object Dependencies {
   )
 
   val enumeratumDeps = Seq(
-    "com.beachape" %% "enumeratum" % "1.5.15"
+    "com.beachape" %% "enumeratum" % "1.6.0"
   )
 
   val refinedCoreDeps = Seq(
@@ -171,6 +171,6 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.0.9"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.1.0"
   )
 }
