@@ -28,8 +28,11 @@ object Dependencies {
 
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
-  val zioDeps = Seq(
-    "dev.zio" %% "zio" % ZIO_VERSION,
+  val zioCoreDeps = Seq(
+    "dev.zio" %% "zio" % ZIO_VERSION
+  )
+
+  val zioDeps = zioCoreDeps ++ Seq(
     "dev.zio" %% "zio-streams" % ZIO_VERSION,
     "dev.zio" %% "zio-logging-slf4j" % "0.2.8"
   )
@@ -46,7 +49,8 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.8.1"
+    "io.prometheus" % "simpleclient" % "0.8.1",
+    "io.prometheus" % "simpleclient_common" % "0.8.1"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
