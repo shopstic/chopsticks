@@ -128,6 +128,12 @@ lazy val kvdbCodecProtobufValue = Build
   .defineProject("kvdb-codec-protobuf-value")
   .dependsOn(kvdbCore)
 
+lazy val metric = Build
+  .defineProject("metric")
+  .settings(
+    libraryDependencies ++= prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps
+  )
+
 lazy val sample = Build
   .defineProject("sample")
   .enablePlugins(AkkaGrpcPlugin)
@@ -172,5 +178,6 @@ lazy val root = (project in file("."))
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
     avro4s,
+    metric,
     sample
   )
