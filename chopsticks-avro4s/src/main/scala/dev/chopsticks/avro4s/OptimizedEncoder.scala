@@ -7,7 +7,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import shapeless.Refute
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{implicitNotFound, nowarn}
 import scala.language.experimental.macros
 @implicitNotFound(
   msg = "Implicit OptimizedEncoder[${T}] not found. Try supplying an implicit instance of OptimizedEncoder[${T}]"
@@ -20,12 +20,10 @@ trait OptimizedEncoder[T] extends Serializable {
 }
 
 trait LowPriorityOptimizedEncoder {
-  implicit def encoderToOptimizedEncoder[A /*: Typeable*/ ](
-    implicit e: Encoder[A],
-    ev: Refute[Optimized[A]]
+  implicit def encoderToOptimizedEncoder[A /*: Typeable*/ ](implicit
+    e: Encoder[A],
+    @nowarn ev: Refute[Optimized[A]]
   ): OptimizedEncoder[A] = {
-    import dev.chopsticks.util.implicits.UnusedImplicits._
-    ev.unused()
     //    println("ORIGINAL: " + implicitly[Typeable[A]].describe)
     (t: A, schema: Schema, fieldMapper: FieldMapper) => e.encode(t, schema, fieldMapper)
   }
@@ -105,9 +103,9 @@ object OptimizedEncoder extends LowPriorityOptimizedEncoder {
     val nameCache = ctx.subtypes
       .foldLeft(Map.empty[(Schema.Type, TypeName), String]) { (m, subtype) =>
         m.updated(
-            Schema.Type.UNION -> subtype.typeName,
-            NameExtractor(subtype.typeName, subtype.annotations ++ ctx.annotations).fullName
-          )
+          Schema.Type.UNION -> subtype.typeName,
+          NameExtractor(subtype.typeName, subtype.annotations ++ ctx.annotations).fullName
+        )
           .updated(Schema.Type.ENUM -> subtype.typeName, NameExtractor(subtype.typeName, subtype.annotations).name)
       }
 

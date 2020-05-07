@@ -6,7 +6,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericContainer, GenericData, GenericEnumSymbol, IndexedRecord}
 import shapeless.Refute
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{implicitNotFound, nowarn}
 import scala.jdk.CollectionConverters._
 import scala.collection.concurrent.TrieMap
 import scala.language.experimental.macros
@@ -24,13 +24,11 @@ trait OptimizedDecoder[T] extends Serializable {
 }
 
 trait LowPriorityOptimizedDecoder {
-  implicit def decoderToOptimizedDecoder[A /*: Typeable*/ ](
-    implicit e: Decoder[A],
-    ev: Refute[Optimized[A]]
-  ): OptimizedDecoder[A] = {
-    import dev.chopsticks.util.implicits.UnusedImplicits._
-    ev.unused()
-    (value: Any, schema: Schema, fieldMapper: FieldMapper) => {
+  implicit def decoderToOptimizedDecoder[A /*: Typeable*/ ](implicit
+    e: Decoder[A],
+    @nowarn ev: Refute[Optimized[A]]
+  ): OptimizedDecoder[A] = { (value: Any, schema: Schema, fieldMapper: FieldMapper) =>
+    {
       e.decode(value, schema, fieldMapper)
     }
   }
@@ -129,13 +127,10 @@ object OptimizedDecoder extends LowPriorityOptimizedDecoder {
     val nameCache = ctx.subtypes
       .foldLeft(Map.empty[(Schema.Type, TypeName), String]) { (m, subtype) =>
         m.updated(
-            Schema.Type.RECORD -> subtype.typeName,
-            NameExtractor(subtype.typeName, subtype.annotations ++ ctx.annotations).fullName
-          )
-          .updated(
-            Schema.Type.UNION -> subtype.typeName,
-            NameExtractor(subtype.typeName, subtype.annotations).fullName
-          )
+          Schema.Type.RECORD -> subtype.typeName,
+          NameExtractor(subtype.typeName, subtype.annotations ++ ctx.annotations).fullName
+        )
+          .updated(Schema.Type.UNION -> subtype.typeName, NameExtractor(subtype.typeName, subtype.annotations).fullName)
           .updated(Schema.Type.ENUM -> subtype.typeName, NameExtractor(subtype).name)
       }
 
