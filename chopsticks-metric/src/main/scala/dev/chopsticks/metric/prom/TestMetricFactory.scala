@@ -1,12 +1,16 @@
-package dev.chopsticks.metric.test
+package dev.chopsticks.metric.prom
 
 import dev.chopsticks.metric.MetricConfigs._
-import dev.chopsticks.metric.MetricService.MetricGroup
+import dev.chopsticks.metric.MetricFactory.MetricGroup
 import dev.chopsticks.metric._
-import dev.chopsticks.metric.prom.PromMetricService._
+import dev.chopsticks.metric.prom.PromMetrics._
 import io.prometheus.client.{Counter, Gauge, Histogram, Summary}
 
-final class TestMetricService[C <: MetricGroup] extends MetricService[C] {
+object TestMetricFactory {
+  def apply[C <: MetricGroup](): TestMetricFactory[C] = new TestMetricFactory[C]()
+}
+
+final class TestMetricFactory[C <: MetricGroup] extends MetricFactory[C] {
   override def counter(config: CounterConfig[NoLabel] with C): MetricCounter = {
     new PromCounter(
       Counter
