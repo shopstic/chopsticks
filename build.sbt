@@ -63,15 +63,15 @@ lazy val kvdbCore = Build
   .defineProject("kvdb-core")
   .settings(
     libraryDependencies ++= shapelessDeps ++ scalapbRuntimeDeps ++ chimneyDeps ++
-      kittensDeps ++ betterFilesDeps ++ refinedDeps ++ silencerDeps,
+      kittensDeps ++ betterFilesDeps ++ refinedDeps,
     Compile / PB.targets := Seq(
       scalapb
         .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value
-    ),
-    scalacOptions ++= Seq(
-      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
-      "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
     )
+//    scalacOptions ++= Seq(
+//      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
+//      "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
+//    )
   )
   .dependsOn(util, fp, stream, testkit % "test->test")
 
@@ -139,13 +139,12 @@ lazy val sample = Build
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= janinoDeps ++ silencerDeps ++ pprintDeps,
+    libraryDependencies ++= janinoDeps ++ pprintDeps,
     publish / skip := true,
     bintrayRelease := {},
     akkaGrpcCodeGeneratorSettings += "server_power_apis",
     scalacOptions ++= Seq(
-      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
-      "-P:silencer:pathFilters=dev/chopsticks/sample/app/proto"
+      s"-Wconf:src=${(Compile / sourceManaged).value.getCanonicalPath}/dev/chopsticks/sample/app/proto/.*&cat=deprecation:s"
     )
   )
   .dependsOn(

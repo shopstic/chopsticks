@@ -11,7 +11,7 @@ import eu.timepit.refined.api.{RefType, Validate}
 import magnolia._
 import scalapb.GeneratedEnum
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{implicitNotFound, nowarn}
 import scala.language.experimental.macros
 @implicitNotFound(
   msg =
@@ -65,15 +65,11 @@ object BerkeleydbKeySerializer {
   implicit def enumeratumEnumKeyEncoder[E <: EnumEntry]: BerkeleydbKeySerializer[E] =
     (o: TupleOutput, t: E) => o.writeString(t.entryName)
 
-  implicit def refinedBerkeleydbKeySerializer[F[_, _], T, P](
-    implicit serializer: BerkeleydbKeySerializer[T],
+  implicit def refinedBerkeleydbKeySerializer[F[_, _], T, P](implicit
+    serializer: BerkeleydbKeySerializer[T],
     refType: RefType[F],
-    validate: Validate[T, P]
-  ): BerkeleydbKeySerializer[F[T, P]] = {
-    import dev.chopsticks.util.implicits.UnusedImplicits._
-    validate.unused()
-    (o: TupleOutput, t: F[T, P]) => serializer.serialize(o, refType.unwrap(t))
-  }
+    @nowarn validate: Validate[T, P]
+  ): BerkeleydbKeySerializer[F[T, P]] = { (o: TupleOutput, t: F[T, P]) => serializer.serialize(o, refType.unwrap(t)) }
 
   def apply[V](implicit f: BerkeleydbKeySerializer[V]): BerkeleydbKeySerializer[V] = f
 
