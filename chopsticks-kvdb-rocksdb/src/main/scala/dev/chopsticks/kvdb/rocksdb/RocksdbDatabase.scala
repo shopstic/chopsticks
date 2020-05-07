@@ -147,7 +147,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     "block-cache-capacity",
     "block-cache-usage",
     "block-cache-pinned-usage"
-  ).map(n => (n, "rocksdb_cf_" + n.replaceAllLiterally("-", "_")))
+  ).map(n => (n, "rocksdb_cf_" + n.replace("-", "_")))
 
   override def statsTask: Task[Map[(String, Map[String, String]), Double]] = references.map { refs =>
     val tickers = TickerType
