@@ -20,7 +20,7 @@ object KvdbUtils {
     val classFullName = clazz.getName.drop(enclosingLength)
     val className = classFullName
       .drop(classFullName.lastIndexOf(".") + 1)
-      .replaceAllLiterally("$", "")
+      .replace("$", "")
     SnakeCase.fromTokens(PascalCase.toTokens(className))
   }
 }

@@ -26,7 +26,9 @@ object AkkaApp extends LoggingContext {
 
   object Env {
     def live(implicit actorSystem: ActorSystem): ZLayer[Any, Nothing, Env] = {
-      AkkaEnv.live(actorSystem) >>> (Clock.live ++ Console.live ++ zio.system.System.live ++ Random.live ++ Blocking.live ++ AkkaEnv.any ++ LogEnv.live)
+      AkkaEnv.live(
+        actorSystem
+      ) >>> (Clock.live ++ Console.live ++ zio.system.System.live ++ Random.live ++ Blocking.live ++ AkkaEnv.any ++ LogEnv.live)
     }
   }
 
@@ -73,8 +75,8 @@ trait AkkaApp extends LoggingContext {
   def run: RIO[Env, Unit]
 
   def main(args: Array[String]): Unit = {
-    val appName = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replaceAllLiterally("$", "")))
-    val appConfigName = this.getClass.getPackage.getName.replaceAllLiterally(".", "/") + "/" + appName
+    val appName = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replace("$", "")))
+    val appConfigName = this.getClass.getPackage.getName.replace(".", "/") + "/" + appName
     val customAppConfig = scala.sys.props.get("config.file") match {
       case Some(customConfigFile) =>
         ConfigFactory
