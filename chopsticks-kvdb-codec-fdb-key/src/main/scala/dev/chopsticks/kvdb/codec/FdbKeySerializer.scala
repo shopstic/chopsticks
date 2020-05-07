@@ -62,8 +62,8 @@ object FdbKeySerializer {
   implicit def enumeratumEnumKeyEncoder[E <: EnumEntry]: FdbKeySerializer[E] =
     (o: Tuple, t: E) => o.add(t.entryName)
 
-  implicit def refinedFdbKeySerializer[F[_, _], T, P](
-    implicit serializer: FdbKeySerializer[T],
+  implicit def refinedFdbKeySerializer[F[_, _], T, P](implicit
+    serializer: FdbKeySerializer[T],
     refType: RefType[F],
     validate: Validate[T, P]
   ): FdbKeySerializer[F[T, P]] = {

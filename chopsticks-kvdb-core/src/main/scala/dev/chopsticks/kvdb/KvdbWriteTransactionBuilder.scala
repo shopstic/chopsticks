@@ -27,8 +27,8 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
     this
   }
 
-  def putValue[CF <: BCF[K, V], K, V](column: CF, value: V)(
-    implicit t: KeyTransformer[V, K]
+  def putValue[CF <: BCF[K, V], K, V](column: CF, value: V)(implicit
+    t: KeyTransformer[V, K]
   ): this.type = {
     val key = t.transform(value)
     put(column, key, value)

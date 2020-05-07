@@ -7,8 +7,8 @@ import com.sleepycat.bind.tuple.{TupleInput, TupleOutput}
 
 //noinspection TypeAnnotation
 package object berkeleydb_key {
-  implicit def berkeleydbKeySerializer[T](
-    implicit serializer: BerkeleydbKeySerializer[T]
+  implicit def berkeleydbKeySerializer[T](implicit
+    serializer: BerkeleydbKeySerializer[T]
   ): KeySerializer[T] = (key: T) => serializer.serialize(new TupleOutput(), key).toByteArray
 
   implicit def berkeleydbKeyDeserializer[T](implicit deserializer: BerkeleydbKeyDeserializer[T]): KeyDeserializer[T] = {

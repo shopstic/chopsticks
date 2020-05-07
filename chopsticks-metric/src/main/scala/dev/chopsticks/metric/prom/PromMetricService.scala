@@ -69,11 +69,13 @@ final class PromMetricService[C <: MetricGroup](prefix: String) extends MetricSe
     val prefixedName = prefixMetric(config, prefix)
 
     val promCounter = counters.synchronized {
-      counters.getOrElseUpdate(prefixedName, {
-        Counter
-          .build(prefixedName, prefixedName)
-          .register()
-      })
+      counters.getOrElseUpdate(
+        prefixedName, {
+          Counter
+            .build(prefixedName, prefixedName)
+            .register()
+        }
+      )
     }
 
     new PromCounter(promCounter)
@@ -88,12 +90,14 @@ final class PromMetricService[C <: MetricGroup](prefix: String) extends MetricSe
     val prefixedName = prefixMetric(config, prefix)
 
     val promCounter = counters.synchronized {
-      counters.getOrElseUpdate(prefixedName, {
-        Counter
-          .build(prefixedName, prefixedName)
-          .labelNames(names: _*)
-          .register()
-      })
+      counters.getOrElseUpdate(
+        prefixedName, {
+          Counter
+            .build(prefixedName, prefixedName)
+            .labelNames(names: _*)
+            .register()
+        }
+      )
     }
 
     new PromChildCounter(promCounter.labels(values: _*))
@@ -103,11 +107,13 @@ final class PromMetricService[C <: MetricGroup](prefix: String) extends MetricSe
     val prefixedName = prefixMetric(config, prefix)
 
     val promGauge = gauges.synchronized {
-      gauges.getOrElseUpdate(prefixedName, {
-        Gauge
-          .build(prefixedName, prefixedName)
-          .register()
-      })
+      gauges.getOrElseUpdate(
+        prefixedName, {
+          Gauge
+            .build(prefixedName, prefixedName)
+            .register()
+        }
+      )
     }
 
     new PromGauge(promGauge)
@@ -122,12 +128,14 @@ final class PromMetricService[C <: MetricGroup](prefix: String) extends MetricSe
     val prefixedName = prefixMetric(config, prefix)
 
     val promGauge = gauges.synchronized {
-      gauges.getOrElseUpdate(prefixedName, {
-        Gauge
-          .build(prefixedName, prefixedName)
-          .labelNames(names: _*)
-          .register()
-      })
+      gauges.getOrElseUpdate(
+        prefixedName, {
+          Gauge
+            .build(prefixedName, prefixedName)
+            .labelNames(names: _*)
+            .register()
+        }
+      )
     }
 
     new PromChildGauge(promGauge.labels(values: _*))
@@ -137,12 +145,14 @@ final class PromMetricService[C <: MetricGroup](prefix: String) extends MetricSe
     val prefixedName = prefixMetric(config, prefix)
 
     val promHistogram = histograms.synchronized {
-      histograms.getOrElseUpdate(prefixedName, {
-        Histogram
-          .build(prefixedName, prefixedName)
-          .buckets(config.buckets: _*)
-          .register()
-      })
+      histograms.getOrElseUpdate(
+        prefixedName, {
+          Histogram
+            .build(prefixedName, prefixedName)
+            .buckets(config.buckets: _*)
+            .register()
+        }
+      )
     }
 
     new PromHistogram(promHistogram)
@@ -157,13 +167,15 @@ final class PromMetricService[C <: MetricGroup](prefix: String) extends MetricSe
     val prefixedName = prefixMetric(config, prefix)
 
     val promHistogram = histograms.synchronized {
-      histograms.getOrElseUpdate(prefixedName, {
-        Histogram
-          .build(prefixedName, prefixedName)
-          .buckets(config.buckets: _*)
-          .labelNames(names: _*)
-          .register()
-      })
+      histograms.getOrElseUpdate(
+        prefixedName, {
+          Histogram
+            .build(prefixedName, prefixedName)
+            .buckets(config.buckets: _*)
+            .labelNames(names: _*)
+            .register()
+        }
+      )
     }
 
     new PromChildHistogram(promHistogram.labels(values: _*))

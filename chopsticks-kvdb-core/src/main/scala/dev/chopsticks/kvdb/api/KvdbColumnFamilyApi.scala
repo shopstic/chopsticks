@@ -28,8 +28,8 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   db: KvdbDatabase[BCF, _],
   cf: CF,
   options: KvdbApiClientOptions
-)(
-  implicit rt: zio.Runtime[AkkaEnv]
+)(implicit
+  rt: zio.Runtime[AkkaEnv]
 ) {
   private val akkaEnv = ZService.get[AkkaEnv.Service](rt.environment)
   import akkaEnv._
@@ -87,7 +87,8 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     else {
       Flow[O]
         .batch(
-          maxBatchSize.toLong, { o: O =>
+          maxBatchSize.toLong,
+          { o: O =>
             val keyBatch = Vector.newBuilder[O]
             val valueBatch = Vector.newBuilder[KvdbKeyConstraintList]
             (keyBatch += o, valueBatch += KeyConstraints.toList(constraintsMapper(o)(KeyConstraints.seed[K])))

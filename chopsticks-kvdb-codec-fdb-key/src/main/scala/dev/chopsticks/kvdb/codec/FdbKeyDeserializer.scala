@@ -85,8 +85,8 @@ object FdbKeyDeserializer {
 
   implicit val uuidFdbKeyDecoder: FdbKeyDeserializer[UUID] = createTry(_.getUUID)
 
-  implicit def protobufEnumFdbKeyDecoder[T <: GeneratedEnum](
-    implicit underlyingDecoder: FdbKeyDeserializer[Int],
+  implicit def protobufEnumFdbKeyDecoder[T <: GeneratedEnum](implicit
+    underlyingDecoder: FdbKeyDeserializer[Int],
     comp: GeneratedEnumCompanion[T],
     typ: Typeable[T]
   ): FdbKeyDeserializer[T] =
@@ -99,8 +99,8 @@ object FdbKeyDeserializer {
         }
       }
 
-  implicit def enumeratumByteEnumKeyDecoder[E <: ByteEnumEntry](
-    implicit e: ByteEnum[E]
+  implicit def enumeratumByteEnumKeyDecoder[E <: ByteEnumEntry](implicit
+    e: ByteEnum[E]
   ): FdbKeyDeserializer[E] = (in: FdbTupleReader) => {
     Try(e.withValue(in.getBigInteger.byteValueExact())) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
@@ -108,8 +108,8 @@ object FdbKeyDeserializer {
     }
   }
 
-  implicit def enumeratumShortEnumKeyDecoder[E <: ShortEnumEntry](
-    implicit e: ShortEnum[E]
+  implicit def enumeratumShortEnumKeyDecoder[E <: ShortEnumEntry](implicit
+    e: ShortEnum[E]
   ): FdbKeyDeserializer[E] = { (in: FdbTupleReader) =>
     Try(e.withValue(in.getBigInteger.shortValueExact())) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
@@ -117,8 +117,8 @@ object FdbKeyDeserializer {
     }
   }
 
-  implicit def enumeratumIntEnumKeyDecoder[E <: IntEnumEntry](
-    implicit e: IntEnum[E]
+  implicit def enumeratumIntEnumKeyDecoder[E <: IntEnumEntry](implicit
+    e: IntEnum[E]
   ): FdbKeyDeserializer[E] = { (in: FdbTupleReader) =>
     Try(e.withValue(in.getBigInteger.intValueExact())) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
@@ -126,8 +126,8 @@ object FdbKeyDeserializer {
     }
   }
 
-  implicit def enumeratumEnumKeyDecoder[E <: EnumEntry](
-    implicit e: enumeratum.Enum[E]
+  implicit def enumeratumEnumKeyDecoder[E <: EnumEntry](implicit
+    e: enumeratum.Enum[E]
   ): FdbKeyDeserializer[E] = { (in: FdbTupleReader) =>
     Try(e.withName(in.getString)) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
@@ -135,8 +135,8 @@ object FdbKeyDeserializer {
     }
   }
 
-  implicit def refinedFdbKeyDeserializer[F[_, _], T, P](
-    implicit deserializer: FdbKeyDeserializer[T],
+  implicit def refinedFdbKeyDeserializer[F[_, _], T, P](implicit
+    deserializer: FdbKeyDeserializer[T],
     refType: RefType[F],
     validate: Validate[T, P]
   ): FdbKeyDeserializer[F[T, P]] = (in: FdbTupleReader) => {
@@ -146,8 +146,8 @@ object FdbKeyDeserializer {
     }
   }
 
-  implicit def optionFdbKeyDecoder[T](
-    implicit decoder: FdbKeyDeserializer[T]
+  implicit def optionFdbKeyDecoder[T](implicit
+    decoder: FdbKeyDeserializer[T]
   ): FdbKeyDeserializer[Option[T]] = { in: FdbTupleReader =>
     for {
       nonEmpty <- booleanFdbKeyDecoder.deserialize(in)

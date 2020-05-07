@@ -17,8 +17,8 @@ object KeyTransformer {
   def transform[From, To](from: From)(implicit t: KeyTransformer[From, To]): To = t.transform(from)
 
   implicit def identityTransformer[V]: DerivedKeyTransformer[V, V] = v => v
-  implicit def autoTransformer[From, To](
-    implicit d: ChimneyTransformer[From, To]
+  implicit def autoTransformer[From, To](implicit
+    d: ChimneyTransformer[From, To]
   ): DerivedKeyTransformer[From, To] = { v => d.transform(v) }
 
   type ToStringDbKeyTransformer[From] = KeyTransformer[From, String]

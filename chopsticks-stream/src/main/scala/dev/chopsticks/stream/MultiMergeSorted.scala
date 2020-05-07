@@ -8,8 +8,8 @@ import scala.collection.immutable
 import scala.reflect.ClassTag
 
 object MultiMergeSorted {
-  def merge[T: ClassTag](sources: Seq[Source[T, Any]], untilLastSourceComplete: Boolean = false)(
-    implicit ordering: Ordering[T]
+  def merge[T: ClassTag](sources: Seq[Source[T, Any]], untilLastSourceComplete: Boolean = false)(implicit
+    ordering: Ordering[T]
   ): Source[T, Any] = {
     Source.fromGraph(GraphDSL.create(new MultiMergeSorted[T](sources.size, ordering, untilLastSourceComplete)) {
       implicit b => merge =>
@@ -117,23 +117,29 @@ final class MultiMergeSorted[T: ClassTag] private (
       val in = ins(i)
       activeUpstreamsMap.update(i, true)
 
-      setHandler(in, new InHandler {
-        override def onPush(): Unit = {
-          val item = grab(in)
-          onItem(i, item)
-        }
+      setHandler(
+        in,
+        new InHandler {
+          override def onPush(): Unit = {
+            val item = grab(in)
+            onItem(i, item)
+          }
 
-        override def onUpstreamFinish(): Unit = {
-          onInletComplete(i)
+          override def onUpstreamFinish(): Unit = {
+            onInletComplete(i)
+          }
         }
-      })
+      )
     }
 
-    setHandler(out, new OutHandler {
-      override def onPull(): Unit = {
-        possiblyPushOrComplete()
+    setHandler(
+      out,
+      new OutHandler {
+        override def onPull(): Unit = {
+          possiblyPushOrComplete()
+        }
       }
-    })
+    )
   }
 
   override def toString: String = "MultiMergeSorted"

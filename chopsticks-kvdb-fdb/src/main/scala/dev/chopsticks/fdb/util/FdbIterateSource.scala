@@ -67,10 +67,15 @@ object FdbIterateSource extends LoggingContext {
             s"lastFailure=${f.toString}"
         }
 
-        val source = Source.fromGraph(new FdbIterateGraphStage(db, tx => {
-          tx.getRange(startSelector, endSelector, limit, reverse, streamingMode)
-            .iterator()
-        }))
+        val source = Source.fromGraph(
+          new FdbIterateGraphStage(
+            db,
+            tx => {
+              tx.getRange(startSelector, endSelector, limit, reverse, streamingMode)
+                .iterator()
+            }
+          )
+        )
 
         (attemptInfo, source)
       }

@@ -188,8 +188,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
   dbContext: LmdbDatabase.LmdbContext[BCF[_, _]]
-)(
-  implicit rt: zio.Runtime[AkkaEnv]
+)(implicit
+  rt: zio.Runtime[AkkaEnv]
 ) extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
   import LmdbDatabase._

@@ -307,10 +307,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
           val tailConstraints = if (op == Operator.PREFIX) prefixedConstraints else prefixedConstraints.tail
 
           val ret: CompletableFuture[_ <: Either[Array[Byte], KvdbPair]] = keyFuture.thenCompose { key: Array[Byte] =>
-            if (key != null && key.length > 0 && KeySerdes.isPrefix(dbContext.columnPrefix(column), key) && keySatisfies(
+            if (
+              key != null && key.length > 0 && KeySerdes.isPrefix(dbContext.columnPrefix(column), key) && keySatisfies(
                 key,
                 tailConstraints
-              )) {
+              )
+            ) {
               tx.get(key).thenApply(value => Either.right[Array[Byte], KvdbPair]((key, value)))
             }
             else {
