@@ -2,11 +2,11 @@ package dev.chopsticks.metric
 
 import dev.chopsticks.metric.MetricConfigs._
 
-object MetricService {
+object MetricFactory {
   trait MetricGroup
 }
 
-trait MetricService[C <: MetricService.MetricGroup] {
+trait MetricFactory[C <: MetricFactory.MetricGroup] {
   def counter(config: CounterConfig[NoLabel] with C): MetricCounter
   def counterWithLabels[L <: MetricLabel](config: CounterConfig[L] with C, labelValues: LabelValues[L]): MetricCounter
 

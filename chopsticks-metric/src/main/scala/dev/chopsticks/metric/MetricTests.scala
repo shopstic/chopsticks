@@ -10,8 +10,8 @@ import dev.chopsticks.metric.MetricConfigs.{
   LabelValues,
   MetricLabel
 }
-import dev.chopsticks.metric.MetricService.MetricGroup
-import dev.chopsticks.metric.prom.PromMetricService
+import dev.chopsticks.metric.MetricFactory.MetricGroup
+import dev.chopsticks.metric.prom.PromMetricFactory
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.TextFormat
 
@@ -22,6 +22,12 @@ object MetricTests {
   object Foo {
     sealed trait Metric extends MetricGroup
     object SequentialWritesTotal extends CounterConfig(LabelNames of WritesPerTx) with Metric
+    def createCounter(factory: MetricFactory[Metric], labels: LabelValues[WritesPerTx.type]): MetricCounter = {
+      factory.counterWithLabels(
+        Foo.SequentialWritesTotal,
+        labels
+      )
+    }
   }
 
   object Bar {
@@ -34,14 +40,10 @@ object MetricTests {
   def main(args: Array[String]): Unit = {
     val labelValues = LabelValues of WritesPerTx -> "123" and TxParallelism -> "456"
 
-    val fooMetrics = PromMetricService[Foo.Metric]("foo")
-    val barMetrics = PromMetricService[Bar.Metric]("bar")
+    val fooMetrics = PromMetricFactory[Foo.Metric]("foo")
+    val barMetrics = PromMetricFactory[Bar.Metric]("bar")
 
-    val counter = fooMetrics
-      .counterWithLabels(
-        Foo.SequentialWritesTotal,
-        labelValues
-      )
+    val counter = Foo.createCounter(fooMetrics, labelValues)
 
     val counter2 = fooMetrics.counterWithLabels(
       Foo.SequentialWritesTotal,

@@ -1,53 +1,14 @@
 package dev.chopsticks.metric.prom
 
 import dev.chopsticks.metric.MetricConfigs._
-import dev.chopsticks.metric.MetricService.MetricGroup
+import dev.chopsticks.metric.MetricFactory.MetricGroup
 import dev.chopsticks.metric._
+import dev.chopsticks.metric.prom.PromMetrics._
 import io.prometheus.client.{Counter, Gauge, Histogram, Summary}
 
 import scala.collection.mutable
 
-object PromMetricService {
-  final class PromCounter(counter: Counter) extends MetricCounter {
-    override def inc(value: Double): Unit = counter.inc(value)
-    override def get(): Double = counter.get()
-  }
-
-  final class PromChildCounter(counter: Counter.Child) extends MetricCounter {
-    override def inc(value: Double): Unit = counter.inc(value)
-    override def get(): Double = counter.get()
-  }
-
-  final class PromGauge(gauge: Gauge) extends MetricGauge {
-    override def inc(value: Double): Unit = gauge.inc(value)
-    override def dec(value: Double): Unit = gauge.dec(value)
-    override def set(value: Double): Unit = gauge.set(value)
-    override def get(): Double = gauge.get()
-  }
-
-  final class PromChildGauge(gauge: Gauge.Child) extends MetricGauge {
-    override def inc(value: Double): Unit = gauge.inc(value)
-    override def dec(value: Double): Unit = gauge.dec(value)
-    override def set(value: Double): Unit = gauge.set(value)
-    override def get(): Double = gauge.get()
-  }
-
-  final class PromHistogram(histogram: Histogram) extends MetricHistogram {
-    override def observe(value: Double): Unit = histogram.observe(value)
-  }
-
-  final class PromChildHistogram(histogram: Histogram.Child) extends MetricHistogram {
-    override def observe(value: Double): Unit = histogram.observe(value)
-  }
-
-  final class PromSummary(summary: Summary) extends MetricSummary {
-    override def observe(value: Double): Unit = summary.observe(value)
-  }
-
-  final class PromChildSummary(summary: Summary.Child) extends MetricSummary {
-    override def observe(value: Double): Unit = summary.observe(value)
-  }
-
+object PromMetricFactory {
   private val counters = mutable.Map.empty[String, Counter]
   private val gauges = mutable.Map.empty[String, Gauge]
   private val histograms = mutable.Map.empty[String, Histogram]
@@ -57,13 +18,13 @@ object PromMetricService {
     if (prefix.nonEmpty) prefix + "_" + config.name else config.name
   }
 
-  def apply[C <: MetricGroup](prefix: String): PromMetricService[C] = {
-    new PromMetricService[C](prefix)
+  def apply[C <: MetricGroup](prefix: String): PromMetricFactory[C] = {
+    new PromMetricFactory[C](prefix)
   }
 }
 
-final class PromMetricService[C <: MetricGroup](prefix: String) extends MetricService[C] {
-  import PromMetricService._
+final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFactory[C] {
+  import PromMetricFactory._
 
   override def counter(config: CounterConfig[NoLabel] with C): MetricCounter = {
     val prefixedName = prefixMetric(config, prefix)
