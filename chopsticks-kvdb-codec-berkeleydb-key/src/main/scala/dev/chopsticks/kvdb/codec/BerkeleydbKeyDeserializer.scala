@@ -74,8 +74,8 @@ object BerkeleydbKeyDeserializer {
   implicit val uuidBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[UUID] =
     createTry(in => new UUID(in.readLong(), in.readLong()))
 
-  implicit def protobufEnumBerkeleydbKeyDecoder[T <: GeneratedEnum](
-    implicit underlyingDecoder: BerkeleydbKeyDeserializer[Int],
+  implicit def protobufEnumBerkeleydbKeyDecoder[T <: GeneratedEnum](implicit
+    underlyingDecoder: BerkeleydbKeyDeserializer[Int],
     comp: GeneratedEnumCompanion[T],
     typ: Typeable[T]
   ): BerkeleydbKeyDeserializer[T] = { in: TupleInput =>
@@ -88,8 +88,8 @@ object BerkeleydbKeyDeserializer {
     }
   }
 
-  implicit def enumeratumByteEnumKeyDecoder[E <: ByteEnumEntry](
-    implicit e: ByteEnum[E]
+  implicit def enumeratumByteEnumKeyDecoder[E <: ByteEnumEntry](implicit
+    e: ByteEnum[E]
   ): BerkeleydbKeyDeserializer[E] = { (in: TupleInput) =>
     Try(e.withValue(in.readByte())) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
@@ -97,8 +97,8 @@ object BerkeleydbKeyDeserializer {
     }
   }
 
-  implicit def enumeratumShortEnumKeyDecoder[E <: ShortEnumEntry](
-    implicit e: ShortEnum[E]
+  implicit def enumeratumShortEnumKeyDecoder[E <: ShortEnumEntry](implicit
+    e: ShortEnum[E]
   ): BerkeleydbKeyDeserializer[E] = { (in: TupleInput) =>
     Try(e.withValue(in.readShort())) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
@@ -106,8 +106,8 @@ object BerkeleydbKeyDeserializer {
     }
   }
 
-  implicit def enumeratumIntEnumKeyDecoder[E <: IntEnumEntry](
-    implicit e: IntEnum[E]
+  implicit def enumeratumIntEnumKeyDecoder[E <: IntEnumEntry](implicit
+    e: IntEnum[E]
   ): BerkeleydbKeyDeserializer[E] = { (in: TupleInput) =>
     Try(e.withValue(in.readInt())) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
@@ -115,8 +115,8 @@ object BerkeleydbKeyDeserializer {
     }
   }
 
-  implicit def enumeratumEnumKeyDecoder[E <: EnumEntry](
-    implicit e: enumeratum.Enum[E]
+  implicit def enumeratumEnumKeyDecoder[E <: EnumEntry](implicit
+    e: enumeratum.Enum[E]
   ): BerkeleydbKeyDeserializer[E] = { (in: TupleInput) =>
     Try(e.withName(in.readString())) match {
       case Failure(e) => Left(GenericKeyDeserializationException(e.getMessage, e))
@@ -124,8 +124,8 @@ object BerkeleydbKeyDeserializer {
     }
   }
 
-  implicit def refinedBerkeleydbKeyDeserializer[F[_, _], T, P](
-    implicit deserializer: BerkeleydbKeyDeserializer[T],
+  implicit def refinedBerkeleydbKeyDeserializer[F[_, _], T, P](implicit
+    deserializer: BerkeleydbKeyDeserializer[T],
     refType: RefType[F],
     validate: Validate[T, P]
   ): BerkeleydbKeyDeserializer[F[T, P]] = (in: TupleInput) => {
@@ -135,8 +135,8 @@ object BerkeleydbKeyDeserializer {
     }
   }
 
-  implicit def optionBerkeleydbKeyDecoder[T](
-    implicit decoder: BerkeleydbKeyDeserializer[T]
+  implicit def optionBerkeleydbKeyDecoder[T](implicit
+    decoder: BerkeleydbKeyDeserializer[T]
   ): BerkeleydbKeyDeserializer[Option[T]] = { in: TupleInput =>
     for {
       hasValue <- booleanBerkeleydbKeyDecoder.deserialize(in)

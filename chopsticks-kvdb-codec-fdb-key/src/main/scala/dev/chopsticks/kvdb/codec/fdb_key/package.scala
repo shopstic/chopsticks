@@ -9,8 +9,8 @@ import dev.chopsticks.kvdb.codec.KeyDeserializer.GenericKeyDeserializationExcept
 import scala.util.control.NonFatal
 
 package object fdb_key {
-  implicit def fdbKeySerializer[T](
-    implicit serializer: FdbKeySerializer[T]
+  implicit def fdbKeySerializer[T](implicit
+    serializer: FdbKeySerializer[T]
   ): KeySerializer[T] = (key: T) => serializer.serialize(new Tuple(), key).pack()
 
   implicit def fdbKeyDeserializer[T](implicit deserializer: FdbKeyDeserializer[T]): KeyDeserializer[T] = {

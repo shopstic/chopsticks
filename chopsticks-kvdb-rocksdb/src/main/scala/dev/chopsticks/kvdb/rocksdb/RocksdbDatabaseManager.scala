@@ -145,9 +145,9 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
 
       optionsFiles.maxBy(_.name.drop(prefix.length).toInt)
     }).map { f =>
-        logger.info(s"Latest db options file: ${f.pathAsString}")
-        f
-      }
+      logger.info(s"Latest db options file: ${f.pathAsString}")
+      f
+    }
       .map(_.lines)
       .map(RocksdbUtils.parseOptions)
       .map { sections =>

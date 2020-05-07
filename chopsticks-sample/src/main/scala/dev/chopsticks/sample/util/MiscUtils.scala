@@ -15,14 +15,14 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 object MiscUtils {
   def printKey(bs: Array[Byte]): String = {
     bs.map { b =>
-        if (b > 32) b.toChar
-        else String.format("\\x%02X", b)
-      }
+      if (b > 32) b.toChar
+      else String.format("\\x%02X", b)
+    }
       .mkString("")
   }
 
-  def logRates(interval: FiniteDuration)(collect: => ListMap[String, Double])(
-    implicit logCtx: LogCtx
+  def logRates(interval: FiniteDuration)(collect: => ListMap[String, Double])(implicit
+    logCtx: LogCtx
   ): RIO[AkkaEnv with LogEnv, Done] = {
     val graphTask = for {
       logger <- ZService[LogEnv.Service].map(_.logger)

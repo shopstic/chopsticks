@@ -27,20 +27,19 @@ object KeySerdes extends StrictLogging {
   }
 
   object flatten extends LowPriorityFlatten {
-    implicit def hlistCase[L <: HList, O <: HList](
-      implicit lfm: Lazy[FlatMapper.Aux[flatten.type, L, O]]
+    implicit def hlistCase[L <: HList, O <: HList](implicit
+      lfm: Lazy[FlatMapper.Aux[flatten.type, L, O]]
     ): Case.Aux[L, O] = at[L](lfm.value(_))
 
-    implicit def instanceCase[C <: Product, H <: HList, O <: HList](
-      implicit gen: Lazy[Generic.Aux[C, H]],
+    implicit def instanceCase[C <: Product, H <: HList, O <: HList](implicit
+      gen: Lazy[Generic.Aux[C, H]],
       lfm: Lazy[FlatMapper.Aux[flatten.type, H, O]]
     ): Case.Aux[C, O] = {
       at[C](c => lfm.value(gen.value.to(c)))
     }
   }
 
-  implicit def deriveProduct[P <: Product, R <: HList, F <: HList](
-    implicit
+  implicit def deriveProduct[P <: Product, R <: HList, F <: HList](implicit
     g: Generic.Aux[P, R],
     f: FlatMapper.Aux[flatten.type, R, F],
     serializer: KeySerializer[P],
@@ -66,8 +65,7 @@ object KeySerdes extends StrictLogging {
     }
   }
 
-  implicit def deriveAny[V](
-    implicit
+  implicit def deriveAny[V](implicit
     serializer: KeySerializer[V],
     deserializer: KeyDeserializer[V],
     typ: Typeable[V],
@@ -108,7 +106,7 @@ object KeySerdes extends StrictLogging {
       val b2 = a2(i)
       //noinspection ScalaStyle
       //scalastyle:off
-      if (b1 != b2) return (b1 & 0xff) - (b2 & 0xff)
+      if (b1 != b2) return (b1 & 0xFF) - (b2 & 0xFF)
       //scalastyle:on
       i += 1
     }

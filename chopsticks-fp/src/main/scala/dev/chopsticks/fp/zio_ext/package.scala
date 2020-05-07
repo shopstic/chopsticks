@@ -30,8 +30,8 @@ package object zio_ext {
   }
 
   implicit final class ZIOExtensions[R >: Nothing, E <: Any, A](io: ZIO[R, E, A]) {
-    def logResult(name: String, result: A => String)(
-      implicit ctx: LogCtx
+    def logResult(name: String, result: A => String)(implicit
+      ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
       val start: ZIO[R with MeasuredLogging, E, Long] = nanoTime <* ZLogger.info(s"[$name] started")
 

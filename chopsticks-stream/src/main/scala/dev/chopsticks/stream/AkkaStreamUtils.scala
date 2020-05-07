@@ -83,10 +83,13 @@ object AkkaStreamUtils {
   ): Flow[In, Out, NotUsed] = {
     statefulMapWithCompleteFlow[In, Option[Out]](() => {
       val (a, b) = funs()
-      (a, () => {
-        val last = b()
-        if (last.nonEmpty) Some(last) else None
-      })
+      (
+        a,
+        () => {
+          val last = b()
+          if (last.nonEmpty) Some(last) else None
+        }
+      )
     }).collect { case Some(out) => out }
   }
 
@@ -127,10 +130,13 @@ object AkkaStreamUtils {
     }
     else {
       Flow[V]
-        .batch(maxBatchSize.toLong, { p =>
-          val builder = Vector.newBuilder[V]
-          builder += p
-        })(_ += _)
+        .batch(
+          maxBatchSize.toLong,
+          { p =>
+            val builder = Vector.newBuilder[V]
+            builder += p
+          }
+        )(_ += _)
         .map(_.result())
     }
   }
@@ -158,10 +164,13 @@ object AkkaStreamUtils {
     val b = Behaviors.receive[T] {
       case (ctx: ActorContext[T], message) =>
         onMessage
-          .applyOrElse(message, (m: T) => {
-            ctx.log.error("[{}] Unhandled message: {}", name, m)
-            throw new IllegalStateException(s"[$name] Unhandled message: $m")
-          })
+          .applyOrElse(
+            message,
+            (m: T) => {
+              ctx.log.error("[{}] Unhandled message: {}", name, m)
+              throw new IllegalStateException(s"[$name] Unhandled message: $m")
+            }
+          )
     }
 
     if (onSignal != PartialFunction.empty) b.receiveSignal {
@@ -183,10 +192,13 @@ object AkkaStreamUtils {
 
       val b = Behaviors.receive[T] { (_, message) =>
         onMessage
-          .applyOrElse(message, (m: T) => {
-            ctx.log.error("[{}] Unhandled message: {}", name, m)
-            throw new IllegalStateException(s"[$name] Unhandled message: $m")
-          })
+          .applyOrElse(
+            message,
+            (m: T) => {
+              ctx.log.error("[{}] Unhandled message: {}", name, m)
+              throw new IllegalStateException(s"[$name] Unhandled message: $m")
+            }
+          )
       }
 
       if (onSignal != PartialFunction.empty) b.receiveSignal {
@@ -234,8 +246,8 @@ object AkkaStreamUtils {
     per: FiniteDuration,
     bufferSize: Int,
     terminateMessage: T
-  )(
-    implicit mat: Materializer
+  )(implicit
+    mat: Materializer
   ): Behavior[T] = Behaviors.setup[T] { ctx =>
     val child = ctx.spawnAnonymous(behavior)
     ctx.watch(child)

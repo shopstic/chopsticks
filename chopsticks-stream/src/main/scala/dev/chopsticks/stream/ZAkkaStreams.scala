@@ -154,7 +154,9 @@ object ZAkkaStreams {
                 interruptibleTask.unsafeRunToFuture
               }
               .watchTermination() { (_, f) =>
-                f.onComplete { _ => val _ = rt.unsafeRun(completionPromise.succeed(())) }
+                f.onComplete { _ =>
+                  val _ = rt.unsafeRun(completionPromise.succeed(()))
+                }
                 NotUsed
               }
           )
@@ -200,7 +202,9 @@ object ZAkkaStreams {
           Future.successful(
             flowWithAttrs
               .watchTermination() { (_, f) =>
-                f.onComplete { _ => val _ = rt.unsafeRun(completionPromise.succeed(())) }
+                f.onComplete { _ =>
+                  val _ = rt.unsafeRun(completionPromise.succeed(()))
+                }
                 NotUsed
               }
           )

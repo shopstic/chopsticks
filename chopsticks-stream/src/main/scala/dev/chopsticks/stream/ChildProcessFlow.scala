@@ -26,8 +26,8 @@ object ChildProcessFlow {
     startTimeout: Timeout = Timeout(5.seconds)
   )
 
-  def apply(config: ChildProcessConfig)(
-    implicit system: ActorSystem
+  def apply(config: ChildProcessConfig)(implicit
+    system: ActorSystem
   ): Flow[ByteString, Out, Future[ProcessExitIOResult]] = {
     Flow
       .lazyFutureFlow(() => {

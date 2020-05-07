@@ -24,8 +24,7 @@ object KeyPrefix extends StrictLogging {
   // e.g
   // T as prefix of:
   // case class Bar(one: T, two: Boolean, three: Double)
-  implicit def anyToKeyPrefixOfProduct[A, B <: Product, F <: HList, T <: HList](
-    implicit
+  implicit def anyToKeyPrefixOfProduct[A, B <: Product, F <: HList, T <: HList](implicit
     f: KeySerdes.Aux[B, F],
     t: IsHCons.Aux[F, A, T],
     e: A <:!< Product,
@@ -45,8 +44,7 @@ object KeyPrefix extends StrictLogging {
     KeyHlist <: HList,
     N <: Nat,
     TakenHlist <: HList
-  ](
-    implicit
+  ](implicit
     neqEvidence: Prefix =:!= Key,
     prefixHlist: Generic.Aux[Prefix, PrefixHlist],
     prefixFlattenedHlist: FlatMapper.Aux[flatten.type, PrefixHlist, PrefixFlattenedHlist],

@@ -121,9 +121,12 @@ class KvdbTailSourceGraph(
 
             val emptyTail = EmptyTail(Instant.now, lastKey)
 
-            timer = materializer.scheduleOnce(pollingDelay, () => {
-              timerAsyncCallback.invoke(emptyTail)
-            })
+            timer = materializer.scheduleOnce(
+              pollingDelay,
+              () => {
+                timerAsyncCallback.invoke(emptyTail)
+              }
+            )
           }
           else {
             pollingDelay = Duration.Zero

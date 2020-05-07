@@ -11,11 +11,14 @@ package object primitive {
   implicit val literalStringDbValue: ValueSerdes[String] = ValueSerdes
     .create[String](KvdbSerdesUtils.stringToByteArray, bytes => Right(KvdbSerdesUtils.byteArrayToString(bytes)))
 
-  implicit val instantDbValue: ValueSerdes[Instant] = ValueSerdes.create[Instant](v => {
-    KvdbSerdesUtils.instantToEpochNanos(v).toByteArray
-  }, v => {
-    Right(KvdbSerdesUtils.epochNanosToInstant(BigInt(v)))
-  })
+  implicit val instantDbValue: ValueSerdes[Instant] = ValueSerdes.create[Instant](
+    v => {
+      KvdbSerdesUtils.instantToEpochNanos(v).toByteArray
+    },
+    v => {
+      Right(KvdbSerdesUtils.epochNanosToInstant(BigInt(v)))
+    }
+  )
 
   def literalStringDbKeyFor[K](from: String => K, to: K => String): Aux[K, HNil] =
     new KeySerdes[K] {

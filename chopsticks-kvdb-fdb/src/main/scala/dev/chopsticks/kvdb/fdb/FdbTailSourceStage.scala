@@ -107,9 +107,14 @@ final class FdbTailSourceStage(
           }
 
           val emptyTail = EmptyTail(Instant.now, maybeLastKey)
-          timer = Some(materializer.scheduleOnce(pollingDelay, () => {
-            self ! EmitEmptyTail(emptyTail)
-          }))
+          timer = Some(
+            materializer.scheduleOnce(
+              pollingDelay,
+              () => {
+                self ! EmitEmptyTail(emptyTail)
+              }
+            )
+          )
 
         case IteratorNext(kv) =>
           if (batchEmitter.batchAndEmit(Some(kv.getKey -> kv.getValue)) > 0) {
