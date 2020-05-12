@@ -49,8 +49,8 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.8.1",
-    "io.prometheus" % "simpleclient_common" % "0.8.1"
+    "io.prometheus" % "simpleclient" % "0.9.0",
+    "io.prometheus" % "simpleclient_common" % "0.9.0"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
@@ -95,8 +95,8 @@ object Dependencies {
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.1.1",
-    "org.scalatest" %% "scalatest" % "3.1.1",
+    "org.scalactic" %% "scalactic" % "3.1.2",
+    "org.scalatest" %% "scalatest" % "3.1.2",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.14.3",
     "org.scalamock" %% "scalamock" % "4.4.0"
@@ -140,7 +140,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.5.1"
+    "io.scalaland" %% "chimney" % "0.5.2"
   )
 
   val snappyDeps = Seq(
@@ -169,5 +169,9 @@ object Dependencies {
 
   val avro4sDeps = Seq(
     "com.sksamuel.avro4s" %% "avro4s-core" % "3.1.0"
+  )
+
+  val distageDeps = Seq(
+    "io.7mind.izumi" %% "distage-core" % "0.10.7"
   )
 }
