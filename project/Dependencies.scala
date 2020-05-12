@@ -7,6 +7,7 @@ object Dependencies {
   val AKKA_VERSION = "2.6.5"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.0-RC18-2"
+  val IZUMI_VERSION = "0.10.7"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -172,6 +173,10 @@ object Dependencies {
   )
 
   val distageDeps = Seq(
-    "io.7mind.izumi" %% "distage-core" % "0.10.7"
+    "io.7mind.izumi" %% "distage-core" % IZUMI_VERSION,
+    "io.7mind.izumi" %% "logstage-core" % IZUMI_VERSION,
+    "io.7mind.izumi" %% "logstage-rendering-circe" % IZUMI_VERSION,
+    "io.7mind.izumi" %% "distage-extension-logstage" % IZUMI_VERSION,
+    "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
   )
 }

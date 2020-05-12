@@ -2,7 +2,7 @@
   <jmxConfigurator />
   <appender name="STDOUT_AKKA" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>%X{akkaTimestamp} [%.-1level] [%logger{15}] [%.15thread] [%X{akkaSource}] %msg%n</pattern>
+      <pattern>%X{akkaTimestamp} [%.-1level] [%logger{35}] [%.15thread] [%X{akkaSource}] %msg%n</pattern>
     </encoder>
     <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
       <evaluator>
@@ -26,7 +26,7 @@
 
   <appender name="STDOUT_NONAKKA" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>%date{ISO8601} [%.-1level] [%logger{15}] [%.15thread] %msg%n</pattern>
+      <pattern>%date{ISO8601} [%.-1level] [%logger{35}] [%.15thread] %msg%n</pattern>
     </encoder>
   </appender>
 
