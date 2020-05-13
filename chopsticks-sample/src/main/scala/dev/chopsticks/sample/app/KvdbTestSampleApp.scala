@@ -52,7 +52,7 @@ object KvdbTestSampleApp extends AkkaApp {
       )
       defaultCf = dbApi.columnFamily(sampleDb.default)
       tailFiber <- ZAkkaStreams
-        .interruptibleGraph(
+        .interruptibleGraphM(
           for {
             log <- ZService[LogEnv.Service].map(_.logger)
           } yield {
