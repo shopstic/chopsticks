@@ -8,6 +8,7 @@ import akka.actor.{ActorSystem, CoordinatedShutdown}
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
+import izumi.distage.model.definition
 import pureconfig.{KebabCase, PascalCase}
 import zio.Cause.Die
 import zio._
@@ -30,6 +31,16 @@ object AkkaApp extends LoggingContext {
         actorSystem
       ) >>> (Clock.live ++ Console.live ++ zio.system.System.live ++ Random.live ++ Blocking.live ++ AkkaEnv.any ++ LogEnv.live)
     }
+
+    def createModule(implicit actorSystem: ActorSystem): definition.Module = DistageLayers.compose(
+      AkkaEnv.live(actorSystem),
+      Clock.live,
+      Console.live,
+      zio.system.System.live,
+      Random.live,
+      Blocking.live,
+      LogEnv.live
+    )
   }
 
   private val factoryRuntime = Runtime((), Platform.global)
