@@ -8,6 +8,7 @@ import akka.actor.{ActorSystem, CoordinatedShutdown}
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
+import distage.ModuleDef
 import izumi.distage.model.definition
 import pureconfig.{KebabCase, PascalCase}
 import zio.Cause.Die
@@ -32,15 +33,16 @@ object AkkaApp extends LoggingContext {
       ) >>> (Clock.live ++ Console.live ++ zio.system.System.live ++ Random.live ++ Blocking.live ++ AkkaEnv.any ++ LogEnv.live)
     }
 
-    def createModule(implicit actorSystem: ActorSystem): definition.Module = DistageLayers.compose(
-      AkkaEnv.live(actorSystem),
-      Clock.live,
-      Console.live,
-      zio.system.System.live,
-      Random.live,
-      Blocking.live,
-      LogEnv.live
-    )
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+    def createModule(implicit actorSystem: ActorSystem): definition.Module = new ModuleDef {
+      make[AkkaEnv.Service].fromHas(AkkaEnv.live(actorSystem))
+      make[Clock.Service].fromHas(Clock.live)
+      make[Console.Service].fromHas(Console.live)
+      make[zio.system.System.Service].fromHas(zio.system.System.live)
+      make[Random.Service].fromHas(Random.live)
+      make[Blocking.Service].fromHas(Blocking.live)
+      make[LogEnv.Service].fromHas(LogEnv.live)
+    }
   }
 
   private val factoryRuntime = Runtime((), Platform.global)

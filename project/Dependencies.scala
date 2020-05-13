@@ -7,6 +7,7 @@ object Dependencies {
   val AKKA_VERSION = "2.6.5"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.0-RC18-2"
+//  val ZIO_VERSION = "1.0.0-RC18"
   val IZUMI_VERSION = "0.10.7"
 
   val akkaSlf4jDeps = Seq(

@@ -82,4 +82,10 @@ package object zio_ext {
         .orDieWith(_ => new IllegalStateException("Can't happen with infinite retries"))
     }
   }
+
+  implicit final class HasService[Self <: Has[_]](private val self: Self) extends AnyVal {
+    def service[B](implicit ev: Self <:< Has[B], tagged: Tagged[B]): B = {
+      self.get[B]
+    }
+  }
 }
