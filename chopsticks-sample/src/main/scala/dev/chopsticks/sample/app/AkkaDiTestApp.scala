@@ -1,15 +1,16 @@
 package dev.chopsticks.sample.app
 
 import com.typesafe.config.Config
-import dev.chopsticks.fp.AkkaDistageApp.DiModule
+import dev.chopsticks.fp.DiApp.DiModule
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.fp.{AkkaDistageApp, DiLayers, ZService}
+import dev.chopsticks.fp.{AkkaDiApp, DiApp, DiLayers, ZService}
+import dev.chopsticks.sample.app.AkkaDiTestApp.Bar
 import zio._
 import zio.clock.Clock
 
-object AkkaDistageTestApp extends AkkaDistageApp {
+object AkkaDiTestApp extends AkkaDiApp {
   type Foo = Has[Foo.Service]
 
   object Foo {
@@ -31,7 +32,7 @@ object AkkaDistageTestApp extends AkkaDistageApp {
 
     def live(bar: String): URLayer[Clock with IzLogging with Foo, Bar] = {
       ZLayer.fromManaged(
-        ZManaged.make {
+        ZManaged.makeInterruptible {
           import zio.duration._
 
           for {
@@ -39,26 +40,37 @@ object AkkaDistageTestApp extends AkkaDistageApp {
             zioLogger <- ZIO.access[IzLogging](_.service.zioLogger)
             fib <- zioLogger.info(s"Still going: ${foo.foo}").repeat(Schedule.fixed(1.second)).forkDaemon
           } yield fib
-        }(_.interrupt).as(BarService(bar))
+        } { fib =>
+          UIO(println("INTERRUPTING===================")) *>
+            fib.interrupt
+        }.as(BarService(bar))
       )
     }
-  }
-
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-  override protected def define(akkaAppModuleDef: DiModule, lbConfig: Config): DiModule = {
-    akkaAppModuleDef ++ DiLayers(
-      IzLogging.live(lbConfig),
-      Bar.live("bar"),
-      Foo.live("foo"),
-      app
-    )
   }
 
   private def doFoo(): URIO[IzLogging, Unit] = {
     ZService[IzLogging.Service].flatMap(_.zioLogger.error("test error here"))
   }
 
-  protected def app: URIO[Clock with IzLogging with AkkaEnv with Bar, Unit] = {
+  override def create(akkaAppDi: DiModule, lbConfig: Config): AkkaDiTestApp = {
+    new AkkaDiTestApp(akkaAppDi, lbConfig)
+  }
+}
+
+final class AkkaDiTestApp(appAppDi: DiModule, lbConfig: Config)
+    extends DiApp[Clock with IzLogging with AkkaEnv with Bar] {
+  import AkkaDiTestApp._
+
+  override def env: DiModule = {
+    appAppDi ++ DiLayers(
+      IzLogging.live(lbConfig),
+      Bar.live("bar"),
+      Foo.live("foo"),
+      ZIO.environment[Env]
+    )
+  }
+
+  override def app: ZIO[Env, Throwable, Unit] = {
     val effect = for {
       bar <- ZIO.access[Bar](_.service)
       akkaService <- ZIO.access[AkkaEnv](_.service)
