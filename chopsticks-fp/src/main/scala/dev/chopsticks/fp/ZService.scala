@@ -7,6 +7,10 @@ object ZService {
     env.get[V]
   }
 
+  def access[V](implicit tagged: Tagged[V]): URIO[Has[V], V] = {
+    ZIO.access[Has[V]](_.get[V])
+  }
+
   def apply[V](implicit tagged: Tagged[V]): URIO[Has[V], V] = {
     ZIO.access[Has[V]](_.get[V])
   }

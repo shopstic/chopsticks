@@ -1,56 +1,68 @@
 package dev.chopsticks.sample.app
 
 import com.typesafe.config.Config
+import dev.chopsticks.fp.AkkaDistageApp.DiModule
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.{AkkaApp, AkkaDistageApp, ZService}
-import dev.chopsticks.sample.app.AkkaDistageTestApp.Bar.BarService
-import dev.chopsticks.sample.app.AkkaDistageTestApp.Foo.FooService
-import distage.{Injector, ModuleDef}
-import izumi.distage.model.definition
-import izumi.distage.model.definition.DIResource.DIResourceBase
+import dev.chopsticks.fp.zio_ext._
+import dev.chopsticks.fp.{AkkaDistageApp, DiLayers, ZService}
 import zio._
+import zio.clock.Clock
 
 object AkkaDistageTestApp extends AkkaDistageApp {
-  type Env = AkkaApp.Env with IzLogging with Has[Bar.Service]
+  type Foo = Has[Foo.Service]
 
   object Foo {
     trait Service {
       def foo: String
     }
     final case class FooService(foo: String) extends Service
+
+    def live(foo: String): Layer[Nothing, Foo] = ZLayer.succeed(FooService(foo))
   }
+
+  type Bar = Has[Bar.Service]
 
   object Bar {
     trait Service {
       def bar: String
     }
     final case class BarService(bar: String) extends Service
+
+    def live(bar: String): URLayer[Clock with IzLogging with Foo, Bar] = {
+      ZLayer.fromManaged(
+        ZManaged.make {
+          import zio.duration._
+
+          for {
+            foo <- ZIO.access[Foo](_.service)
+            zioLogger <- ZIO.access[IzLogging](_.service.zioLogger)
+            fib <- zioLogger.info(s"Still going: ${foo.foo}").repeat(Schedule.fixed(1.second)).forkDaemon
+          } yield fib
+        }(_.interrupt).as(BarService(bar))
+      )
+    }
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-  override protected def defineEnv(akkaAppModuleDef: definition.Module, lbConfig: Config): DIResourceBase[Task, Env] = {
-    val barLayer = ZLayer.requires[Has[Foo.Service]] >>> ZLayer.succeed(BarService("foo"))
-
-    val module = akkaAppModuleDef ++ new ModuleDef {
-      make[IzLogging.Service].fromHas(IzLogging.live(lbConfig))
-      make[Bar.Service].fromHas(barLayer)
-      make[Foo.Service].fromValue(FooService("foo"))
-      make[Env].fromHas(ZIO.environment[Env])
-    }
-
-    Injector().produceGetF[Task, Env](module)
+  override protected def define(akkaAppModuleDef: DiModule, lbConfig: Config): DiModule = {
+    akkaAppModuleDef ++ DiLayers(
+      IzLogging.live(lbConfig),
+      Bar.live("bar"),
+      Foo.live("foo"),
+      app
+    )
   }
 
-  private def doFoo(): ZIO[IzLogging, Nothing, Unit] = {
+  private def doFoo(): URIO[IzLogging, Unit] = {
     ZService[IzLogging.Service].flatMap(_.zioLogger.error("test error here"))
   }
 
-  override protected def run: ZIO[Env, Throwable, Unit] = {
+  protected def app: URIO[Clock with IzLogging with AkkaEnv with Bar, Unit] = {
     val effect = for {
-      bar <- ZService[Bar.Service]
-      akkaService <- ZService[AkkaEnv.Service]
-      logging <- ZService[IzLogging.Service]
+      bar <- ZIO.access[Bar](_.service)
+      akkaService <- ZIO.access[AkkaEnv](_.service)
+      logging <- ZIO.access[IzLogging](_.service)
       zioLogger = logging.zioLogger.withCustomContext("userId" -> "user@google.com", "company" -> "acme")
       logger = logging.logger
       _ <- zioLogger.info(s"${bar.bar} ${akkaService.actorSystem.startTime}")

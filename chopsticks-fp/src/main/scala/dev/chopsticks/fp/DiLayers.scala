@@ -4,8 +4,8 @@ import distage.{HasConstructor, ModuleDef, Tag}
 import zio.{Has, RLayer, ZIO}
 import izumi.distage.model.definition.Module
 
-object DistageLayers {
-  def compose(layers: LayerBinding*): Module = layers.foldLeft(Module.empty)(_ ++ _.layerModule)
+object DiLayers {
+  def apply(layers: LayerBinding*): Module = layers.foldLeft(Module.empty)(_ ++ _.layerModule)
 
   final case class LayerBinding(layerModule: ModuleDef)
   object LayerBinding {
