@@ -1,12 +1,11 @@
 package dev.chopsticks.sample.app
 
 import com.typesafe.config.Config
-import dev.chopsticks.fp.DiApp.DiModule
+import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.fp.{AkkaDiApp, DiApp, DiLayers, ZService}
-import dev.chopsticks.sample.app.AkkaDiTestApp.Bar
+import dev.chopsticks.fp.{AkkaDiApp, DiEnv, DiLayers, ZService}
 import zio._
 import zio.clock.Clock
 
@@ -52,25 +51,10 @@ object AkkaDiTestApp extends AkkaDiApp {
     ZService[IzLogging.Service].flatMap(_.zioLogger.error("test error here"))
   }
 
-  override def create(akkaAppDi: DiModule, lbConfig: Config): AkkaDiTestApp = {
-    new AkkaDiTestApp(akkaAppDi, lbConfig)
-  }
-}
+  type Env = Clock with IzLogging with AkkaEnv with Bar
+  type Cfg = Unit
 
-final class AkkaDiTestApp(appAppDi: DiModule, lbConfig: Config)
-    extends DiApp[Clock with IzLogging with AkkaEnv with Bar] {
-  import AkkaDiTestApp._
-
-  override def env: DiModule = {
-    appAppDi ++ DiLayers(
-      IzLogging.live(lbConfig),
-      Bar.live("bar"),
-      Foo.live("foo"),
-      ZIO.environment[Env]
-    )
-  }
-
-  override def app: ZIO[Env, Throwable, Unit] = {
+  def app: ZIO[Env, Throwable, Unit] = {
     val effect = for {
       bar <- ZIO.access[Bar](_.service)
       akkaService <- ZIO.access[AkkaEnv](_.service)
@@ -86,4 +70,19 @@ final class AkkaDiTestApp(appAppDi: DiModule, lbConfig: Config)
     import zio.duration._
     effect.repeat(Schedule.fixed(1.second)).unit
   }
+
+  override def liveEnv(akkaAppDi: DiModule, appConfig: Cfg, allConfig: Config): Task[DiEnv[Env]] = {
+    Task {
+      LiveDiEnv(
+        akkaAppDi ++ DiLayers(
+          IzLogging.live(allConfig),
+          Bar.live("bar"),
+          Foo.live("foo"),
+          ZIO.environment[Env]
+        )
+      )
+    }
+  }
+
+  override def config(allConfig: Config): Task[Unit] = Task.unit
 }
