@@ -8,6 +8,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigRes
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
 import izumi.distage.model.definition.DIResource.DIResourceBase
+import izumi.distage.model.definition.Module
 import pureconfig.{KebabCase, PascalCase}
 import zio.Cause.Die
 import zio._
@@ -17,12 +18,12 @@ import scala.util.Try
 import scala.util.control.NonFatal
 
 trait AkkaDistageApp extends LoggingContext {
-  type Env <: Has[_]
+  type Env <: AkkaApp.Env
 
   protected def createActorSystem(appName: String, config: Config): ActorSystem = ActorSystem(appName, config)
 
   protected def defineEnv(
-    akkaEnv: Layer[Nothing, AkkaEnv],
+    akkaAppModuleDef: Module,
     lbConfig: Config
   ): DIResourceBase[Task, Env]
 
@@ -57,19 +58,21 @@ trait AkkaDistageApp extends LoggingContext {
     val akkaActorSystem = createActorSystem(appName, config)
     val shutdown: CoordinatedShutdown = CoordinatedShutdown(akkaActorSystem)
 
-    val akkaEnvLayer = AkkaEnv.live(akkaActorSystem)
     val zioTracingEnabled = Try(config.getBoolean("zio.trace")).recover { case _ => true }.getOrElse(true)
     val runtime = AkkaApp.createRuntime(
-      akkaEnvLayer ++ LogEnv.live,
+      AkkaEnv.live(akkaActorSystem) ++ LogEnv.live,
       if (zioTracingEnabled) TracingConfig.enabled else TracingConfig.disabled
     )
 
-    val appLayer = ZLayer.fromManagedMany(defineEnv(akkaEnvLayer, config).toZIO)
+    val akkaAppModule = AkkaApp.Env.createModule(akkaActorSystem)
+    val resource = defineEnv(akkaAppModule, config).toZIO
 
     val main = for {
-      appFib <- run
-        .ensuring(ZIO.interruptAllChildren)
-        .provideLayer(appLayer)
+      appFib <- resource.use { e =>
+        run
+        //          .ensuring(ZIO.interruptAllChildren)
+          .provide(e)
+      }
         .fork
       _ <- UIO {
         shutdown.addTask("app-interruption", "interrupt app") { () =>
