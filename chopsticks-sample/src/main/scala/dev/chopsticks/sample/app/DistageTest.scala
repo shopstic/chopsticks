@@ -1,8 +1,8 @@
 package dev.chopsticks.sample.app
 
-import dev.chopsticks.sample.app.AkkaDistageTestApp.Bar.BarService
-import dev.chopsticks.sample.app.AkkaDistageTestApp.{Bar, Foo}
-import dev.chopsticks.sample.app.AkkaDistageTestApp.Foo.FooService
+import dev.chopsticks.sample.app.AkkaDiTestApp.Bar.BarService
+import dev.chopsticks.sample.app.AkkaDiTestApp.{Bar, Foo}
+import dev.chopsticks.sample.app.AkkaDiTestApp.Foo.FooService
 import distage.{Injector, ModuleDef}
 import izumi.distage.model.plan.GCMode
 import zio.{Has, Task, ZIO, ZLayer}
