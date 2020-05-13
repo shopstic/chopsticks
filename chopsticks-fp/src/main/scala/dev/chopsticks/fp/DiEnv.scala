@@ -5,9 +5,9 @@ import izumi.distage.model.effect.DIEffect
 import izumi.distage.model.exceptions.ProvisioningException
 import izumi.distage.planning.extensions.GraphDumpBootstrapModule
 import izumi.fundamentals.reflection.Tags.Tag
-import zio.{Has, Task, UIO, ZIO}
+import zio.{Has, RIO, Task, UIO, ZIO}
 
-object DiApp {
+object DiEnv {
   type DiModule = izumi.distage.model.definition.Module
   private val zioDiEffect = implicitly[DIEffect[Task]]
 
@@ -36,32 +36,32 @@ object DiApp {
     override def map[A, B](fa: Task[A])(f: A => B): Task[B] = zioDiEffect.map(fa)(f)
     override def map2[A, B, C](fa: Task[A], fb: Task[B])(f: (A, B) => C): Task[C] = zioDiEffect.map2(fa, fb)(f)
   }
+
+  final case class LiveDiEnv[E <: Has[_]: Tag](env: DiModule) extends DiEnv[E] {
+    override def run(app: RIO[E, Unit], dumpGraph: Boolean = false): Task[Int] = {
+      implicit val diEff: DIEffect[Task] = InterruptiableZioDiEffect
+      val injector = if (dumpGraph) Injector(GraphDumpBootstrapModule()) else Injector()
+
+      injector
+        .produceGetF[Task, E](env).toZIO
+        .use { env =>
+          app.provide(env)
+            .ensuring(ZIO.interruptAllChildren)
+            .as(0)
+        }
+        .catchSome {
+          case e: ProvisioningException =>
+            UIO {
+              Console.err.println(e.getMessage)
+              1
+            }
+        }
+    }
+  }
 }
 
-abstract class DiApp[E <: Has[_]: Tag](dumpGraph: Boolean = false) {
-  type Env = E
-
-  import DiApp._
-
+abstract class DiEnv[E <: Has[_]: Tag] {
+  import DiEnv._
   def env: DiModule
-  def app: ZIO[Env, Throwable, Unit]
-  def run: ZIO[Any, Throwable, Int] = {
-    implicit val diEff: DIEffect[Task] = InterruptiableZioDiEffect
-    val injector = if (dumpGraph) Injector(GraphDumpBootstrapModule()) else Injector()
-
-    injector
-      .produceGetF[Task, Env](env).toZIO
-      .use { env =>
-        app.provide(env)
-          .ensuring(ZIO.interruptAllChildren)
-          .as(0)
-      }
-      .catchSome {
-        case e: ProvisioningException =>
-          UIO {
-            Console.err.println(e.getMessage)
-            1
-          }
-      }
-  }
+  def run(app: RIO[E, Unit], dumpGraph: Boolean = false): Task[Int]
 }
