@@ -60,49 +60,45 @@ object FdbTestSampleApp extends AkkaApp {
 
       _ <- ZAkkaStreams
         .graph(
-          UIO(
-            dbApi
-              .columnFamily(sampleDb.default)
-              .source
-              .toMat(Sink.foreach(println))(Keep.right)
-          )
+          dbApi
+            .columnFamily(sampleDb.default)
+            .source
+            .toMat(Sink.foreach(println))(Keep.right)
         )
         .log("Default dump")
 
       _ <- ZAkkaStreams
-        .graph(UIO {
+        .graph {
           Source(1 to 100)
             .map(i => TestKey("foo", i) -> s"foo$i")
             .via(dbApi.columnFamily(sampleDb.test).putInBatchesFlow)
             .toMat(Sink.ignore)(Keep.right)
-        })
+        }
         .log("Range populate foo")
 
       _ <- ZAkkaStreams
-        .graph(UIO {
+        .graph(
           Source(1 to 100000)
             .map(i => TestKey("bar", i) -> s"bar$i")
             .via(dbApi.columnFamily(sampleDb.test).putInBatchesFlow)
             .toMat(Sink.ignore)(Keep.right)
-        })
+        )
         .log("Range populate bar")
 
       _ <- ZAkkaStreams
         .interruptibleGraph(
-          UIO(
-            dbApi
-              .columnFamily(sampleDb.test)
-              .source(_ startsWith "bar", _ ltEq TestKey("bar", 50000))
-              .viaMat(KillSwitches.single)(Keep.right)
-              .toMat(Sink.fold(0)((s, _) => s + 1))(Keep.both)
-          ),
+          dbApi
+            .columnFamily(sampleDb.test)
+            .source(_ startsWith "bar", _ ltEq TestKey("bar", 50000))
+            .viaMat(KillSwitches.single)(Keep.right)
+            .toMat(Sink.fold(0)((s, _) => s + 1))(Keep.both),
           graceful = true
         )
         //        .repeat(Schedule.forever)
         .logResult("Range scan", r => s"counted $r")
 
       _ <- ZAkkaStreams
-        .interruptibleGraph(
+        .interruptibleGraphM(
           {
             for {
               lastKey <- dbApi
@@ -130,16 +126,14 @@ object FdbTestSampleApp extends AkkaApp {
 
       _ <- ZAkkaStreams
         .interruptibleGraph(
-          UIO(
-            dbApi
-              .columnFamily(sampleDb.test)
-              .tailSource(_ startsWith "bar", _ startsWith "bar")
-              .viaMat(KillSwitches.single)(Keep.right)
-              .toMat(Sink.foreach {
-                case (k, v) =>
-                  println(s"Tail got: k=$k v=$v")
-              })(Keep.both)
-          ),
+          dbApi
+            .columnFamily(sampleDb.test)
+            .tailSource(_ startsWith "bar", _ startsWith "bar")
+            .viaMat(KillSwitches.single)(Keep.right)
+            .toMat(Sink.foreach {
+              case (k, v) =>
+                println(s"Tail got: k=$k v=$v")
+            })(Keep.both),
           graceful = true
         )
         .log("Tail")

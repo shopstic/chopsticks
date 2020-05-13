@@ -108,7 +108,7 @@ object FdbTestApp extends AkkaApp {
         .toMat(Sink.foreach(_ => txCounter.increment()))(Keep.both)
     }
 
-    ZAkkaStreams.interruptibleGraph(graphTask, graceful = true)
+    ZAkkaStreams.interruptibleGraphM(graphTask, graceful = true)
   }
 
   def fetchShardMap(
@@ -118,7 +118,7 @@ object FdbTestApp extends AkkaApp {
     for {
       fdbService <- ZService[FdbEnv.Service]
       db = fdbService.database
-      map <- ZAkkaStreams.graph(
+      map <- ZAkkaStreams.graphM(
         ZService[AkkaEnv.Service].map(_.dispatcher).map { implicit ec =>
           Source
             .fromGraph(

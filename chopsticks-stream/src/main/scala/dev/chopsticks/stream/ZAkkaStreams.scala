@@ -65,21 +65,44 @@ object ZAkkaStreams {
   }
 
   def graph[R <: Has[_], A](
-    make: RIO[R, RunnableGraph[Future[A]]]
-  ): RIO[AkkaEnv with LogEnv with R, A] = {
-    graphM(make)
-  }
-
-  def graphM[R <: Has[_], A](
-    make: RIO[R, RunnableGraph[Future[A]]]
+    make: => RunnableGraph[Future[A]]
   ): RIO[AkkaEnv with LogEnv with R, A] = {
     ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
       val akkaService = ZService.get[AkkaEnv.Service](env)
       import akkaService.{actorSystem, dispatcher}
 
-      make.flatMap { graph =>
-        val f = graph.run()
-        f.value
+      val graph = make
+      val f = graph.run()
+      f.value
+        .fold {
+          Task.effectAsync { cb: (Task[A] => Unit) =>
+            f.onComplete {
+              case Success(a) => cb(Task.succeed(a))
+              case Failure(t) => cb(Task.fail(t))
+            }
+          }
+        }(Task.fromTry(_))
+    }
+  }
+
+  def graphM[R <: Has[_], A](
+    make: RIO[R, RunnableGraph[Future[A]]]
+  ): RIO[AkkaEnv with LogEnv with R, A] = {
+    make.flatMap(graph(_))
+  }
+
+  def interruptibleGraph[A](
+    make: => RunnableGraph[(KillSwitch, Future[A])],
+    graceful: Boolean
+  )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv, A] = {
+    for {
+      akkaService <- ZService[AkkaEnv.Service]
+      logService <- ZService[LogEnv.Service]
+      ret <- {
+        val graph = make
+        import akkaService.{actorSystem, dispatcher}
+        val (ks, f) = graph.run()
+        val task = f.value
           .fold {
             Task.effectAsync { cb: (Task[A] => Unit) =>
               f.onComplete {
@@ -88,45 +111,27 @@ object ZAkkaStreams {
               }
             }
           }(Task.fromTry(_))
+
+        task.onInterrupt(
+          UIO {
+            if (graceful) ks.shutdown()
+            else ks.abort(new InterruptedException("Stream (interruptibleGraph) was interrupted"))
+          } *> task.fold(
+            e =>
+              logService.logger
+                .error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}", e),
+            _ => ()
+          )
+        )
       }
-    }
+    } yield ret
   }
 
-  def interruptibleGraph[R <: Has[_], A](
+  def interruptibleGraphM[R <: Has[_], A](
     make: RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
     graceful: Boolean
   )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv with R, A] = {
-    for {
-      akkaService <- ZService[AkkaEnv.Service]
-      logService <- ZService[LogEnv.Service]
-      ret <- {
-        make.flatMap { graph =>
-          import akkaService.{actorSystem, dispatcher}
-          val (ks, f) = graph.run()
-          val task = f.value
-            .fold {
-              Task.effectAsync { cb: (Task[A] => Unit) =>
-                f.onComplete {
-                  case Success(a) => cb(Task.succeed(a))
-                  case Failure(t) => cb(Task.fail(t))
-                }
-              }
-            }(Task.fromTry(_))
-
-          task.onInterrupt(
-            UIO {
-              if (graceful) ks.shutdown()
-              else ks.abort(new InterruptedException("Stream (interruptibleGraph) was interrupted"))
-            } *> task.fold(
-              e =>
-                logService.logger
-                  .error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}", e),
-              _ => ()
-            )
-          )
-        }
-      }
-    } yield ret
+    make.flatMap(interruptibleGraph(_, graceful))
   }
 
   def interruptibleMapAsyncM[R <: Has[_], A, B](

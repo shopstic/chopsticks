@@ -61,6 +61,6 @@ object MiscUtils {
         })(Keep.both)
     }
 
-    ZAkkaStreams.interruptibleGraph(graphTask, graceful = true)
+    ZAkkaStreams.interruptibleGraphM(graphTask, graceful = true)
   }
 }

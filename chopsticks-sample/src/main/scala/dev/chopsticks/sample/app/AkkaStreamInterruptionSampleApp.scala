@@ -16,7 +16,7 @@ object AkkaStreamInterruptionSampleApp extends AkkaApp {
   protected def createEnv(untypedConfig: Config) = ZLayer.requires[AkkaApp.Env]
 
   def run: ZIO[Env, Throwable, Unit] = {
-    val stream = ZAkkaStreams.interruptibleGraph(
+    val stream = ZAkkaStreams.interruptibleGraphM(
       ZService[LogEnv.Service]
         .map(_.logger)
         .map { logger =>
