@@ -1,5 +1,7 @@
 package dev.chopsticks.kvdb
 
+import java.util.concurrent.TimeUnit
+
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
@@ -55,7 +57,9 @@ object KvdbDatabase {
     batchReadMaxBatchBytes: Information = 32.kb,
     tailPollingMaxInterval: FiniteDuration = 100.millis,
     tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d,
-    disableWriteConflictChecking: Boolean = false
+    disableWriteConflictChecking: Boolean = false,
+    watchTimeout: Duration = Duration.Inf,
+    watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS)
   )
 
   object KvdbClientOptions {

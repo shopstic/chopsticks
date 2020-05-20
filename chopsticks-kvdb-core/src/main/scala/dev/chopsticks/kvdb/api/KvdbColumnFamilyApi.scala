@@ -38,7 +38,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     modifier: KvdbApiClientOptions => KvdbApiClientOptions
   ): KvdbColumnFamilyApi[BCF, CF, K, V] = {
     val newOptions = modifier(options)
-    new KvdbColumnFamilyApi[BCF, CF, K, V](db, cf, newOptions)
+    new KvdbColumnFamilyApi[BCF, CF, K, V](db.withOptions(newOptions.patchClientOptions), cf, newOptions)
   }
 
   def estimateCountTask: Task[Long] = {

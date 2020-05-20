@@ -1,5 +1,7 @@
 package dev.chopsticks.kvdb.api
 
+import java.util.concurrent.TimeUnit
+
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
@@ -29,7 +31,9 @@ object KvdbDatabaseApi {
     tailPollingMaxInterval: FiniteDuration = 100.millis,
     tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d,
     disableWriteConflictChecking: Boolean = false,
-    serdesParallelism: PosInt = 2
+    serdesParallelism: PosInt = 2,
+    watchTimeout: Duration = Duration.Inf,
+    watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS)
   ) {
     def patchClientOptions(options: KvdbClientOptions): KvdbClientOptions = {
       options.copy(
@@ -37,7 +41,9 @@ object KvdbDatabaseApi {
         batchReadMaxBatchBytes = batchReadMaxBatchBytes,
         tailPollingMaxInterval = tailPollingMaxInterval,
         tailPollingBackoffFactor = tailPollingBackoffFactor,
-        disableWriteConflictChecking = disableWriteConflictChecking
+        disableWriteConflictChecking = disableWriteConflictChecking,
+        watchTimeout = watchTimeout,
+        watchMinLatency = watchMinLatency
       )
     }
   }
