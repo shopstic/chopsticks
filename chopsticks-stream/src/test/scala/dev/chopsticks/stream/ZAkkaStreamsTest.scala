@@ -11,7 +11,7 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
-import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, FixedTestClock, ManualTimeAkkaTestKit}
+import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, ManualTimeAkkaTestKit}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
@@ -34,7 +34,7 @@ final class ZAkkaStreamsTest
   type Env = AkkaEnv with TestClock with Clock with Blocking
 
   private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Assertion] = {
-    val testClock = zio.ZEnv.live >>> zio.test.environment.Live.default >>> FixedTestClock.live
+    val testClock = zio.ZEnv.live >>> zio.test.environment.Live.default >>> TestClock.default
     val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live ++ LogEnv.live
     val rt = AkkaApp.createRuntime(env)
     rt.unsafeRunToFuture(run)
@@ -94,9 +94,7 @@ final class ZAkkaStreamsTest
     val (source, sink) = TestSource
       .probe[Int]
       .effectMapAsync(1) { i =>
-        ZService[Clock.Service].flatMap { clock =>
-          clock.sleep(zio.duration.Duration(10, TimeUnit.SECONDS)) *> UIO(i + 1)
-        }
+        UIO(i + 1).delay(zio.duration.Duration(10, TimeUnit.SECONDS))
       }
       .withAttributes(Attributes.inputBuffer(initial = 0, max = 1))
       .toMat(TestSink.probe[Int])(Keep.both)

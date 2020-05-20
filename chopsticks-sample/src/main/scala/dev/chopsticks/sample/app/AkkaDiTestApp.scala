@@ -4,7 +4,6 @@ import com.typesafe.config.Config
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, DiEnv, DiLayers, ZService}
 import zio._
 import zio.clock.Clock
@@ -35,8 +34,8 @@ object AkkaDiTestApp extends AkkaDiApp {
           import zio.duration._
 
           for {
-            foo <- ZIO.access[Foo](_.service)
-            zioLogger <- ZIO.access[IzLogging](_.service.zioLogger)
+            foo <- ZIO.access[Foo](_.get)
+            zioLogger <- ZIO.access[IzLogging](_.get.zioLogger)
             fib <- zioLogger.info(s"Still going: ${foo.foo}").repeat(Schedule.fixed(1.second)).forkDaemon
           } yield fib
         } { fib =>
@@ -56,9 +55,9 @@ object AkkaDiTestApp extends AkkaDiApp {
 
   def app: ZIO[Env, Throwable, Unit] = {
     val effect = for {
-      bar <- ZIO.access[Bar](_.service)
-      akkaService <- ZIO.access[AkkaEnv](_.service)
-      logging <- ZIO.access[IzLogging](_.service)
+      bar <- ZIO.access[Bar](_.get)
+      akkaService <- ZIO.access[AkkaEnv](_.get)
+      logging <- ZIO.access[IzLogging](_.get)
       zioLogger = logging.zioLogger.withCustomContext("userId" -> "user@google.com", "company" -> "acme")
       logger = logging.logger
       _ <- zioLogger.info(s"${bar.bar} ${akkaService.actorSystem.startTime}")

@@ -1,17 +1,18 @@
 package dev.chopsticks.fp
 
-import zio.{Has, Tagged, URIO, ZIO}
+import izumi.reflect.Tag
+import zio.{Has, URIO, ZIO}
 
 object ZService {
-  def get[V](env: Has[V])(implicit tagged: Tagged[V]): V = {
+  def get[V: Tag](env: Has[V]): V = {
     env.get[V]
   }
 
-  def access[V](implicit tagged: Tagged[V]): URIO[Has[V], V] = {
+  def access[V: Tag]: URIO[Has[V], V] = {
     ZIO.access[Has[V]](_.get[V])
   }
 
-  def apply[V](implicit tagged: Tagged[V]): URIO[Has[V], V] = {
+  def apply[V: Tag]: URIO[Has[V], V] = {
     ZIO.access[Has[V]](_.get[V])
   }
 }

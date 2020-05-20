@@ -11,13 +11,13 @@ object DiLayers {
   object LayerBinding {
     import scala.language.implicitConversions
     @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-    implicit def fromLayer[R: HasConstructor, A: Tag: zio.Tagged](layer: RLayer[R, Has[A]]): LayerBinding =
+    implicit def fromLayer[R: HasConstructor, A: Tag](layer: RLayer[R, Has[A]]): LayerBinding =
       LayerBinding(new ModuleDef {
         make[A].fromHas(layer = layer)
       })
 
     @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-    implicit def fromEffect[R: HasConstructor, E: Tag, A: Tag: zio.Tagged](effect: ZIO[R, E, A]): LayerBinding =
+    implicit def fromEffect[R: HasConstructor, E: Tag, A: Tag](effect: ZIO[R, E, A]): LayerBinding =
       LayerBinding(new ModuleDef {
         make[A].fromHas(effect = effect)
       })
