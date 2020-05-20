@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb.fdb
 
 import java.time.Instant
 import java.util
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import akka.NotUsed
@@ -10,9 +10,9 @@ import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Source}
 import cats.syntax.either._
 import cats.syntax.show._
+import com.apple.foundationdb._
 import com.apple.foundationdb.directory.DirectoryLayer
 import com.apple.foundationdb.tuple.ByteArrayUtil
-import com.apple.foundationdb._
 import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.LoggingContext
@@ -40,16 +40,16 @@ import dev.chopsticks.kvdb.util.KvdbException.{
 }
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import pureconfig.ConfigConvert
+import zio._
 import zio.blocking.{blocking, Blocking}
 import zio.clock.Clock
-import zio.stream.ZStream
-import zio._
+import zio.duration.Duration
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, TimeoutException}
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
-import scala.util.Failure
+import scala.util.{Failure, Success}
 
 object FdbDatabase extends LoggingContext {
   final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](db: Database, prefixMap: Map[BCF[_, _], Array[Byte]]) {
@@ -204,7 +204,7 @@ object FdbDatabase extends LoggingContext {
             .log("Close FDB context")
             .orDie
         }
-      db <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv].map { implicit rt =>
+      db <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv with Clock].map { implicit rt =>
         new FdbDatabase(materialization, config.clientOptions, ctx)
       })
     } yield db
@@ -249,7 +249,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
   dbContext: FdbContext[BCF]
-)(implicit rt: zio.Runtime[AkkaEnv])
+)(implicit rt: zio.Runtime[AkkaEnv with Clock])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
@@ -359,64 +359,100 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   ): Source[Option[Array[Byte]], NotUsed] = {
     val prefixedKey = dbContext.prefixKey(column, key)
 
-    import zio.interop.reactivestreams._
-
-    val zioStream = ZStream
-      .repeatEffect {
-        Task.effectSuspend {
-          val f = dbContext.db.runAsync { tx =>
-            println("Watch tx")
-            tx.get(prefixedKey).thenApply { value =>
-              val maybeValue = Option(value)
-              val watchTask = tx
-                .watch(prefixedKey)
-                .asTask
-                .as(maybeValue)
-                .catchSome {
-                  case e: FDBException =>
-                    println(s"GOT ${e.getMessage}")
-                    ZIO.succeed(maybeValue)
-                }
-
-              Task.succeed(maybeValue) :: watchTask :: Nil
-            }
-          }: CompletableFuture[List[Task[Option[Array[Byte]]]]]
-
-          f.asTask
-        }
-      }
-      .mapConcat(identity)
-      .mapM(identity)
+    import dev.chopsticks.stream.ZAkkaStreams.ops._
+    val watchTimeout = zio.duration.Duration.fromScala(clientOptions.watchTimeout)
+    val watchMinLatency = clientOptions.watchMinLatency
+    val watchMinLatencyNanos = watchMinLatency.toNanos
 
     Source
-      .lazySource(() => {
-        Source
-          .fromPublisher(rt.unsafeRun(zioStream.toPublisher))
-          .statefulMapConcat(() => {
-            var isFirst = true
-            var currentValue = Option.empty[Array[Byte]]
+      .unfoldAsync(Future.successful(System.nanoTime())) { waitFuture =>
+        import scala.jdk.FutureConverters._
+        val akkaService = rt.environment.get
+        val scheduler = akkaService.actorSystem.scheduler
 
-            value => {
-              println(s"VALUE: $value")
-              if (isFirst) {
-                isFirst = false
+        import akkaService.dispatcher
+
+        waitFuture
+          .transformWith { lastTry =>
+            val txFuture = dbContext.db.runAsync { tx =>
+              tx.get(prefixedKey).thenApply { value =>
+                val maybeValue = Option(value)
+                val watchCompletableFuture = tx.watch(prefixedKey)
+                (watchCompletableFuture, maybeValue)
+              }
+            }: CompletableFuture[(CompletableFuture[Void], Option[Array[Byte]])]
+
+            txFuture
+              .asScala
+              .map {
+                case (future, maybeValue) =>
+                  val watchTask = future
+                    .asTask
+                    .as(maybeValue)
+
+                  val watchTaskWithTimeout = watchTimeout match {
+                    case Duration.Infinity => watchTask
+                    case d => watchTask.timeoutTo(maybeValue)(identity)(d)
+                  }
+
+                  val watchTaskWithRecovery = watchTaskWithTimeout
+                    .catchSome {
+                      case e: FDBException if e.getCode == 1009 => // Request for future version
+                        ZIO.succeed(maybeValue)
+                      case e: FDBException =>
+                        logger.warn(s"[watchKeySource][fdbErrorCode=${e.getCode}] ${e.getMessage}")
+                        ZIO.succeed(maybeValue)
+                    }
+
+                  val emit = Task.succeed(maybeValue) :: watchTaskWithRecovery :: Nil
+
+                  val nextWaitFuture = future.asScala.flatMap { _ =>
+                    val now = System.nanoTime()
+                    val f = Future.successful(now)
+
+                    lastTry match {
+                      case Failure(_) =>
+                        akka.pattern.after(watchMinLatency, scheduler)(f)
+                      case Success(lastNanos) =>
+                        val elapse = now - lastNanos
+
+                        if (elapse < watchMinLatencyNanos) {
+                          akka.pattern.after(
+                            FiniteDuration(watchMinLatencyNanos - elapse, TimeUnit.NANOSECONDS),
+                            scheduler
+                          )(f)
+                        }
+                        else f
+                    }
+                  }
+
+                  Some(nextWaitFuture -> emit)
+              }
+          }
+      }
+      .mapConcat(identity)
+      .interruptibleEffectMapAsyncUnordered(1)(identity)
+      .statefulMapConcat(() => {
+        var isFirst = true
+        var currentValue = Option.empty[Array[Byte]]
+
+        value => {
+          if (isFirst) {
+            isFirst = false
+            currentValue = value
+            currentValue :: Nil
+          }
+          else {
+            (currentValue, value) match {
+              case (Some(a), Some(b)) if a.sameElements(b) => Nil
+              case (None, None) => Nil
+              case _ =>
                 currentValue = value
                 currentValue :: Nil
-              }
-              else {
-                (currentValue, value) match {
-                  case (Some(a), Some(b)) if a.sameElements(b) => Nil
-                  case (None, None) => Nil
-                  case _ =>
-                    currentValue = value
-                    currentValue :: Nil
-                }
-              }
             }
-          })
+          }
+        }
       })
-      .mapMaterializedValue(_ => NotUsed)
-
   }
 
   override def getTask[Col <: CF](

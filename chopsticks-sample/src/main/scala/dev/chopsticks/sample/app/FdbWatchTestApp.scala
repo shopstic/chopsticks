@@ -1,6 +1,7 @@
 package dev.chopsticks.sample.app
 
 import java.time.Instant
+import java.util.concurrent.atomic.LongAdder
 
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink}
@@ -14,7 +15,7 @@ import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.stream.ZAkkaStreams
 import zio.clock.Clock
-import zio.{RIO, Schedule, Task, ZIO, ZLayer}
+import zio.{RIO, Schedule, Task, UIO, ZIO, ZLayer}
 import zio.duration._
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.util.config.PureconfigLoader
@@ -49,21 +50,31 @@ object FdbWatchTestApp extends AkkaDiApp {
   override def app: RIO[Env, Unit] = {
     for {
       db <- ZIO.access[SampleDb.Env](_.get)
+      watchCounter = new LongAdder()
+      changeCounter = new LongAdder()
       dbApi <- KvdbDatabaseApi(db)
       _ <- ZAkkaStreams
         .interruptibleGraph(
           dbApi
-            .columnFamily(sampleDb.default).watchKeySource("foo")
+            .columnFamily(sampleDb.default)
+            .watchKeySource("foo")
             .viaMat(KillSwitches.single)(Keep.right)
-            .toMat(Sink.foreach(println))(Keep.both),
+            .toMat(Sink.foreach { _ =>
+              watchCounter.increment()
+            })(Keep.both),
           graceful = true
         )
         .log("Watch stream")
         .fork
 
       _ <- Task.effectSuspend {
+        changeCounter.increment()
         dbApi.columnFamily(sampleDb.default).putTask("foo", Instant.now.toString)
-      }.repeat(Schedule.fixed(60.seconds))
+      }.repeat(Schedule.forever).fork
+
+      _ <- Task.effectSuspend {
+        UIO(println(s"watch=${watchCounter.longValue()} change=${changeCounter.longValue()}"))
+      }.repeat(Schedule.fixed(1.second))
     } yield ()
   }
 
