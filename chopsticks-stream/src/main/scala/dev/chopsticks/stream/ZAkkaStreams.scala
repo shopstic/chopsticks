@@ -385,10 +385,11 @@ object ZAkkaStreams {
       }
 
       def interruptibleEffectMapAsyncUnordered[R <: Has[_], Next](
-        parallelism: Int
+        parallelism: Int,
+        attributes: Option[Attributes] = None
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
         source
-          .via(interruptibleMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
+          .via(interruptibleMapAsyncUnordered[R, Out, Next](parallelism, attributes)(runTask))
       }
 
       def switchFlatMapConcat[R <: Has[_], Next](

@@ -192,6 +192,15 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
   }
 
+  def watchKeySource(key: K): Source[Option[V], NotUsed] = {
+    db.watchKeySource(cf, cf.serializeKey(key))
+      .mapAsync(options.serdesParallelism) { value =>
+        Future {
+          value.map(cf.unsafeDeserializeValue)
+        }
+      }
+  }
+
   def source: Source[(K, V), NotUsed] = {
     source(_.first, _.last)
   }

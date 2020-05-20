@@ -554,6 +554,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     } yield count)
   }
 
+  override def watchKeySource[Col <: CF](column: Col, key: Array[Byte]): Source[Option[Array[Byte]], NotUsed] = ???
+
   override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source
       .lazyFuture(() => {
