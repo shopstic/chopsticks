@@ -95,6 +95,8 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def estimateCount[Col <: CF](column: Col): Task[Long]
 
+  def watchKeySource[Col <: CF](column: Col, key: Array[Byte]): Source[Option[Array[Byte]], NotUsed]
+
   def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed]
 
   def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit]

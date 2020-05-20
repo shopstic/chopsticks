@@ -35,7 +35,8 @@ object Dependencies {
   )
 
   val zioDeps = zioCoreDeps ++ Seq(
-    "dev.zio" %% "zio-streams" % ZIO_VERSION
+    "dev.zio" %% "zio-streams" % ZIO_VERSION,
+    "dev.zio" %% "zio-interop-reactivestreams" % "1.0.3.5-RC8+1-3571a670-SNAPSHOT"
   )
 
   val zioTestDeps = Seq(

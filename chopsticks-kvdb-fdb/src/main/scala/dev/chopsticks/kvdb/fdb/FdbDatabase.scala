@@ -12,7 +12,7 @@ import cats.syntax.either._
 import cats.syntax.show._
 import com.apple.foundationdb.directory.DirectoryLayer
 import com.apple.foundationdb.tuple.ByteArrayUtil
-import com.apple.foundationdb.{Database, FDB, KeySelector, ReadTransaction}
+import com.apple.foundationdb._
 import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.LoggingContext
@@ -42,7 +42,8 @@ import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import pureconfig.ConfigConvert
 import zio.blocking.{blocking, Blocking}
 import zio.clock.Clock
-import zio.{Schedule, Task, ZIO, ZManaged}
+import zio.stream.ZStream
+import zio._
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, TimeoutException}
@@ -189,18 +190,24 @@ object FdbDatabase extends LoggingContext {
     db: Database,
     config: FdbDatabaseConfig
   ): ZManaged[AkkaEnv with Blocking with MeasuredLogging, Throwable, KvdbDatabase[BCF, CFS]] = {
-    ZManaged
-      .makeInterruptible[AkkaEnv with Blocking with MeasuredLogging, Throwable, FdbContext[BCF]] {
-        buildPrefixMap(db, materialization, config)
-          .timeoutFail(new TimeoutException("Timed out building directory layer. Check connection to FDB?"))(2.seconds)
-          .log("Build FDB directory map")
-          .map { prefixMap => FdbContext[BCF](db, prefixMap) }
-      } {
-        _.close()
-          .log("Close FDB context")
-          .orDie
-      }
-      .map(ctx => new FdbDatabase(materialization, config.clientOptions, ctx))
+    for {
+      ctx <- ZManaged
+        .makeInterruptible[AkkaEnv with Blocking with MeasuredLogging, Throwable, FdbContext[BCF]] {
+          buildPrefixMap(db, materialization, config)
+            .timeoutFail(new TimeoutException("Timed out building directory layer. Check connection to FDB?"))(
+              2.seconds
+            )
+            .log("Build FDB directory map")
+            .map { prefixMap => FdbContext[BCF](db, prefixMap) }
+        } {
+          _.close()
+            .log("Close FDB context")
+            .orDie
+        }
+      db <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv].map { implicit rt =>
+        new FdbDatabase(materialization, config.clientOptions, ctx)
+      })
+    } yield db
   }
 
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
@@ -214,6 +221,26 @@ object FdbDatabase extends LoggingContext {
   }
 
   val COMPLETED_FUTURE: CompletableFuture[Unit] = CompletableFuture.completedFuture(())
+
+  implicit class CompletableFutureToInterruptibleZio[V](future: CompletableFuture[V]) {
+    def asTask: Task[V] = {
+      Task.effectAsyncInterrupt[V](cb => {
+        val _ = future.whenComplete((v, e) => {
+          if (e == null) {
+            cb(Task.succeed(v))
+          }
+          else {
+            cb(Task.fail(e))
+          }
+        })
+
+        Left(UIO {
+          println("GOING TO CANCEL")
+          future.cancel(true)
+        })
+      })
+    }
+  }
 }
 
 import dev.chopsticks.kvdb.fdb.FdbDatabase._
@@ -222,7 +249,8 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
   dbContext: FdbContext[BCF]
-) extends KvdbDatabase[BCF, CFS]
+)(implicit rt: zio.Runtime[AkkaEnv])
+    extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
   override def withOptions(modifier: KvdbClientOptions => KvdbClientOptions): KvdbDatabase[BCF, CFS] = {
@@ -323,6 +351,72 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
           ret
       }
     }
+  }
+
+  override def watchKeySource[Col <: CF](
+    column: Col,
+    key: Array[Byte]
+  ): Source[Option[Array[Byte]], NotUsed] = {
+    val prefixedKey = dbContext.prefixKey(column, key)
+
+    import zio.interop.reactivestreams._
+
+    val zioStream = ZStream
+      .repeatEffect {
+        Task.effectSuspend {
+          val f = dbContext.db.runAsync { tx =>
+            println("Watch tx")
+            tx.get(prefixedKey).thenApply { value =>
+              val maybeValue = Option(value)
+              val watchTask = tx
+                .watch(prefixedKey)
+                .asTask
+                .as(maybeValue)
+                .catchSome {
+                  case e: FDBException =>
+                    println(s"GOT ${e.getMessage}")
+                    ZIO.succeed(maybeValue)
+                }
+
+              Task.succeed(maybeValue) :: watchTask :: Nil
+            }
+          }: CompletableFuture[List[Task[Option[Array[Byte]]]]]
+
+          f.asTask
+        }
+      }
+      .mapConcat(identity)
+      .mapM(identity)
+
+    Source
+      .lazySource(() => {
+        Source
+          .fromPublisher(rt.unsafeRun(zioStream.toPublisher))
+          .statefulMapConcat(() => {
+            var isFirst = true
+            var currentValue = Option.empty[Array[Byte]]
+
+            value => {
+              println(s"VALUE: $value")
+              if (isFirst) {
+                isFirst = false
+                currentValue = value
+                currentValue :: Nil
+              }
+              else {
+                (currentValue, value) match {
+                  case (Some(a), Some(b)) if a.sameElements(b) => Nil
+                  case (None, None) => Nil
+                  case _ =>
+                    currentValue = value
+                    currentValue :: Nil
+                }
+              }
+            }
+          })
+      })
+      .mapMaterializedValue(_ => NotUsed)
+
   }
 
   override def getTask[Col <: CF](
