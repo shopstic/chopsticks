@@ -4,7 +4,7 @@ import distage.Injector
 import izumi.distage.model.effect.DIEffect
 import izumi.distage.model.exceptions.ProvisioningException
 import izumi.distage.planning.extensions.GraphDumpBootstrapModule
-import izumi.fundamentals.reflection.Tags.Tag
+import izumi.reflect.Tag
 import zio.{Has, RIO, Task, UIO, ZIO}
 
 object DiEnv {
