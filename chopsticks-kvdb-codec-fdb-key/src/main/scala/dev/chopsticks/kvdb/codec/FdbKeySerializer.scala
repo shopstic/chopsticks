@@ -11,7 +11,7 @@ import eu.timepit.refined.api.{RefType, Validate}
 import magnolia._
 import scalapb.GeneratedEnum
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{implicitNotFound, nowarn}
 import scala.language.experimental.macros
 @implicitNotFound(
   msg = "Implicit FdbKeySerializer[${T}] not found. Try supplying an implicit instance of FdbKeySerializer[${T}]"
@@ -65,10 +65,8 @@ object FdbKeySerializer {
   implicit def refinedFdbKeySerializer[F[_, _], T, P](implicit
     serializer: FdbKeySerializer[T],
     refType: RefType[F],
-    validate: Validate[T, P]
+    @nowarn validate: Validate[T, P]
   ): FdbKeySerializer[F[T, P]] = {
-    import dev.chopsticks.util.implicits.UnusedImplicits._
-    validate.unused()
     (o: Tuple, t: F[T, P]) => serializer.serialize(o, refType.unwrap(t))
   }
 
