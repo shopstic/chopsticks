@@ -2,11 +2,10 @@ package dev.chopsticks.kvdb.codec
 
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.codec.KeySerdes.flatten
-import dev.chopsticks.util.implicits.UnusedImplicits._
 import shapeless.ops.hlist.{FlatMapper, IsHCons, Length, Take}
 import shapeless.{<:!<, =:!=, Generic, HList, Nat}
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{implicitNotFound, nowarn}
 
 @implicitNotFound(msg = "Cannot prove that ${A} is a DbKeyPrefix of ${B}.")
 trait KeyPrefix[-A, B] {
@@ -26,13 +25,11 @@ object KeyPrefix extends StrictLogging {
   // case class Bar(one: T, two: Boolean, three: Double)
   implicit def anyToKeyPrefixOfProduct[A, B <: Product, F <: HList, T <: HList](implicit
     f: KeySerdes.Aux[B, F],
-    t: IsHCons.Aux[F, A, T],
-    e: A <:!< Product,
+    @nowarn t: IsHCons.Aux[F, A, T],
+    @nowarn e: A <:!< Product,
     serializer: KeySerializer[A]
   ): KeyPrefix[A, B] = {
     logger.debug(s"[DbKeyPrefix][anyToDbKeyPrefixOfProduct] ${f.describe}")
-    t.unused()
-    e.unused()
     new KeyPrefixWithSerializer[A, B](serializer)
   }
 
@@ -45,23 +42,16 @@ object KeyPrefix extends StrictLogging {
     N <: Nat,
     TakenHlist <: HList
   ](implicit
-    neqEvidence: Prefix =:!= Key,
-    prefixHlist: Generic.Aux[Prefix, PrefixHlist],
-    prefixFlattenedHlist: FlatMapper.Aux[flatten.type, PrefixHlist, PrefixFlattenedHlist],
-    length: Length.Aux[PrefixFlattenedHlist, N],
+    @nowarn neqEvidence: Prefix =:!= Key,
+    @nowarn prefixHlist: Generic.Aux[Prefix, PrefixHlist],
+    @nowarn prefixFlattenedHlist: FlatMapper.Aux[flatten.type, PrefixHlist, PrefixFlattenedHlist],
+    @nowarn length: Length.Aux[PrefixFlattenedHlist, N],
     keyHlist: KeySerdes.Aux[Key, KeyHlist],
-    takenHlist: Take.Aux[KeyHlist, N, TakenHlist],
+    @nowarn takenHlist: Take.Aux[KeyHlist, N, TakenHlist],
     evidence: PrefixFlattenedHlist =:= TakenHlist,
     encoder: KeySerializer[Prefix]
   ): KeyPrefix[Prefix, Key] = {
     logger.debug(s"[DbKeyPrefix][productToDbKeyPrefix] ${keyHlist.describe}")
-    //    n.unused()
-    neqEvidence.unused()
-    prefixHlist.unused()
-    prefixFlattenedHlist.unused()
-    length.unused()
-    takenHlist.unused()
-    evidence.unused()
     new KeyPrefixWithSerializer[Prefix, Key](encoder)
   }
 

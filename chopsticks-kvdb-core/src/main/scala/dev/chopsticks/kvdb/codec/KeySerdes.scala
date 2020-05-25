@@ -4,7 +4,8 @@ import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.codec.KeyDeserializer.KeyDeserializationResult
 import shapeless._
 import shapeless.ops.hlist.FlatMapper
-import dev.chopsticks.util.implicits.UnusedImplicits._
+
+import scala.annotation.nowarn
 
 trait KeySerdes[P] extends KeySerializer[P] with KeyDeserializer[P] {
   type Flattened <: HList
@@ -40,14 +41,12 @@ object KeySerdes extends StrictLogging {
   }
 
   implicit def deriveProduct[P <: Product, R <: HList, F <: HList](implicit
-    g: Generic.Aux[P, R],
-    f: FlatMapper.Aux[flatten.type, R, F],
+    @nowarn g: Generic.Aux[P, R],
+    @nowarn f: FlatMapper.Aux[flatten.type, R, F],
     serializer: KeySerializer[P],
     deserializer: KeyDeserializer[P],
     typ: Typeable[P]
   ): Aux[P, F] = {
-    g.unused()
-    f.unused()
     logger.debug(s"[DerivedDbKey][deriveProduct] ${typ.describe}")
 
     new KeySerdes[P] {
@@ -69,9 +68,8 @@ object KeySerdes extends StrictLogging {
     serializer: KeySerializer[V],
     deserializer: KeyDeserializer[V],
     typ: Typeable[V],
-    ev: V <:!< Product
+    @nowarn ev: V <:!< Product
   ): Aux[V, V :: HNil] = {
-    ev.unused()
     logger.debug(s"[DerivedDbKey][deriveAny] ${typ.describe}")
 
     new KeySerdes[V] {
