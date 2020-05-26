@@ -3,6 +3,7 @@ package dev.chopsticks.kvdb.codec
 import java.time._
 import java.util.UUID
 
+import com.apple.foundationdb.tuple.Versionstamp
 import dev.chopsticks.kvdb.codec.KeyDeserializer.{DecodingFailure, GenericKeyDeserializationException}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import enumeratum.EnumEntry
@@ -84,6 +85,7 @@ object FdbKeyDeserializer {
   }
 
   implicit val uuidFdbKeyDecoder: FdbKeyDeserializer[UUID] = createTry(_.getUUID)
+  implicit val versionstampFdbKeyDecoder: FdbKeyDeserializer[Versionstamp] = createTry(_.getVersionStamp)
 
   implicit def protobufEnumFdbKeyDecoder[T <: GeneratedEnum](implicit
     underlyingDecoder: FdbKeyDeserializer[Int],
