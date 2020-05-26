@@ -4,6 +4,7 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.apple.foundationdb.tuple.Versionstamp
 import com.typesafe.config.Config
+import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
@@ -16,16 +17,25 @@ import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.sample.kvdb.SampleDb.TestKey
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
-import zio.{Has, RIO, UIO, ZLayer}
+import pureconfig.ConfigReader
+import zio._
 
 import scala.concurrent.duration._
 
-object FdbTestSampleApp extends AkkaApp {
-  final case class AppConfig(
+object FdbTestSampleApp extends AkkaDiApp {
+  final case class Cfg(
     db: FdbDatabase.FdbDatabaseConfig
   )
 
-  type Env = AkkaApp.Env with Has[AppConfig] with SampleDb.Env
+  object Cfg {
+    //noinspection TypeAnnotation
+    implicit val configReader = {
+      import dev.chopsticks.util.config.PureconfigConverters._
+      ConfigReader[Cfg]
+    }
+  }
+
+  type Env = AkkaApp.Env with AppConfig with SampleDb.Env
 
   object sampleDb extends SampleDb.Materialization {
     object default extends SampleDb.Default
@@ -37,119 +47,154 @@ object FdbTestSampleApp extends AkkaApp {
     )
   }
 
-  protected def createEnv(untypedConfig: Config): ZLayer[AkkaApp.Env, Nothing, Env] = {
-    import dev.chopsticks.util.config.PureconfigConverters._
-
-    val appConfig = PureconfigLoader.unsafeLoad[AppConfig](untypedConfig, "app")
-    val configEnv = ZLayer.succeed(appConfig)
-    val dbEnv = FdbDatabase.manage(sampleDb, appConfig.db).orDie.toLayer
-
-    ZLayer.requires[AkkaApp.Env] ++ configEnv ++ dbEnv
+  override def liveEnv(akkaAppDi: DiModule, appConfig: Cfg, allConfig: Config): Task[DiEnv[Env]] = {
+    Task {
+      LiveDiEnv(
+        akkaAppDi ++ DiLayers(
+          ZLayer.succeed(appConfig),
+          ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
+          ZIO.environment[Env]
+        )
+      )
+    }
   }
 
-  def run: RIO[Env, Unit] = {
-    for {
-      db <- ZService[SampleDb.Db]
-      dbApi <- KvdbDatabaseApi(db)
-      ks = dbApi
-        .columnFamily(sampleDb.default)
-      _ <- dbApi
-        .columnFamily(sampleDb.default)
-        .putTask("foo0000", "foo0000")
-        .log("put foo0000")
-      _ <- dbApi
-        .columnFamily(sampleDb.default)
-        .putTask("foo1000", "foo1000")
-        .log("put foo1000")
-      _ <- dbApi
-        .columnFamily(sampleDb.default)
-        .getTask(_ is "foo1000")
-        .logResult("get", _.toString)
+  override def config(allConfig: Config): Task[Cfg] = Task {
+    PureconfigLoader.unsafeLoad[Cfg](allConfig, "app")
+  }
 
-      _ <- ZAkkaStreams
-        .graph(
-          dbApi
-            .columnFamily(sampleDb.default)
-            .source
-            .toMat(Sink.foreach(println))(Keep.right)
-        )
-        .log("Default dump")
+  override def app: RIO[Env, Unit] = for {
+    db <- ZService[SampleDb.Db]
+    dbApi <- KvdbDatabaseApi(db)
+    _ <- dbApi
+      .columnFamily(sampleDb.default)
+      .putTask("foo0000", "foo0000")
+      .log("put foo0000")
+    _ <- dbApi
+      .columnFamily(sampleDb.default)
+      .putTask("foo1000", "foo1000")
+      .log("put foo1000")
+    _ <- dbApi
+      .columnFamily(sampleDb.default)
+      .getTask(_ is "foo1000")
+      .logResult("get", _.toString)
 
-      _ <- dbApi
-        .columnFamily(sampleDb.test)
-        .drop()
-        .log("Drop test")
+    _ <- ZAkkaStreams
+      .graph(
+        dbApi
+          .columnFamily(sampleDb.default)
+          .source
+          .toMat(Sink.foreach(println))(Keep.right)
+      )
+      .log("Default dump")
 
-      _ <- ZAkkaStreams
-        .graph {
-          Source(1 to 100)
-            .map(i => TestKey("foo", i, Versionstamp.incomplete()) -> s"foo$i")
-            .via(dbApi.columnFamily(sampleDb.test).putInBatchesFlow)
-            .toMat(Sink.ignore)(Keep.right)
-        }
-        .log("Range populate foo")
+    testKeyspace = dbApi.columnFamily(sampleDb.test)
 
-      _ <- ZAkkaStreams
-        .graph(
-          Source(1 to 100000)
-            .map(i => TestKey("bar", i, Versionstamp.incomplete()) -> s"bar$i")
-            .via(dbApi.columnFamily(sampleDb.test).putInBatchesFlow)
-            .toMat(Sink.ignore)(Keep.right)
-        )
-        .log("Range populate bar")
+    _ <- testKeyspace
+      .drop()
+      .log("Drop test")
 
-      _ <- ZAkkaStreams
-        .interruptibleGraph(
-          dbApi
-            .columnFamily(sampleDb.test)
-            .source(_ startsWith "bar", _ ltEq "bar" -> 50000)
-            .viaMat(KillSwitches.single)(Keep.right)
-            .toMat(Sink.fold(0)((s, _) => s + 1))(Keep.both),
-          graceful = true
-        )
-        //        .repeat(Schedule.forever)
-        .logResult("Range scan", r => s"counted $r")
+    _ <- ZAkkaStreams
+      .graph {
+        Source(1 to 100)
+          .via(dbApi.batchTransact((tx, batch) => {
+            testKeyspace.batchPut(
+              tx,
+              batch.zipWithIndex.map {
+                case (i, index) =>
+                  TestKey("foo", i, Versionstamp.incomplete(index)) -> s"foo$i"
+              }
+            )
+          }))
+          .toMat(Sink.ignore)(Keep.right)
+      }
+      .log("Range populate foo")
 
-      _ <- ZAkkaStreams
-        .interruptibleGraphM(
-          {
-            for {
-              lastKey <- dbApi
-                .columnFamily(sampleDb.test)
-                .getKeyTask(_ lastStartsWith "bar")
-                .logResult("Get last test key", _.toString)
-              source <- UIO(
-                Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
-                  .throttle(1, 1.second)
-                  .map(i => TestKey("bar", i, Versionstamp.incomplete()) -> s"bar$i")
-                  .viaMat(KillSwitches.single)(Keep.right)
-                  .via(
-                    dbApi
-                      .columnFamily(sampleDb.test)
-                      .putInBatchesFlow
+    _ <- ZAkkaStreams
+      .graph(
+        Source(1 to 100000)
+          .via(dbApi.batchTransact((tx, batch) => {
+            testKeyspace.batchPut(
+              tx,
+              batch.zipWithIndex.map {
+                case (i, index) =>
+                  TestKey("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+              }
+            )
+          }))
+          .toMat(Sink.ignore)(Keep.right)
+      )
+      .log("Range populate bar")
+
+    _ <- ZAkkaStreams
+      .interruptibleGraph(
+        testKeyspace
+          .source(_ startsWith "bar", _ ltEq "bar" -> 50000)
+          .viaMat(KillSwitches.single)(Keep.right)
+          .toMat(Sink.fold(0)((s, _) => s + 1))(Keep.both),
+        graceful = true
+      )
+      //        .repeat(Schedule.forever)
+      .logResult("Range scan", r => s"counted $r")
+
+    _ <- ZAkkaStreams
+      .interruptibleGraphM(
+        {
+          for {
+            lastKey <- testKeyspace
+              .getKeyTask(_ lastStartsWith "bar")
+              .logResult("Get last test key", _.toString)
+            source <- UIO(
+              Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
+                .throttle(1, 1.second)
+                .viaMat(KillSwitches.single)(Keep.right)
+                .via(dbApi.batchTransact((tx, batch) => {
+                  testKeyspace.batchPut(
+                    tx,
+                    batch.zipWithIndex.map {
+                      case (i, index) =>
+                        TestKey("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+                    }
                   )
-                  .toMat(Sink.ignore)(Keep.both)
-              )
-            } yield source
-          },
-          graceful = true
-        )
-        .log("Append")
-        .fork
+                }))
+                .toMat(Sink.ignore)(Keep.both)
+            )
+          } yield source
+        },
+        graceful = true
+      )
+      .log("Append")
+      .fork
 
-      _ <- ZAkkaStreams
-        .interruptibleGraph(
-          dbApi
-            .columnFamily(sampleDb.test)
-            .tailSource(_ gt "bar" -> 100000, _ startsWith "bar")
-            .viaMat(KillSwitches.single)(Keep.right)
-            .toMat(Sink.foreach {
-              case (k, v) =>
-                println(s"Tail got: k=$k v=$v")
-            })(Keep.both),
-          graceful = true
-        )
-        .log("Tail")
+    _ <- ZAkkaStreams
+      .interruptibleGraph(
+        testKeyspace
+          .source(_ ^= "bar", _ ^= "bar")
+          .map(_._1)
+          .sliding(2)
+          .map(_.toList)
+          .viaMat(KillSwitches.single)(Keep.right)
+          .toMat(Sink.foreach {
+            case one :: two :: Nil =>
+              assert(one.version.compareTo(two.version) < 0, s"$one vs $two")
+            case _ =>
+          })(Keep.both),
+        graceful = true
+      )
+      .log("Check versionstamp uniqueness")
+
+    _ <- ZAkkaStreams
+      .interruptibleGraph(
+        testKeyspace
+          .tailSource(_ gt "bar" -> 100000, _ startsWith "bar")
+          .viaMat(KillSwitches.single)(Keep.right)
+          .toMat(Sink.foreach {
+            case (k, v) =>
+              println(s"Tail got: k=$k v=$v")
+          })(Keep.both),
+        graceful = true
+      )
+      .log("Tail")
 //      stats <- dbApi.statsTask
 //      _ <- ZLogger.info(
 //        stats.toVector
@@ -175,6 +220,5 @@ object FdbTestSampleApp extends AkkaApp {
 //      pair <- defaultCf.getTask(_.last)
 //      _ <- ZLogger.info(s"Got last: $pair")
 //      _ <- tailFiber.join
-    } yield ()
-  }
+  } yield ()
 }

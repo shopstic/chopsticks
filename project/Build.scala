@@ -6,7 +6,7 @@ import sbt.Keys._
 
 //noinspection TypeAnnotation
 object Build {
-  val buildVersion = "2.11.1"
+  val buildVersion = "2.13.0"
 
   lazy val ITest = config("it") extend Test
 

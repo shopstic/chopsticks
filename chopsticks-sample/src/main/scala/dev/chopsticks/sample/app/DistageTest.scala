@@ -4,7 +4,7 @@ import dev.chopsticks.sample.app.AkkaDiTestApp.Bar.BarService
 import dev.chopsticks.sample.app.AkkaDiTestApp.{Bar, Foo}
 import dev.chopsticks.sample.app.AkkaDiTestApp.Foo.FooService
 import distage.{Injector, ModuleDef}
-import izumi.distage.model.plan.GCMode
+import izumi.distage.model.plan.Roots
 import zio.{Has, Task, ZIO, ZLayer}
 import zio.clock.Clock
 
@@ -17,7 +17,7 @@ object DistageTest {
       make[Bar.Service].fromHas(ZLayer.succeed(BarService("foo")))
     }
 
-    val plan = Injector().plan(definition, GCMode.NoGC)
+    val plan = Injector().plan(definition, Roots.Everything)
     println(plan.render())
     plan.assertImportsResolvedOrThrow
 

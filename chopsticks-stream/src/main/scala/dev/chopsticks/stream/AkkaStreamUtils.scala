@@ -123,10 +123,11 @@ object AkkaStreamUtils {
   def batchFlow[V](
     maxBatchSize: Int,
     groupWithin: FiniteDuration
-  ): Flow[V, Seq[V], NotUsed] = {
+  ): Flow[V, Vector[V], NotUsed] = {
     if (groupWithin != Duration.Zero) {
       Flow[V]
         .groupedWithin(maxBatchSize, groupWithin)
+        .map(_.toVector)
     }
     else {
       Flow[V]
