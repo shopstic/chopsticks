@@ -2,6 +2,7 @@ package dev.chopsticks.sample.app
 
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
+import com.apple.foundationdb.tuple.Versionstamp
 import com.typesafe.config.Config
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.zio_ext._
@@ -10,6 +11,7 @@ import dev.chopsticks.kvdb.codec.fdb_key._
 import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
 import dev.chopsticks.kvdb.codec.protobuf_value._
 import dev.chopsticks.kvdb.fdb.FdbDatabase
+import dev.chopsticks.kvdb.fdb.FdbMaterialization.KeyspaceWithVersionstamp
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.sample.kvdb.SampleDb.TestKey
 import dev.chopsticks.stream.ZAkkaStreams
@@ -29,6 +31,10 @@ object FdbTestSampleApp extends AkkaApp {
     object default extends SampleDb.Default
     object test extends SampleDb.Test
     object time extends SampleDb.Time
+
+    override val keyspacesWithVersionstamp = Set(
+      KeyspaceWithVersionstamp(test)
+    )
   }
 
   protected def createEnv(untypedConfig: Config): ZLayer[AkkaApp.Env, Nothing, Env] = {
@@ -45,6 +51,8 @@ object FdbTestSampleApp extends AkkaApp {
     for {
       db <- ZService[SampleDb.Db]
       dbApi <- KvdbDatabaseApi(db)
+      ks = dbApi
+        .columnFamily(sampleDb.default)
       _ <- dbApi
         .columnFamily(sampleDb.default)
         .putTask("foo0000", "foo0000")
@@ -67,10 +75,15 @@ object FdbTestSampleApp extends AkkaApp {
         )
         .log("Default dump")
 
+      _ <- dbApi
+        .columnFamily(sampleDb.test)
+        .drop()
+        .log("Drop test")
+
       _ <- ZAkkaStreams
         .graph {
           Source(1 to 100)
-            .map(i => TestKey("foo", i) -> s"foo$i")
+            .map(i => TestKey("foo", i, Versionstamp.incomplete()) -> s"foo$i")
             .via(dbApi.columnFamily(sampleDb.test).putInBatchesFlow)
             .toMat(Sink.ignore)(Keep.right)
         }
@@ -79,7 +92,7 @@ object FdbTestSampleApp extends AkkaApp {
       _ <- ZAkkaStreams
         .graph(
           Source(1 to 100000)
-            .map(i => TestKey("bar", i) -> s"bar$i")
+            .map(i => TestKey("bar", i, Versionstamp.incomplete()) -> s"bar$i")
             .via(dbApi.columnFamily(sampleDb.test).putInBatchesFlow)
             .toMat(Sink.ignore)(Keep.right)
         )
@@ -89,7 +102,7 @@ object FdbTestSampleApp extends AkkaApp {
         .interruptibleGraph(
           dbApi
             .columnFamily(sampleDb.test)
-            .source(_ startsWith "bar", _ ltEq TestKey("bar", 50000))
+            .source(_ startsWith "bar", _ ltEq "bar" -> 50000)
             .viaMat(KillSwitches.single)(Keep.right)
             .toMat(Sink.fold(0)((s, _) => s + 1))(Keep.both),
           graceful = true
@@ -108,7 +121,7 @@ object FdbTestSampleApp extends AkkaApp {
               source <- UIO(
                 Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
                   .throttle(1, 1.second)
-                  .map(i => TestKey("bar", i) -> s"bar$i")
+                  .map(i => TestKey("bar", i, Versionstamp.incomplete()) -> s"bar$i")
                   .viaMat(KillSwitches.single)(Keep.right)
                   .via(
                     dbApi
@@ -128,7 +141,7 @@ object FdbTestSampleApp extends AkkaApp {
         .interruptibleGraph(
           dbApi
             .columnFamily(sampleDb.test)
-            .tailSource(_ startsWith "bar", _ startsWith "bar")
+            .tailSource(_ gt "bar" -> 100000, _ startsWith "bar")
             .viaMat(KillSwitches.single)(Keep.right)
             .toMat(Sink.foreach {
               case (k, v) =>

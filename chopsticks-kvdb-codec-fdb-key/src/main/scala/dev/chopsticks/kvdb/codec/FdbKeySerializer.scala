@@ -3,7 +3,7 @@ package dev.chopsticks.kvdb.codec
 import java.time._
 import java.util.UUID
 
-import com.apple.foundationdb.tuple.Tuple
+import com.apple.foundationdb.tuple.{Tuple, Versionstamp}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import enumeratum.EnumEntry
 import enumeratum.values.{ByteEnumEntry, IntEnumEntry, ShortEnumEntry}
@@ -45,6 +45,8 @@ object FdbKeySerializer {
   implicit val ymFdbKeyEncoder: FdbKeySerializer[YearMonth] =
     create((o, v) => longFdbKeyEncoder.serialize(o, v.getYear.toLong * 100 + v.getMonthValue))
   implicit val uuidFdbKeyEncoder: FdbKeySerializer[UUID] =
+    create((o, v) => o.add(v))
+  implicit val versionStampFdbKeyEncoder: FdbKeySerializer[Versionstamp] =
     create((o, v) => o.add(v))
 
   implicit def protobufEnumFdbKeyEncoder[T <: GeneratedEnum]: FdbKeySerializer[T] =

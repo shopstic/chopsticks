@@ -9,12 +9,14 @@ import zio.{ZIO, ZManaged}
 import dev.chopsticks.kvdb.codec.primitive._
 
 object FdbDatabaseTest {
-  object dbMaterialization extends TestDatabase.Materialization {
+  object dbMaterialization extends TestDatabase.Materialization with FdbMaterialization[TestDatabase.BaseCf] {
     object plain extends PlainCf
     object lookup extends LookupCf
     val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = {
       ColumnFamilySet[BaseCf] of plain and lookup
     }
+    //noinspection TypeAnnotation
+    override val keyspacesWithVersionstamp = Set.empty
   }
 
   val managedDb: ZManaged[AkkaApp.Env, Throwable, TestDatabase.Db] = {

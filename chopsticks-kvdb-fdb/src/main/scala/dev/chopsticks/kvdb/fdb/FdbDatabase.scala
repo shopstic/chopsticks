@@ -1,5 +1,6 @@
 package dev.chopsticks.kvdb.fdb
 
+import java.nio.{ByteBuffer, ByteOrder}
 import java.time.Instant
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
@@ -52,7 +53,17 @@ import scala.jdk.FutureConverters._
 import scala.util.{Failure, Success}
 
 object FdbDatabase extends LoggingContext {
-  final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](db: Database, prefixMap: Map[BCF[_, _], Array[Byte]]) {
+  final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](
+    db: Database,
+    prefixMap: Map[BCF[_, _], Array[Byte]],
+    withVersionstampSet: Set[BCF[_, _]]
+  ) {
+    private val prefixMapById: Map[String, Array[Byte]] = prefixMap.map {
+      case (k, v) =>
+        k.id -> v
+    }
+    private val withVersionstampIdSet = withVersionstampSet.map(_.id)
+
     val dbCloseSignal = new KvdbCloseSignal
 
     private val isClosed = new AtomicBoolean(false)
@@ -75,31 +86,54 @@ object FdbDatabase extends LoggingContext {
       task
     }
 
-    private val columnIdPrefixMap = prefixMap.map {
-      case (k, v) =>
-        k.id -> v
+    def hasVersionstamp[CF <: BCF[_, _]](column: CF): Boolean = {
+      hasVersionstamp(column.id)
+    }
+
+    def hasVersionstamp(columnId: String): Boolean = {
+      withVersionstampIdSet.contains(columnId)
     }
 
     def columnPrefix[CF <: BCF[_, _]](column: CF): Array[Byte] = {
-      prefixMap(column)
+      prefixMapById(column.id)
     }
 
     def strinc[CF <: BCF[_, _]](column: CF): Array[Byte] = {
-      ByteArrayUtil.strinc(prefixMap(column))
+      ByteArrayUtil.strinc(prefixMapById(column.id))
+    }
+
+    // From com.apple.foundationdb.tuple.TupleUtil
+    private def adjustVersionPosition520(packed: Array[Byte], delta: Int): Array[Byte] = {
+      val offsetOffset = packed.length - Integer.BYTES
+      val buffer = ByteBuffer.wrap(packed, offsetOffset, Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN)
+      val versionPosition = buffer.getInt + delta
+      if (versionPosition < 0)
+        throw new IllegalArgumentException("Tuple has an incomplete version at a negative position")
+      val _ = buffer
+        .position(offsetOffset)
+        .putInt(versionPosition)
+      packed
+    }
+
+    def adjustKeyVersionstamp[CF <: BCF[_, _]](column: CF, key: Array[Byte]): Array[Byte] = {
+      adjustKeyVersionstamp(column.id, key)
+    }
+
+    def adjustKeyVersionstamp(columnId: String, key: Array[Byte]): Array[Byte] = {
+      adjustVersionPosition520(key, prefixMapById(columnId).length)
     }
 
     def prefixKey(columnId: String, key: Array[Byte]): Array[Byte] = {
-      val prefix = columnIdPrefixMap(columnId)
+      val prefix = prefixMapById(columnId)
       ByteArrayUtil.join(prefix, key)
     }
 
     def prefixKey[CF <: BCF[_, _]](column: CF, key: Array[Byte]): Array[Byte] = {
-      val prefix = prefixMap(column)
-      ByteArrayUtil.join(prefix, key)
+      prefixKey(column.id, key)
     }
 
     def unprefixKey[CF <: BCF[_, _]](column: CF, key: Array[Byte]): Array[Byte] = {
-      val prefixLength = prefixMap(column).length
+      val prefixLength = prefixMapById(column.id).length
       util.Arrays.copyOfRange(key, prefixLength, key.length)
     }
 
@@ -107,7 +141,7 @@ object FdbDatabase extends LoggingContext {
       column: CF,
       constraints: List[KvdbKeyConstraint]
     ): List[KvdbKeyConstraint] = {
-      val prefix = prefixMap(column)
+      val prefix = prefixMapById(column.id)
       constraints.map { constraint =>
         constraint
           .copy(
@@ -186,7 +220,7 @@ object FdbDatabase extends LoggingContext {
   }
 
   def fromDatabase[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
-    materialization: KvdbMaterialization[BCF, CFS],
+    materialization: KvdbMaterialization[BCF, CFS] with FdbMaterialization[BCF],
     db: Database,
     config: FdbDatabaseConfig
   ): ZManaged[AkkaEnv with Blocking with MeasuredLogging, Throwable, KvdbDatabase[BCF, CFS]] = {
@@ -198,7 +232,9 @@ object FdbDatabase extends LoggingContext {
               2.seconds
             )
             .log("Build FDB directory map")
-            .map { prefixMap => FdbContext[BCF](db, prefixMap) }
+            .map { prefixMap =>
+              FdbContext[BCF](db, prefixMap, materialization.keyspacesWithVersionstamp.map(_.keyspace))
+            }
         } {
           _.close()
             .log("Close FDB context")
@@ -211,7 +247,7 @@ object FdbDatabase extends LoggingContext {
   }
 
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
-    materialization: KvdbMaterialization[BCF, CFS],
+    materialization: KvdbMaterialization[BCF, CFS] with FdbMaterialization[BCF],
     config: FdbDatabaseConfig
   ): ZManaged[AkkaEnv with Blocking with MeasuredLogging, Throwable, KvdbDatabase[BCF, CFS]] = {
     for {
@@ -506,7 +542,14 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .fromCompletionStage {
         dbContext.db.runAsync { tx =>
           if (clientOptions.disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
-          tx.set(prefixedKey, value)
+
+          if (dbContext.hasVersionstamp(column)) {
+            tx.mutate(MutationType.SET_VERSIONSTAMPED_KEY, dbContext.adjustKeyVersionstamp(column, prefixedKey), value)
+          }
+          else {
+            tx.set(prefixedKey, value)
+          }
+
           COMPLETED_FUTURE
         }
       }
@@ -615,7 +658,19 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
             action match {
               case TransactionPut(columnId, key, value) =>
-                tx.set(dbContext.prefixKey(columnId, key), value)
+                val prefixedKey = dbContext.prefixKey(columnId, key)
+
+                if (dbContext.hasVersionstamp(columnId)) {
+                  tx.mutate(
+                    MutationType.SET_VERSIONSTAMPED_KEY,
+                    dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
+                    value
+                  )
+                }
+                else {
+                  tx.set(prefixedKey, value)
+                }
+
               case TransactionDelete(columnId, key) =>
                 tx.clear(dbContext.prefixKey(columnId, key))
               case TransactionDeleteRange(columnId, fromKey, toKey) =>
@@ -659,7 +714,19 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
                   action match {
                     case TransactionPut(columnId, key, value) =>
-                      tx.set(dbContext.prefixKey(columnId, key), value)
+                      val prefixedKey = dbContext.prefixKey(columnId, key)
+
+                      if (dbContext.hasVersionstamp(columnId)) {
+                        tx.mutate(
+                          MutationType.SET_VERSIONSTAMPED_KEY,
+                          dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
+                          value
+                        )
+                      }
+                      else {
+                        tx.set(prefixedKey, value)
+                      }
+
                     case TransactionDelete(columnId, key) =>
                       tx.clear(dbContext.prefixKey(columnId, key))
                     case TransactionDeleteRange(columnId, fromKey, toKey) =>

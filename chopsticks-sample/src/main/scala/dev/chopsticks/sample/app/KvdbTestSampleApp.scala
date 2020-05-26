@@ -8,7 +8,7 @@ import com.typesafe.config.Config
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
-import dev.chopsticks.kvdb.codec.berkeleydb_key._
+import dev.chopsticks.kvdb.codec.fdb_key._
 import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
 import dev.chopsticks.kvdb.lmdb.LmdbDatabase
 import dev.chopsticks.sample.kvdb.SampleDb
@@ -27,6 +27,8 @@ object KvdbTestSampleApp extends AkkaApp {
     object default extends SampleDb.Default
     object test extends SampleDb.Test
     object time extends SampleDb.Time
+
+    override val keyspacesWithVersionstamp = Set.empty
   }
 
   protected def createEnv(untypedConfig: Config): ZLayer[AkkaApp.Env, Nothing, Env] = {

@@ -43,6 +43,8 @@ object FdbWatchTestApp extends AkkaDiApp {
     object default extends SampleDb.Default
     object test extends SampleDb.Test
     object time extends SampleDb.Time
+
+    override val keyspacesWithVersionstamp = Set.empty
   }
 
   override type Cfg = FdbWatchTestAppConfig

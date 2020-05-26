@@ -11,7 +11,12 @@ import scala.util.control.NonFatal
 package object fdb_key {
   implicit def fdbKeySerializer[T](implicit
     serializer: FdbKeySerializer[T]
-  ): KeySerializer[T] = (key: T) => serializer.serialize(new Tuple(), key).pack()
+  ): KeySerializer[T] = (key: T) => {
+    val tuple = serializer.serialize(new Tuple(), key)
+
+    if (tuple.hasIncompleteVersionstamp) tuple.packWithVersionstamp()
+    else tuple.pack()
+  }
 
   implicit def fdbKeyDeserializer[T](implicit deserializer: FdbKeyDeserializer[T]): KeyDeserializer[T] = {
     bytes: Array[Byte] =>
