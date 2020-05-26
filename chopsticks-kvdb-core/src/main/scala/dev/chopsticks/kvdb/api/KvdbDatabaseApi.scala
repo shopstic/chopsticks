@@ -88,21 +88,20 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
     )
   }
 
-  def batchTransact[A](
-    buildTransaction: (KvdbWriteTransactionBuilder[BCF], Vector[A]) => KvdbWriteTransactionBuilder[BCF]
-  ): Flow[A, Seq[A], NotUsed] = {
+  def batchTransact[A, P](
+    buildTransaction: Vector[A] => (List[TransactionWrite], P)
+  ): Flow[A, P, NotUsed] = {
     Flow[A]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
-          buildTransaction(db.transactionBuilder(), batch)
-            .result
-        }.map(serialized => (batch, serialized))
+          buildTransaction(batch)
+        }
       }
       .mapAsync(1) {
-        case (batch, serialized) =>
-          db.transactionTask(serialized)
-            .as(batch)
+        case (writes, passthrough) =>
+          db.transactionTask(writes)
+            .as(passthrough)
             .unsafeRunToFuture
       }
   }

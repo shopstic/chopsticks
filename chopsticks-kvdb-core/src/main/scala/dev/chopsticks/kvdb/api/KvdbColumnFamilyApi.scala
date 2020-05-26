@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import dev.chopsticks.fp.ZService
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext._
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
 import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
@@ -255,43 +256,52 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .map(v => (kt.transform(v), v))
   }
 
-  def batchPut(
-    tx: KvdbWriteTransactionBuilder[BCF],
-    batch: Vector[(K, V)]
-  ): KvdbWriteTransactionBuilder[BCF] = {
+  def batchPut(batch: Vector[(K, V)]): KvdbWriteTransactionBuilder[BCF] = {
+    val tx = db.transactionBuilder()
     for ((k, v) <- batch) {
       val _ = tx.put(cf, k, v)
     }
     tx
   }
 
-  type BatchPutTxBuilder = (KvdbWriteTransactionBuilder[BCF], Vector[(K, V)]) => KvdbWriteTransactionBuilder[BCF]
+  type BatchPutTxBuilder[P] = Vector[(K, V)] => (List[TransactionWrite], P)
 
-  def putPairsInBatchesFlow(
-    buildTransaction: BatchPutTxBuilder = batchPut
-  ): Flow[(K, V), Vector[(K, V)], NotUsed] = {
+  def putPairsInBatchesFlow[P](
+    buildTransaction: BatchPutTxBuilder[P]
+  ): Flow[(K, V), P, NotUsed] = {
     Flow[(K, V)]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
-          buildTransaction(db.transactionBuilder(), batch)
-            .result
-        }.map(serialized => (batch, serialized))
+          buildTransaction(batch)
+        }
       }
       .mapAsync(1) {
-        case (batch, serialized) =>
-          db.transactionTask(serialized)
-            .as(batch)
+        case (writes, passthrough) =>
+          db.transactionTask(writes)
+            .as(passthrough)
             .unsafeRunToFuture
       }
   }
 
-  def putValuesInBatchesFlow(
-    buildTransaction: BatchPutTxBuilder = batchPut
-  )(implicit kt: KeyTransformer[V, K]): Flow[V, Vector[(K, V)], NotUsed] = {
+  def putPairsInBatchesFlow: Flow[(K, V), Vector[(K, V)], NotUsed] = {
+    putPairsInBatchesFlow(batch => {
+      batchPut(batch).result -> batch
+    })
+  }
+
+  def putValuesInBatchesFlow[P](
+    buildTransaction: BatchPutTxBuilder[P]
+  )(implicit kt: KeyTransformer[V, K]): Flow[V, P, NotUsed] = {
     Flow[V]
       .via(transformValueToPairFlow)
       .via(putPairsInBatchesFlow(buildTransaction))
+  }
+
+  def putValuesInBatchesFlow(implicit kt: KeyTransformer[V, K]): Flow[V, Vector[(K, V)], NotUsed] = {
+    putValuesInBatchesFlow[Vector[(K, V)]](batch => {
+      batchPut(batch).result -> batch
+    })
   }
 
   def tailBatchedRawValueSource(
