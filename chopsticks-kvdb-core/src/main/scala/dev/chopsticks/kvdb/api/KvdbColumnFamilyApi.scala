@@ -14,7 +14,7 @@ import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbTailBatch, KvdbValueBatch}
-import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase}
+import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbWriteTransactionBuilder}
 import dev.chopsticks.stream.AkkaStreamUtils
 import eu.timepit.refined.auto._
 import zio.Task
@@ -255,56 +255,27 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .map(v => (kt.transform(v), v))
   }
 
-  def putInBatchesFlow: Flow[(K, V), Seq[(K, V)], NotUsed] = {
+  def batchPut(
+    tx: KvdbWriteTransactionBuilder[BCF],
+    batch: Vector[(K, V)]
+  ): KvdbWriteTransactionBuilder[BCF] = {
+    for ((k, v) <- batch) {
+      val _ = tx.put(cf, k, v)
+    }
+    tx
+  }
+
+  type BatchPutTxBuilder = (KvdbWriteTransactionBuilder[BCF], Vector[(K, V)]) => KvdbWriteTransactionBuilder[BCF]
+
+  def putPairsInBatchesFlow(
+    buildTransaction: BatchPutTxBuilder = batchPut
+  ): Flow[(K, V), Vector[(K, V)], NotUsed] = {
     Flow[(K, V)]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
-          batch
-            .foldLeft(db.transactionBuilder()) {
-              case (tx, (k, v)) =>
-                tx.put(cf, k, v)
-            }
+          buildTransaction(db.transactionBuilder(), batch)
             .result
-        }.map(serialized => (batch, serialized))
-      }
-      .mapAsync(1) {
-        case (batch, serialized) =>
-          db.transactionTask(serialized)
-            .map(_ => batch)
-            .unsafeRunToFuture
-      }
-  }
-
-  def putValuesInBatchesFlow(implicit kt: KeyTransformer[V, K]): Flow[V, Seq[(K, V)], NotUsed] = {
-    Flow[V]
-      .via(transformValueToPairFlow)
-      .via(putInBatchesFlow)
-  }
-
-  def putInBatchesWithCheckpointFlow[CCF <: BCF[CK, CV], CK, CV](
-    checkpointColumn: CCF
-  )(
-    aggregateCheckpoint: Seq[(K, V)] => (CK, CV)
-  ): Flow[(K, V), Seq[(K, V)], NotUsed] = {
-    putInBatchesWithCheckpointsFlow[CCF, CK, CV](
-      checkpointColumn
-    ) { seq => Vector(aggregateCheckpoint(seq)) }
-  }
-
-  def putInBatchesWithCheckpointsFlow[CCF <: BCF[CK, CV], CK, CV](checkpointColumn: CCF)(
-    aggregateCheckpoints: Seq[(K, V)] => Seq[(CK, CV)]
-  ): Flow[(K, V), Seq[(K, V)], NotUsed] = {
-    Flow[(K, V)]
-      .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
-      .mapAsync(options.serdesParallelism) { batch =>
-        Future {
-          val txn = db.transactionBuilder()
-
-          for ((k, v) <- batch) txn.put(cf, k, v)
-          for ((ck, cv) <- aggregateCheckpoints(batch)) txn.put(checkpointColumn, ck, cv)
-
-          txn.result
         }.map(serialized => (batch, serialized))
       }
       .mapAsync(1) {
@@ -315,36 +286,12 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
   }
 
-  def putValuesInBatchesWithCheckpointFlow[CCF <: BCF[CK, CV], CK, CV](
-    checkpointColumn: CCF
-  )(
-    aggregateCheckpoint: Seq[(K, V)] => (CK, CV)
-  )(implicit kt: KeyTransformer[V, K]): Flow[V, Seq[(K, V)], NotUsed] = {
+  def putValuesInBatchesFlow(
+    buildTransaction: BatchPutTxBuilder = batchPut
+  )(implicit kt: KeyTransformer[V, K]): Flow[V, Vector[(K, V)], NotUsed] = {
     Flow[V]
       .via(transformValueToPairFlow)
-      .via(
-        putInBatchesWithCheckpointFlow[CCF, CK, CV](
-          checkpointColumn
-        )(
-          aggregateCheckpoint
-        )
-      )
-  }
-
-  def putValuesInBatchesWithCheckpointsFlow[CCF <: BCF[CK, CV], CK, CV](
-    checkpointColumn: CCF
-  )(
-    aggregateCheckpoints: Seq[(K, V)] => Seq[(CK, CV)]
-  )(implicit kt: KeyTransformer[V, K]): Flow[V, Seq[(K, V)], NotUsed] = {
-    Flow[V]
-      .via(transformValueToPairFlow)
-      .via(
-        putInBatchesWithCheckpointsFlow[CCF, CK, CV](
-          checkpointColumn
-        )(
-          aggregateCheckpoints
-        )
-      )
+      .via(putPairsInBatchesFlow(buildTransaction))
   }
 
   def tailBatchedRawValueSource(

@@ -2,6 +2,8 @@ package dev.chopsticks.kvdb.api
 
 import java.util.concurrent.TimeUnit
 
+import akka.NotUsed
+import akka.stream.scaladsl.Flow
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
@@ -9,6 +11,7 @@ import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
 import dev.chopsticks.kvdb.util.KvdbAliases.KvdbPair
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbReadTransactionBuilder, KvdbWriteTransactionBuilder}
+import dev.chopsticks.stream.AkkaStreamUtils
 import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
@@ -21,6 +24,9 @@ import zio.{Task, ZIO}
 
 import scala.concurrent.duration._
 import io.scalaland.chimney.dsl._
+import dev.chopsticks.fp.zio_ext._
+
+import scala.concurrent.Future
 
 object KvdbDatabaseApi {
   final case class KvdbApiClientOptions(
@@ -68,6 +74,9 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
 )(implicit
   rt: zio.Runtime[AkkaEnv]
 ) {
+  private val akkaEnv = rt.environment.get[AkkaEnv.Service]
+  import akkaEnv._
+
   def withOptions(
     modifier: KvdbApiClientOptions => KvdbApiClientOptions
   ): KvdbDatabaseApi[BCF] = {
@@ -79,6 +88,25 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
     )
   }
 
+  def batchTransact[A](
+    buildTransaction: (KvdbWriteTransactionBuilder[BCF], Vector[A]) => KvdbWriteTransactionBuilder[BCF]
+  ): Flow[A, Seq[A], NotUsed] = {
+    Flow[A]
+      .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
+      .mapAsync(options.serdesParallelism) { batch =>
+        Future {
+          buildTransaction(db.transactionBuilder(), batch)
+            .result
+        }.map(serialized => (batch, serialized))
+      }
+      .mapAsync(1) {
+        case (batch, serialized) =>
+          db.transactionTask(serialized)
+            .as(batch)
+            .unsafeRunToFuture
+      }
+  }
+
   def columnFamily[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
     col: CF[K, V] with CF2
   ): KvdbColumnFamilyApi[BCF, CF2, K, V] = {
@@ -87,12 +115,17 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]] = db.statsTask
 
+  @deprecated("Use transact(...) instead", since = "2.13")
   def transactionTask(actions: Seq[TransactionWrite]): Task[Seq[TransactionWrite]] = {
+    transact(actions)
+  }
+
+  def transact(actions: Seq[TransactionWrite]): Task[Seq[TransactionWrite]] = {
     db.transactionTask(actions)
       .as(actions)
   }
 
-  def conditionalTransactionTask(
+  def conditionallyTransact(
     reads: List[TransactionGet],
     condition: List[Option[KvdbPair]] => Boolean,
     actions: Seq[TransactionWrite]
