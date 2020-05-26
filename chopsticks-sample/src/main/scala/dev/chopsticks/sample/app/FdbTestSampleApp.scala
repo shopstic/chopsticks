@@ -97,14 +97,13 @@ object FdbTestSampleApp extends AkkaDiApp {
     _ <- ZAkkaStreams
       .graph {
         Source(1 to 100)
-          .via(dbApi.batchTransact((tx, batch) => {
-            testKeyspace.batchPut(
-              tx,
-              batch.zipWithIndex.map {
-                case (i, index) =>
-                  TestKey("foo", i, Versionstamp.incomplete(index)) -> s"foo$i"
-              }
-            )
+          .via(dbApi.batchTransact(batch => {
+            val pairs = batch.zipWithIndex.map {
+              case (i, index) =>
+                TestKey("foo", i, Versionstamp.incomplete(index)) -> s"foo$i"
+            }
+
+            testKeyspace.batchPut(pairs).result -> pairs
           }))
           .toMat(Sink.ignore)(Keep.right)
       }
@@ -113,14 +112,13 @@ object FdbTestSampleApp extends AkkaDiApp {
     _ <- ZAkkaStreams
       .graph(
         Source(1 to 100000)
-          .via(dbApi.batchTransact((tx, batch) => {
-            testKeyspace.batchPut(
-              tx,
-              batch.zipWithIndex.map {
-                case (i, index) =>
-                  TestKey("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
-              }
-            )
+          .via(dbApi.batchTransact(batch => {
+            val pairs = batch.zipWithIndex.map {
+              case (i, index) =>
+                TestKey("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+            }
+
+            testKeyspace.batchPut(pairs).result -> pairs
           }))
           .toMat(Sink.ignore)(Keep.right)
       )
@@ -148,14 +146,13 @@ object FdbTestSampleApp extends AkkaDiApp {
               Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
                 .throttle(1, 1.second)
                 .viaMat(KillSwitches.single)(Keep.right)
-                .via(dbApi.batchTransact((tx, batch) => {
-                  testKeyspace.batchPut(
-                    tx,
-                    batch.zipWithIndex.map {
-                      case (i, index) =>
-                        TestKey("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
-                    }
-                  )
+                .via(dbApi.batchTransact(batch => {
+                  val pairs = batch.zipWithIndex.map {
+                    case (i, index) =>
+                      TestKey("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+                  }
+
+                  testKeyspace.batchPut(pairs).result -> pairs
                 }))
                 .toMat(Sink.ignore)(Keep.both)
             )
@@ -175,8 +172,8 @@ object FdbTestSampleApp extends AkkaDiApp {
           .map(_.toList)
           .viaMat(KillSwitches.single)(Keep.right)
           .toMat(Sink.foreach {
-            case one :: two :: Nil =>
-              assert(one.version.compareTo(two.version) < 0, s"$one vs $two")
+            case previous :: next :: Nil =>
+              assert(previous.version.compareTo(next.version) < 0, s"$previous vs $next")
             case _ =>
           })(Keep.both),
         graceful = true
