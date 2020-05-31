@@ -31,6 +31,7 @@ import scala.concurrent.Future
 object KvdbDatabaseApi {
   final case class KvdbApiClientOptions(
     forceSync: Boolean = false,
+    batchWriteParallelism: PosInt = 1,
     batchWriteMaxBatchSize: PosInt = 4096,
     batchWriteBatchingGroupWithin: FiniteDuration = Duration.Zero,
     batchReadMaxBatchBytes: Information = 32.kb,
@@ -98,7 +99,25 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
           buildTransaction(batch)
         }
       }
-      .mapAsync(1) {
+      .mapAsync(options.batchWriteParallelism) {
+        case (writes, passthrough) =>
+          db.transactionTask(writes)
+            .as(passthrough)
+            .unsafeRunToFuture
+      }
+  }
+
+  def batchTransactUnordered[A, P](
+    buildTransaction: Vector[A] => (List[TransactionWrite], P)
+  ): Flow[A, P, NotUsed] = {
+    Flow[A]
+      .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
+      .mapAsyncUnordered(options.serdesParallelism) { batch =>
+        Future {
+          buildTransaction(batch)
+        }
+      }
+      .mapAsyncUnordered(options.batchWriteParallelism) {
         case (writes, passthrough) =>
           db.transactionTask(writes)
             .as(passthrough)
