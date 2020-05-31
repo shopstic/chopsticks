@@ -341,16 +341,23 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
   }
 
-  def tailSource(
+  def tailBatchedSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
-  ): Source[(K, V), NotUsed] = {
+  ): Source[List[(K, V)], NotUsed] = {
     tailBatchedRawSource(from, to)
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserialize).to(List)
         }
       }
+  }
+
+  def tailSource(
+    from: ConstraintsBuilder[K],
+    to: ConstraintsBuilder[K]
+  ): Source[(K, V), NotUsed] = {
+    tailBatchedSource(from, to)
       .mapConcat(identity)
   }
 

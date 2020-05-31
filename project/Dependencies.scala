@@ -165,7 +165,7 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.1.0"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "3.1.1"
   )
 
   val distageDeps = Seq(
