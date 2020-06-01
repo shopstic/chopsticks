@@ -72,10 +72,6 @@ object Dependencies {
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
 
-  val quicklensDeps = Seq(
-    "com.softwaremill.quicklens" %% "quicklens" % "1.4.12"
-  )
-
   val nameofDeps = Seq(
     "com.github.dwickern" %% "scala-nameof" % "1.0.3" % Provided
   )
