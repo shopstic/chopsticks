@@ -103,12 +103,12 @@ lazy val kvdbFdb = Build
   )
   .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
 
-lazy val avro4s = Build
-  .defineProject("avro4s")
-  .settings(
-    libraryDependencies ++= avro4sDeps ++ refinedCoreDeps
-  )
-  .dependsOn(util)
+//lazy val avro4s = Build
+//  .defineProject("avro4s")
+//  .settings(
+//    libraryDependencies ++= avro4sDeps ++ refinedCoreDeps
+//  )
+//  .dependsOn(util)
 
 lazy val kvdbCodecFdbKey = Build
   .defineProject("kvdb-codec-fdb-key")
@@ -176,7 +176,6 @@ lazy val root = (project in file("."))
     kvdbCodecBerkeleydbKey,
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
-    avro4s,
     metric,
     sample
   )
