@@ -162,4 +162,17 @@ object FdbKeyDeserializer {
   def combine[A](ctx: CaseClass[FdbKeyDeserializer, A]): FdbKeyDeserializer[A] = (in: FdbTupleReader) => {
     ctx.constructMonadic { param => param.typeclass.deserialize(in) }
   }
+
+  def dispatch[A](ctx: SealedTrait[FdbKeyDeserializer, A]): FdbKeyDeserializer[A] = (in: FdbTupleReader) => {
+    val index = in.getBigInteger.intValueExact()
+    if (index < 0) {
+      Left(GenericKeyDeserializationException(s"Invalid index: $index"))
+    }
+    else if (index > ctx.subtypes.size - 1) {
+      Left(GenericKeyDeserializationException(s"Index out of bound: $index. All subtypes: ${ctx.subtypes}"))
+    }
+    else {
+      ctx.subtypes(index).typeclass.deserialize(in)
+    }
+  }
 }

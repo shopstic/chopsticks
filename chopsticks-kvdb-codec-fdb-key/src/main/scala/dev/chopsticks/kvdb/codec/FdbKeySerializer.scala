@@ -79,6 +79,12 @@ object FdbKeySerializer {
   def combine[A](ctx: CaseClass[FdbKeySerializer, A]): FdbKeySerializer[A] =
     (o: Tuple, a: A) => ctx.parameters.foldLeft(o) { (tuple, p) => p.typeclass.serialize(tuple, p.dereference(a)) }
 
+  def dispatch[A](ctx: SealedTrait[FdbKeySerializer, A]): FdbKeySerializer[A] = (o: Tuple, a: A) => {
+    ctx.dispatch(a) { sub: Subtype[Typeclass, A] =>
+      sub.typeclass.serialize(o.add(sub.index.toLong), sub.cast(a))
+    }
+  }
+
   //noinspection MatchToPartialFunction
   implicit def deriveOption[T](implicit encoder: FdbKeySerializer[T]): FdbKeySerializer[Option[T]] = {
     create { (o, maybeValue) =>
