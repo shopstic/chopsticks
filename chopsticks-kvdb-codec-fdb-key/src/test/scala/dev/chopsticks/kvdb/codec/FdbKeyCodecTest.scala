@@ -3,7 +3,14 @@ package dev.chopsticks.kvdb.codec
 import java.time.{LocalDate, LocalDateTime, LocalTime, YearMonth}
 import java.util.UUID
 
-import dev.chopsticks.kvdb.codec.FdbKeyCodecTest.TestKeyWithRefined
+import dev.chopsticks.kvdb.codec.FdbKeyCodecTest.{
+  SealedTraitTest,
+  SealedTraitTestBar,
+  SealedTraitTestBaz,
+  SealedTraitTestBoo,
+  SealedTraitTestFoo,
+  TestKeyWithRefined
+}
 import dev.chopsticks.testkit.ArbitraryTime._
 import enumeratum.EnumEntry
 import enumeratum.values.{ByteEnum, ByteEnumEntry, IntEnum, IntEnumEntry}
@@ -65,6 +72,16 @@ object FdbKeyCodecTest {
     import dev.chopsticks.kvdb.codec.fdb_key._
     implicit val dbKey = KeySerdes[TestKeyWithRefined]
   }
+
+  sealed trait SealedTraitTest
+  object SealedTraitTest {
+    import dev.chopsticks.kvdb.codec.fdb_key._
+    implicit val dbKey = KeySerdes[SealedTraitTest]
+  }
+  final case class SealedTraitTestFoo(foo: Int) extends SealedTraitTest
+  final case class SealedTraitTestBar(bar: Int) extends SealedTraitTest
+  final case class SealedTraitTestBaz(baz: Int) extends SealedTraitTest
+  final case class SealedTraitTestBoo(boom: Int) extends SealedTraitTest
 }
 
 //noinspection TypeAnnotation
@@ -456,6 +473,21 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
         import eu.timepit.refined.auto._
         val key = TestKeyWithRefined("foo", 1234)
         KeySerdes.deserialize[TestKeyWithRefined](KeySerdes.serialize(key)) should equal(Right(key))
+      }
+    }
+
+    "sealed trait" should {
+      "serdes" in {
+//        import fdb_key._
+        val foo = SealedTraitTestFoo(1)
+        val bar = SealedTraitTestBar(2)
+        val baz = SealedTraitTestBaz(3)
+        val boo = SealedTraitTestBoo(4)
+
+        KeySerdes.deserialize[SealedTraitTest](KeySerdes.serialize[SealedTraitTest](foo)) should equal(Right(foo))
+        KeySerdes.deserialize[SealedTraitTest](KeySerdes.serialize[SealedTraitTest](bar)) should equal(Right(bar))
+        KeySerdes.deserialize[SealedTraitTest](KeySerdes.serialize[SealedTraitTest](baz)) should equal(Right(baz))
+        KeySerdes.deserialize[SealedTraitTest](KeySerdes.serialize[SealedTraitTest](boo)) should equal(Right(boo))
       }
     }
 
