@@ -7,6 +7,13 @@ build:
   script:
     - SBT_POD=$(kubectl get po -n sbt -l "app.kubernetes.io/instance=sbt" -o=name)
     - |
+      PAUSE_ON_START=${PAUSE_ON_START:-"0"}
+
+      if [[ "${PAUSE_ON_START}" != "0" ]]; then
+        echo "PAUSE_ON_START is set, going to pause here..."
+        trap : TERM INT; sleep infinity & wait
+      fi
+
       kubectl exec -i -n sbt "${SBT_POD}" -- bash <<EOF
         export COURSIER_CACHE="${COURSIER_CACHE}"
         cd "${CI_PROJECT_DIR}"
