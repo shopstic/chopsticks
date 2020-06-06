@@ -472,6 +472,171 @@ abstract private[kvdb] class KvdbDatabaseTest
     }
   }
 
+  "getRangeTask" should {
+    def prep(db: TestDatabase.Db) = {
+      populateColumn(
+        db,
+        defaultCf,
+        List(
+          "aaa" -> "aaa",
+          "aaa1" -> "aaa1",
+          "aaa2" -> "aaa2",
+          "aaa3" -> "aaa3",
+          "aaa4" -> "aaa4",
+          "bbb" -> "bbb",
+          "ccc" -> "ccc"
+        )
+      )
+    }
+
+    "fail if range limit is not a positive int" in withDb { db: TestDatabase.Db =>
+      for {
+        _ <- prep(db)
+        ret <- db.getRangeTask(
+          defaultCf,
+          $$(_ ^= "aaa", _ ^= "aaa")
+        ).either
+      } yield {
+        ret should matchPattern {
+          case Left(_: InvalidKvdbArgumentException) =>
+        }
+      }
+    }
+
+    "return the correct range less than limit" in withDb { db =>
+      for {
+        _ <- prep(db)
+        pairs <- db.getRangeTask(
+          defaultCf,
+          $$(_ > "aaa", _ < "aaa4").copy(limit = 10)
+        )
+      } yield {
+        assertPairs(
+          pairs,
+          List(
+            "aaa1" -> "aaa1",
+            "aaa2" -> "aaa2",
+            "aaa3" -> "aaa3"
+          )
+        )
+      }
+    }
+
+    "return the correct range at exactly limit" in withDb { db =>
+      for {
+        _ <- prep(db)
+        pairs <- db.getRangeTask(
+          defaultCf,
+          $$(_ ^= "aaa", _ ^= "aaa").copy(limit = 3)
+        )
+      } yield {
+        assertPairs(
+          pairs,
+          List(
+            "aaa" -> "aaa",
+            "aaa1" -> "aaa1",
+            "aaa2" -> "aaa2"
+          )
+        )
+      }
+    }
+
+    "return empty if range doesn't match any" in withDb { db =>
+      for {
+        _ <- prep(db)
+        pairs <- db.getRangeTask(
+          defaultCf,
+          $$(_ > "aaa4", _ ^= "aaa").copy(limit = 3)
+        )
+      } yield {
+        pairs shouldBe empty
+      }
+    }
+  }
+
+  "batchGetRangeTask" should {
+    def prep(db: TestDatabase.Db) = {
+      populateColumn(
+        db,
+        defaultCf,
+        List(
+          "aaa" -> "aaa",
+          "aaa1" -> "aaa1",
+          "aaa2" -> "aaa2",
+          "aaa3" -> "aaa3",
+          "aaa4" -> "aaa4",
+          "bbb" -> "bbb",
+          "ccc" -> "ccc"
+        )
+      )
+    }
+
+    "fail if any range limit is not a positive int" in withDb { db: TestDatabase.Db =>
+      for {
+        _ <- prep(db)
+        ret <- db.batchGetRangeTask(
+          defaultCf,
+          $$(_ ^= "aaa", _ ^= "aaa") :: Nil
+        ).either
+      } yield {
+        ret should matchPattern {
+          case Left(_: InvalidKvdbArgumentException) =>
+        }
+      }
+    }
+
+    "fail if range get task fails" in withDb { db: TestDatabase.Db =>
+      for {
+        _ <- prep(db)
+        ret <- db.batchGetRangeTask(
+          defaultCf,
+          List(
+            $$(_ > "aaa", _ < "aaa4").copy(limit = 10),
+            $$(_ ^= "aaa", _ ^= "aaa").copy(limit = 3),
+            $$(_ > "aaa4", _ ^= "aaa")
+          )
+        ).either
+      } yield {
+        ret should matchPattern {
+          case Left(_: InvalidKvdbArgumentException) =>
+        }
+      }
+    }
+
+    "return the correct ranges" in withDb { db =>
+      for {
+        _ <- prep(db)
+        ret <- db.batchGetRangeTask(
+          defaultCf,
+          List(
+            $$(_ > "aaa", _ < "aaa4").copy(limit = 10),
+            $$(_ ^= "aaa", _ ^= "aaa").copy(limit = 3),
+            $$(_ > "aaa4", _ ^= "aaa").copy(limit = 3)
+          )
+        )
+      } yield {
+        ret should have size (3)
+        assertPairs(
+          ret.head,
+          List(
+            "aaa1" -> "aaa1",
+            "aaa2" -> "aaa2",
+            "aaa3" -> "aaa3"
+          )
+        )
+        assertPairs(
+          ret(1),
+          List(
+            "aaa" -> "aaa",
+            "aaa1" -> "aaa1",
+            "aaa2" -> "aaa2"
+          )
+        )
+        ret(2) shouldBe empty
+      }
+    }
+  }
+
   "deleteTask" should {
     "do nothing if no such key is found" in withDb { db =>
       for {

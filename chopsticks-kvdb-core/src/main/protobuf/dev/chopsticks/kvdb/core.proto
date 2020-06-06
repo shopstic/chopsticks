@@ -27,6 +27,7 @@ message KvdbKeyConstraint {
 message KvdbKeyRange {
   repeated KvdbKeyConstraint from = 1 [(scalapb.field).collection_type="List"];
   repeated KvdbKeyConstraint to = 2 [(scalapb.field).collection_type="List"];
+  int32 limit = 3;
 }
 
 //message KvdbPutRequest {

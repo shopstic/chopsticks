@@ -7,7 +7,7 @@ import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 
 import akka.NotUsed
 import akka.stream.Attributes
-import akka.stream.scaladsl.{Merge, Source}
+import akka.stream.scaladsl.{Merge, Sink, Source}
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
@@ -477,6 +477,32 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     })
   }
 
+  override def getRangeTask[Col <: CF](column: Col, range: KvdbKeyRange): Task[List[KvdbPair]] = {
+    if (range.limit < 1) {
+      Task.fail(
+        InvalidKvdbArgumentException(s"range.limit of '${range.limit}' is invalid, must be a positive integer")
+      )
+    }
+    else {
+      // TODO: Optimize with a better implementation tailored to range scanning with a known limit
+      Task.fromFuture { _ =>
+        val akkaService = rt.environment.get
+        import akkaService.actorSystem
+
+        iterateSource(column, range)
+          .recoverWithRetries(
+            1,
+            {
+              case _: SeekFailure => Source.empty
+            }
+          )
+          .mapConcat(_.toList)
+          .take(range.limit.toLong)
+          .runWith(Sink.collection[KvdbPair, List[KvdbPair]])
+      }
+    }
+  }
+
   override def batchGetTask[Col <: CF](
     column: Col,
     requests: Seq[KvdbKeyConstraintList]
@@ -495,6 +521,13 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       }
       finally closeTxn(txn)
     })
+  }
+
+  override def batchGetRangeTask[Col <: CF](column: Col, ranges: Seq[KvdbKeyRange]): Task[List[List[KvdbPair]]] = {
+    ZIO
+      .foreachPar(ranges) { range =>
+        getRangeTask(column, range)
+      }
   }
 
   override def estimateCount[Col <: CF](column: Col): Task[Long] = {
