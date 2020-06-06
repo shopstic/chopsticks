@@ -440,7 +440,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   @deprecated("Use rawConcurrentTailVerboseSource instead", "2.14")
-  def concurrentTailVerboseRawSource1(
+  def concurrentTailVerboseRawSource(
     ranges: ConstraintsRangesBuilder[K]
   ): Source[(Int, KvdbTailBatch), NotUsed] = {
     rawConcurrentTailVerboseSource(ranges)
