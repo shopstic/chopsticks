@@ -83,7 +83,7 @@ object KvdbDatabaseTest extends Matchers with Inside {
     KeyConstraints[String] => KeyConstraints[String],
     KeyConstraints[String] => KeyConstraints[String]
   ) => KvdbKeyRange =
-    KeyConstraints.range[String]
+    KeyConstraints.range[String](_, _, 0)
 
   private[kvdb] def assertPair(pair: Option[KvdbPair], key: String, value: String): Assertion = {
     inside(pair) {
