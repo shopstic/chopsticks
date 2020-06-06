@@ -160,10 +160,6 @@ object Dependencies {
     "com.lihaoyi" %% "pprint" % "0.5.9"
   )
 
-  val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "3.1.1"
-  )
-
   val distageDeps = Seq(
     "io.7mind.izumi" %% "distage-core" % IZUMI_VERSION,
     "io.7mind.izumi" %% "logstage-core" % IZUMI_VERSION,
