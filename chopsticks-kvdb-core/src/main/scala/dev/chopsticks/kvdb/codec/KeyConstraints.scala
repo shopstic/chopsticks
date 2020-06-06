@@ -5,7 +5,7 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
-
+import eu.timepit.refined.types.numeric.PosInt
 import scala.collection.immutable.Queue
 
 object KeyConstraints {
@@ -15,6 +15,8 @@ object KeyConstraints {
   type ConstraintsBuilder[K] = KeyConstraints[K] => KeyConstraints[K]
   type ConstraintsSeqBuilder[K] = KeyConstraints[K] => Seq[KeyConstraints[K]]
   type ConstraintsRangesBuilder[K] = KeyConstraints[K] => List[(KeyConstraints[K], KeyConstraints[K])]
+  type ConstraintsRangesWithLimitBuilder[K] =
+    KeyConstraints[K] => List[((KeyConstraints[K], KeyConstraints[K]), PosInt)]
 
   def seed[K]: KeyConstraints[K] = Seed.asInstanceOf[KeyConstraints[K]]
 
@@ -26,8 +28,8 @@ object KeyConstraints {
     KvdbKeyConstraintList(constraints.constraints.toList)
   }
 
-  def toRange[K](from: KeyConstraints[K], to: KeyConstraints[K]): KvdbKeyRange = {
-    KvdbKeyRange(from.constraints.toList, to.constraints.toList)
+  def toRange[K](from: KeyConstraints[K], to: KeyConstraints[K], limit: Int = 0): KvdbKeyRange = {
+    KvdbKeyRange(from.constraints.toList, to.constraints.toList, limit)
   }
 
   def constrain[K](c: KeyConstraints[K] => KeyConstraints[K]): KvdbKeyConstraintList = {
@@ -36,9 +38,10 @@ object KeyConstraints {
 
   def range[K](
     from: KeyConstraints[K] => KeyConstraints[K],
-    to: KeyConstraints[K] => KeyConstraints[K]
+    to: KeyConstraints[K] => KeyConstraints[K],
+    limit: Int = 0
   ): KvdbKeyRange = {
-    toRange(from(seed), to(seed))
+    toRange(from(seed), to(seed), limit)
   }
 
   def build[K](builder: ConstraintsBuilder[K]): KvdbKeyConstraintList = {

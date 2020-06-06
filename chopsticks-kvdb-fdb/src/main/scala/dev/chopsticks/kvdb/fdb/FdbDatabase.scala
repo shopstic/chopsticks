@@ -3,8 +3,8 @@ package dev.chopsticks.kvdb.fdb
 import java.nio.{ByteBuffer, ByteOrder}
 import java.time.Instant
 import java.util
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 
 import akka.NotUsed
 import akka.stream.Attributes
@@ -33,13 +33,9 @@ import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
 import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbCloseSignal
-import dev.chopsticks.kvdb.util.KvdbException.{
-  ConditionalTransactionFailedException,
-  KvdbAlreadyClosedException,
-  SeekFailure,
-  UnsupportedKvdbOperationException
-}
+import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
+import eu.timepit.refined.types.numeric.PosInt
 import pureconfig.ConfigConvert
 import zio._
 import zio.blocking.{blocking, Blocking}
@@ -257,26 +253,6 @@ object FdbDatabase extends LoggingContext {
   }
 
   val COMPLETED_FUTURE: CompletableFuture[Unit] = CompletableFuture.completedFuture(())
-
-  implicit class CompletableFutureToInterruptibleZio[V](future: CompletableFuture[V]) {
-    def asTask: Task[V] = {
-      Task.effectAsyncInterrupt[V](cb => {
-        val _ = future.whenComplete((v, e) => {
-          if (e == null) {
-            cb(Task.succeed(v))
-          }
-          else {
-            cb(Task.fail(e))
-          }
-        })
-
-        Left(UIO {
-          println("GOING TO CANCEL")
-          future.cancel(true)
-        })
-      })
-    }
-  }
 }
 
 import dev.chopsticks.kvdb.fdb.FdbDatabase._
@@ -422,8 +398,8 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
               .asScala
               .map {
                 case (future, maybeValue) =>
-                  val watchTask = future
-                    .asTask
+                  val watchTask = TaskUtils
+                    .fromCancellableCompletableFuture(future)
                     .as(maybeValue)
 
                   val watchTaskWithTimeout = watchTimeout match {
@@ -495,8 +471,8 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     column: Col,
     constraints: KvdbKeyConstraintList
   ): Task[Option[(Array[Byte], Array[Byte])]] = {
-    Task
-      .fromCompletionStage {
+    TaskUtils
+      .fromCancellableCompletableFuture {
         dbContext.db.readAsync { tx =>
           doGet(tx, column, constraints.constraints).thenApply { //noinspection MatchToPartialFunction
             result =>
@@ -510,72 +486,176 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       }
   }
 
+  private def doGetRangeFuture[Col <: CF](
+    tx: ReadTransaction,
+    column: Col,
+    from: List[KvdbKeyConstraint],
+    to: List[KvdbKeyConstraint],
+    limit: PosInt
+  ): CompletableFuture[List[KvdbPair]] = {
+    val prefixedFrom = dbContext.prefixKeyConstraints(column, from)
+    val prefixedTo = dbContext.prefixKeyConstraints(column, to)
+    val fromHead = prefixedFrom.head
+    val operator = fromHead.operator
+    val headValidation =
+      if (operator == Operator.EQUAL || operator == Operator.PREFIX) prefixedFrom else prefixedFrom.tail
+    val headOperand = fromHead.operand.toByteArray
+
+    val startKeySelector = operator match {
+      case Operator.EQUAL => KeySelector.firstGreaterOrEqual(headOperand)
+      case _ => nonEqualFromConstraintToKeySelector(operator, headOperand)
+    }
+
+    val toHead = prefixedTo.head
+    val endKeySelector = toConstraintToKeySelector(
+      toHead.operator,
+      toHead.operand.toByteArray,
+      dbContext.strinc(column)
+    )
+    val columnPrefix = dbContext.columnPrefix(column)
+
+    tx.getRange(startKeySelector, endKeySelector, limit.value)
+      .asList()
+      .thenApply { javaList =>
+        val pairs = javaList.asScala.toList match {
+          case head :: tail =>
+            val headKey = head.getKey
+            if (
+              headKey != null && headKey.nonEmpty && KeySerdes.isPrefix(columnPrefix, headKey) && keySatisfies(
+                headKey,
+                headValidation
+              )
+            ) {
+              head :: tail.takeWhile { p =>
+                val key = p.getKey
+                key != null && key.nonEmpty && KeySerdes.isPrefix(columnPrefix, headKey) && keySatisfies(
+                  key,
+                  prefixedTo
+                )
+              }
+            }
+            else Nil
+          case Nil => Nil
+        }
+
+        pairs.map(p => dbContext.unprefixKey(column, p.getKey) -> p.getValue)
+      }
+  }
+
+  override def getRangeTask[Col <: CF](column: Col, range: KvdbKeyRange): Task[List[KvdbPair]] = {
+    PosInt.from(range.limit) match {
+      case Left(_) =>
+        Task.fail(
+          InvalidKvdbArgumentException(s"range.limit of '${range.limit}' is invalid, must be a positive integer")
+        )
+      case Right(limit) =>
+        TaskUtils
+          .fromCancellableCompletableFuture {
+            dbContext.db
+              .readAsync { tx =>
+                doGetRangeFuture(tx, column, range.from, range.to, limit)
+              }
+          }
+    }
+  }
+
   override def batchGetTask[Col <: CF](
     column: Col,
     requests: Seq[KvdbKeyConstraintList]
   ): Task[Seq[Option[KvdbPair]]] = {
-    Task
-      .fromCompletionStage {
-        dbContext.db.readAsync { tx =>
-          val futures = requests.map { req =>
-            doGet(tx, column, req.constraints)
-              .thenApply { //noinspection MatchToPartialFunction
-                result =>
-                  result match {
-                    case Right((key, value)) => Some(dbContext.unprefixKey(column, key) -> value)
-                    case _ => None
-                  }
-              }
-          }
+    TaskUtils
+      .fromCancellableCompletableFuture {
+        dbContext.db
+          .readAsync { tx =>
+            val futures = requests.map { req =>
+              doGet(tx, column, req.constraints)
+                .thenApply { //noinspection MatchToPartialFunction
+                  result =>
+                    result match {
+                      case Right((key, value)) => Some(dbContext.unprefixKey(column, key) -> value)
+                      case _ => None
+                    }
+                }
+            }
 
-          CompletableFuture
-            .allOf(futures: _*)
-            .thenApply(_ => futures.map(_.join()))
-        }
+            CompletableFuture
+              .allOf(futures: _*)
+              .thenApply(_ => futures.map(_.join()))
+          }
       }
+  }
+
+  override def batchGetRangeTask[Col <: CF](column: Col, ranges: Seq[KvdbKeyRange]): Task[List[List[KvdbPair]]] = {
+    if (!ranges.forall(_.limit > 0)) {
+      Task.fail(
+        InvalidKvdbArgumentException(s"ranges contains non-positive integers")
+      )
+    }
+    else {
+      TaskUtils
+        .fromCancellableCompletableFuture {
+          dbContext.db
+            .readAsync { tx =>
+              val futures = ranges.view.map { range =>
+                doGetRangeFuture(tx, column, range.from, range.to, PosInt.unsafeFrom(range.limit))
+              }.toList
+
+              CompletableFuture
+                .allOf(futures: _*)
+                .thenApply(_ => futures.map(_.join()))
+            }
+        }
+    }
   }
 
   override def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
     val prefixedKey = dbContext.prefixKey(column, key)
 
-    Task
-      .fromCompletionStage {
-        dbContext.db.runAsync { tx =>
-          if (clientOptions.disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
+    TaskUtils
+      .fromCancellableCompletableFuture {
+        dbContext.db
+          .runAsync { tx =>
+            if (clientOptions.disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
 
-          if (dbContext.hasVersionstamp(column)) {
-            tx.mutate(MutationType.SET_VERSIONSTAMPED_KEY, dbContext.adjustKeyVersionstamp(column, prefixedKey), value)
-          }
-          else {
-            tx.set(prefixedKey, value)
-          }
+            if (dbContext.hasVersionstamp(column)) {
+              tx.mutate(
+                MutationType.SET_VERSIONSTAMPED_KEY,
+                dbContext.adjustKeyVersionstamp(column, prefixedKey),
+                value
+              )
+            }
+            else {
+              tx.set(prefixedKey, value)
+            }
 
-          COMPLETED_FUTURE
-        }
+            COMPLETED_FUTURE
+          }
       }
   }
 
   override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit] = {
     val prefixedKey = dbContext.prefixKey(column, key)
 
-    Task
-      .fromCompletionStage {
-        dbContext.db.runAsync { tx =>
-          tx.clear(prefixedKey)
-          COMPLETED_FUTURE
-        }
+    TaskUtils
+      .fromCancellableCompletableFuture {
+        dbContext.db
+          .runAsync { tx =>
+            tx.clear(prefixedKey)
+            COMPLETED_FUTURE
+          }
       }
   }
 
   override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long] = {
     val prefixedKey = dbContext.prefixKey(column, prefix)
 
-    Task
-      .fromCompletionStage {
-        dbContext.db.runAsync { tx =>
-          tx.clear(com.apple.foundationdb.Range.startsWith(prefixedKey))
-          COMPLETED_FUTURE
-        }
+    TaskUtils
+      .fromCancellableCompletableFuture {
+        dbContext.db
+          .runAsync { tx =>
+            tx.clear(com.apple.foundationdb.Range.startsWith(prefixedKey))
+            COMPLETED_FUTURE
+          }
       }
       .as(0L)
   }
@@ -648,38 +728,39 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   override def transactionTask(
     actions: Seq[TransactionWrite]
   ): Task[Unit] = {
-    Task
-      .fromCompletionStage {
-        dbContext.db.runAsync { tx =>
-          val disableWriteConflictChecking = clientOptions.disableWriteConflictChecking
+    TaskUtils
+      .fromCancellableCompletableFuture {
+        dbContext.db
+          .runAsync { tx =>
+            val disableWriteConflictChecking = clientOptions.disableWriteConflictChecking
 
-          actions.foreach { action =>
-            if (disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
+            actions.foreach { action =>
+              if (disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
 
-            action match {
-              case TransactionPut(columnId, key, value) =>
-                val prefixedKey = dbContext.prefixKey(columnId, key)
+              action match {
+                case TransactionPut(columnId, key, value) =>
+                  val prefixedKey = dbContext.prefixKey(columnId, key)
 
-                if (dbContext.hasVersionstamp(columnId)) {
-                  tx.mutate(
-                    MutationType.SET_VERSIONSTAMPED_KEY,
-                    dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
-                    value
-                  )
-                }
-                else {
-                  tx.set(prefixedKey, value)
-                }
+                  if (dbContext.hasVersionstamp(columnId)) {
+                    tx.mutate(
+                      MutationType.SET_VERSIONSTAMPED_KEY,
+                      dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
+                      value
+                    )
+                  }
+                  else {
+                    tx.set(prefixedKey, value)
+                  }
 
-              case TransactionDelete(columnId, key) =>
-                tx.clear(dbContext.prefixKey(columnId, key))
-              case TransactionDeleteRange(columnId, fromKey, toKey) =>
-                tx.clear(dbContext.prefixKey(columnId, fromKey), dbContext.prefixKey(columnId, toKey))
+                case TransactionDelete(columnId, key) =>
+                  tx.clear(dbContext.prefixKey(columnId, key))
+                case TransactionDeleteRange(columnId, fromKey, toKey) =>
+                  tx.clear(dbContext.prefixKey(columnId, fromKey), dbContext.prefixKey(columnId, toKey))
+              }
             }
-          }
 
-          COMPLETED_FUTURE
-        }
+            COMPLETED_FUTURE
+          }
       }
   }
 
@@ -688,61 +769,62 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     condition: List[Option[(Array[Byte], Array[Byte])]] => Boolean,
     actions: Seq[TransactionWrite]
   ): Task[Unit] = {
-    Task
-      .fromCompletionStage {
-        dbContext.db.runAsync { tx =>
-          val readFutures = for (read <- reads) yield {
-            val key = read.key
-            val f: CompletableFuture[Option[KvdbPair]] = tx
-              .get(dbContext.prefixKey(read.columnId, key))
-              .thenApply { value => if (value != null) Some(key -> value) else None }
-            f
-          }
-
-          val future: CompletableFuture[Unit] = CompletableFuture
-            .allOf(readFutures: _*)
-            .thenCompose { _ =>
-              val pairs = readFutures.map(_.join())
-
-              val okToWrite = condition(pairs)
-
-              if (okToWrite) {
-                val disableWriteConflictChecking = clientOptions.disableWriteConflictChecking
-
-                actions.foreach { action =>
-                  if (disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
-
-                  action match {
-                    case TransactionPut(columnId, key, value) =>
-                      val prefixedKey = dbContext.prefixKey(columnId, key)
-
-                      if (dbContext.hasVersionstamp(columnId)) {
-                        tx.mutate(
-                          MutationType.SET_VERSIONSTAMPED_KEY,
-                          dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
-                          value
-                        )
-                      }
-                      else {
-                        tx.set(prefixedKey, value)
-                      }
-
-                    case TransactionDelete(columnId, key) =>
-                      tx.clear(dbContext.prefixKey(columnId, key))
-                    case TransactionDeleteRange(columnId, fromKey, toKey) =>
-                      tx.clear(dbContext.prefixKey(columnId, fromKey), dbContext.prefixKey(columnId, toKey))
-                  }
-                }
-
-                COMPLETED_FUTURE
-              }
-              else {
-                CompletableFuture.failedFuture(ConditionalTransactionFailedException("Condition returns false"))
-              }
+    TaskUtils
+      .fromCancellableCompletableFuture {
+        dbContext.db
+          .runAsync { tx =>
+            val readFutures = for (read <- reads) yield {
+              val key = read.key
+              val f: CompletableFuture[Option[KvdbPair]] = tx
+                .get(dbContext.prefixKey(read.columnId, key))
+                .thenApply { value => if (value != null) Some(key -> value) else None }
+              f
             }
 
-          future
-        }
+            val future: CompletableFuture[Unit] = CompletableFuture
+              .allOf(readFutures: _*)
+              .thenCompose { _ =>
+                val pairs = readFutures.map(_.join())
+
+                val okToWrite = condition(pairs)
+
+                if (okToWrite) {
+                  val disableWriteConflictChecking = clientOptions.disableWriteConflictChecking
+
+                  actions.foreach { action =>
+                    if (disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
+
+                    action match {
+                      case TransactionPut(columnId, key, value) =>
+                        val prefixedKey = dbContext.prefixKey(columnId, key)
+
+                        if (dbContext.hasVersionstamp(columnId)) {
+                          tx.mutate(
+                            MutationType.SET_VERSIONSTAMPED_KEY,
+                            dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
+                            value
+                          )
+                        }
+                        else {
+                          tx.set(prefixedKey, value)
+                        }
+
+                      case TransactionDelete(columnId, key) =>
+                        tx.clear(dbContext.prefixKey(columnId, key))
+                      case TransactionDeleteRange(columnId, fromKey, toKey) =>
+                        tx.clear(dbContext.prefixKey(columnId, fromKey), dbContext.prefixKey(columnId, toKey))
+                    }
+                  }
+
+                  COMPLETED_FUTURE
+                }
+                else {
+                  CompletableFuture.failedFuture(ConditionalTransactionFailedException("Condition returns false"))
+                }
+              }
+
+            future
+          }
       }
   }
 
@@ -845,13 +927,15 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   }
 
   override def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {
-    Task.fromCompletionStage {
-      dbContext.db.runAsync { tx =>
-        val prefix = dbContext.columnPrefix(column)
-        tx.clear(com.apple.foundationdb.Range.startsWith(prefix))
-        COMPLETED_FUTURE
+    TaskUtils
+      .fromCancellableCompletableFuture {
+        dbContext.db
+          .runAsync { tx =>
+            val prefix = dbContext.columnPrefix(column)
+            tx.clear(com.apple.foundationdb.Range.startsWith(prefix))
+            COMPLETED_FUTURE
+          }
       }
-    }
   }
 
 }

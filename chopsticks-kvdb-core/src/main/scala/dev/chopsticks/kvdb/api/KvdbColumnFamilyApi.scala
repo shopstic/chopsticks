@@ -10,15 +10,21 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
-import dev.chopsticks.kvdb.codec.KeyConstraints.{ConstraintsBuilder, ConstraintsRangesBuilder, ConstraintsSeqBuilder}
+import dev.chopsticks.kvdb.codec.KeyConstraints.{
+  ConstraintsBuilder,
+  ConstraintsRangesBuilder,
+  ConstraintsRangesWithLimitBuilder,
+  ConstraintsSeqBuilder
+}
 import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList}
-import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbTailBatch, KvdbValueBatch}
+import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbPair, KvdbTailBatch, KvdbValueBatch}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbWriteTransactionBuilder}
 import dev.chopsticks.stream.AkkaStreamUtils
 import eu.timepit.refined.auto._
-import zio.Task
+import eu.timepit.refined.types.numeric.PosInt
+import zio.{Task, ZIO}
 
 import scala.collection.immutable.Queue
 import scala.collection.mutable
@@ -61,6 +67,15 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .map(_.map(p => cf.unsafeDeserializeValue(p._2)))
   }
 
+  def rawGetRangeTask(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K], limit: PosInt): Task[List[KvdbPair]] = {
+    db.getRangeTask(cf, KeyConstraints.range[K](from, to, limit))
+  }
+
+  def getRangeTask(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K], limit: PosInt): Task[List[(K, V)]] = {
+    rawGetRangeTask(from, to, limit)
+      .map(_.map(cf.unsafeDeserialize))
+  }
+
   def batchGetTask(constraints: ConstraintsSeqBuilder[K]): Task[Seq[Option[(K, V)]]] = {
     db.batchGetTask(cf, constraints(KeyConstraints.seed[K]).map(KeyConstraints.toList[K]))
       .map(_.map(_.map(cf.unsafeDeserialize)))
@@ -69,6 +84,23 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def batchGetByKeysTask(keys: Seq[K]): Task[Seq[Option[(K, V)]]] = {
     db.batchGetTask(cf, keys.map(k => KeyConstraints.toList(KeyConstraints.seed[K].is(k)(cf.keySerdes))))
       .map(_.map(_.map(cf.unsafeDeserialize)))
+  }
+
+  def rawBatchGetRangeTask(ranges: ConstraintsRangesWithLimitBuilder[K]): Task[List[List[KvdbPair]]] = {
+    val builtRanges = ranges(KeyConstraints.seed[K]).map {
+      case ((from, to), limit) =>
+        KeyConstraints.toRange[K](from, to, limit)
+    }
+    db.batchGetRangeTask(cf, builtRanges)
+  }
+
+  def batchGetRangeTask(ranges: ConstraintsRangesWithLimitBuilder[K]): Task[List[List[(K, V)]]] = {
+    rawBatchGetRangeTask(ranges)
+      .flatMap { groups =>
+        ZIO.foreachPar(groups) { g =>
+          Task(g.map(cf.unsafeDeserialize))
+        }
+      }
   }
 
   def batchGetFlow[O](
@@ -175,7 +207,12 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     )
   }
 
+  @deprecated("Use rawBatchedSource instead", "2.14")
   def batchedRawSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[KvdbBatch, NotUsed] = {
+    rawBatchedSource(from, to)
+  }
+
+  def rawBatchedSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[KvdbBatch, NotUsed] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateSource(cf, range)
   }
@@ -185,7 +222,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   def batchedSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[List[(K, V)], NotUsed] = {
-    batchedRawSource(from, to)
+    rawBatchedSource(from, to)
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserialize).to(List)
@@ -210,14 +247,19 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     batchedSource(from, to).mapConcat(identity)
   }
 
+  @deprecated("Use rawBatchedValueSource instead", "2.14")
   def batchedRawValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[KvdbValueBatch, NotUsed] = {
+    rawBatchedValueSource(from, to)
+  }
+
+  def rawBatchedValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[KvdbValueBatch, NotUsed] = {
     val range = KeyConstraints.range[K](from, to)
     db.iterateSource(cf, range)
       .map(_.map(_._2))
   }
 
   def batchedValueSource(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K]): Source[List[V], NotUsed] = {
-    batchedRawValueSource(from, to)
+    rawBatchedValueSource(from, to)
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserializeValue).to(List)
@@ -304,7 +346,15 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     })
   }
 
+  @deprecated("Use rawTailBatchedValueSource instead", "2.14")
   def tailBatchedRawValueSource(
+    from: ConstraintsBuilder[K],
+    to: ConstraintsBuilder[K]
+  ): Source[KvdbValueBatch, NotUsed] = {
+    rawTailBatchedValueSource(from, to)
+  }
+
+  def rawTailBatchedValueSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
   ): Source[KvdbValueBatch, NotUsed] = {
@@ -318,7 +368,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
   ): Source[V, NotUsed] = {
-    tailBatchedRawValueSource(from, to)
+    rawTailBatchedValueSource(from, to)
       .mapAsync(options.serdesParallelism) { b =>
         Future {
           b.view.map(cf.unsafeDeserializeValue).to(List)
@@ -331,7 +381,15 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     tailValueSource(_.first, _.last)
   }
 
+  @deprecated("Use rawTailBatchedSource instead", "2.14")
   def tailBatchedRawSource(
+    from: ConstraintsBuilder[K],
+    to: ConstraintsBuilder[K]
+  ): Source[KvdbBatch, NotUsed] = {
+    rawTailBatchedSource(from, to)
+  }
+
+  def rawTailBatchedSource(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
   ): Source[KvdbBatch, NotUsed] = {
@@ -345,7 +403,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K]
   ): Source[List[(K, V)], NotUsed] = {
-    tailBatchedRawSource(from, to)
+    rawTailBatchedSource(from, to)
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserialize).to(List)
@@ -381,7 +439,14 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
-  def concurrentTailVerboseRawSource(
+  @deprecated("Use rawConcurrentTailVerboseSource instead", "2.14")
+  def concurrentTailVerboseRawSource1(
+    ranges: ConstraintsRangesBuilder[K]
+  ): Source[(Int, KvdbTailBatch), NotUsed] = {
+    rawConcurrentTailVerboseSource(ranges)
+  }
+
+  def rawConcurrentTailVerboseSource(
     ranges: ConstraintsRangesBuilder[K]
   ): Source[(Int, KvdbTailBatch), NotUsed] = {
     val builtRanges = ranges(KeyConstraints.seed[K]).map {
@@ -397,7 +462,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   ): Source[(Int, Either[Instant, List[(K, V)]]), NotUsed] = {
     import cats.syntax.either._
 
-    concurrentTailVerboseRawSource(ranges)
+    rawConcurrentTailVerboseSource(ranges)
       .mapAsync(options.serdesParallelism) {
         case (index, Left(e)) => Future.successful((index, Either.left(e.time)))
         case (index, Right(batch)) =>
