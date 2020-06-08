@@ -4,11 +4,11 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.2"
-  val AKKA_VERSION = "2.6.5"
+  val AKKA_VERSION = "2.6.6"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.0-RC20"
 //  val ZIO_VERSION = "1.0.0-RC18"
-  val IZUMI_VERSION = "0.10.10"
+  val IZUMI_VERSION = "0.10.12"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -104,11 +104,11 @@ object Dependencies {
   )
 
   val lmdbDeps = Seq(
-    "org.lmdbjava" % "lmdbjava" % "0.8.0"
+    "org.lmdbjava" % "lmdbjava" % "0.8.1"
   )
 
   val fdbDeps = Seq(
-    "org.foundationdb" % "fdb-java" % "6.2.19"
+    "org.foundationdb" % "fdb-java" % "6.2.22"
   )
 
   val shapelessDeps = Seq(
