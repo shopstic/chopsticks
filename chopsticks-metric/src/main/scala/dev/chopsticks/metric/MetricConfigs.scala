@@ -52,15 +52,16 @@ object MetricConfigs {
 
   abstract class CounterConfig[L <: MetricLabel](override val labelNames: LabelNames[L])
       extends MetricConfig[L](labelNames)
-  abstract class NoLabelCounterConfig extends MetricConfig[NoLabel](LabelNames.none)
+  abstract class NoLabelCounterConfig extends CounterConfig[NoLabel](LabelNames.none)
 
   abstract class GaugeConfig[L <: MetricLabel](override val labelNames: LabelNames[L])
       extends MetricConfig[L](labelNames)
-  abstract class NoLabelGaugeConfig extends MetricConfig[NoLabel](LabelNames.none)
+  abstract class NoLabelGaugeConfig extends GaugeConfig[NoLabel](LabelNames.none)
 
   abstract class HistogramConfig[L <: MetricLabel](override val labelNames: LabelNames[L], val buckets: List[Double])
       extends MetricConfig[L](labelNames)
-  abstract class NoLabelHistogramConfig(val buckets: List[Double]) extends MetricConfig[NoLabel](LabelNames.none)
+  abstract class NoLabelHistogramConfig(override val buckets: List[Double])
+      extends HistogramConfig[NoLabel](LabelNames.none, buckets)
 
   abstract class SummaryConfig[L <: MetricLabel](
     override val labelNames: LabelNames[L],
@@ -69,8 +70,8 @@ object MetricConfigs {
     val ageBuckets: Int
   ) extends MetricConfig[L](labelNames)
   abstract class NoLabelSummaryConfig(
-    val quantiles: ListMap[Double, Double],
-    val maxAge: FiniteDuration,
-    val ageBuckets: Int
-  ) extends MetricConfig[NoLabel](LabelNames.none)
+    override val quantiles: ListMap[Double, Double],
+    override val maxAge: FiniteDuration,
+    override val ageBuckets: Int
+  ) extends SummaryConfig[NoLabel](LabelNames.none, quantiles, maxAge, ageBuckets)
 }
