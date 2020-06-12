@@ -8,7 +8,8 @@ import dev.chopsticks.metric.MetricConfigs.{
   HistogramConfig,
   LabelNames,
   LabelValues,
-  MetricLabel
+  MetricLabel,
+  NoLabelCounterConfig
 }
 import dev.chopsticks.metric.MetricFactory.MetricGroup
 import dev.chopsticks.metric.prom.PromMetricFactory
@@ -37,11 +38,17 @@ object MetricTests {
     object LatencyDistribution extends HistogramConfig(LabelNames of Partition, List(0.01, 0.5, 0.9)) with Metric
   }
 
+  object Baz {
+    sealed trait Metric extends MetricGroup
+    object NoLabelTest extends NoLabelCounterConfig with Metric
+  }
+
   def main(args: Array[String]): Unit = {
     val labelValues = LabelValues of WritesPerTx -> "123" and TxParallelism -> "456"
 
     val fooMetrics = PromMetricFactory[Foo.Metric]("foo")
     val barMetrics = PromMetricFactory[Bar.Metric]("bar")
+    val bazMetrics = PromMetricFactory[Baz.Metric]("baz")
 
     val counter = Foo.createCounter(fooMetrics, labelValues)
 
@@ -49,6 +56,9 @@ object MetricTests {
       Foo.SequentialWritesTotal,
       labelValues
     )
+
+    val counter3 = bazMetrics.counter(Baz.NoLabelTest)
+    counter3.inc(123)
 
     val gauge = barMetrics.gaugeWithLabels(
       Bar.RandomWritesTotal,
