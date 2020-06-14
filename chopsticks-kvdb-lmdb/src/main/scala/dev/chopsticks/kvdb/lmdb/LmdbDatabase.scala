@@ -17,6 +17,7 @@ import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
   TransactionDelete,
+  TransactionDeletePrefix,
   TransactionDeleteRange,
   TransactionPut,
   TransactionWrite
@@ -371,27 +372,40 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     txn: Txn[ByteBuffer],
     dbi: Dbi[ByteBuffer],
     fromKey: Array[Byte],
-    toKey: Array[Byte]
+    toKey: Array[Byte],
+    exactFromKey: Boolean
   ): Long = {
     val cursor = openCursor(dbi, txn)
 
     try {
-      if (cursor.get(putInBuffer(reuseablePutKeyBuffer, fromKey), GetOp.MDB_SET)) {
-        val it = Iterator.single(bufferToArray(cursor.key())) ++ Iterator
-          .continually {
-            cursor.next()
-          }
-          .takeWhile(identity)
-          .map(_ => bufferToArray(cursor.key()))
+      if (
+        cursor.get(
+          putInBuffer(reuseablePutKeyBuffer, fromKey),
+          if (exactFromKey) GetOp.MDB_SET else GetOp.MDB_SET_RANGE
+        )
+      ) {
+        val firstKey = bufferToArray(cursor.key())
 
-        val count = it
-          .takeWhile(k => KeySerdes.compare(k, toKey) < 0)
-          .foldLeft(0L) { (count, key) =>
-            if (dbi.delete(txn, putInBuffer(reuseablePutKeyBuffer, key))) count + 1
-            else count
-          }
+        if (KeySerdes.isPrefix(fromKey, firstKey)) {
+          val it = Iterator.single(firstKey) ++ Iterator
+            .continually {
+              cursor.next()
+            }
+            .takeWhile(identity)
+            .map(_ => bufferToArray(cursor.key()))
 
-        count
+          val count = it
+            .takeWhile(k => KeySerdes.compare(k, toKey) < 0)
+            .foldLeft(0L) { (count, key) =>
+              if (dbi.delete(txn, putInBuffer(reuseablePutKeyBuffer, key))) count + 1
+              else count
+            }
+
+          count
+        }
+        else {
+          0L
+        }
       }
       else 0L
     }
@@ -805,7 +819,16 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
         val _ = doDelete(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key)
 
       case TransactionDeleteRange(columnId, fromKey, toKey) =>
-        val _ = doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey)
+        val _ = doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey, exactFromKey = true)
+
+      case TransactionDeletePrefix(columnId, prefix) =>
+        val _ = doDeleteRange(
+          txn,
+          refs.getKvdbi(columnFamilyWithId(columnId).get),
+          prefix,
+          prefix :+ 0xFF.toByte,
+          exactFromKey = false
+        )
     }
   }
 
