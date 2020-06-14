@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb
 
-import scala.collection.mutable
+import java.util.concurrent.ConcurrentLinkedQueue
 
 object KvdbReadTransactionBuilder {
   final case class TransactionGet(columnId: String, key: Array[Byte])
@@ -9,15 +9,20 @@ object KvdbReadTransactionBuilder {
 final class KvdbReadTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
   import KvdbReadTransactionBuilder._
 
-  private val buffer = new mutable.ListBuffer[TransactionGet]
+  private val buffer = new ConcurrentLinkedQueue[TransactionGet]
 
   def get[CF <: BCF[K, _], K](column: CF, key: K): this.type = {
-    val _ = buffer += TransactionGet(
-      columnId = column.id,
-      key = column.serializeKey(key)
+    val _ = buffer.add(
+      TransactionGet(
+        columnId = column.id,
+        key = column.serializeKey(key)
+      )
     )
     this
   }
 
-  def result: List[TransactionGet] = buffer.result()
+  def result: List[TransactionGet] = {
+    import scala.jdk.CollectionConverters._
+    List.from(buffer.asScala)
+  }
 }

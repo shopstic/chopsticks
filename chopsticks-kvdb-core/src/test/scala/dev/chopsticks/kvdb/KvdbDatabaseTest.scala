@@ -1250,6 +1250,36 @@ abstract private[kvdb] class KvdbDatabaseTest
         )
       }
     }
+
+    "support deletePrefix" in withDb { db =>
+      for {
+        _ <- populateColumn(
+          db,
+          defaultCf,
+          List(
+            "aaaa1" -> "aaaa1",
+            "bbbb2" -> "bbbb2",
+            "bbbb3" -> "bbbb3",
+            "bbbb4" -> "bbbb4",
+            "cccc5" -> "cccc5"
+          )
+        )
+        _ <- db.transactionTask(
+          db.transactionBuilder()
+            .deletePrefix(defaultCf, "bbbb")
+            .result
+        )
+        allDefault <- collectPairs(db.iterateSource(defaultCf, $$(_.first, _.last)))
+      } yield {
+        assertPairs(
+          allDefault,
+          Vector(
+            ("aaaa1", "aaaa1"),
+            ("cccc5", "cccc5")
+          )
+        )
+      }
+    }
   }
 
   "conditionalTransactionTask" should {

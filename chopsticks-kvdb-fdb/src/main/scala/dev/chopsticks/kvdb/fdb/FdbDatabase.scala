@@ -23,6 +23,7 @@ import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
   TransactionDelete,
+  TransactionDeletePrefix,
   TransactionDeleteRange,
   TransactionPut,
   TransactionWrite
@@ -754,8 +755,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
                 case TransactionDelete(columnId, key) =>
                   tx.clear(dbContext.prefixKey(columnId, key))
+
                 case TransactionDeleteRange(columnId, fromKey, toKey) =>
                   tx.clear(dbContext.prefixKey(columnId, fromKey), dbContext.prefixKey(columnId, toKey))
+
+                case TransactionDeletePrefix(columnId, prefix) =>
+                  tx.clear(Range.startsWith(dbContext.prefixKey(columnId, prefix)))
               }
             }
 
@@ -811,8 +816,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
                       case TransactionDelete(columnId, key) =>
                         tx.clear(dbContext.prefixKey(columnId, key))
+
                       case TransactionDeleteRange(columnId, fromKey, toKey) =>
                         tx.clear(dbContext.prefixKey(columnId, fromKey), dbContext.prefixKey(columnId, toKey))
+
+                      case TransactionDeletePrefix(columnId, prefix) =>
+                        tx.clear(Range.startsWith(dbContext.prefixKey(columnId, prefix)))
                     }
                   }
 
