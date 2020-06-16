@@ -1,14 +1,17 @@
 package dev.chopsticks.metric.prom
 
+import java.util.concurrent.ConcurrentLinkedQueue
+
 import dev.chopsticks.metric.MetricConfigs._
-import dev.chopsticks.metric.MetricFactory.MetricGroup
+import dev.chopsticks.metric.MetricRegistry.MetricGroup
 import dev.chopsticks.metric._
 import dev.chopsticks.metric.prom.PromMetrics._
-import io.prometheus.client.{Counter, Gauge, Histogram, Summary}
+import io.prometheus.client._
+import zio.{UIO, ULayer, ZLayer, ZManaged}
 
 import scala.collection.mutable
 
-object PromMetricFactory {
+object PromMetricRegistry {
   private val counters = mutable.Map.empty[String, Counter]
   private val gauges = mutable.Map.empty[String, Gauge]
   private val histograms = mutable.Map.empty[String, Histogram]
@@ -18,13 +21,30 @@ object PromMetricFactory {
     if (prefix.nonEmpty) prefix + "_" + config.name else config.name
   }
 
-  def apply[C <: MetricGroup](prefix: String): PromMetricFactory[C] = {
-    new PromMetricFactory[C](prefix)
+  def live[C <: MetricGroup: zio.Tag](
+    prefix: String,
+    registry: CollectorRegistry = CollectorRegistry.defaultRegistry
+  ): ULayer[MetricRegistry[C]] = {
+    ZLayer.fromManaged(ZManaged.make {
+      UIO(new PromMetricRegistry[C](prefix, registry))
+    } { registry =>
+      UIO(registry.removeAll())
+    })
   }
 }
 
-final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFactory[C] {
-  import PromMetricFactory._
+final class PromMetricRegistry[C <: MetricGroup](
+  prefix: String,
+  registry: CollectorRegistry
+) extends MetricRegistry.Service[C] {
+  import PromMetricRegistry._
+
+  private val cleanUpQueue = new ConcurrentLinkedQueue[() => Unit]()
+
+  private[prom] def removeAll(): Unit = {
+    import scala.jdk.CollectionConverters._
+    cleanUpQueue.iterator().asScala.foreach(_())
+  }
 
   override def counter(config: CounterConfig[NoLabel] with C): MetricCounter = {
     val prefixedName = prefixMetric(config, prefix)
@@ -32,14 +52,39 @@ final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFa
     val promCounter = counters.synchronized {
       counters.getOrElseUpdate(
         prefixedName, {
-          Counter
-            .build(prefixedName, prefixedName)
-            .register()
+          val metric = Counter.build(prefixedName, prefixedName).create()
+          registry.register(metric)
+          metric
         }
       )
     }
 
+    val _ = cleanUpQueue.add(() => removeMetric(counters, prefixedName))
     new PromCounter(promCounter)
+  }
+
+  private def removeMetric[SC <: SimpleCollector[_]](
+    map: mutable.Map[String, SC],
+    prefixedName: String
+  ): Unit = {
+    map.synchronized {
+      map.get(prefixedName).foreach { metric =>
+        val _ = counters.remove(prefixedName)
+        registry.unregister(metric)
+      }
+    }
+  }
+
+  private def removeMetricWithLabels[SC <: SimpleCollector[_], L <: MetricLabel](
+    map: mutable.Map[String, SC],
+    prefixedName: String,
+    values: Seq[String]
+  ): Unit = {
+    map.synchronized {
+      map.get(prefixedName).foreach { metric =>
+        metric.remove(values: _*)
+      }
+    }
   }
 
   override def counterWithLabels[L <: MetricLabel](
@@ -53,14 +98,16 @@ final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFa
     val promCounter = counters.synchronized {
       counters.getOrElseUpdate(
         prefixedName, {
-          Counter
+          val metric = Counter
             .build(prefixedName, prefixedName)
             .labelNames(names: _*)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
-
+    val _ = cleanUpQueue.add(() => removeMetricWithLabels(counters, prefixedName, values))
     new PromChildCounter(promCounter.labels(values: _*))
   }
 
@@ -77,6 +124,7 @@ final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFa
       )
     }
 
+    val _ = cleanUpQueue.add(() => removeMetric(gauges, prefixedName))
     new PromGauge(promGauge)
   }
 
@@ -99,6 +147,7 @@ final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFa
       )
     }
 
+    val _ = cleanUpQueue.add(() => removeMetricWithLabels(gauges, prefixedName, values))
     new PromChildGauge(promGauge.labels(values: _*))
   }
 
@@ -116,6 +165,7 @@ final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFa
       )
     }
 
+    val _ = cleanUpQueue.add(() => removeMetric(histograms, prefixedName))
     new PromHistogram(promHistogram)
   }
 
@@ -139,6 +189,7 @@ final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFa
       )
     }
 
+    val _ = cleanUpQueue.add(() => removeMetricWithLabels(histograms, prefixedName, values))
     new PromChildHistogram(promHistogram.labels(values: _*))
   }
 
@@ -160,6 +211,7 @@ final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFa
       )
     }
 
+    val _ = cleanUpQueue.add(() => removeMetric(summaries, prefixedName))
     new PromSummary(promSummary)
   }
 
@@ -187,6 +239,7 @@ final class PromMetricFactory[C <: MetricGroup](prefix: String) extends MetricFa
       )
     }
 
+    val _ = cleanUpQueue.add(() => removeMetricWithLabels(summaries, prefixedName, values))
     new PromChildSummary(promSummary.labels(values: _*))
   }
 }

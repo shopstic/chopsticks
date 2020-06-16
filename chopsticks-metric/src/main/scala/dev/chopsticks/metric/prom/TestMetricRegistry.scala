@@ -1,16 +1,21 @@
 package dev.chopsticks.metric.prom
 
 import dev.chopsticks.metric.MetricConfigs._
-import dev.chopsticks.metric.MetricFactory.MetricGroup
+import dev.chopsticks.metric.MetricRegistry.MetricGroup
 import dev.chopsticks.metric._
 import dev.chopsticks.metric.prom.PromMetrics._
 import io.prometheus.client.{Counter, Gauge, Histogram, Summary}
+import zio.{ULayer, ZLayer}
 
-object TestMetricFactory {
-  def apply[C <: MetricGroup](): TestMetricFactory[C] = new TestMetricFactory[C]()
+object TestMetricRegistry {
+  def apply[C <: MetricGroup](): TestMetricRegistry[C] = new TestMetricRegistry[C]()
+
+  def live[C <: MetricGroup: zio.Tag]: ULayer[MetricRegistry[C]] = {
+    ZLayer.succeed(new TestMetricRegistry[C])
+  }
 }
 
-final class TestMetricFactory[C <: MetricGroup] extends MetricFactory[C] {
+final class TestMetricRegistry[C <: MetricGroup] extends MetricRegistry.Service[C] {
   override def counter(config: CounterConfig[NoLabel] with C): MetricCounter = {
     new PromCounter(
       Counter
