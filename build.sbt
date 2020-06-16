@@ -131,7 +131,7 @@ lazy val kvdbCodecProtobufValue = Build
 lazy val metric = Build
   .defineProject("metric")
   .settings(
-    libraryDependencies ++= prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps
+    libraryDependencies ++= prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps ++ akkaStreamDeps
   )
 
 lazy val sample = Build
