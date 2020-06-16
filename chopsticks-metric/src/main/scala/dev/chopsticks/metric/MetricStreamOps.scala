@@ -7,7 +7,7 @@ object MetricStreamOps {
     def metricCounter(metric: MetricCounter): Source[Elem, Mat] = {
       source
         .map { v =>
-          metric.inc(1.0)
+          metric.inc()
           v
         }
     }
@@ -33,7 +33,7 @@ object MetricStreamOps {
     def metricCounter(metric: MetricCounter): Flow[In, Out, Mat] = {
       flow
         .map { v =>
-          metric.inc(1.0)
+          metric.inc()
           v
         }
     }
