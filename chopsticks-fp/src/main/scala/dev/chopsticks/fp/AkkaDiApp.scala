@@ -5,6 +5,8 @@ import java.nio.file.Paths
 import akka.Done
 import akka.actor.{ActorSystem, CoordinatedShutdown}
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
+import dev.chopsticks.fp.AkkaDiApp.AkkaDiAppContext
+import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.DiModule
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
@@ -16,21 +18,19 @@ import zio.internal.tracing.TracingConfig
 import scala.util.Try
 import scala.util.control.NonFatal
 
-trait AkkaDiApp extends LoggingContext {
+object AkkaDiApp {
+  final case class AkkaDiAppContext(
+    actorSystem: ActorSystem,
+    appConfig: Config,
+    buildEnv: Task[DiEnv[AppEnv]]
+  )
+}
 
-  type Env <: Has[_]
-  type Cfg
+trait AkkaDiApp[Cfg] extends LoggingContext {
+
   type AppConfig = Has[Cfg]
 
   protected def createActorSystem(appName: String, config: Config): ActorSystem = ActorSystem(appName, config)
-
-  def app: RIO[Env, Unit]
-
-  def liveEnv(
-    akkaAppDi: DiModule,
-    appConfig: Cfg,
-    allConfig: Config
-  ): Task[DiEnv[Env]]
 
   lazy val appName: String = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replace("$", "")))
 
@@ -65,24 +65,40 @@ trait AkkaDiApp extends LoggingContext {
 
   def config(allConfig: Config): Task[Cfg]
 
-  def main(args: Array[String]): Unit = {
+  def liveEnv(
+    akkaAppDi: DiModule,
+    appConfig: Cfg,
+    allConfig: Config
+  ): Task[DiEnv[AppEnv]]
+
+  def create: AkkaDiAppContext = {
     val allConfig = unsafeLoadUntypedConfig
-
     val akkaActorSystem = createActorSystem(appName, allConfig)
-    val shutdown: CoordinatedShutdown = CoordinatedShutdown(akkaActorSystem)
 
+    AkkaDiAppContext(
+      akkaActorSystem,
+      allConfig,
+      for {
+        appConfig <- config(allConfig)
+        akkaAppDi = AkkaApp.Env.createModule(akkaActorSystem)
+        runEnv <- liveEnv(akkaAppDi ++ DiLayers(ZIO.environment[AppEnv]), appConfig, allConfig)
+      } yield runEnv
+    )
+  }
+
+  def main(args: Array[String]): Unit = {
+    val AkkaDiAppContext(akkaActorSystem, allConfig, buildEnv) = create
     val zioTracingEnabled = Try(allConfig.getBoolean("zio.trace")).recover { case _ => true }.getOrElse(true)
     val runtime = AkkaApp.createRuntime(
       AkkaEnv.live(akkaActorSystem) ++ LogEnv.live,
       if (zioTracingEnabled) TracingConfig.enabled else TracingConfig.disabled
     )
+    val shutdown = CoordinatedShutdown(akkaActorSystem)
 
     val main = for {
-      appConfig <- config(allConfig)
-      akkaAppDi = AkkaApp.Env.createModule(akkaActorSystem)
-      runEnv <- liveEnv(akkaAppDi, appConfig, allConfig)
+      runEnv <- buildEnv
       appFib <- runEnv
-        .run(app, args.headOption.contains("--dump-di-graph"))
+        .run(ZIO.accessM[AppEnv](_.get), args.headOption.contains("--dump-di-graph"))
         .fork
       _ <- UIO {
         shutdown.addTask("app-interruption", "interrupt app") { () =>

@@ -5,7 +5,6 @@ import java.time.Instant
 import com.apple.foundationdb.tuple.Versionstamp
 import dev.chopsticks.kvdb.fdb.FdbMaterialization
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDefinition, KvdbMaterialization}
-import zio.Has
 
 object SampleDb extends KvdbDefinition {
   final case class TestKey(foo: String, bar: Int, version: Versionstamp)
@@ -27,6 +26,4 @@ object SampleDb extends KvdbDefinition {
         .and(time)
     }
   }
-
-  type Env = Has[Db]
 }

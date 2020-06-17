@@ -4,8 +4,11 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.apple.foundationdb.tuple.Versionstamp
 import com.typesafe.config.Config
+import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp._
+import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.fdb_key._
@@ -22,20 +25,19 @@ import zio._
 
 import scala.concurrent.duration._
 
-object FdbTestSampleApp extends AkkaDiApp {
-  final case class Cfg(
-    db: FdbDatabase.FdbDatabaseConfig
-  )
+final case class FdbTestSampleAppConfig(
+  db: FdbDatabase.FdbDatabaseConfig
+)
 
-  object Cfg {
-    //noinspection TypeAnnotation
-    implicit val configReader = {
-      import dev.chopsticks.util.config.PureconfigConverters._
-      ConfigReader[Cfg]
-    }
+object FdbTestSampleAppConfig {
+  //noinspection TypeAnnotation
+  implicit val configReader = {
+    import dev.chopsticks.util.config.PureconfigConverters._
+    ConfigReader[FdbTestSampleAppConfig]
   }
+}
 
-  type Env = AkkaApp.Env with AppConfig with SampleDb.Env
+object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
 
   object sampleDb extends SampleDb.Materialization {
     object default extends SampleDb.Default
@@ -47,23 +49,27 @@ object FdbTestSampleApp extends AkkaDiApp {
     )
   }
 
-  override def liveEnv(akkaAppDi: DiModule, appConfig: Cfg, allConfig: Config): Task[DiEnv[Env]] = {
+  override def liveEnv(
+    akkaAppDi: DiModule,
+    appConfig: FdbTestSampleAppConfig,
+    allConfig: Config
+  ): Task[DiEnv[AppEnv]] = {
     Task {
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
           ZLayer.succeed(appConfig),
           ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
-          ZIO.environment[Env]
+          AppLayer(app)
         )
       )
     }
   }
 
-  override def config(allConfig: Config): Task[Cfg] = Task {
-    PureconfigLoader.unsafeLoad[Cfg](allConfig, "app")
+  override def config(allConfig: Config): Task[FdbTestSampleAppConfig] = Task {
+    PureconfigLoader.unsafeLoad[FdbTestSampleAppConfig](allConfig, "app")
   }
 
-  override def app: RIO[Env, Unit] = for {
+  def app: RIO[AkkaEnv with LogEnv with MeasuredLogging with Has[SampleDb.Db], Unit] = for {
     db <- ZService[SampleDb.Db]
     dbApi <- KvdbDatabaseApi(db)
     _ <- dbApi

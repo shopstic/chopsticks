@@ -1,14 +1,15 @@
 package dev.chopsticks.sample.app
 
 import com.typesafe.config.Config
+import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.{AkkaDiApp, DiEnv, DiLayers, ZService}
+import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers, ZService}
 import zio._
 import zio.clock.Clock
 
-object AkkaDiTestApp extends AkkaDiApp {
+object AkkaDiTestApp extends AkkaDiApp[Unit] {
   type Foo = Has[Foo.Service]
 
   object Foo {
@@ -50,10 +51,7 @@ object AkkaDiTestApp extends AkkaDiApp {
     ZService[IzLogging.Service].flatMap(_.zioLogger.error("test error here"))
   }
 
-  type Env = Clock with IzLogging with AkkaEnv with Bar
-  type Cfg = Unit
-
-  def app: ZIO[Env, Throwable, Unit] = {
+  def app: URIO[Clock with IzLogging with AkkaEnv with Bar, Unit] = {
     val effect = for {
       bar <- ZIO.access[Bar](_.get)
       akkaService <- ZIO.access[AkkaEnv](_.get)
@@ -70,14 +68,14 @@ object AkkaDiTestApp extends AkkaDiApp {
     effect.repeat(Schedule.fixed(1.second)).unit
   }
 
-  override def liveEnv(akkaAppDi: DiModule, appConfig: Cfg, allConfig: Config): Task[DiEnv[Env]] = {
+  override def liveEnv(akkaAppDi: DiModule, appConfig: Unit, allConfig: Config): Task[DiEnv[AppEnv]] = {
     Task {
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
           IzLogging.live(allConfig),
           Bar.live("bar"),
           Foo.live("foo"),
-          ZIO.environment[Env]
+          AppLayer(app)
         )
       )
     }
