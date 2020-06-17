@@ -6,35 +6,34 @@ import java.util.concurrent.atomic.LongAdder
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink}
 import com.typesafe.config.Config
+import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
-import dev.chopsticks.fp.{AkkaDiApp, DiEnv, DiLayers}
+import dev.chopsticks.fp.zio_ext._
+import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.fdb.FdbDatabase
-import dev.chopsticks.sample.kvdb.SampleDb
+import dev.chopsticks.sample.kvdb.{SampleDb, SampleDbEnv}
 import dev.chopsticks.stream.ZAkkaStreams
-import zio.clock.Clock
-import zio.{RIO, Schedule, Task, UIO, ZIO, ZLayer}
-import zio.duration._
-import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigReader
+import zio.duration._
+import zio._
 
-object FdbWatchTestApp extends AkkaDiApp {
-  override type Env = AkkaEnv with LogEnv with Clock with AppConfig with SampleDb.Env
+final case class FdbWatchTestAppConfig(
+  db: FdbDatabase.FdbDatabaseConfig
+)
 
-  final case class FdbWatchTestAppConfig(
-    db: FdbDatabase.FdbDatabaseConfig
-  )
-
-  object FdbWatchTestAppConfig {
-    //noinspection TypeAnnotation
-    implicit val configReader = {
-      import dev.chopsticks.util.config.PureconfigConverters._
-      ConfigReader[FdbWatchTestAppConfig]
-    }
+object FdbWatchTestAppConfig {
+  //noinspection TypeAnnotation
+  implicit val configReader = {
+    import dev.chopsticks.util.config.PureconfigConverters._
+    ConfigReader[FdbWatchTestAppConfig]
   }
+}
+
+object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
 
   object sampleDb extends SampleDb.Materialization {
     import dev.chopsticks.kvdb.codec.fdb_key._
@@ -47,11 +46,9 @@ object FdbWatchTestApp extends AkkaDiApp {
     override val keyspacesWithVersionstamp = Set.empty
   }
 
-  override type Cfg = FdbWatchTestAppConfig
-
-  override def app: RIO[Env, Unit] = {
+  def app: RIO[AkkaEnv with LogEnv with MeasuredLogging with SampleDbEnv, Unit] = {
     for {
-      db <- ZIO.access[SampleDb.Env](_.get)
+      db <- ZIO.access[SampleDbEnv](_.get)
       watchCounter = new LongAdder()
       changeCounter = new LongAdder()
       dbApi <- KvdbDatabaseApi(db)
@@ -80,17 +77,23 @@ object FdbWatchTestApp extends AkkaDiApp {
     } yield ()
   }
 
-  override def liveEnv(akkaAppDi: DiModule, appConfig: Cfg, allConfig: Config): Task[DiEnv[Env]] = {
+  override def liveEnv(
+    akkaAppDi: DiModule,
+    appConfig: FdbWatchTestAppConfig,
+    allConfig: Config
+  ): Task[DiEnv[AppEnv]] = {
     Task {
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
           ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
           ZLayer.succeed(appConfig),
-          ZIO.environment[Env]
+          AppLayer(app)
         )
       )
     }
   }
 
-  override def config(allConfig: Config): Task[Cfg] = Task(PureconfigLoader.unsafeLoad[Cfg](allConfig, "app"))
+  override def config(allConfig: Config): Task[FdbWatchTestAppConfig] = Task(
+    PureconfigLoader.unsafeLoad[FdbWatchTestAppConfig](allConfig, "app")
+  )
 }
