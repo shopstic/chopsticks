@@ -5,7 +5,7 @@ import izumi.distage.model.effect.DIEffect
 import izumi.distage.model.exceptions.ProvisioningException
 import izumi.distage.planning.extensions.GraphDumpBootstrapModule
 import izumi.reflect.Tag
-import zio.{Has, RIO, Task, UIO, ZIO}
+import zio._
 
 object DiEnv {
   type DiModule = izumi.distage.model.definition.Module
@@ -38,12 +38,14 @@ object DiEnv {
   }
 
   final case class LiveDiEnv[E <: Has[_]: Tag](env: DiModule) extends DiEnv[E] {
-    override def run(app: RIO[E, Unit], dumpGraph: Boolean = false): Task[Int] = {
+    override def build(dumpGraph: Boolean = false): TaskManaged[E] = {
       implicit val diEff: DIEffect[Task] = InterruptiableZioDiEffect
       val injector = if (dumpGraph) Injector(GraphDumpBootstrapModule()) else Injector()
+      injector.produceGetF[Task, E](env).toZIO
+    }
 
-      injector
-        .produceGetF[Task, E](env).toZIO
+    override def run(app: RIO[E, Unit], dumpGraph: Boolean = false): Task[Int] = {
+      build(dumpGraph)
         .use { env =>
           app.provide(env)
             .ensuring(ZIO.interruptAllChildren)
@@ -63,5 +65,6 @@ object DiEnv {
 abstract class DiEnv[E <: Has[_]: Tag] {
   import DiEnv._
   def env: DiModule
+  def build(dumpGraph: Boolean = false): TaskManaged[E]
   def run(app: RIO[E, Unit], dumpGraph: Boolean = false): Task[Int]
 }
