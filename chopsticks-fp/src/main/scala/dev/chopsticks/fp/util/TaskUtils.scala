@@ -1,8 +1,10 @@
-package dev.chopsticks.fp.zio_ext
+package dev.chopsticks.fp.util
 
 import java.util.concurrent.{CompletableFuture, CompletionException}
 
-import zio.{Task, UIO}
+import dev.chopsticks.fp.log_env.LogCtx
+import zio.{RIO, Task, UIO, ZIO}
+import dev.chopsticks.fp.zio_ext._
 
 import scala.concurrent.ExecutionException
 
@@ -47,6 +49,22 @@ object TaskUtils {
           })
         }
       })
+    }
+  }
+
+  def raceFirst(tasks: Iterable[(String, Task[Unit])])(implicit logCtx: LogCtx): RIO[MeasuredLogging, Unit] = {
+    val list = tasks.map {
+      case (name, task) =>
+        task.log(name)
+    }.toList
+
+    list match {
+      case head :: tail :: Nil =>
+        head.raceFirst(tail)
+      case head :: tail =>
+        head.run.raceAll(tail.map(_.run)).flatMap(ZIO.done(_)).refailWithTrace
+      case Nil =>
+        Task.unit
     }
   }
 }
