@@ -15,7 +15,7 @@ import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
 import dev.chopsticks.kvdb.util.KvdbTestUtils.populateColumn
-import dev.chopsticks.kvdb.util.{KvdbSerdesUtils, KvdbTestUtils}
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.{Assertion, Inside}
@@ -115,15 +115,15 @@ abstract private[kvdb] class KvdbDatabaseTest
     with LoggingContext {
   import KvdbDatabaseTest._
 
-  protected def managedDb: ZManaged[AkkaApp.Env, Throwable, TestDatabase.Db]
+  protected def managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool, Throwable, TestDatabase.Db]
 
   protected def dbMat: TestDatabase.Materialization
 
   private lazy val defaultCf = dbMat.plain
   private lazy val lookupCf = dbMat.lookup
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
-  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](managedDb)(runtime)
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live ++ KvdbIoThreadPool.live())
+  private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb)(runtime)
 
   "wrong column family" should {
     "not compile" in withDb { db =>

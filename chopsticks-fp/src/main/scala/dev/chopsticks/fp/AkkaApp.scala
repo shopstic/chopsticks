@@ -27,7 +27,7 @@ object AkkaApp extends LoggingContext {
   type Env = Clock with Console with zio.system.System with Random with Blocking with AkkaEnv with LogEnv
 
   object Env {
-    def live(implicit actorSystem: ActorSystem): ZLayer[Any, Nothing, Env] = {
+    def live(implicit actorSystem: ActorSystem): ULayer[AkkaApp.Env] = {
       AkkaEnv.live(
         actorSystem
       ) >>> (Clock.live ++ Console.live ++ zio.system.System.live ++ Random.live ++ Blocking.live ++ AkkaEnv.any ++ LogEnv.live)

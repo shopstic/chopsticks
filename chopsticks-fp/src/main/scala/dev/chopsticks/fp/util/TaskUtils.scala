@@ -3,8 +3,8 @@ package dev.chopsticks.fp.util
 import java.util.concurrent.{CompletableFuture, CompletionException}
 
 import dev.chopsticks.fp.log_env.LogCtx
-import zio.{Fiber, RIO, Task, UIO, ZIO}
 import dev.chopsticks.fp.zio_ext._
+import zio.{RIO, Task, UIO, ZIO}
 
 import scala.concurrent.ExecutionException
 

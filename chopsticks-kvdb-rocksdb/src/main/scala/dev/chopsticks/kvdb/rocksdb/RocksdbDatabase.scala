@@ -41,7 +41,7 @@ object RocksdbDatabase extends StrictLogging {
 
   private val ESTIMATE_NUM_KEYS = "rocksdb.estimate-num-keys"
 
-  final case class Config(
+  final case class RocksdbDatabaseConfig(
     path: NonEmptyString,
     startWithBulkInserts: Boolean,
     useDirectIo: Boolean,
@@ -49,23 +49,24 @@ object RocksdbDatabase extends StrictLogging {
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
-  object Config {
+  object RocksdbDatabaseConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
     import eu.timepit.refined.pureconfig._
     //noinspection TypeAnnotation
-    implicit val configConvert = ConfigConvert[Config]
+    implicit val configConvert = ConfigConvert[RocksdbDatabaseConfig]
   }
 
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
-    config: Config
-  ): ZManaged[AkkaEnv with Blocking with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
+    config: RocksdbDatabaseConfig
+  ): ZManaged[AkkaEnv with KvdbIoThreadPool with Blocking with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
     RocksdbMaterialization.validate(materialization) match {
       case Left(ex) => ZManaged.fail(ex)
       case Right(_) =>
         for {
-          context <- RocksdbDatabaseManager[BCF, CFS](materialization, config).managedContext
-          rt <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv])
+          ioExecutor <- ZManaged.access[KvdbIoThreadPool](_.get.executor)
+          context <- RocksdbDatabaseManager[BCF, CFS](materialization, ioExecutor, config).managedContext
+          rt <- ZIO.runtime[AkkaEnv].toManaged_
         } yield {
           new RocksdbDatabase[BCF, CFS](materialization, config.clientOptions, context)(rt)
         }
@@ -107,7 +108,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   private val dbCloseSignal = new KvdbCloseSignal
 
   private def ioTask[T](task: Task[T]): Task[T] = {
-    task.lock(KvdbIoThreadPool.executor)
+    task.lock(dbContext.ioExecutor)
   }
 
   def references: Task[RocksdbContext[CF]] = dbContext.obtain()

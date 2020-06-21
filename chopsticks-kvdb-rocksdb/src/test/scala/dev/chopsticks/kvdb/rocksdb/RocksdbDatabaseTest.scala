@@ -5,7 +5,7 @@ import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.TestDatabase._
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern}
-import dev.chopsticks.kvdb.util.KvdbTestUtils
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestUtils}
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
@@ -43,12 +43,12 @@ object RocksdbDatabaseTest {
     val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf] of plain and lookup
   }
 
-  val managedDb: ZManaged[AkkaApp.Env, Throwable, Db] = {
+  val managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool, Throwable, Db] = {
     for {
       dir <- KvdbTestUtils.managedTempDir
       db <- RocksdbDatabase.manage(
         dbMaterialization,
-        RocksdbDatabase.Config(
+        RocksdbDatabase.RocksdbDatabaseConfig(
           path = NonEmptyString.unsafeFrom(dir.pathAsString),
           startWithBulkInserts = false,
           useDirectIo = true,

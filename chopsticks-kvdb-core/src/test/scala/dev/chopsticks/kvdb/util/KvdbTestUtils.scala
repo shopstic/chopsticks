@@ -18,10 +18,12 @@ object KvdbTestUtils {
     } { f => blocking(Task(f.delete())).orDie }
   }
 
-  def createTestRunner[Db](
-    managed: ZManaged[AkkaApp.Env, Throwable, Db]
-  )(implicit rt: zio.Runtime[AkkaApp.Env]): (Db => RIO[AkkaApp.Env, Assertion]) => Future[Assertion] = {
-    (testCode: Db => RIO[AkkaApp.Env, Assertion]) =>
+  def createTestRunner[R <: AkkaApp.Env, Db](
+    managed: ZManaged[R, Throwable, Db]
+  )(implicit
+    rt: zio.Runtime[R]
+  ): (Db => RIO[R, Assertion]) => Future[Assertion] = {
+    (testCode: Db => RIO[R, Assertion]) =>
       managed
         .use(testCode(_))
         .unsafeRunToFuture
