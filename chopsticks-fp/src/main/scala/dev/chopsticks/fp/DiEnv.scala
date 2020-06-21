@@ -6,6 +6,7 @@ import izumi.distage.model.exceptions.ProvisioningException
 import izumi.distage.planning.extensions.GraphDumpBootstrapModule
 import izumi.reflect.Tag
 import zio._
+import dev.chopsticks.fp.zio_ext._
 
 object DiEnv {
   type DiModule = izumi.distage.model.definition.Module
@@ -48,7 +49,7 @@ object DiEnv {
       build(dumpGraph)
         .use { env =>
           app.provide(env)
-            .interruptAllChildren
+            .interruptAllChildrenPar
             .as(0)
         }
         .catchSome {
