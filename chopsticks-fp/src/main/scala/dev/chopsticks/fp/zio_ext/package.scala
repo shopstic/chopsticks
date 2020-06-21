@@ -30,6 +30,14 @@ package object zio_ext {
   }
 
   implicit final class ZIOExtensions[R >: Nothing, E <: Any, A](io: ZIO[R, E, A]) {
+    def interruptAllChildrenPar: ZIO[R, E, A] = {
+      io.ensuringChildren(fibs => {
+        ZIO.fiberId.flatMap { fs =>
+          ZIO.foreachPar_(fibs)(_.interruptAs(fs))
+        }
+      })
+    }
+
     def logResult(name: String, result: A => String)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
