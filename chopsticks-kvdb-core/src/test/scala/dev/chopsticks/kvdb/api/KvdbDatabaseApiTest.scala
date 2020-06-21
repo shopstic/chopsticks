@@ -4,7 +4,7 @@ import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
 import dev.chopsticks.kvdb.codec.primitive._
-import dev.chopsticks.kvdb.util.KvdbTestUtils
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
@@ -16,11 +16,11 @@ abstract class KvdbDatabaseApiTest
     with Matchers
     with AkkaTestKitAutoShutDown
     with LoggingContext {
-  protected def managedDb: ZManaged[AkkaApp.Env, Throwable, DbApi]
+  protected def managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live ++ KvdbIoThreadPool.live())
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb)(runtime)
   private lazy val withCf = KvdbTestUtils.createTestRunner(managedDb.map(_.columnFamily(dbMat.plain)))(runtime)
 

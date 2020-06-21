@@ -3,11 +3,44 @@ package dev.chopsticks.kvdb.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{SynchronousQueue, ThreadFactory, ThreadPoolExecutor, TimeUnit}
 
-import zio.blocking.Blocking
+import eu.timepit.refined.auto._
+import eu.timepit.refined.types.string.NonEmptyString
 import zio.internal.Executor
-import zio.{Has, ZLayer}
+import zio.{ULayer, ZLayer}
 
 object KvdbIoThreadPool {
+  trait Service {
+    def executor: Executor
+  }
+
+  def live(
+    name: NonEmptyString = "dev.chopsticks.kvdb.io",
+    maxPoolSize: Int = 128,
+    keepAliveTimeMs: Long = 60000
+  ): ULayer[KvdbIoThreadPool] = {
+    ZLayer.succeed(
+      new Service {
+        override val executor: Executor = zio.internal.Executor.fromThreadPoolExecutor(_ => Int.MaxValue) {
+          val corePoolSize = 0
+          val timeUnit = TimeUnit.MILLISECONDS
+          val workQueue = new SynchronousQueue[Runnable]()
+          val threadFactory = new KvdbIoThreadFactory(name, true)
+
+          val threadPool = new ThreadPoolExecutor(
+            corePoolSize,
+            maxPoolSize,
+            keepAliveTimeMs,
+            timeUnit,
+            workQueue,
+            threadFactory
+          )
+
+          threadPool
+        }
+      }
+    )
+  }
+
   final class KvdbIoThreadFactory(name: String, daemon: Boolean) extends ThreadFactory {
     private val parentGroup =
       Option(System.getSecurityManager).fold(Thread.currentThread().getThreadGroup)(_.getThreadGroup)
@@ -24,32 +57,6 @@ object KvdbIoThreadPool {
       thread.setDaemon(daemon)
 
       thread
-    }
-  }
-
-  lazy val executor: Executor = zio.internal.Executor.fromThreadPoolExecutor(_ => Int.MaxValue) {
-    val corePoolSize = 0
-    val maxPoolSize = Int.MaxValue
-    val keepAliveTime = 60000L
-    val timeUnit = TimeUnit.MILLISECONDS
-    val workQueue = new SynchronousQueue[Runnable]()
-    val threadFactory = new KvdbIoThreadFactory("dev.chopsticks.kvdb.io", true)
-
-    val threadPool = new ThreadPoolExecutor(
-      corePoolSize,
-      maxPoolSize,
-      keepAliveTime,
-      timeUnit,
-      workQueue,
-      threadFactory
-    )
-
-    threadPool
-  }
-
-  lazy val blockingEnv: ZLayer[Any, Nothing, Has[Blocking.Service]] = ZLayer.succeed {
-    new Blocking.Service {
-      val blockingExecutor: Executor = executor
     }
   }
 }

@@ -15,25 +15,13 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
-import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
-  TransactionDelete,
-  TransactionDeletePrefix,
-  TransactionDeleteRange,
-  TransactionPut,
-  TransactionWrite
-}
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder._
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto._
 import dev.chopsticks.kvdb.util.KvdbAliases._
-import dev.chopsticks.kvdb.util.KvdbException.{
-  ConditionalTransactionFailedException,
-  InvalidKvdbArgumentException,
-  KvdbAlreadyClosedException,
-  SeekFailure,
-  UnsupportedKvdbOperationException
-}
+import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util._
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.auto._
@@ -41,7 +29,6 @@ import eu.timepit.refined.types.string.NonEmptyString
 import org.lmdbjava._
 import pureconfig.ConfigConvert
 import squants.information.Information
-import zio.blocking.{blocking, Blocking}
 import zio.clock.Clock
 import zio.internal.Executor
 import zio.{Schedule, Task, ZIO, ZManaged}
@@ -75,13 +62,14 @@ object LmdbDatabase extends StrictLogging {
   final case class LmdbContext[BaseCol <: ColumnFamily[_, _]](
     env: Env[ByteBuffer],
     dbiMap: Map[BaseCol, Dbi[ByteBuffer]],
+    ioExecutor: Executor,
     ioDispatcher: String
   ) {
     val dbCloseSignal = new KvdbCloseSignal
     lazy val writeExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val isClosed = new AtomicBoolean(false)
 
-    def close(): ZIO[Blocking with Clock, Throwable, Unit] = {
+    def close(): ZIO[Clock, Throwable, Unit] = {
       import zio.duration._
 
       val task = for {
@@ -89,17 +77,17 @@ object LmdbDatabase extends StrictLogging {
           if (isClosed) Task.unit
           else Task.fail(ClosedException)
         }
-        _ <- blocking(Task {
+        _ <- Task {
           writeExecutor.shutdown()
           writeExecutor.awaitTermination(10, TimeUnit.SECONDS)
-        })
+        }.lock(ioExecutor)
         _ <- Task(dbCloseSignal.tryComplete(Failure(ClosedException)))
         _ <- Task(dbCloseSignal.hasNoListeners)
           .repeat(Schedule.fixed(100.millis).untilInput[Boolean](identity))
-        _ <- blocking(Task {
+        _ <- Task {
           dbiMap.foreach(_._2.close())
           env.close()
-        })
+        }.lock(ioExecutor)
       } yield ()
 
       task
@@ -142,41 +130,40 @@ object LmdbDatabase extends StrictLogging {
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS],
     config: LmdbDatabaseConfig
-  ): ZManaged[AkkaEnv with Blocking with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
+  ): ZManaged[AkkaEnv with KvdbIoThreadPool with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
     KvdbMaterialization.validate(materialization) match {
       case Left(ex) => ZManaged.fail(ex)
       case Right(mat) =>
-        val managed = ZManaged
-          .make {
-            blocking(Task {
-              import better.files.Dsl._
-              import better.files._
-
-              val file = File(config.path)
-              val _ = mkdirs(file)
-              val extraFlags = {
-                if (config.noSync) Vector(EnvFlags.MDB_NOSYNC, EnvFlags.MDB_NOMETASYNC)
-                else Vector.empty
-              }
-
-              val flags = Vector(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD) ++ extraFlags
-              val env = Env.create
-                .setMapSize(config.maxSize.toBytes.toLong)
-                .setMaxDbs(materialization.columnFamilySet.value.size)
-                .setMaxReaders(4096)
-                .open(file.toJava, flags: _*)
-
-              val columnRefs: Map[BCF[_, _], Dbi[ByteBuffer]] = materialization.columnFamilySet.value.map { col =>
-                (col, env.openDbi(col.id, DbiFlags.MDB_CREATE))
-              }.toMap
-
-              LmdbContext[BCF[_, _]](env, columnRefs, config.ioDispatcher)
-            })
-          } { refs => refs.close().orDie }
-
         for {
-          refs <- managed
-          rt <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv])
+          ioExecutor <- ZManaged.access[KvdbIoThreadPool](_.get.executor)
+          refs <- ZManaged
+            .make {
+              Task {
+                import better.files.Dsl._
+                import better.files._
+
+                val file = File(config.path)
+                val _ = mkdirs(file)
+                val extraFlags = {
+                  if (config.noSync) Vector(EnvFlags.MDB_NOSYNC, EnvFlags.MDB_NOMETASYNC)
+                  else Vector.empty
+                }
+
+                val flags = Vector(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD) ++ extraFlags
+                val env = Env.create
+                  .setMapSize(config.maxSize.toBytes.toLong)
+                  .setMaxDbs(materialization.columnFamilySet.value.size)
+                  .setMaxReaders(4096)
+                  .open(file.toJava, flags: _*)
+
+                val columnRefs: Map[BCF[_, _], Dbi[ByteBuffer]] = materialization.columnFamilySet.value.map { col =>
+                  (col, env.openDbi(col.id, DbiFlags.MDB_CREATE))
+                }.toMap
+
+                LmdbContext[BCF[_, _]](env, columnRefs, ioExecutor, config.ioDispatcher)
+              }.lock(ioExecutor)
+            } { refs => refs.close().orDie }
+          rt <- ZIO.runtime[AkkaEnv].toManaged_
         } yield {
           new LmdbDatabase[BCF, CFS](mat, config.clientOptions, refs)(rt)
         }
@@ -199,7 +186,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
   private lazy val writeEc = ExecutionContext.fromExecutor(dbContext.writeExecutor)
   private lazy val writeZioExecutor = Executor.fromExecutionContext(Int.MaxValue)(writeEc)
-  private lazy val readZioExecutor = KvdbIoThreadPool.executor
+  private lazy val readZioExecutor = dbContext.ioExecutor
 
   val activeTxnCounter = new LongAdder
   val activeCursorCounter = new LongAdder

@@ -6,7 +6,7 @@ import java.util.{ArrayList => JavaArrayList}
 
 import better.files.File
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.{Config, DEFAULT_COLUMN_NAME}
+import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.{DEFAULT_COLUMN_NAME, RocksdbDatabaseConfig}
 import dev.chopsticks.kvdb.rocksdb.RocksdbUtils.OptionsFileSection
 import dev.chopsticks.kvdb.util.KvdbCloseSignal
 import dev.chopsticks.kvdb.util.KvdbException.{
@@ -19,6 +19,7 @@ import eu.timepit.refined.auto._
 import org.rocksdb._
 import zio.blocking.{blocking, Blocking}
 import zio.clock.Clock
+import zio.internal.Executor
 import zio.{RIO, Schedule, Task, UIO, ZIO, ZManaged}
 
 import scala.jdk.CollectionConverters._
@@ -37,6 +38,7 @@ object RocksdbDatabaseManager {
     columnHandleMap: Map[CF, ColumnFamilyHandle],
     columnPrefixExtractorOptionMap: Map[CF, String],
     stats: Statistics,
+    ioExecutor: Executor,
     ioDispatcher: String
   ) {
     val dbCloseSignal = new KvdbCloseSignal
@@ -101,28 +103,30 @@ object RocksdbDatabaseManager {
         _ <- Task(dbCloseSignal.tryComplete(Failure(KvdbClosedException)))
         _ <- Task(dbCloseSignal.hasNoListeners)
           .repeat(Schedule.fixed(100.millis).untilInput(identity))
-        _ <- blocking(Task {
+        _ <- Task {
           stats.close()
           columnHandleMap.values.foreach { c => txDb.flush(new FlushOptions().setWaitForFlush(true), c) }
           columnHandleMap.foreach(_._2.close())
           txDb.flushWal(true)
           txDb.closeE()
-        })
+        }.lock(ioExecutor)
       } yield ()
     }
   }
 
   def apply[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
-    config: Config
-  ) = new RocksdbDatabaseManager(materialization, config)
+    ioExecutor: Executor,
+    config: RocksdbDatabaseConfig
+  ) = new RocksdbDatabaseManager(materialization, ioExecutor, config)
 }
 
 import dev.chopsticks.kvdb.rocksdb.RocksdbDatabaseManager._
 
 final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]] private (
   materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
-  config: Config
+  ioExecutor: Executor,
+  config: RocksdbDatabaseConfig
 ) extends StrictLogging {
   type CF = BCF[_, _]
 
@@ -196,8 +200,8 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
     }
   }
 
-  private def open(): ZIO[Blocking, Throwable, RocksdbContext[CF]] = {
-    blocking(Task {
+  private def open() = {
+    Task {
       RocksDB.loadLibrary()
 
       val columnOptions: Map[BCF[_, _], ColumnFamilyOptions] = materialization.columnFamilyConfigMap.map
@@ -283,27 +287,30 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
       }
 
       openKvdb()
-    }).flatMap {
-      case (db, columnHandleMap, stats) =>
-        readColumnFamilyOptionsFromDisk(config.path)
-          .map { r =>
-            val columnHasPrefixExtractorMap: Map[CF, String] = r.iterator.map {
-              case (colName, colMap) =>
-                val cf = columnFamilyWithName(colName).get
-                val prefixExtractor = colMap("prefix_extractor")
-                (cf, prefixExtractor)
-            }.toMap
-
-            RocksdbContext[CF](
-              txDb = db,
-              db = db.getBaseDB,
-              columnHandleMap = columnHandleMap,
-              columnPrefixExtractorOptionMap = columnHasPrefixExtractorMap,
-              stats = stats,
-              ioDispatcher = config.ioDispatcher
-            )
-          }
     }
+      .lock(ioExecutor)
+      .flatMap {
+        case (db, columnHandleMap, stats) =>
+          readColumnFamilyOptionsFromDisk(config.path)
+            .map { r =>
+              val columnHasPrefixExtractorMap: Map[CF, String] = r.iterator.map {
+                case (colName, colMap) =>
+                  val cf = columnFamilyWithName(colName).get
+                  val prefixExtractor = colMap("prefix_extractor")
+                  (cf, prefixExtractor)
+              }.toMap
+
+              RocksdbContext[CF](
+                txDb = db,
+                db = db.getBaseDB,
+                columnHandleMap = columnHandleMap,
+                columnPrefixExtractorOptionMap = columnHasPrefixExtractorMap,
+                stats = stats,
+                ioExecutor = ioExecutor,
+                ioDispatcher = config.ioDispatcher
+              )
+            }
+      }
   }
 
 }

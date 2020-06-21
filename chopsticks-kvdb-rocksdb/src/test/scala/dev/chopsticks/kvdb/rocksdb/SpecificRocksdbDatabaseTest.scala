@@ -2,14 +2,14 @@ package dev.chopsticks.kvdb.rocksdb
 
 import akka.testkit.ImplicitSender
 import dev.chopsticks.fp.{AkkaApp, LoggingContext}
-import dev.chopsticks.kvdb.{KvdbDatabaseTest, TestDatabase}
-import dev.chopsticks.kvdb.util.{KvdbSerdesUtils, KvdbTestUtils}
+import dev.chopsticks.kvdb.KvdbDatabaseTest
+import dev.chopsticks.kvdb.codec.primitive._
+import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.Inside
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import dev.chopsticks.kvdb.codec.primitive._
-import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
 import zio.{Promise, ZIO}
 
 final class SpecificRocksdbDatabaseTest
@@ -26,8 +26,8 @@ final class SpecificRocksdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
-  private lazy val withDb = KvdbTestUtils.createTestRunner[TestDatabase.Db](RocksdbDatabaseTest.managedDb)(runtime)
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live ++ KvdbIoThreadPool.live())
+  private lazy val withDb = KvdbTestUtils.createTestRunner(RocksdbDatabaseTest.managedDb)(runtime)
 
   "conditionalTransactionTask" should {
     "fail upon conflict" in withDb { db =>
