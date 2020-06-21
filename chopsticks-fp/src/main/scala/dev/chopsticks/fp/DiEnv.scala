@@ -48,7 +48,7 @@ object DiEnv {
       build(dumpGraph)
         .use { env =>
           app.provide(env)
-            .ensuring(ZIO.interruptAllChildren)
+            .interruptAllChildren
             .as(0)
         }
         .catchSome {
