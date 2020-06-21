@@ -125,7 +125,7 @@ trait AkkaApp extends LoggingContext {
 
     val main = for {
       appFib <- run
-        .ensuring(ZIO.interruptAllChildren)
+        .interruptAllChildren
         .provideLayer(appLayer)
         .fork
       _ <- UIO {

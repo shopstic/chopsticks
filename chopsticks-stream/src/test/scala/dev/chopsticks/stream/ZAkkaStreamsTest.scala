@@ -18,6 +18,7 @@ import org.scalatest.wordspec.AsyncWordSpecLike
 import org.scalatest.{Assertion, Succeeded}
 import zio.blocking._
 import zio.clock.Clock
+import zio.test.Annotations
 import zio.test.environment.TestClock
 import zio.{CancelableFuture, Task, UIO, ZIO}
 
@@ -34,7 +35,7 @@ final class ZAkkaStreamsTest
   type Env = AkkaEnv with TestClock with Clock with Blocking
 
   private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Assertion] = {
-    val testClock = zio.ZEnv.live >>> zio.test.environment.Live.default >>> TestClock.default
+    val testClock = zio.ZEnv.live >>> (zio.test.environment.Live.default ++ Annotations.live) >>> TestClock.default
     val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live ++ LogEnv.live
     val rt = AkkaApp.createRuntime(env)
     rt.unsafeRunToFuture(run)

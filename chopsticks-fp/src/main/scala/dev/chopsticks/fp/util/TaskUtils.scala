@@ -29,6 +29,7 @@ object TaskUtils {
 
   def fromCancellableCompletableFuture[A](thunk: => CompletableFuture[A]): Task[A] = {
     lazy val future = thunk
+
     Task.effectSuspendTotalWith { (p, _) =>
       Task.effectAsyncInterrupt[A](cb => {
         if (future.isDone) {
