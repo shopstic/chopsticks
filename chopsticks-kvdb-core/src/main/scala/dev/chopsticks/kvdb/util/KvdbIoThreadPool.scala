@@ -3,14 +3,28 @@ package dev.chopsticks.kvdb.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{SynchronousQueue, ThreadFactory, ThreadPoolExecutor, TimeUnit}
 
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import zio.internal.Executor
-import zio.{ULayer, ZLayer}
+import zio.{ULayer, URLayer, ZLayer, ZManaged}
 
 object KvdbIoThreadPool {
   trait Service {
     def executor: Executor
+  }
+
+  def fromAkkaDispatcher(id: String): URLayer[AkkaEnv, KvdbIoThreadPool] = {
+    val managed = for {
+      akkaService <- ZManaged.access[AkkaEnv](_.get)
+    } yield {
+      new Service {
+        override val executor: Executor =
+          zio.internal.Executor.fromExecutionContext(Int.MaxValue)(akkaService.actorSystem.dispatchers.lookup(id))
+      }
+    }
+
+    managed.toLayer
   }
 
   def live(
