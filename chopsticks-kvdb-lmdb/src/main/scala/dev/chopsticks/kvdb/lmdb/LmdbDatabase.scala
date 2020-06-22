@@ -45,7 +45,7 @@ object LmdbDatabase extends StrictLogging {
     maxSize: Information,
     noSync: Boolean,
     ioDispatcher: NonEmptyString,
-    clientOptions: KvdbClientOptions
+    clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
   object LmdbDatabaseConfig {
