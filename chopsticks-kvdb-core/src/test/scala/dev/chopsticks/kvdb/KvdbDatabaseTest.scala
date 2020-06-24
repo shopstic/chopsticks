@@ -236,6 +236,57 @@ abstract private[kvdb] class KvdbDatabaseTest
         }
       }
 
+      "[lastStartsWith] seek and return pair with matching prefix" in withDb { db =>
+        for {
+          _ <- populateColumn(
+            db,
+            defaultCf,
+            List(
+              "aaaa1" -> "aaaa1",
+              "aaaa2" -> "aaaa2",
+              "cccc1" -> "cccc1"
+            )
+          )
+          pair <- db.getTask(defaultCf, $(_ lastStartsWith "aaaa"))
+        } yield {
+          assertPair(pair, "aaaa2", "aaaa2")
+        }
+      }
+
+      "[lastStartsWith] seek and return pair with exact match" in withDb { db =>
+        for {
+          _ <- populateColumn(
+            db,
+            defaultCf,
+            List(
+              "aaaa1" -> "aaaa1",
+              "aaaa2" -> "aaaa2",
+              "cccc1" -> "cccc1"
+            )
+          )
+          pair <- db.getTask(defaultCf, $(_ lastStartsWith "aaaa2"))
+        } yield {
+          assertPair(pair, "aaaa2", "aaaa2")
+        }
+      }
+
+      "[lastStartsWith] return None if prefix doesn't match" in withDb { db =>
+        for {
+          _ <- populateColumn(
+            db,
+            defaultCf,
+            List(
+              "aaaa1" -> "aaaa1",
+              "aaaa2" -> "aaaa2",
+              "cccc1" -> "cccc1"
+            )
+          )
+          pair <- db.getTask(defaultCf, $(_ lastStartsWith "bbbb"))
+        } yield {
+          pair should be(None)
+        }
+      }
+
       "[.first ^=] seek to first and return pair with matching key" in withDb { db =>
         for {
           _ <- populateColumn(

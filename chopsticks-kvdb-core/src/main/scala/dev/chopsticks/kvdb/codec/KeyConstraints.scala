@@ -122,12 +122,24 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
   def <[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = lt(v)
 
   def lastStartsWith[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
+    val prefix = ProtoByteString.copyFrom(e.serialize(v))
+
     copy(
-      constraints enqueue KvdbKeyConstraint(
-        Operator.LESS_EQUAL,
-        ProtoByteString.copyFrom(e.serialize(v)).concat(KeyConstraints.MAX_BYTE),
-        v.toString
-      )
+      constraints
+        .enqueue(
+          KvdbKeyConstraint(
+            Operator.LESS_EQUAL,
+            prefix.concat(KeyConstraints.MAX_BYTE),
+            v.toString
+          )
+        )
+        .enqueue(
+          KvdbKeyConstraint(
+            Operator.PREFIX,
+            prefix,
+            v.toString
+          )
+        )
     )
   }
 
