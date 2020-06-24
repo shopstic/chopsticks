@@ -51,7 +51,7 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
     ZService[IzLogging.Service].flatMap(_.zioLogger.error("test error here"))
   }
 
-  def app: URIO[Clock with IzLogging with AkkaEnv with Bar, Unit] = {
+  def app = {
     val effect = for {
       bar <- ZIO.access[Bar](_.get)
       akkaService <- ZIO.access[AkkaEnv](_.get)
