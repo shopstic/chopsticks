@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
 import dev.chopsticks.kvdb.codec.{KeyPrefix, KeyTransformer}
+import dev.chopsticks.kvdb.util.KvdbUtils
 
 object KvdbWriteTransactionBuilder {
   sealed trait TransactionWrite
@@ -11,7 +12,6 @@ object KvdbWriteTransactionBuilder {
   final case class TransactionDelete(columnId: String, key: Array[Byte]) extends TransactionWrite
   final case class TransactionDeleteRange(columnId: String, fromKey: Array[Byte], toKey: Array[Byte])
       extends TransactionWrite
-  final case class TransactionDeletePrefix(columnId: String, prefix: Array[Byte]) extends TransactionWrite
 }
 
 final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
@@ -60,13 +60,33 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
     this
   }
 
+  def deletePrefixRange[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K, FP, TP](
+    column: CF[K, _] with CF2,
+    fromPrefix: FP,
+    toPrefix: TP
+  )(implicit
+    fromKeyPrefix: KeyPrefix[FP, K],
+    toKeyPrefix: KeyPrefix[TP, K]
+  ): KvdbWriteTransactionBuilder[BCF] = {
+    val _ = buffer.add(
+      TransactionDeleteRange(
+        columnId = column.id,
+        fromKey = fromKeyPrefix.serialize(fromPrefix),
+        toKey = toKeyPrefix.serialize(toPrefix)
+      )
+    )
+    this
+  }
+
   def deletePrefix[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K, P](column: CF[K, _] with CF2, prefix: P)(
     implicit keyPrefix: KeyPrefix[P, K]
   ): KvdbWriteTransactionBuilder[BCF] = {
+    val prefixBytes = keyPrefix.serialize(prefix)
     val _ = buffer.add(
-      TransactionDeletePrefix(
+      TransactionDeleteRange(
         columnId = column.id,
-        prefix = keyPrefix.serialize(prefix)
+        fromKey = prefixBytes,
+        toKey = KvdbUtils.strinc(prefixBytes)
       )
     )
     this

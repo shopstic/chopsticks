@@ -74,7 +74,7 @@ final class ZAkkaStreamsTest
           source
             .viaMat(KillSwitches.single)(Keep.right)
             .toMat(Sink.ignore)(Keep.both)
-            .run
+            .run()
         }
         (ks, future) = mat
         _ <- startP.await
@@ -99,7 +99,7 @@ final class ZAkkaStreamsTest
       }
       .withAttributes(Attributes.inputBuffer(initial = 0, max = 1))
       .toMat(TestSink.probe[Int])(Keep.both)
-      .run
+      .run()
 
     sink.request(2)
     source.sendNext(1)
@@ -145,7 +145,7 @@ final class ZAkkaStreamsTest
           .probe[Source[Int, Any]]
           .switchFlatMapConcat(UIO(_))
           .toMat(TestSink.probe)(Keep.both)
-          .run
+          .run()
 
         source.sendNext(Source(1 to 3))
         sink.request(3)
@@ -169,7 +169,7 @@ final class ZAkkaStreamsTest
           .probe[Source[Int, Any]]
           .switchFlatMapConcat(UIO(_))
           .toMat(TestSink.probe)(Keep.both)
-          .run
+          .run()
 
         sink.request(2)
         source.sendNext {

@@ -22,7 +22,7 @@ final class ManualTimeAkkaTestKitTest
       .probe[Int]
       .mapAsync(1) { i => akka.pattern.after(10.seconds, system.scheduler)(Future.successful(i + 1)) }
       .toMat(TestSink.probe[Int])(Keep.both)
-      .run
+      .run()
 
     sink.request(1)
     source.sendNext(1)

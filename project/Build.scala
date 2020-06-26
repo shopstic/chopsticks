@@ -6,7 +6,7 @@ import sbt.Keys._
 
 //noinspection TypeAnnotation
 object Build {
-  val buildVersion = "2.18.3"
+  val buildVersion = "2.20.0"
 
   lazy val ITest = config("it") extend Test
 
@@ -22,7 +22,7 @@ object Build {
     "-Wnumeric-widen", // Warn when numerics are widened.
     "-Wvalue-discard", // Warn when non-Unit expression results are unused.
     "-Wunused:_", // Warn unused
-    "-Xlint:_", // Enable all linting options
+    "-Xlint:-byname-implicit,_", // Enable all linting options except lint-byname-implicit
     "-Wconf:any:wv"
   ) ++ scala.sys.env.get("FATAL_WARNINGS").map(_ => Seq("-Werror")).getOrElse(Seq.empty[String])
 

@@ -359,8 +359,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     txn: Txn[ByteBuffer],
     dbi: Dbi[ByteBuffer],
     fromKey: Array[Byte],
-    toKey: Array[Byte],
-    exactFromKey: Boolean
+    toKey: Array[Byte]
   ): Long = {
     val cursor = openCursor(dbi, txn)
 
@@ -368,7 +367,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       if (
         cursor.get(
           putInBuffer(reuseablePutKeyBuffer, fromKey),
-          if (exactFromKey) GetOp.MDB_SET else GetOp.MDB_SET_RANGE
+          GetOp.MDB_SET_RANGE
         )
       ) {
         val firstKey = bufferToArray(cursor.key())
@@ -806,16 +805,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
         val _ = doDelete(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), key)
 
       case TransactionDeleteRange(columnId, fromKey, toKey) =>
-        val _ = doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey, exactFromKey = true)
-
-      case TransactionDeletePrefix(columnId, prefix) =>
-        val _ = doDeleteRange(
-          txn,
-          refs.getKvdbi(columnFamilyWithId(columnId).get),
-          prefix,
-          prefix :+ 0xFF.toByte,
-          exactFromKey = false
-        )
+        val _ =
+          doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey)
     }
   }
 

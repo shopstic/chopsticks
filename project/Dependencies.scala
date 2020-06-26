@@ -3,7 +3,7 @@ import scalapb.compiler.Version.scalapbVersion
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
-  val SCALA_VERSION = "2.13.2"
+  val SCALA_VERSION = "2.13.3"
   val AKKA_VERSION = "2.6.6"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.0-RC20"

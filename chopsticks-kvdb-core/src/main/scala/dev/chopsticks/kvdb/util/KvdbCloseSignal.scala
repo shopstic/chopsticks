@@ -10,7 +10,7 @@ import scala.util.Try
 
 final class KvdbCloseSignal {
   final class Listener private[KvdbCloseSignal] {
-    private[KvdbCloseSignal] val promise = Promise[Done]
+    private[KvdbCloseSignal] val promise = Promise[Done]()
     def future: Future[Done] = promise.future
     def unregister(): Unit = removeListener(this)
   }
