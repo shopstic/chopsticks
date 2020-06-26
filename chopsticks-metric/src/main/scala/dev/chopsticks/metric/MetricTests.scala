@@ -83,8 +83,8 @@ object MetricTests {
 
       counter.inc(123)
       gauge.set(999)
-      println(counter2.get())
-      println(gauge.get())
+      println(counter2.get)
+      println(gauge.get)
 
       val writer = new CharArrayWriter()
       TextFormat.write004(writer, CollectorRegistry.defaultRegistry.metricFamilySamples())

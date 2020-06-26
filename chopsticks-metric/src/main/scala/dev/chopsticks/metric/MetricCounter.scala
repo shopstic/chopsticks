@@ -5,7 +5,7 @@ import zio.clock.Clock
 
 trait MetricCounter {
   def inc(value: Double): Unit
-  def get(): Double
+  def get: Double
   def inc(): Unit = inc(1.0d)
   def inc(value: Long): Unit = inc(value.toDouble)
   def inc(value: Int): Unit = inc(value.toDouble)
