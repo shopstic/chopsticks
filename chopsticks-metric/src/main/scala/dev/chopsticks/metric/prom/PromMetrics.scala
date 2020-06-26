@@ -6,7 +6,7 @@ import io.prometheus.client.{Counter, Gauge, Histogram, Summary}
 object PromMetrics {
   final class PromCounter(counter: Counter) extends MetricCounter {
     override def inc(value: Double): Unit = counter.inc(value)
-    override def get(): Double = counter.get()
+    override def get: Double = counter.get
   }
 
   object PromCounter {
@@ -15,14 +15,14 @@ object PromMetrics {
 
   final class PromChildCounter(counter: Counter.Child) extends MetricCounter {
     override def inc(value: Double): Unit = counter.inc(value)
-    override def get(): Double = counter.get()
+    override def get: Double = counter.get
   }
 
   final class PromGauge(gauge: Gauge) extends MetricGauge {
     override def inc(value: Double): Unit = gauge.inc(value)
     override def dec(value: Double): Unit = gauge.dec(value)
     override def set(value: Double): Unit = gauge.set(value)
-    override def get(): Double = gauge.get()
+    override def get: Double = gauge.get
   }
 
   object PromGauge {
@@ -33,7 +33,7 @@ object PromMetrics {
     override def inc(value: Double): Unit = gauge.inc(value)
     override def dec(value: Double): Unit = gauge.dec(value)
     override def set(value: Double): Unit = gauge.set(value)
-    override def get(): Double = gauge.get()
+    override def get: Double = gauge.get
   }
 
   final class PromHistogram(histogram: Histogram) extends MetricHistogram {
