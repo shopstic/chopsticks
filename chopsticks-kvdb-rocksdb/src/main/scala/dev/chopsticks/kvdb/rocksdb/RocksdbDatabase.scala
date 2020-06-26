@@ -13,7 +13,6 @@ import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
   TransactionDelete,
-  TransactionDeletePrefix,
   TransactionDeleteRange,
   TransactionPut,
   TransactionWrite
@@ -768,13 +767,6 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
               fromKey,
               toKey
             )
-
-          case TransactionDeletePrefix(columnId, prefix) =>
-            writeBatch.deleteRange(
-              refs.getColumnHandle(columnFamilyWithId(columnId).get),
-              prefix,
-              prefix :+ 0xFF.toByte
-            )
         }
 
         val writeOptions = newWriteOptions()
@@ -833,11 +825,6 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
             case TransactionDeleteRange(_, _, _) =>
               throw UnsupportedKvdbOperationException(
                 "TransactionDeleteRange is not yet supported in conditionalTransactionTask"
-              )
-
-            case TransactionDeletePrefix(_, _) =>
-              throw UnsupportedKvdbOperationException(
-                "TransactionDeletePrefix is not yet supported in conditionalTransactionTask"
               )
           }
 

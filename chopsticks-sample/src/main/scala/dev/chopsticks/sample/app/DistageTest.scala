@@ -19,7 +19,7 @@ object DistageTest {
 
     val plan = Injector().plan(definition, Roots.Everything)
     println(plan.render())
-    plan.assertImportsResolvedOrThrow
+    plan.assertImportsResolvedOrThrow()
 
     val _ = Injector()
       .produceGetF[Task, Has[Foo.Service] with Has[Bar.Service]](definition).toZIO

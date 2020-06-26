@@ -5,7 +5,9 @@ import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
+import dev.chopsticks.kvdb.util.KvdbUtils
 import eu.timepit.refined.types.numeric.PosInt
+
 import scala.collection.immutable.Queue
 
 object KeyConstraints {
@@ -74,7 +76,6 @@ object KeyConstraints {
     }
   }
 
-  private val MAX_BYTE = ProtoByteString.copyFrom(Array[Byte](0xFF.toByte))
 }
 
 //noinspection ScalaStyle
@@ -122,21 +123,21 @@ final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue
   def <[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = lt(v)
 
   def lastStartsWith[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
-    val prefix = ProtoByteString.copyFrom(e.serialize(v))
+    val prefixBytes = e.serialize(v)
 
     copy(
       constraints
         .enqueue(
           KvdbKeyConstraint(
-            Operator.LESS_EQUAL,
-            prefix.concat(KeyConstraints.MAX_BYTE),
+            Operator.LESS,
+            ProtoByteString.copyFrom(KvdbUtils.strinc(prefixBytes)),
             v.toString
           )
         )
         .enqueue(
           KvdbKeyConstraint(
             Operator.PREFIX,
-            prefix,
+            ProtoByteString.copyFrom(prefixBytes),
             v.toString
           )
         )

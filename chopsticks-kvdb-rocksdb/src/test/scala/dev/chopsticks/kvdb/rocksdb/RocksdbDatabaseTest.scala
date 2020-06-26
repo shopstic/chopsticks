@@ -22,23 +22,25 @@ object RocksdbDatabaseTest {
     val defaultColumnFamily: plain.type = plain
 
     val columnFamilyConfigMap: RocksdbColumnFamilyOptionsMap[BaseCf, CfSet] = {
-      RocksdbColumnFamilyOptionsMap[BaseCf] of (
-        plain,
-        RocksdbColumnFamilyConfig(
-          memoryBudget = 1.mib,
-          blockCache = 1.mib,
-          blockSize = 8.kib,
-          writeBufferCount = 4
-        ).toOptions(PrefixedScanPattern(1))
-      ) and (
-        lookup,
-        RocksdbColumnFamilyConfig(
-          memoryBudget = 1.mib,
-          blockCache = 1.mib,
-          blockSize = 8.kib,
-          writeBufferCount = 4
-        ).toOptions(PointLookupPattern)
-      )
+      RocksdbColumnFamilyOptionsMap[BaseCf]
+        .of(
+          plain,
+          RocksdbColumnFamilyConfig(
+            memoryBudget = 1.mib,
+            blockCache = 1.mib,
+            blockSize = 8.kib,
+            writeBufferCount = 4
+          ).toOptions(PrefixedScanPattern(1))
+        )
+        .and(
+          lookup,
+          RocksdbColumnFamilyConfig(
+            memoryBudget = 1.mib,
+            blockCache = 1.mib,
+            blockSize = 8.kib,
+            writeBufferCount = 4
+          ).toOptions(PointLookupPattern)
+        )
     }
     val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf] of plain and lookup
   }
