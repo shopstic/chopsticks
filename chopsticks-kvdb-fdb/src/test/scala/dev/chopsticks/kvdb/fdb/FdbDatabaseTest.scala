@@ -7,6 +7,7 @@ import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, LookupCf, PlainCf}
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest, TestDatabase}
 import zio.{ZIO, ZManaged}
 import dev.chopsticks.kvdb.codec.primitive._
+import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 
 object FdbDatabaseTest {
   object dbMaterialization extends TestDatabase.Materialization with FdbMaterialization[TestDatabase.BaseCf] {
@@ -19,7 +20,7 @@ object FdbDatabaseTest {
     override val keyspacesWithVersionstamp = Set.empty
   }
 
-  val managedDb: ZManaged[AkkaApp.Env, Throwable, TestDatabase.Db] = {
+  val managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool, Throwable, TestDatabase.Db] = {
     for {
       database <- FdbDatabase.manage(
         dbMaterialization,

@@ -7,7 +7,7 @@ import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.KvdbDatabaseTest
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
-import dev.chopsticks.kvdb.util.{KvdbSerdesUtils, KvdbTestUtils}
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.Inside
 import org.scalatest.matchers.should.Matchers
@@ -28,7 +28,7 @@ final class SpecificFdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live ++ KvdbIoThreadPool.live())
   private lazy val withDb = KvdbTestUtils.createTestRunner(FdbDatabaseTest.managedDb)(runtime)
 
   "conditionalTransactionTask" should {

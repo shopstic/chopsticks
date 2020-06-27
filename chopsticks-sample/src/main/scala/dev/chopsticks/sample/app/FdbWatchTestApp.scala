@@ -14,6 +14,7 @@ import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.fdb.FdbDatabase
+import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.sample.kvdb.{SampleDb, SampleDbEnv}
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
@@ -86,6 +87,7 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
           ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
+          KvdbIoThreadPool.live(),
           ZLayer.succeed(appConfig),
           AppLayer(app)
         )

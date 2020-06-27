@@ -1,13 +1,28 @@
 package dev.chopsticks.fp
 
 import distage.{HasConstructor, ModuleDef, Tag}
-import zio.{Has, RLayer, ZIO}
 import izumi.distage.model.definition.Module
+import zio.{Has, RLayer, ZIO}
 
 object DiLayers {
   def apply(layers: LayerBinding*): Module = layers.foldLeft(Module.empty)(_ ++ _.layerModule)
 
+  def narrow[R: HasConstructor, A: Tag](layer: RLayer[R, Has[A]]): LayerBindingNarrow[R, A] = {
+    LayerBindingNarrow[R, A](layer)
+  }
+
   final case class LayerBinding(layerModule: ModuleDef)
+
+  final case class LayerBindingNarrow[R: HasConstructor, A: Tag](layer: RLayer[R, Has[A]]) {
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+    def to[B >: A: Tag]: LayerBinding = {
+      LayerBinding(new ModuleDef {
+        make[A].fromHas(layer = layer)
+        make[B].using[A]
+      })
+    }
+  }
+
   object LayerBinding {
     import scala.language.implicitConversions
     @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
