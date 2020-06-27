@@ -6,8 +6,9 @@ import java.util.concurrent.{SynchronousQueue, ThreadFactory, ThreadPoolExecutor
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
+import zio.blocking.Blocking
 import zio.internal.Executor
-import zio.{ULayer, URLayer, ZLayer, ZManaged}
+import zio.{UIO, URLayer, ZManaged}
 
 object KvdbIoThreadPool {
   trait Service {
@@ -32,27 +33,36 @@ object KvdbIoThreadPool {
     corePoolSize: Int = 0,
     maxPoolSize: Int = 128,
     keepAliveTimeMs: Long = 60000
-  ): ULayer[KvdbIoThreadPool] = {
-    ZLayer.succeed(
-      new Service {
-        override val executor: Executor = zio.internal.Executor.fromThreadPoolExecutor(_ => Int.MaxValue) {
-          val timeUnit = TimeUnit.MILLISECONDS
-          val workQueue = new SynchronousQueue[Runnable]()
-          val threadFactory = new KvdbIoThreadFactory(name, true)
+  ): URLayer[Blocking, KvdbIoThreadPool] = {
+    ZManaged.make {
+      UIO {
+        val timeUnit = TimeUnit.MILLISECONDS
+        val workQueue = new SynchronousQueue[Runnable]()
+        val threadFactory = new KvdbIoThreadFactory(name, true)
 
-          val threadPool = new ThreadPoolExecutor(
-            corePoolSize,
-            maxPoolSize,
-            keepAliveTimeMs,
-            timeUnit,
-            workQueue,
-            threadFactory
-          )
+        val threadPool = new ThreadPoolExecutor(
+          corePoolSize,
+          maxPoolSize,
+          keepAliveTimeMs,
+          timeUnit,
+          workQueue,
+          threadFactory
+        )
 
-          threadPool
+        threadPool
+      }
+    } { threadPool =>
+      zio.blocking.effectBlocking {
+        threadPool.shutdown()
+        threadPool.awaitTermination(5, TimeUnit.SECONDS)
+      }.orDie
+    }
+      .map { pool =>
+        new Service {
+          override val executor: Executor = zio.internal.Executor.fromThreadPoolExecutor(_ => Int.MaxValue)(pool)
         }
       }
-    )
+      .toLayer
   }
 
   final class KvdbIoThreadFactory(name: String, daemon: Boolean) extends ThreadFactory {
