@@ -9,6 +9,7 @@ object Dependencies {
 //  val ZIO_VERSION = "1.0.0-RC20"
   val ZIO_VERSION = "1.0.0-RC21-1"
   val IZUMI_VERSION = "0.10.15"
+  val REFINED_VERSION = "0.9.14"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -67,7 +68,7 @@ object Dependencies {
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.12.3")
+    .map(p => "com.github.pureconfig" %% p % "0.13.0")
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
@@ -125,11 +126,12 @@ object Dependencies {
   )
 
   val refinedCoreDeps = Seq(
-    "eu.timepit" %% "refined" % "0.9.14"
+    "eu.timepit" %% "refined" % REFINED_VERSION,
+    "eu.timepit" %% "refined-shapeless" % REFINED_VERSION
   )
 
   val refinedDeps = refinedCoreDeps ++ Seq(
-    "eu.timepit" %% "refined-pureconfig" % "0.9.14"
+    "eu.timepit" %% "refined-pureconfig" % REFINED_VERSION
   )
 
   val chimneyDeps = Seq(
