@@ -122,8 +122,9 @@ abstract private[kvdb] class KvdbDatabaseTest
   private lazy val defaultCf = dbMat.plain
   private lazy val lookupCf = dbMat.lookup
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live ++ KvdbIoThreadPool.live())
-  private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb)(runtime)
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
+  private lazy val runtimeLayer = AkkaApp.Env.live >+> KvdbIoThreadPool.live()
+  private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
 
   "wrong column family" should {
     "not compile" in withDb { db =>

@@ -28,8 +28,9 @@ final class SpecificFdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live ++ KvdbIoThreadPool.live())
-  private lazy val withDb = KvdbTestUtils.createTestRunner(FdbDatabaseTest.managedDb)(runtime)
+  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
+  private lazy val runtimeLayer = AkkaApp.Env.live >+> KvdbIoThreadPool.live()
+  private lazy val withDb = KvdbTestUtils.createTestRunner(FdbDatabaseTest.managedDb, runtimeLayer)(runtime)
 
   "conditionalTransactionTask" should {
     "fail upon conflict" in withDb { db =>
