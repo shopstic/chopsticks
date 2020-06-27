@@ -3,86 +3,14 @@ package dev.chopsticks.kvdb.codec
 import java.time.{LocalDate, LocalDateTime, LocalTime, YearMonth}
 import java.util.UUID
 
-import dev.chopsticks.kvdb.codec.FdbKeyCodecTest.{
-  SealedTraitTest,
-  SealedTraitTestBar,
-  SealedTraitTestBaz,
-  SealedTraitTestBoo,
-  SealedTraitTestFoo,
-  TestKeyWithRefined
-}
+import dev.chopsticks.kvdb.codec.FdbKeyCodecTestEntities._
 import dev.chopsticks.testkit.ArbitraryTime._
-import enumeratum.EnumEntry
-import enumeratum.values.{ByteEnum, ByteEnumEntry, IntEnum, IntEnumEntry}
-import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.string.NonEmptyString
-import org.scalacheck.{Arbitrary, Gen}
 import org.scalactic.anyvals.{PosInt, PosZDouble}
 import org.scalatest.Assertions
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-
-//noinspection TypeAnnotation
-object FdbKeyCodecTest {
-  final case class Sym(symbol: String) extends AnyVal
-
-  sealed abstract class ByteEnumTest(val value: Byte) extends ByteEnumEntry
-
-  object ByteEnumTest extends ByteEnum[ByteEnumTest] {
-    case object One extends ByteEnumTest(1)
-    case object Two extends ByteEnumTest(2)
-    case object Three extends ByteEnumTest(3)
-    val values = findValues
-  }
-
-  implicit val byteEnumTestGen: Arbitrary[ByteEnumTest] = Arbitrary(Gen.oneOf(ByteEnumTest.values))
-
-  sealed abstract class IntEnumTest(val value: Int) extends IntEnumEntry
-
-  object IntEnumTest extends IntEnum[IntEnumTest] {
-    case object One extends IntEnumTest(1)
-    case object Two extends IntEnumTest(2)
-    case object Three extends IntEnumTest(3)
-    val values = findValues
-  }
-
-  implicit val intEnumTestGen: Arbitrary[IntEnumTest] = Arbitrary(Gen.oneOf(IntEnumTest.values))
-
-  sealed abstract class EnumTest(val value: String) extends EnumEntry
-
-  object EnumTest extends enumeratum.Enum[EnumTest] {
-    case object One extends EnumTest("one")
-    case object Two extends EnumTest("one")
-    case object Three extends EnumTest("one")
-    val values = findValues
-  }
-
-  implicit val enumTestGen: Arbitrary[EnumTest] = Arbitrary(Gen.oneOf(EnumTest.values))
-
-  final case class ContravariantKeyPrefixTest(foo: EnumTest, bar: IntEnumTest, baz: ByteEnumTest)
-  object ContravariantKeyPrefixTest {
-    import dev.chopsticks.kvdb.codec.fdb_key._
-    implicit val dbKey = KeySerdes[ContravariantKeyPrefixTest]
-    implicit val dbKeyPrefix = KeyPrefix[(EnumTest, IntEnumTest), ContravariantKeyPrefixTest]
-  }
-
-  final case class TestKeyWithRefined(foo: NonEmptyString, bar: PortNumber)
-  object TestKeyWithRefined {
-    import dev.chopsticks.kvdb.codec.fdb_key._
-    implicit val dbKey = KeySerdes[TestKeyWithRefined]
-  }
-
-  sealed trait SealedTraitTest
-  object SealedTraitTest {
-    import dev.chopsticks.kvdb.codec.fdb_key._
-    implicit val dbKey = KeySerdes[SealedTraitTest]
-  }
-  final case class SealedTraitTestFoo(foo: Int) extends SealedTraitTest
-  final case class SealedTraitTestBar(bar: Int) extends SealedTraitTest
-  final case class SealedTraitTestBaz(baz: Int) extends SealedTraitTest
-  final case class SealedTraitTestBoo(boom: Int) extends SealedTraitTest
-}
 
 //noinspection TypeAnnotation
 class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with ScalaCheckDrivenPropertyChecks {
@@ -157,7 +85,6 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
   }
 
   "prefix" should {
-    import FdbKeyCodecTest.Sym
     case class TradeTick(symbol: Sym, dateTime: LocalDateTime, price: Double, size: Int)
     object TradeTick {
       import fdb_key._
@@ -437,7 +364,6 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
     }
 
     "Enumeratum" when {
-      import FdbKeyCodecTest._
 
       "ByteEnum" should {
         "serialize / deserialize" in {
@@ -469,10 +395,20 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
 
     "refined" should {
       "serdes" in {
-        import fdb_key._
         import eu.timepit.refined.auto._
+        import fdb_key._
         val key = TestKeyWithRefined("foo", 1234)
         KeySerdes.deserialize[TestKeyWithRefined](KeySerdes.serialize(key)) should equal(Right(key))
+      }
+
+      "serdes alias" in {
+        import eu.timepit.refined.auto._
+        import fdb_key._
+        val foo: NonEmptyString = "foo"
+        val key = TestKeyWithRefinedAlias(1234, foo)
+        import eu.timepit.refined.shapeless.typeable._
+        implicit val dbKey = KeySerdes[TestKeyWithRefinedAlias]
+        KeySerdes.deserialize[TestKeyWithRefinedAlias](KeySerdes.serialize(key)) should equal(Right(key))
       }
     }
 
@@ -493,7 +429,6 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
 
     "KeyPrefix" should {
       "be contravariant" in {
-        import FdbKeyCodecTest._
         KeyPrefix[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(
           ContravariantKeyPrefixTest.dbKeyPrefix
         )

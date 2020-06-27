@@ -5,9 +5,13 @@ import java.util.UUID
 
 import com.apple.foundationdb.tuple.{ByteArrayUtil, Tuple}
 import dev.chopsticks.kvdb.codec.KeyDeserializer.GenericKeyDeserializationException
+import eu.timepit.refined.types.string.NonEmptyString
 
 import scala.util.control.NonFatal
+import eu.timepit.refined.shapeless.typeable._
+import eu.timepit.refined.types.numeric.{PosInt, PosLong}
 
+//noinspection TypeAnnotation
 package object fdb_key {
   implicit def fdbKeySerializer[T](implicit
     serializer: FdbKeySerializer[T]
@@ -57,4 +61,7 @@ package object fdb_key {
   implicit val ltKeySerdes = KeySerdes[LocalTime]
   implicit val ymKeySerdes = KeySerdes[YearMonth]
   implicit val uuidKeySerdes = KeySerdes[UUID]
+  implicit val nonEmptyStringSerdes = KeySerdes[NonEmptyString]
+  implicit val posIntSerdes = KeySerdes[PosInt]
+  implicit val posLongSerdes = KeySerdes[PosLong]
 }
