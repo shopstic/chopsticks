@@ -33,8 +33,8 @@ import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
 import dev.chopsticks.kvdb.util.KvdbAliases._
-import dev.chopsticks.kvdb.util.KvdbCloseSignal
 import dev.chopsticks.kvdb.util.KvdbException._
+import dev.chopsticks.kvdb.util.{KvdbCloseSignal, KvdbIoThreadPool}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.types.numeric.PosInt
 import pureconfig.ConfigConvert
@@ -44,7 +44,7 @@ import zio.clock.Clock
 import zio.duration.Duration
 
 import scala.concurrent.duration._
-import scala.concurrent.{Future, TimeoutException}
+import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
 import scala.util.{Failure, Success}
@@ -193,27 +193,37 @@ object FdbDatabase extends LoggingContext {
     }
   }
 
-  def fromConfig(config: FdbDatabaseConfig): ZManaged[Blocking with MeasuredLogging, Nothing, Database] = {
-    ZManaged.make {
-      blocking(Task {
-        // TODO: this will no longer be needed once this PR makes it into a public release:
-        // https://github.com/apple/foundationdb/pull/2635
-        val m = classOf[FDB].getDeclaredMethod("selectAPIVersion", Integer.TYPE, java.lang.Boolean.TYPE)
-        m.setAccessible(true)
-        val fdb = m.invoke(null, 620, false).asInstanceOf[FDB]
-        config.clusterFilePath.fold(fdb.open)(fdb.open)
-      }.orDie)
-        .log("Open FDB database")
-    } { db =>
-      blocking {
-        Task {
-          db.close()
-          if (config.stopNetworkOnClose) {
-            FDB.instance().stopNetwork()
-          }
-        }.orDie
-      }.log("Close FDB database")
-    }
+  def fromConfig(
+    config: FdbDatabaseConfig
+  ): ZManaged[Blocking with MeasuredLogging with KvdbIoThreadPool, Nothing, Database] = {
+    for {
+      ioThreadPool <- ZManaged.access[KvdbIoThreadPool](_.get)
+      ec = ioThreadPool.executor.asEC
+      executor = new ExecutionContextExecutor {
+        override def reportFailure(cause: Throwable): Unit = ec.reportFailure(cause)
+        override def execute(command: Runnable): Unit = ec.execute(command)
+      }
+      db <- Managed.make {
+        blocking(Task {
+          // TODO: this will no longer be needed once this PR makes it into a public release:
+          // https://github.com/apple/foundationdb/pull/2635
+          val m = classOf[FDB].getDeclaredMethod("selectAPIVersion", Integer.TYPE, java.lang.Boolean.TYPE)
+          m.setAccessible(true)
+          val fdb = m.invoke(null, 620, false).asInstanceOf[FDB]
+          config.clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path, executor))
+        }.orDie)
+          .log("Open FDB database")
+      } { db =>
+        blocking {
+          Task {
+            db.close()
+            if (config.stopNetworkOnClose) {
+              FDB.instance().stopNetwork()
+            }
+          }.orDie
+        }.log("Close FDB database")
+      }
+    } yield db
   }
 
   def fromDatabase[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
@@ -246,7 +256,7 @@ object FdbDatabase extends LoggingContext {
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS] with FdbMaterialization[BCF],
     config: FdbDatabaseConfig
-  ): ZManaged[AkkaEnv with Blocking with MeasuredLogging, Throwable, KvdbDatabase[BCF, CFS]] = {
+  ): ZManaged[AkkaEnv with Blocking with MeasuredLogging with KvdbIoThreadPool, Throwable, KvdbDatabase[BCF, CFS]] = {
     for {
       db <- fromConfig(config)
       fdbDatabase <- fromDatabase(materialization, db, config)

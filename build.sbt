@@ -153,6 +153,7 @@ lazy val sample = Build
     kvdbCodecBerkeleydbKey,
     kvdbCodecProtobufValue,
     kvdbCodecFdbKey,
+    metric,
     kvdbFdb /*, dstream*/
   )
 

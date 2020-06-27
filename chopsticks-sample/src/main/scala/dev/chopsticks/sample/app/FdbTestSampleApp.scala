@@ -16,11 +16,12 @@ import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
 import dev.chopsticks.kvdb.codec.protobuf_value._
 import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.kvdb.fdb.FdbMaterialization.KeyspaceWithVersionstamp
+import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.sample.kvdb.SampleDb.TestKey
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
-import pureconfig.ConfigReader
+import pureconfig.ConfigConvert
 import zio._
 
 import scala.concurrent.duration._
@@ -33,7 +34,7 @@ object FdbTestSampleAppConfig {
   //noinspection TypeAnnotation
   implicit val configReader = {
     import dev.chopsticks.util.config.PureconfigConverters._
-    ConfigReader[FdbTestSampleAppConfig]
+    ConfigConvert[FdbTestSampleAppConfig]
   }
 }
 
@@ -58,6 +59,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
           ZLayer.succeed(appConfig),
+          KvdbIoThreadPool.live(keepAliveTimeMs = 5000),
           ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
           AppLayer(app)
         )
@@ -69,7 +71,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
     PureconfigLoader.unsafeLoad[FdbTestSampleAppConfig](allConfig, "app")
   }
 
-  def app: RIO[AkkaEnv with LogEnv with MeasuredLogging with Has[SampleDb.Db], Unit] = for {
+  def app: ZIO[AkkaEnv with LogEnv with MeasuredLogging with Has[SampleDb.Db], Throwable, Unit] = for {
     db <- ZService[SampleDb.Db]
     dbApi <- KvdbDatabaseApi(db)
     _ <- dbApi

@@ -29,13 +29,13 @@ object KvdbIoThreadPool {
 
   def live(
     name: NonEmptyString = "dev.chopsticks.kvdb.io",
+    corePoolSize: Int = 0,
     maxPoolSize: Int = 128,
     keepAliveTimeMs: Long = 60000
   ): ULayer[KvdbIoThreadPool] = {
     ZLayer.succeed(
       new Service {
         override val executor: Executor = zio.internal.Executor.fromThreadPoolExecutor(_ => Int.MaxValue) {
-          val corePoolSize = 0
           val timeUnit = TimeUnit.MILLISECONDS
           val workQueue = new SynchronousQueue[Runnable]()
           val threadFactory = new KvdbIoThreadFactory(name, true)
