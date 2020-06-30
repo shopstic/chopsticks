@@ -121,7 +121,8 @@ final class FdbTailSourceStage(
             pollingDelay = Duration.Zero
           }
 
-        case IteratorFailure(ex: FDBException) if ex.getCode == 1007 /* Transaction too old */ =>
+        case IteratorFailure(ex: FDBException)
+            if ex.getCode == 1007 /* Transaction too old */ || ex.getCode == 1009 /* Request for future version */ =>
           close()
           self ! IteratorComplete
 
