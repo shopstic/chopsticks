@@ -43,7 +43,6 @@ object FdbTestApp extends AkkaApp {
     //noinspection TypeAnnotation
     implicit val configConvert = {
       import dev.chopsticks.util.config.PureconfigConverters._
-      import eu.timepit.refined.pureconfig._
       ConfigReader[AppConfig]
     }
   }

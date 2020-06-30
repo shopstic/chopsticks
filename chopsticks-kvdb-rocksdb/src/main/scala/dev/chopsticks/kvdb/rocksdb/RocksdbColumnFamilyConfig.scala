@@ -32,7 +32,6 @@ object RocksdbColumnFamilyConfig {
   //noinspection TypeAnnotation
   implicit val configConvert = {
     import dev.chopsticks.util.config.PureconfigConverters._
-    import eu.timepit.refined.pureconfig._
     ConfigConvert[RocksdbColumnFamilyConfig]
   }
 }

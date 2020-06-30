@@ -50,7 +50,6 @@ object RocksdbDatabase extends StrictLogging {
 
   object RocksdbDatabaseConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
-    import eu.timepit.refined.pureconfig._
     //noinspection TypeAnnotation
     implicit val configConvert = ConfigConvert[RocksdbDatabaseConfig]
   }
