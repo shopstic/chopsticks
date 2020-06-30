@@ -5,12 +5,15 @@ import java.time.{LocalDate, LocalDateTime, LocalTime, Duration => JavaDuration}
 
 import akka.actor.ActorPath
 import akka.util.{ByteString, Timeout}
+import com.typesafe.config.ConfigValue
+import eu.timepit.refined.api.{RefType, Validate}
 import pureconfig.ConfigConvert.{viaNonEmptyString, viaNonEmptyStringTry, viaString}
 import pureconfig.ConvertHelpers.catchReadError
+import pureconfig.error.{CannotConvert, ConfigReaderFailures, ConvertFailure}
 import pureconfig.generic.{ExportMacros, ProductHint}
-import pureconfig.{ConfigConvert, ConfigReader, ConfigWriter, Exported}
+import pureconfig.{ConfigConvert, ConfigCursor, ConfigReader, ConfigWriter, Exported}
 import squants.information.Information
-
+import scala.reflect.runtime.universe.WeakTypeTag
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.experimental.macros
 
@@ -51,6 +54,43 @@ object PureconfigConverters {
   implicit val intMapConfigConverter: ConfigConvert[Map[Int, Int]] = {
     ConfigConvert[Map[String, Int]].xmap(_.map(p => (p._1.toInt, p._2)), _.map(p => (p._1.toString, p._2)))
   }
+
+  implicit def refTypeConfigConvert[F[_, _], T, P](implicit
+    configConvert: ConfigConvert[T],
+    refType: RefType[F],
+    validate: Validate[T, P],
+    typeTag: WeakTypeTag[F[T, P]]
+  ): ConfigConvert[F[T, P]] = new ConfigConvert[F[T, P]] {
+    override def from(cur: ConfigCursor): Either[ConfigReaderFailures, F[T, P]] =
+      configConvert.from(cur) match {
+        case Right(t) =>
+          refType.refine[P](t) match {
+            case Left(because) =>
+              Left(
+                ConfigReaderFailures(
+                  ConvertFailure(
+                    reason = CannotConvert(
+                      value = cur.value.render(),
+                      toType = typeTag.tpe.toString,
+                      because = because
+                    ),
+                    cur = cur
+                  )
+                )
+              )
+
+            case Right(refined) =>
+              Right(refined)
+          }
+
+        case Left(configReaderFailures) =>
+          Left(configReaderFailures)
+      }
+
+    override def to(t: F[T, P]): ConfigValue =
+      configConvert.to(refType.unwrap(t))
+  }
+
   implicit def exportReader[A]: Exported[ConfigReader[A]] = macro ExportMacros.exportDerivedReader[A]
   implicit def exportWriter[A]: Exported[ConfigWriter[A]] = macro ExportMacros.exportDerivedWriter[A]
 }

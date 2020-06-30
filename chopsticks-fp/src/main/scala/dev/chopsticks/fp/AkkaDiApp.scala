@@ -37,6 +37,7 @@ trait AkkaDiApp[Cfg] extends LoggingContext {
   def unsafeLoadUntypedConfig: Config = {
     val appName = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replace("$", "")))
     val appConfigName = this.getClass.getPackage.getName.replace(".", "/") + "/" + appName
+
     val customAppConfig = scala.sys.props.get("config.file") match {
       case Some(customConfigFile) =>
         ConfigFactory
