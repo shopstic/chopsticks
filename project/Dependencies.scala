@@ -101,7 +101,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.8.1"
+    "org.rocksdb" % "rocksdbjni" % "6.10.2"
   )
 
   val lmdbDeps = Seq(
@@ -125,13 +125,9 @@ object Dependencies {
     "com.beachape" %% "enumeratum" % "1.6.1"
   )
 
-  val refinedCoreDeps = Seq(
+  val refinedDeps = Seq(
     "eu.timepit" %% "refined" % REFINED_VERSION,
     "eu.timepit" %% "refined-shapeless" % REFINED_VERSION
-  )
-
-  val refinedDeps = refinedCoreDeps ++ Seq(
-    "eu.timepit" %% "refined-pureconfig" % REFINED_VERSION
   )
 
   val chimneyDeps = Seq(

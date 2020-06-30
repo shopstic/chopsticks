@@ -26,7 +26,7 @@ lazy val util = Build
   .defineProject("util")
   .settings(
     libraryDependencies ++= akkaSlf4jDeps ++ squantsDeps ++ loggingDeps ++
-      pureconfigDeps ++ microlibsDeps ++ prometheusClientDeps
+      pureconfigDeps ++ microlibsDeps ++ prometheusClientDeps ++ refinedDeps
   )
 
 lazy val testkit = Build
@@ -63,7 +63,7 @@ lazy val kvdbCore = Build
   .defineProject("kvdb-core")
   .settings(
     libraryDependencies ++= shapelessDeps ++ scalapbRuntimeDeps ++ chimneyDeps ++
-      kittensDeps ++ betterFilesDeps ++ refinedDeps,
+      kittensDeps ++ betterFilesDeps,
     Compile / PB.targets := Seq(
       scalapb
         .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value
@@ -113,14 +113,14 @@ lazy val kvdbFdb = Build
 lazy val kvdbCodecFdbKey = Build
   .defineProject("kvdb-codec-fdb-key")
   .settings(
-    libraryDependencies ++= fdbDeps ++ magnoliaDeps ++ enumeratumDeps ++ refinedCoreDeps
+    libraryDependencies ++= fdbDeps ++ magnoliaDeps ++ enumeratumDeps
   )
   .dependsOn(kvdbCore, testkit % "test->test")
 
 lazy val kvdbCodecBerkeleydbKey = Build
   .defineProject("kvdb-codec-berkeleydb-key")
   .settings(
-    libraryDependencies ++= berkeleyDbDeps ++ magnoliaDeps ++ enumeratumDeps ++ refinedCoreDeps
+    libraryDependencies ++= berkeleyDbDeps ++ magnoliaDeps ++ enumeratumDeps
   )
   .dependsOn(kvdbCore, testkit % "test->test")
 
