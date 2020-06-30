@@ -743,6 +743,8 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .fromCancellableCompletableFuture {
         dbContext.db
           .runAsync { tx =>
+            tx.options().setReadYourWritesDisable()
+
             val disableWriteConflictChecking = clientOptions.disableWriteConflictChecking
 
             actions.foreach { action =>
