@@ -8,17 +8,34 @@ import akka.util.{ByteString, Timeout}
 import com.typesafe.config.ConfigValue
 import eu.timepit.refined.api.{RefType, Validate}
 import pureconfig.ConfigConvert.{viaNonEmptyString, viaNonEmptyStringTry, viaString}
+import pureconfig.ConfigReader.Result
 import pureconfig.ConvertHelpers.catchReadError
 import pureconfig.error.{CannotConvert, ConfigReaderFailures, ConvertFailure}
 import pureconfig.generic.{ExportMacros, ProductHint}
 import pureconfig.{ConfigConvert, ConfigCursor, ConfigReader, ConfigWriter, Exported}
+import shapeless.ops.hlist.IsHCons
+import shapeless.{Generic, HList, HNil}
 import squants.information.Information
+
 import scala.reflect.runtime.universe.WeakTypeTag
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.experimental.macros
 
 object PureconfigConverters {
   import pureconfig.configurable.{localDateConfigConvert, localTimeConfigConvert}
+
+  def deriveFlatConverter[C <: Product, H <: HList, V](implicit
+    gen: Generic.Aux[C, H],
+    hcons: IsHCons.Aux[H, V, HNil],
+    convert: ConfigConvert[V]
+  ): ConfigConvert[C] = new ConfigConvert[C] {
+    override def to(a: C): ConfigValue = convert.to(hcons.head(gen.to(a)))
+    override def from(cur: ConfigCursor): Result[C] = {
+      convert.from(cur).map { v =>
+        gen.from(hcons.cons(v, HNil))
+      }
+    }
+  }
 
   implicit val informationConfigConverter: ConfigConvert[Information] =
     viaNonEmptyStringTry[Information](Information.apply, _.toString)
