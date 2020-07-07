@@ -24,7 +24,7 @@ import scala.language.experimental.macros
 object PureconfigConverters {
   import pureconfig.configurable.{localDateConfigConvert, localTimeConfigConvert}
 
-  def deriveFlatConverter[C <: Product, H <: HList, V](implicit
+  def deriveFlat[C <: Product, H <: HList, V](implicit
     gen: Generic.Aux[C, H],
     hcons: IsHCons.Aux[H, V, HNil],
     convert: ConfigConvert[V]
