@@ -17,9 +17,9 @@ object PureconfigConvertersTest {
 final class PureconfigConvertersTest extends AnyWordSpecLike with Assertions with Matchers {
   import PureconfigConvertersTest._
 
-  "deriveFlatConverter" should {
+  "deriveFlat" should {
     "work with a value class having a single field" in {
-      val converter: ConfigConvert[StringValueClass] = PureconfigConverters.deriveFlatConverter
+      val converter: ConfigConvert[StringValueClass] = PureconfigConverters.deriveFlat
 
       val original = StringValueClass("foo")
       val expected = ConfigFactory.parseString("test = foo").getValue("test")
@@ -31,7 +31,7 @@ final class PureconfigConvertersTest extends AnyWordSpecLike with Assertions wit
     "work with a case class having a single refined field" in {
       val converter: ConfigConvert[NonEmptyStringCaseClass] = {
         import PureconfigConverters._
-        deriveFlatConverter
+        deriveFlat
       }
 
       val original = NonEmptyStringCaseClass("foo")
