@@ -1,11 +1,22 @@
 package dev.chopsticks.kvdb.codec
 
-import dev.chopsticks.kvdb.codec.ValueDeserializer.ValueDeserializationResult
+import dev.chopsticks.kvdb.codec.ValueDeserializer.{GenericValueDeserializationException, ValueDeserializationResult}
+import cats.syntax.either._
 
 trait ValueSerdes[T] extends ValueSerializer[T] with ValueDeserializer[T]
 
 object ValueSerdes {
   def apply[T](implicit f: ValueSerdes[T]): ValueSerdes[T] = f
+
+  def fromKeySerdes[T](implicit keySerdes: KeySerdes[T]): ValueSerdes[T] = {
+    create[T](
+      value => keySerdes.serialize(value),
+      bytes =>
+        keySerdes.deserialize(bytes).leftMap { e =>
+          GenericValueDeserializationException(e.getMessage, e.getCause)
+        }
+    )
+  }
 
   def create[T](
     serializer: T => Array[Byte],

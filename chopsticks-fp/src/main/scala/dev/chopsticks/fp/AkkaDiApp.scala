@@ -110,8 +110,8 @@ trait AkkaDiApp[Cfg] extends LoggingContext {
     } yield result
 
     try {
-      val _ = runtime.unsafeRun(main)
-      sys.exit(0)
+      val exitCode = runtime.unsafeRun(main)
+      sys.exit(exitCode)
     }
     catch {
       case NonFatal(e) =>
