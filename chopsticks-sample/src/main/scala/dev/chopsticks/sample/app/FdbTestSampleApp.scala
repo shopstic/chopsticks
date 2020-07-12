@@ -11,14 +11,15 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
+import dev.chopsticks.kvdb.codec.ValueSerdes
 import dev.chopsticks.kvdb.codec.fdb_key._
 import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
 import dev.chopsticks.kvdb.codec.protobuf_value._
 import dev.chopsticks.kvdb.fdb.FdbDatabase
-import dev.chopsticks.kvdb.fdb.FdbMaterialization.KeyspaceWithVersionstamp
+import dev.chopsticks.kvdb.fdb.FdbMaterialization.{KeyspaceWithVersionstampKey, KeyspaceWithVersionstampValue}
 import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.sample.kvdb.SampleDb
-import dev.chopsticks.sample.kvdb.SampleDb.TestKey
+import dev.chopsticks.sample.kvdb.SampleDb.{TestKeyWithVersionstamp, TestValueWithVersionstamp}
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigConvert
@@ -41,12 +42,18 @@ object FdbTestSampleAppConfig {
 object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
 
   object sampleDb extends SampleDb.Materialization {
+    implicit val testVersionstampValueSerdes: ValueSerdes[TestValueWithVersionstamp] = ValueSerdes.fromKeySerdes
+
     object default extends SampleDb.Default
     object test extends SampleDb.Test
     object time extends SampleDb.Time
+    object testVersionstampValue extends SampleDb.TestVersionstampValue
 
-    override val keyspacesWithVersionstamp = Set(
-      KeyspaceWithVersionstamp(test)
+    override val keyspacesWithVersionstampKey = Set(
+      KeyspaceWithVersionstampKey(test)
+    )
+    override val keyspacesWithVersionstampValue = Set(
+      KeyspaceWithVersionstampValue(testVersionstampValue)
     )
   }
 
@@ -108,7 +115,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
           .via(dbApi.batchTransact(batch => {
             val pairs = batch.zipWithIndex.map {
               case (i, index) =>
-                TestKey("foo", i, Versionstamp.incomplete(index)) -> s"foo$i"
+                TestKeyWithVersionstamp("foo", i, Versionstamp.incomplete(index)) -> s"foo$i"
             }
 
             testKeyspace.batchPut(pairs).result -> pairs
@@ -123,7 +130,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
           .via(dbApi.batchTransact(batch => {
             val pairs = batch.zipWithIndex.map {
               case (i, index) =>
-                TestKey("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+                TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
             }
 
             testKeyspace.batchPut(pairs).result -> pairs
@@ -157,7 +164,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
                 .via(dbApi.batchTransact(batch => {
                   val pairs = batch.zipWithIndex.map {
                     case (i, index) =>
-                      TestKey("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+                      TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
                   }
 
                   testKeyspace.batchPut(pairs).result -> pairs

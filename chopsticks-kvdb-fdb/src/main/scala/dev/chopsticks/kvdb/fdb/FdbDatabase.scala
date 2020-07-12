@@ -53,13 +53,15 @@ object FdbDatabase extends LoggingContext {
   final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](
     db: Database,
     prefixMap: Map[BCF[_, _], Array[Byte]],
-    withVersionstampSet: Set[BCF[_, _]]
+    withVersionstampKeySet: Set[BCF[_, _]],
+    withVersionstampValueSet: Set[BCF[_, _]]
   ) {
     private val prefixMapById: Map[String, Array[Byte]] = prefixMap.map {
       case (k, v) =>
         k.id -> v
     }
-    private val withVersionstampIdSet = withVersionstampSet.map(_.id)
+    private val withVersionstampKeyIdSet = withVersionstampKeySet.map(_.id)
+    private val withVersionstampValueIdSet = withVersionstampValueSet.map(_.id)
 
     val dbCloseSignal = new KvdbCloseSignal
 
@@ -83,12 +85,20 @@ object FdbDatabase extends LoggingContext {
       task
     }
 
-    def hasVersionstamp[CF <: BCF[_, _]](column: CF): Boolean = {
-      hasVersionstamp(column.id)
+    def hasVersionstampKey[CF <: BCF[_, _]](column: CF): Boolean = {
+      hasVersionstampKey(column.id)
     }
 
-    def hasVersionstamp(columnId: String): Boolean = {
-      withVersionstampIdSet.contains(columnId)
+    def hasVersionstampKey(columnId: String): Boolean = {
+      withVersionstampKeyIdSet.contains(columnId)
+    }
+
+    def hasVersionstampValue[CF <: BCF[_, _]](column: CF): Boolean = {
+      hasVersionstampValue(column.id)
+    }
+
+    def hasVersionstampValue(columnId: String): Boolean = {
+      withVersionstampValueIdSet.contains(columnId)
     }
 
     def columnPrefix[CF <: BCF[_, _]](column: CF): Array[Byte] = {
@@ -240,7 +250,12 @@ object FdbDatabase extends LoggingContext {
             )
             .log("Build FDB directory map")
             .map { prefixMap =>
-              FdbContext[BCF](db, prefixMap, materialization.keyspacesWithVersionstamp.map(_.keyspace))
+              FdbContext[BCF](
+                db = db,
+                prefixMap = prefixMap,
+                withVersionstampKeySet = materialization.keyspacesWithVersionstampKey.map(_.keyspace),
+                withVersionstampValueSet = materialization.keyspacesWithVersionstampValue.map(_.keyspace)
+              )
             }
         } {
           _.close()
@@ -628,10 +643,17 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
           .runAsync { tx =>
             if (clientOptions.disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
 
-            if (dbContext.hasVersionstamp(column)) {
+            if (dbContext.hasVersionstampKey(column)) {
               tx.mutate(
                 MutationType.SET_VERSIONSTAMPED_KEY,
                 dbContext.adjustKeyVersionstamp(column, prefixedKey),
+                value
+              )
+            }
+            else if (dbContext.hasVersionstampValue(column)) {
+              tx.mutate(
+                MutationType.SET_VERSIONSTAMPED_VALUE,
+                prefixedKey,
                 value
               )
             }
@@ -754,10 +776,17 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                 case TransactionPut(columnId, key, value) =>
                   val prefixedKey = dbContext.prefixKey(columnId, key)
 
-                  if (dbContext.hasVersionstamp(columnId)) {
+                  if (dbContext.hasVersionstampKey(columnId)) {
                     tx.mutate(
                       MutationType.SET_VERSIONSTAMPED_KEY,
                       dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
+                      value
+                    )
+                  }
+                  else if (dbContext.hasVersionstampValue(columnId)) {
+                    tx.mutate(
+                      MutationType.SET_VERSIONSTAMPED_VALUE,
+                      prefixedKey,
                       value
                     )
                   }
@@ -812,10 +841,17 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                       case TransactionPut(columnId, key, value) =>
                         val prefixedKey = dbContext.prefixKey(columnId, key)
 
-                        if (dbContext.hasVersionstamp(columnId)) {
+                        if (dbContext.hasVersionstampKey(columnId)) {
                           tx.mutate(
                             MutationType.SET_VERSIONSTAMPED_KEY,
                             dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
+                            value
+                          )
+                        }
+                        else if (dbContext.hasVersionstampValue(columnId)) {
+                          tx.mutate(
+                            MutationType.SET_VERSIONSTAMPED_VALUE,
+                            prefixedKey,
                             value
                           )
                         }

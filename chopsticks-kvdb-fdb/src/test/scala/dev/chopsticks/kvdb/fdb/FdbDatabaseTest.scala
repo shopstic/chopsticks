@@ -17,7 +17,8 @@ object FdbDatabaseTest {
       ColumnFamilySet[BaseCf] of plain and lookup
     }
     //noinspection TypeAnnotation
-    override val keyspacesWithVersionstamp = Set.empty
+    override val keyspacesWithVersionstampKey = Set.empty
+    override val keyspacesWithVersionstampValue = Set.empty
   }
 
   val managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool, Throwable, TestDatabase.Db] = {
