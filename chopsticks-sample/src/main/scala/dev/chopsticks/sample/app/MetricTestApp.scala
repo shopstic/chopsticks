@@ -1,10 +1,9 @@
 package dev.chopsticks.sample.app
 
-import java.util.concurrent.TimeUnit
-
 import com.typesafe.config.Config
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
+import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.MetricConfigs._
 import dev.chopsticks.metric.MetricRegistry.MetricGroup
@@ -12,6 +11,9 @@ import dev.chopsticks.metric._
 import dev.chopsticks.metric.prom.PromMetricRegistry
 import dev.chopsticks.sample.app.MetricTestApp.AppMetrics.AppMetric
 import zio._
+
+import scala.concurrent.duration._
+import scala.util.Random
 
 object MetricTestApp extends AkkaDiApp[Unit] {
   trait AppMetrics {
@@ -26,34 +28,23 @@ object MetricTestApp extends AkkaDiApp[Unit] {
     case object barCurrent extends GaugeConfig(LabelNames of testLabel) with AppMetric
   }
 
-  type AppMetricsManager = Has[AppMetricsManager.Service]
-
-  object AppMetricsManager {
-    trait Service extends MetricServiceTracker[AppMetrics] {
-      def manage(test: String): UManaged[AppMetrics]
-    }
-
-    final case class LiveService(registryLayer: ULayer[MetricRegistry[AppMetric]])
-        extends MetricServiceManager[AppMetric, AppMetrics](registryLayer)
-        with Service {
+  object AppMetricsFactory extends MetricServiceFactory[AppMetric, String, AppMetrics] {
+    override def create(registry: MetricRegistry.Service[AppMetric], config: String): AppMetrics = {
       import AppMetrics._
+      val labels = LabelValues.of(testLabel -> config)
 
-      def manage(test: String): UManaged[AppMetrics] = {
-        val labels = LabelValues.of(testLabel -> test)
-        create(test) { registry =>
-          new AppMetrics {
-            override val fooCounter: MetricCounter = registry.counterWithLabels(fooTotal, labels)
-            override val barGauge: MetricGauge = registry.gaugeWithLabels(barCurrent, labels)
-          }
-        }
+      new AppMetrics {
+        override val fooCounter: MetricCounter = registry.counterWithLabels(fooTotal, labels)
+        override val barGauge: MetricGauge = registry.gaugeWithLabels(barCurrent, labels)
       }
     }
+  }
 
-    def live: URLayer[MetricRegistryFactory[AppMetric], AppMetricsManager] = {
-      ZManaged.access[MetricRegistryFactory[AppMetric]](_.get)
-        .map(LiveService.apply)
-        .toLayer
-    }
+  type AppMetricsManager = MetricServiceManager[String, AppMetrics]
+
+  object AppMetricsManager {
+    def live: RLayer[MetricRegistryFactory[AppMetric], MetricServiceManager[String, AppMetrics]] =
+      MetricServiceManager.live(AppMetricsFactory)
   }
 
   override def config(allConfig: Config): Task[Unit] = Task.unit
@@ -73,19 +64,35 @@ object MetricTestApp extends AkkaDiApp[Unit] {
   def app = {
     val managed = for {
       metricsManager <- ZManaged.access[AppMetricsManager](_.get)
-      metrics <- metricsManager.manage("testing")
     } yield {
-      println("HERE YO!")
-      metrics.fooCounter.inc()
-      metrics.barGauge.set(100)
-
-      Task {
-        metricsManager.activeSet.foreach { m =>
-          println(s"foo = ${m.fooCounter.get}")
-          println(s"bar = ${m.barGauge.get}")
-        }
-      }
-        .repeat(Schedule.fixed(zio.duration.Duration(1, TimeUnit.SECONDS)))
+      for {
+        _ <-
+          metricsManager
+            .manage("testing")
+            .use { metrics =>
+              UIO {
+                metrics.fooCounter.inc()
+                metrics.barGauge.set(Random.nextInt())
+              } *> ZIO.unit.delay(1.second)
+            }
+            .flatMap(_ => ZIO.unit.delay(1.second))
+            .repeat(Schedule.forever)
+            .fork
+        _ <- metricsManager
+          .activeSet
+          .map { activeSet =>
+            if (activeSet.nonEmpty) {
+              activeSet.foreach { m =>
+                println(s"foo = ${m.fooCounter.get}")
+                println(s"bar = ${m.barGauge.get}")
+              }
+            }
+            else {
+              println("Empty activeSet")
+            }
+          }
+          .repeat(Schedule.fixed(500.millis))
+      } yield ()
     }
 
     managed

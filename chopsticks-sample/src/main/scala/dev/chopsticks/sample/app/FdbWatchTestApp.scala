@@ -8,8 +8,6 @@ import com.apple.foundationdb.tuple.Versionstamp
 import com.typesafe.config.Config
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
-import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
@@ -22,8 +20,8 @@ import dev.chopsticks.sample.kvdb.{SampleDb, SampleDbEnv}
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigReader
-import zio.duration._
 import zio._
+import zio.duration._
 
 final case class FdbWatchTestAppConfig(
   db: FdbDatabase.FdbDatabaseConfig
@@ -58,7 +56,7 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
     )
   }
 
-  def app: RIO[AkkaEnv with LogEnv with MeasuredLogging with SampleDbEnv, Unit] = {
+  def app = {
     for {
       db <- ZIO.access[SampleDbEnv](_.get)
       watchCounter = new LongAdder()
@@ -80,7 +78,7 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
         .log("Watch stream")
         .fork
 
-      fib <- Task.effectSuspend {
+      fib <- ZIO.effectSuspend {
         changeCounter.increment()
         dbApi.columnFamily(sampleDb.testVersionstampValue).putTask(
           "foo",

@@ -1,44 +1,27 @@
 package dev.chopsticks.metric
 
-import java.util.concurrent.atomic.AtomicReference
-
+import dev.chopsticks.fp.util.{SharedResourceFactory, SharedResourceManager}
 import dev.chopsticks.metric.MetricRegistry.MetricGroup
-import zio._
+import zio.{RLayer, UManaged, ZLayer, ZManaged}
 
-abstract class MetricServiceManager[G <: MetricGroup: zio.Tag, Svc: zio.Tag](registryLayer: ULayer[MetricRegistry[G]])
-    extends MetricServiceTracker[Svc] {
-  protected val atomic = new AtomicReference(Map.empty[Any, (Svc, Int)])
-
-  override def activeSet: Set[Svc] = atomic.get.values.map(_._1).toSet
-
-  protected def create(id: Any)(createService: MetricRegistry.Service[G] => Svc): ZManaged[Any, Nothing, Svc] = {
-    registryLayer
-      .fresh
-      .build
-      .map(_.get)
-      .map { registry =>
-        val state = atomic.updateAndGet { map =>
-          map.get(id) match {
-            case Some((svc, count)) => map.updated(id, svc -> (count + 1))
-            case None => map.updated(id, createService(registry) -> 1)
-          }
-        }
-
-        state(id)._1
-      }
-      .onExit {
-        case Exit.Success(_) =>
-          UIO {
-            atomic.updateAndGet { map =>
-              map.get(id) match {
-                case Some((_, 1)) => map - id
-                case Some((svc, count)) => map.updated(id, svc -> (count - 1))
-                case None => map
+object MetricServiceManager {
+  def live[Grp <: MetricGroup: zio.Tag, Cfg: zio.Tag, Svc: zio.Tag](
+    serviceFactory: MetricServiceFactory[Grp, Cfg, Svc]
+  ): RLayer[MetricRegistryFactory[Grp], MetricServiceManager[Cfg, Svc]] = {
+    ZLayer.fromManagedMany {
+      for {
+        registryFactory <- ZManaged.access[MetricRegistryFactory[Grp]](_.get)
+        factory = ZLayer.succeed {
+          new SharedResourceFactory.Service[Any, Cfg, Svc] {
+            override def manage(id: Cfg): UManaged[Svc] = {
+              registryFactory.fresh.build.map(_.get).map { registry =>
+                serviceFactory.create(registry, id)
               }
             }
           }
-            .unit
-        case Exit.Failure(_) => UIO.unit
-      }
+        }
+        manager <- SharedResourceManager.fromFactory(factory).build
+      } yield manager
+    }
   }
 }

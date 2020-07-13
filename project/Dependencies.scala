@@ -10,6 +10,7 @@ object Dependencies {
   val ZIO_VERSION = "1.0.0-RC21-2"
   val IZUMI_VERSION = "0.10.16"
   val REFINED_VERSION = "0.9.14"
+  val CALIBAN_VERSION = "0.9.0"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -165,4 +166,13 @@ object Dependencies {
     "io.7mind.izumi" %% "distage-extension-logstage" % IZUMI_VERSION,
     "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
   )
+
+  val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.1")
+
+  val calibanDeps = List(
+    "com.github.ghostdogpr" %% "caliban",
+    "com.github.ghostdogpr" %% "caliban-client",
+    "com.github.ghostdogpr" %% "caliban-akka-http"
+  ).map(_ % CALIBAN_VERSION)
+
 }
