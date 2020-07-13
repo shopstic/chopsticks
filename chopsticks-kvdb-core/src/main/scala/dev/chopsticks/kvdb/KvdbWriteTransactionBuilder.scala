@@ -49,7 +49,7 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
     this
   }
 
-  def deleteRange[CF <: BCF[K, _], K](column: CF, fromKey: K, toKey: K): this.type = {
+  def deleteRange[CF <: BCF[K, _], K](column: CF, fromKey: K, toKey: K, inclusive: Boolean): this.type = {
     val _ = buffer.add(
       TransactionDeleteRange(
         columnId = column.id,
@@ -57,7 +57,13 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
         toKey = column.serializeKey(toKey)
       )
     )
-    this
+
+    if (inclusive) {
+      delete(column, toKey)
+    }
+    else {
+      this
+    }
   }
 
   def deletePrefixRange[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K, FP, TP](

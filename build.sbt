@@ -103,12 +103,12 @@ lazy val kvdbFdb = Build
   )
   .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
 
-//lazy val avro4s = Build
-//  .defineProject("avro4s")
-//  .settings(
-//    libraryDependencies ++= avro4sDeps ++ refinedCoreDeps
-//  )
-//  .dependsOn(util)
+lazy val graphql = Build
+  .defineProject("graphql")
+  .settings(
+    libraryDependencies ++= sttpBackendDeps ++ calibanDeps
+  )
+  .dependsOn(fp, stream)
 
 lazy val kvdbCodecFdbKey = Build
   .defineProject("kvdb-codec-fdb-key")
@@ -131,8 +131,11 @@ lazy val kvdbCodecProtobufValue = Build
 lazy val metric = Build
   .defineProject("metric")
   .settings(
-    libraryDependencies ++= prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps ++ akkaStreamDeps
+    libraryDependencies ++= prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps ++ akkaStreamDeps ++ scalatestDeps.map(
+      _ % "test"
+    )
   )
+  .dependsOn(fp)
 
 lazy val sample = Build
   .defineProject("sample")
@@ -169,7 +172,7 @@ lazy val root = (project in file("."))
     testkit,
     fp,
     stream,
-//    dstream,
+    graphql,
     kvdbCore,
     kvdbLmdb,
     kvdbRocksdb,

@@ -1251,7 +1251,7 @@ abstract private[kvdb] class KvdbDatabaseTest
             .put(lookupCf, "dddd1", "dddd1")
             .delete(lookupCf, "bbbb1")
             .put(defaultCf, "cccc1", "cccc1")
-            .deleteRange(defaultCf, "pppp1", "pppp4")
+            .deleteRange(defaultCf, "pppp1", "pppp4", false)
             .result
         )
         allDefault <- collectPairs(db.iterateSource(defaultCf, $$(_.first, _.last)))
@@ -1288,7 +1288,7 @@ abstract private[kvdb] class KvdbDatabaseTest
         )
         _ <- db.transactionTask(
           db.transactionBuilder()
-            .deleteRange(defaultCf, "aaaa2", "aaaa5")
+            .deleteRange(defaultCf, "aaaa2", "aaaa5", false)
             .result
         )
         allDefault <- collectPairs(db.iterateSource(defaultCf, $$(_.first, _.last)))
