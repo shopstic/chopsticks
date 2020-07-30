@@ -4,12 +4,12 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.3"
-  val AKKA_VERSION = "2.6.7"
+  val AKKA_VERSION = "2.6.8"
   val AKKA_HTTP_VERSION = "10.1.10"
 //  val ZIO_VERSION = "1.0.0-RC20"
   val ZIO_VERSION = "1.0.0-RC21-2"
   val IZUMI_VERSION = "0.10.16"
-  val REFINED_VERSION = "0.9.14"
+  val REFINED_VERSION = "0.9.15"
   val CALIBAN_VERSION = "0.9.0"
 
   val akkaSlf4jDeps = Seq(
@@ -102,7 +102,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.10.2"
+    "org.rocksdb" % "rocksdbjni" % "6.11.4"
   )
 
   val lmdbDeps = Seq(
@@ -132,7 +132,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.5.2"
+    "io.scalaland" %% "chimney" % "0.5.3"
   )
 
   val snappyDeps = Seq(
@@ -167,7 +167,7 @@ object Dependencies {
     "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
   )
 
-  val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.1")
+  val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.3")
 
   val calibanDeps = List(
     "com.github.ghostdogpr" %% "caliban",
