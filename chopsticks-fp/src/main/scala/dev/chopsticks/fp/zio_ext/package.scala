@@ -4,6 +4,7 @@ import dev.chopsticks.fp.log_env.{LogCtx, LogEnv}
 import dev.chopsticks.util.implicits.SquantsImplicits._
 import squants.time.Nanoseconds
 import zio._
+import zio.duration._
 import zio.clock.Clock
 
 import scala.concurrent.Future
