@@ -86,7 +86,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .map(_.map(_.map(cf.unsafeDeserialize)))
   }
 
-  def rawBatchGetRangeTask(ranges: ConstraintsRangesWithLimitBuilder[K]): Task[List[List[KvdbPair]]] = {
+  def rawBatchGetRangeTask(ranges: ConstraintsRangesWithLimitBuilder[K]): Task[Seq[List[KvdbPair]]] = {
     val builtRanges = ranges(KeyConstraints.seed[K]).map {
       case ((from, to), limit) =>
         KeyConstraints.toRange[K](from, to, limit)
@@ -94,7 +94,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     db.batchGetRangeTask(cf, builtRanges)
   }
 
-  def batchGetRangeTask(ranges: ConstraintsRangesWithLimitBuilder[K]): Task[List[List[(K, V)]]] = {
+  def batchGetRangeTask(ranges: ConstraintsRangesWithLimitBuilder[K]): Task[Seq[List[(K, V)]]] = {
     rawBatchGetRangeTask(ranges)
       .flatMap { groups =>
         ZIO.foreachPar(groups) { g =>

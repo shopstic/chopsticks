@@ -101,7 +101,7 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
   def batchGetRangeTask[Col <: CF](
     column: Col,
     ranges: Seq[KvdbKeyRange]
-  ): Task[List[List[KvdbPair]]]
+  ): Task[Seq[List[KvdbPair]]]
 
   def estimateCount[Col <: CF](column: Col): Task[Long]
 

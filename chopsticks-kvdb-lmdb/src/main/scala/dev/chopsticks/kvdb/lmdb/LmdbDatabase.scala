@@ -522,7 +522,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     })
   }
 
-  override def batchGetRangeTask[Col <: CF](column: Col, ranges: Seq[KvdbKeyRange]): Task[List[List[KvdbPair]]] = {
+  override def batchGetRangeTask[Col <: CF](column: Col, ranges: Seq[KvdbKeyRange]): Task[Seq[List[KvdbPair]]] = {
     ZIO
       .foreachPar(ranges) { range =>
         getRangeTask(column, range)
