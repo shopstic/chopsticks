@@ -92,7 +92,7 @@ object Build {
       releaseVersionBump := sbtrelease.Version.Bump.Minor,
       bintrayReleaseOnPublish := false,
       bintrayVcsUrl := Some("https://github.com/shopstic/chopsticks.git"),
-//      releaseIgnoreUntrackedFiles := true,
+      releaseIgnoreUntrackedFiles := true,
       licenses += ("Apache-2.0", url("http://www.apache.org/licenses/")),
       releaseProcess := Seq(
         checkSnapshotDependencies,
