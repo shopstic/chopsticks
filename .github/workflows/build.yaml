@@ -17,7 +17,9 @@ jobs:
             apt-get -qq -y install python &&
             wget --no-check-certificate https://www.foundationdb.org/downloads/6.2.22/ubuntu/installers/foundationdb-clients_6.2.22-1_amd64.deb &&
             wget --no-check-certificate https://www.foundationdb.org/downloads/6.2.22/ubuntu/installers/foundationdb-server_6.2.22-1_amd64.deb &&
-            dpkg -i foundationdb-clients_6.2.22-1_amd64.deb foundationdb-server_6.2.22-1_amd64.deb
+            dpkg -i foundationdb-clients_6.2.22-1_amd64.deb foundationdb-server_6.2.22-1_amd64.deb && \
+            mkdir -p ~/.fdb && \
+            cp /etc/foundationdb/fdb.cluster ~/.fdb/cluster.file
       - name: Build
         env:
           FATAL_WARNINGS: "true"
