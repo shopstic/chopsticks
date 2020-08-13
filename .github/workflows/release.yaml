@@ -26,4 +26,6 @@ jobs:
       - name: Build
         env:
           FATAL_WARNINGS: "true"
+          BINTRAY_USER: ${{ secrets.BINTRAY_USER }}
+          BINTRAY_PASS: ${{ secrets.BINTRAY_PASS }}
         run: sbt clean compile test:compile cq test bintray:publish bintrayRelease
