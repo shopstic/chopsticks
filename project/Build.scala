@@ -1,12 +1,12 @@
 import com.timushev.sbt.updates.UpdatesPlugin.autoImport._
+import com.typesafe.sbt.GitPlugin.autoImport.git
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
 import wartremover.WartRemover.autoImport._
-import sbt._
+import sbt.{Def, _}
 import sbt.Keys._
 
 //noinspection TypeAnnotation
 object Build {
-  val buildVersion = "2.25.1"
 
   lazy val ITest = config("it") extend Test
 
@@ -42,7 +42,16 @@ object Build {
     Project(projectName, file(s"chopsticks-$projectName"))
       .settings(
         name := s"chopsticks-$projectName",
-        version := buildVersion,
+        version := {
+          val useSnapshotVersion = sys.env.get("CHOPSTICKS_USE_SNAPSHOT_VERSION").map(_.toLowerCase).contains("true")
+          val buildVersion = (version in ThisBuild).value
+          if (useSnapshotVersion || !buildVersion.endsWith("-SNAPSHOT")) buildVersion
+          else {
+            val shortGitSha = sys.env.get("GITHUB_SHA").orElse(git.gitHeadCommit.value).get.take(8)
+            val buildNumber = sys.env.getOrElse("GITHUB_RUN_NUMBER", "0")
+            s"${buildVersion.dropRight("-SNAPSHOT".length)}+$buildNumber-$shortGitSha"
+          }
+        },
         Build.cq := {
           (Compile / scalafmtCheck).value
           (Test / scalafmtCheck).value
@@ -68,7 +77,37 @@ object Build {
         dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
         libraryDependencies ++= Dependencies.scalatestDeps,
         Compile / doc / sources := Seq.empty,
-        Compile / packageDoc / publishArtifact := false
+        Compile / packageDoc / publishArtifact := false,
+        ossPublishSettings
       )
+  }
+
+  def ossPublishSettings: Seq[Def.Setting[_]] = {
+    import sbtrelease.ReleaseStateTransformations._
+    import sbtrelease.ReleasePlugin.autoImport._
+    import bintray.BintrayKeys._
+    Seq(
+      bintrayRepository := {
+        if (isSnapshot.value) "snapshots" else "maven"
+      },
+      releaseVersionBump := sbtrelease.Version.Bump.Minor,
+      bintrayReleaseOnPublish := false,
+//      releaseIgnoreUntrackedFiles := true,
+      licenses += ("Apache-2.0", url("http://www.apache.org/licenses/")),
+      releaseProcess := Seq(
+        checkSnapshotDependencies,
+        inquireVersions,
+        runClean,
+        runTest,
+        setReleaseVersion,
+        commitReleaseVersion,
+        tagRelease,
+        releaseStepCommandAndRemaining("bintray:publish"),
+        releaseStepCommandAndRemaining("bintrayRelease"),
+        setNextVersion,
+        commitNextVersion,
+        pushChanges
+      )
+    )
   }
 }

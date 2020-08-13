@@ -13,8 +13,6 @@ ThisBuild / Test / javaOptions += "-Xmx768m"
 ThisBuild / Build.ITest / fork := Build.forkTests
 ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
-ThisBuild / licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
-ThisBuild / bintrayReleaseOnPublish := false
 ThisBuild / resolvers ++= Seq(
   Resolver.bintrayRepo("shopstic", "maven")
 //  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
