@@ -88,7 +88,7 @@ object Build {
     import bintray.BintrayKeys._
     Seq(
       bintrayRepository := {
-        if (version.value.endsWith("-SNAPSHOT")) "snapshots" else "maven"
+        if ((version in ThisBuild).value.endsWith("-SNAPSHOT")) "snapshots" else "maven"
       },
       releaseVersionBump := sbtrelease.Version.Bump.Minor,
       bintrayReleaseOnPublish := false,
