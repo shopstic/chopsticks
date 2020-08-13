@@ -30,7 +30,9 @@ jobs:
             wget --no-check-certificate https://www.foundationdb.org/downloads/6.2.22/ubuntu/installers/foundationdb-server_6.2.22-1_amd64.deb &&
             dpkg -i foundationdb-clients_6.2.22-1_amd64.deb foundationdb-server_6.2.22-1_amd64.deb && \
             mkdir -p ~/.fdb && \
-            cp /etc/foundationdb/fdb.cluster ~/.fdb/cluster.file
+            cp /etc/foundationdb/fdb.cluster ~/.fdb/cluster.file && \
+            rm foundationdb-clients_6.2.22-1_amd64.deb && \
+            rm foundationdb-server_6.2.22-1_amd64.deb
       - name: Setup git credentials
         run: |
           git config --global user.name 'Auto Deployer'
