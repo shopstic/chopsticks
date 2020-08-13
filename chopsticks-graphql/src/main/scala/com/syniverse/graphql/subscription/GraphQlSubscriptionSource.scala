@@ -47,9 +47,11 @@ object ConditionalRestartSource {
         .withBackoff(minBackoff, maxBackoff, randomFactor) { () =>
           sourceFactory()
             .alsoToMat(Sink.ignore)(Keep.both)
-            .withAttributes(Attributes(
-              Attributes.CancellationStrategy(Attributes.cancellationStrategyCompleteState) :: Nil
-            ))
+            .withAttributes(
+              Attributes(
+                Attributes.CancellationStrategy(Attributes.cancellationStrategyCompleteState) :: Nil
+              )
+            )
             // idleTimeout for safety until https://github.com/hasura/graphql-engine/issues/5099 is resolved
             .idleTimeout(5.seconds)
             .recoverWithRetries(
