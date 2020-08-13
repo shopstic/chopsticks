@@ -30,7 +30,7 @@ jobs:
           GITHUB_REF: ${{ github.ref }}
         run: echo ${GITHUB_REF}
       - name: Publish
-        if: ${{ github.ref == 'master' }}
+        if: ${{ github.ref == 'refs/heads/master' }}
         env:
           BINTRAY_USER: ${{ secrets.BINTRAY_USER }}
           BINTRAY_PASS: ${{ secrets.BINTRAY_PASS }}
