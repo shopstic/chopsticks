@@ -1,0 +1,45 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      releaseVersion:
+        description: 'Version to release (e.g. 2.4.0)'
+        required: true
+      nextVersion:
+        description: 'Next version to set in the repository (e.g. 2.5.0-SNAPSHOT)'
+        required: true
+
+jobs:
+  build:
+    name: Release
+    runs-on: ubuntu-latest
+    container:
+      image: shopstic/jdk11-sbt:1.3.12
+    if: ${{ github.ref == 'refs/heads/master' }}
+    steps:
+      - name: Install git
+        run: apt-get install git -y
+      - uses: actions/checkout@v2
+      - name: Install FDB
+        run: |
+          apt-get update && \
+            apt-get -qq -y install wget &&
+            apt-get -qq -y install python2.7  &&
+            apt-get -qq -y install python &&
+            wget --no-check-certificate https://www.foundationdb.org/downloads/6.2.22/ubuntu/installers/foundationdb-clients_6.2.22-1_amd64.deb &&
+            wget --no-check-certificate https://www.foundationdb.org/downloads/6.2.22/ubuntu/installers/foundationdb-server_6.2.22-1_amd64.deb &&
+            dpkg -i foundationdb-clients_6.2.22-1_amd64.deb foundationdb-server_6.2.22-1_amd64.deb && \
+            mkdir -p ~/.fdb && \
+            cp /etc/foundationdb/fdb.cluster ~/.fdb/cluster.file && \
+            rm foundationdb-clients_6.2.22-1_amd64.deb && \
+            rm foundationdb-server_6.2.22-1_amd64.deb
+      - name: Setup git credentials
+        run: |
+          git config --global user.name 'Auto Deployer'
+          git config --global user.email 'auto-deployer@shopstic.github.com'
+      - name: Release
+        env:
+          FATAL_WARNINGS: "true"
+          BINTRAY_USER: ${{ secrets.BINTRAY_USER }}
+          BINTRAY_PASS: ${{ secrets.BINTRAY_PASS }}
+        run: sbt "release release-version ${{ github.event.inputs.releaseVersion }} next-version ${{ github.event.inputs.nextVersion }}"
