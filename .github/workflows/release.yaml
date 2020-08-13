@@ -23,9 +23,10 @@ jobs:
             dpkg -i foundationdb-clients_6.2.22-1_amd64.deb foundationdb-server_6.2.22-1_amd64.deb && \
             mkdir -p ~/.fdb && \
             cp /etc/foundationdb/fdb.cluster ~/.fdb/cluster.file
-      - name: Build
+      - name: Build and publish
         env:
           FATAL_WARNINGS: "true"
           BINTRAY_USER: ${{ secrets.BINTRAY_USER }}
           BINTRAY_PASS: ${{ secrets.BINTRAY_PASS }}
-        run: sbt clean compile test:compile cq test bintray:publish bintrayRelease
+#        run: sbt clean compile test:compile cq test bintray:publish bintrayRelease
+        run: sbt clean compile test:compile bintray:publish bintrayRelease
