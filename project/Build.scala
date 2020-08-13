@@ -48,8 +48,7 @@ object Build {
           if (useSnapshotVersion || !buildVersion.endsWith("-SNAPSHOT")) buildVersion
           else {
             val shortGitSha = sys.env.get("GITHUB_SHA").orElse(git.gitHeadCommit.value).get.take(8)
-            val buildNumber = sys.env.getOrElse("GITHUB_RUN_NUMBER", "0")
-            s"${buildVersion.dropRight("-SNAPSHOT".length)}+$buildNumber-$shortGitSha"
+            s"${buildVersion.dropRight("-SNAPSHOT".length)}-$shortGitSha"
           }
         },
         Build.cq := {
