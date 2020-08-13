@@ -29,6 +29,10 @@ jobs:
             dpkg -i foundationdb-clients_6.2.22-1_amd64.deb foundationdb-server_6.2.22-1_amd64.deb && \
             mkdir -p ~/.fdb && \
             cp /etc/foundationdb/fdb.cluster ~/.fdb/cluster.file
+      - name: Setup git credentials
+        run: |
+          git config --global user.name 'Auto Deployer'
+          git config --global user.email 'auto-deployer@shopstic.github.com'
       - name: Release
         env:
           FATAL_WARNINGS: "true"
