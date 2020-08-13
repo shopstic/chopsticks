@@ -17,6 +17,8 @@ jobs:
       image: shopstic/jdk11-sbt:1.3.12
     if: ${{ github.ref == 'refs/heads/master' }}
     steps:
+      - name: Install git
+        run: apt-get install git -y
       - uses: actions/checkout@v2
       - name: Install FDB
         run: |
