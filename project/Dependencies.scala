@@ -166,7 +166,7 @@ object Dependencies {
     "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
   )
 
-  val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.3")
+  val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.4")
 
   val calibanDeps = List(
     "com.github.ghostdogpr" %% "caliban",
