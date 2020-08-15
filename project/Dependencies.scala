@@ -143,7 +143,7 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "2.3"
+    "com.github.japgolly.microlibs" %% "utils" % "2.5"
   )
 
   val berkeleyDbDeps = Seq(
