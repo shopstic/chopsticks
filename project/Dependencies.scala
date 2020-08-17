@@ -7,9 +7,9 @@ object Dependencies {
   val AKKA_VERSION = "2.6.8"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.0"
-  val IZUMI_VERSION = "0.10.16"
+  val IZUMI_VERSION = "0.10.17"
   val REFINED_VERSION = "0.9.15"
-  val CALIBAN_VERSION = "0.9.0"
+  val CALIBAN_VERSION = "0.9.1"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -47,7 +47,7 @@ object Dependencies {
   )
 
   val squantsDeps = Seq(
-    "org.typelevel" %% "squants" % "1.6.0"
+    "org.typelevel" %% "squants" % "1.7.0"
   )
 
   val prometheusClientDeps = Seq(
@@ -89,8 +89,8 @@ object Dependencies {
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.2.0",
-    "org.scalatest" %% "scalatest" % "3.2.0",
+    "org.scalactic" %% "scalactic" % "3.2.1",
+    "org.scalatest" %% "scalatest" % "3.2.1",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.14.3",
     "org.scalamock" %% "scalamock" % "4.4.0"
@@ -109,7 +109,7 @@ object Dependencies {
   )
 
   val fdbDeps = Seq(
-    "org.foundationdb" % "fdb-java" % "6.2.22"
+    "org.foundationdb" % "fdb-java" % "6.2.22" // scala-steward:off
   )
 
   val shapelessDeps = Seq(
@@ -143,7 +143,7 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "2.3"
+    "com.github.japgolly.microlibs" %% "utils" % "2.5"
   )
 
   val berkeleyDbDeps = Seq(
@@ -151,11 +151,11 @@ object Dependencies {
   )
 
   val magnoliaDeps = Seq(
-    "com.propensive" %% "magnolia" % "0.16.0"
+    "com.propensive" %% "magnolia" % "0.17.0"
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.5.9"
+    "com.lihaoyi" %% "pprint" % "0.6.0"
   )
 
   val distageDeps = Seq(
@@ -166,7 +166,7 @@ object Dependencies {
     "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
   )
 
-  val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.3")
+  val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.4")
 
   val calibanDeps = List(
     "com.github.ghostdogpr" %% "caliban",

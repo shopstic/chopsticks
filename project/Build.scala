@@ -73,6 +73,7 @@ object Build {
 //          Wart.Product
         ),
         wartremoverExcluded += sourceManaged.value,
+        wartremoverExcluded += baseDirectory.value / "target" / "scala-2.13" / "akka-grpc",
         dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
         libraryDependencies ++= Dependencies.scalatestDeps,
         Compile / doc / sources := Seq.empty,

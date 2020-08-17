@@ -34,7 +34,7 @@ object KvdbUtils {
     * {@code key} must be non-null, and contain at least some character this is not
     * {@code \xFF} (255).
     *
-   * @param key prefix key
+    * @param key prefix key
     * @return a newly created byte array
     */
   def strinc(key: Array[Byte]): Array[Byte] = {
