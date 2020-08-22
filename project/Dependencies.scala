@@ -90,7 +90,7 @@ object Dependencies {
 
   val scalatestDeps = Seq(
     "org.scalactic" %% "scalactic" % "3.2.1",
-    "org.scalatest" %% "scalatest" % "3.2.1",
+    "org.scalatest" %% "scalatest" % "3.2.2",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.14.3",
     "org.scalamock" %% "scalamock" % "5.0.0"
