@@ -286,7 +286,7 @@ import dev.chopsticks.kvdb.fdb.FdbDatabase._
 final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
-  dbContext: FdbContext[BCF]
+  val dbContext: FdbContext[BCF]
 )(implicit rt: zio.Runtime[AkkaEnv with Clock])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
@@ -512,7 +512,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       }
   }
 
-  private def doGetRangeFuture[Col <: CF](
+  private[chopsticks] def doGetRangeFuture[Col <: CF](
     tx: ReadTransaction,
     column: Col,
     from: List[KvdbKeyConstraint],
