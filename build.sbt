@@ -99,7 +99,7 @@ lazy val kvdbFdb = Build
   .settings(
     libraryDependencies ++= fdbDeps
   )
-  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
+  .dependsOn(kvdbCore % "compile->compile;test->test", kvdbCodecFdbKey % "compile->test", testkit % "test->test")
 
 lazy val graphql = Build
   .defineProject("graphql")
