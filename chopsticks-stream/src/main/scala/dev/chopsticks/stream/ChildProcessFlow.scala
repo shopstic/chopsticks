@@ -56,7 +56,6 @@ object ChildProcessFlow {
                 ) { case (in, (out, err)) => (in, out, err) }
                 .watchTermination() {
                   case ((in, out, err), done) =>
-                    import cats.instances.future._
                     Applicative[Future]
                       .tuple4(in, out, err, done)
                       .transformWith { ioTry =>

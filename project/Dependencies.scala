@@ -60,7 +60,7 @@ object Dependencies {
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.1.1"
+    "org.typelevel" %% "cats-core" % "2.2.0"
   )
 
   val kittensDeps = Seq(
