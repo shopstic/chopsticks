@@ -9,7 +9,7 @@ object Dependencies {
   val ZIO_VERSION = "1.0.1"
   val IZUMI_VERSION = "0.10.18"
   val REFINED_VERSION = "0.9.16"
-  val CALIBAN_VERSION = "0.9.1"
+  val CALIBAN_VERSION = "0.9.2"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
