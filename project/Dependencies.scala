@@ -8,7 +8,7 @@ object Dependencies {
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.1"
   val IZUMI_VERSION = "0.10.18"
-  val REFINED_VERSION = "0.9.15"
+  val REFINED_VERSION = "0.9.16"
   val CALIBAN_VERSION = "0.9.1"
 
   val akkaSlf4jDeps = Seq(
