@@ -22,36 +22,35 @@ object TaskUtils {
 
   private def unwrapDone[A](isFatal: Throwable => Boolean)(f: CompletableFuture[A]): Task[A] = {
     try {
-      Task.succeed(f.get())
+      succeedNowTask(f.get())
     }
     catch catchFromGet(isFatal)
   }
 
-  def fromCancellableCompletableFuture[A](thunk: => CompletableFuture[A]): Task[A] = {
-    lazy val future = thunk
-
-    Task.effectSuspendTotalWith { (p, _) =>
-      Task.effectAsyncInterrupt[A](cb => {
-        if (future.isDone) {
-          Right(unwrapDone(p.fatal)(future))
-        }
-        else {
-          val _ = future.whenComplete((v, e) => {
-            if (e == null) {
-              cb(Task.succeed(v))
+  def fromCancellableCompletableFuture[A](thunk: => CompletableFuture[A]): Task[A] =
+    Task.effect(thunk).flatMap { future =>
+      Task.effectSuspendTotalWith { (p, _) =>
+        Task.effectAsyncInterrupt[A] { cb =>
+          if (future.isDone) {
+            Right(unwrapDone(p.fatal)(future))
+          }
+          else {
+            val _ = future.whenComplete { (v, e) =>
+              if (e == null) {
+                cb(Task.succeed(v))
+              }
+              else {
+                cb(catchFromGet(p.fatal).lift(e).getOrElse(Task.die(e)))
+              }
             }
-            else {
-              cb(catchFromGet(p.fatal).lift(e).getOrElse(Task.die(e)))
-            }
-          })
 
-          Left(UIO {
-            future.cancel(true)
-          })
+            Left(UIO {
+              future.cancel(true)
+            })
+          }
         }
-      })
+      }
     }
-  }
 
   def raceFirst(tasks: Iterable[(String, Task[Unit])])(implicit logCtx: LogCtx): RIO[MeasuredLogging, Unit] = {
     val list = tasks.map {
@@ -68,4 +67,6 @@ object TaskUtils {
         Task.unit
     }
   }
+
+  private def succeedNowTask[A](value: A): Task[A] = Task.succeed(value)
 }
