@@ -204,9 +204,8 @@ class LeaseSupervisorTest
     "refresh its leases" in leaseSupervisorTest() {
       (for {
         leaseSupervisor <- useLeaseSupervisor.toManaged_
-        probe <- ZManaged.make(Task(leaseSupervisor.acquireLeases.runWith(TestSink.probe)))(probe =>
-          UIO(probe.cancel()).unit
-        )
+        probe <-
+          ZManaged.make(Task(leaseSupervisor.acquireLeases.runWith(TestSink.probe)))(probe => UIO(probe.cancel()).unit)
       } yield probe).use { probe =>
         for {
           config <- useConfig
@@ -234,9 +233,8 @@ class LeaseSupervisorTest
     "remove its leases if other replica is waiting for them" in leaseSupervisorTest() {
       (for {
         leaseSupervisor <- useLeaseSupervisor.toManaged_
-        probe <- ZManaged.make(Task(leaseSupervisor.acquireLeases.runWith(TestSink.probe)))(probe =>
-          UIO(probe.cancel()).unit
-        )
+        probe <-
+          ZManaged.make(Task(leaseSupervisor.acquireLeases.runWith(TestSink.probe)))(probe => UIO(probe.cancel()).unit)
       } yield probe).use { probe =>
         for {
           acquirer <- useLeaseAcquirer
@@ -264,9 +262,8 @@ class LeaseSupervisorTest
     "signal that its waiting for its own partitions and it should acquire them once they are freed" in leaseSupervisorTest() {
       (for {
         leaseSupervisor <- useLeaseSupervisor.toManaged_
-        probe <- ZManaged.make(Task(leaseSupervisor.acquireLeases.runWith(TestSink.probe)))(probe =>
-          UIO(probe.cancel()).unit
-        )
+        probe <-
+          ZManaged.make(Task(leaseSupervisor.acquireLeases.runWith(TestSink.probe)))(probe => UIO(probe.cancel()).unit)
       } yield probe).use { probe =>
         for {
           config <- useConfig
@@ -471,40 +468,41 @@ class LeaseSupervisorTest
 
   object LeaseAcquirer {
     def live: URLayer[Clock with Has[KvdbDatabaseApi[LeaseSupervisorTestDbCf]], Has[LeaseAcquirer]] = {
-      val managed = for {
-        dbApi <- ZManaged.access[Has[KvdbDatabaseApi[LeaseSupervisorTestDbCf]]](_.get)
-        clock <- ZManaged.access[Clock](_.get)
-      } yield new LeaseAcquirer {
-        override def getAllLeases(): Task[Seq[Lease]] = {
-          dbApi
-            .columnFamily(LeaseFdbMaterialization.lease)
-            .getRangeTask(_.first, _.last, 10000)
-            .map { xs =>
-              xs.map { case (_, v) => v }
-            }
-        }
+      val managed =
+        for {
+          dbApi <- ZManaged.access[Has[KvdbDatabaseApi[LeaseSupervisorTestDbCf]]](_.get)
+          clock <- ZManaged.access[Clock](_.get)
+        } yield new LeaseAcquirer {
+          override def getAllLeases(): Task[Seq[Lease]] = {
+            dbApi
+              .columnFamily(LeaseFdbMaterialization.lease)
+              .getRangeTask(_.first, _.last, 10000)
+              .map { xs =>
+                xs.map { case (_, v) => v }
+              }
+          }
 
-        override def forceAcquire(partitionNumber: Int, customizeLease: Lease => Lease): Task[Lease] = {
-          for {
-            now <- clock.currentDateTime.map(_.toInstant)
-            lease <- {
-              val l = Lease(
-                partitionNumber = partitionNumber,
-                owner = Some(Int.MaxValue),
-                refreshedAt = now,
-                assigneeWaitingFrom = None,
-                acquisitionId = UUID.randomUUID()
-              )
-              setLease(customizeLease(l))
-            }
-          } yield lease
-        }
+          override def forceAcquire(partitionNumber: Int, customizeLease: Lease => Lease): Task[Lease] = {
+            for {
+              now <- clock.currentDateTime.map(_.toInstant)
+              lease <- {
+                val l = Lease(
+                  partitionNumber = partitionNumber,
+                  owner = Some(Int.MaxValue),
+                  refreshedAt = now,
+                  assigneeWaitingFrom = None,
+                  acquisitionId = UUID.randomUUID()
+                )
+                setLease(customizeLease(l))
+              }
+            } yield lease
+          }
 
-        override def setLease(newLease: Lease) = {
-          val writes = dbApi.transactionBuilder.put(LeaseFdbMaterialization.lease, LeaseKey(newLease), newLease)
-          dbApi.transact(writes.result).as(newLease)
+          override def setLease(newLease: Lease) = {
+            val writes = dbApi.transactionBuilder.put(LeaseFdbMaterialization.lease, LeaseKey(newLease), newLease)
+            dbApi.transact(writes.result).as(newLease)
+          }
         }
-      }
       managed.toLayer
     }
   }

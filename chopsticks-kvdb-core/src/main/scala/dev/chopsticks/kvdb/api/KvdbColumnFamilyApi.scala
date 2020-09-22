@@ -110,31 +110,32 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     val maxBatchSize = options.batchWriteMaxBatchSize
     val groupWithin = options.batchWriteBatchingGroupWithin
 
-    val flow = if (groupWithin > Duration.Zero) {
-      Flow[O]
-        .groupedWithin(maxBatchSize, groupWithin)
-        .map { keyBatch =>
-          (keyBatch, keyBatch.map(k => KeyConstraints.toList(constraintsMapper(k)(KeyConstraints.seed[K]))))
-        }
-    }
-    else {
-      Flow[O]
-        .batch(
-          maxBatchSize.toLong,
-          { o: O =>
-            val keyBatch = Vector.newBuilder[O]
-            val valueBatch = Vector.newBuilder[KvdbKeyConstraintList]
-            (keyBatch += o, valueBatch += KeyConstraints.toList(constraintsMapper(o)(KeyConstraints.seed[K])))
+    val flow =
+      if (groupWithin > Duration.Zero) {
+        Flow[O]
+          .groupedWithin(maxBatchSize, groupWithin)
+          .map { keyBatch =>
+            (keyBatch, keyBatch.map(k => KeyConstraints.toList(constraintsMapper(k)(KeyConstraints.seed[K]))))
           }
-        ) {
-          case ((keyBatch, valueBatch), o) =>
-            (keyBatch += o, valueBatch += KeyConstraints.toList(constraintsMapper(o)(KeyConstraints.seed[K])))
-        }
-        .map {
-          case (keyBatch, valueBatch) =>
-            (keyBatch.result(), valueBatch.result())
-        }
-    }
+      }
+      else {
+        Flow[O]
+          .batch(
+            maxBatchSize.toLong,
+            { o: O =>
+              val keyBatch = Vector.newBuilder[O]
+              val valueBatch = Vector.newBuilder[KvdbKeyConstraintList]
+              (keyBatch += o, valueBatch += KeyConstraints.toList(constraintsMapper(o)(KeyConstraints.seed[K])))
+            }
+          ) {
+            case ((keyBatch, valueBatch), o) =>
+              (keyBatch += o, valueBatch += KeyConstraints.toList(constraintsMapper(o)(KeyConstraints.seed[K])))
+          }
+          .map {
+            case (keyBatch, valueBatch) =>
+              (keyBatch.result(), valueBatch.result())
+          }
+      }
 
     flow
       .via(AkkaStreamUtils.statefulMapOptionFlow(() => {
@@ -142,49 +143,50 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
         {
           case (keyBatch: Seq[O], requests: Seq[KvdbKeyConstraintList]) =>
-            val future = if (useCache) {
-              val maybeValues = new Array[Option[V]](requests.size)
-              val uncachedIndicesBuilder = mutable.ArrayBuilder.make[Int]
-              val uncachedGetsBuilder = mutable.ArrayBuilder.make[KvdbKeyConstraintList]
+            val future =
+              if (useCache) {
+                val maybeValues = new Array[Option[V]](requests.size)
+                val uncachedIndicesBuilder = mutable.ArrayBuilder.make[Int]
+                val uncachedGetsBuilder = mutable.ArrayBuilder.make[KvdbKeyConstraintList]
 
-              for ((request, index) <- requests.zipWithIndex) {
-                cache.get(request) match {
-                  case Some(v) => maybeValues(index) = v
-                  case None =>
-                    //
-                    {
-                      val _ = uncachedIndicesBuilder += index
+                for ((request, index) <- requests.zipWithIndex) {
+                  cache.get(request) match {
+                    case Some(v) => maybeValues(index) = v
+                    case None =>
+                      //
+                      {
+                        val _ = uncachedIndicesBuilder += index
+                      }
+                      val _ = uncachedGetsBuilder += request
+                  }
+                }
+
+                val uncachedRequests = uncachedGetsBuilder.result()
+
+                if (uncachedRequests.isEmpty) {
+                  Future.successful(keyBatch.zip(maybeValues))
+                }
+                else {
+                  val uncachedIndices = uncachedIndicesBuilder.result()
+
+                  db.batchGetTask(cf, uncachedRequests.toList)
+                    .map { pairs =>
+                      for ((maybePair, index) <- pairs.zipWithIndex) {
+                        val maybeValue = maybePair.map(p => cf.unsafeDeserializeValue(p._2))
+                        maybeValues(uncachedIndices(index)) = maybeValue
+                        cache.update(uncachedRequests(index), maybeValue)
+                      }
+
+                      keyBatch.zip(maybeValues)
                     }
-                    val _ = uncachedGetsBuilder += request
+                    .unsafeRunToFuture
                 }
               }
-
-              val uncachedRequests = uncachedGetsBuilder.result()
-
-              if (uncachedRequests.isEmpty) {
-                Future.successful(keyBatch.zip(maybeValues))
-              }
               else {
-                val uncachedIndices = uncachedIndicesBuilder.result()
-
-                db.batchGetTask(cf, uncachedRequests.toList)
-                  .map { pairs =>
-                    for ((maybePair, index) <- pairs.zipWithIndex) {
-                      val maybeValue = maybePair.map(p => cf.unsafeDeserializeValue(p._2))
-                      maybeValues(uncachedIndices(index)) = maybeValue
-                      cache.update(uncachedRequests(index), maybeValue)
-                    }
-
-                    keyBatch.zip(maybeValues)
-                  }
+                db.batchGetTask(cf, requests)
+                  .map { maybePairs => keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2)))) }
                   .unsafeRunToFuture
               }
-            }
-            else {
-              db.batchGetTask(cf, requests)
-                .map { maybePairs => keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2)))) }
-                .unsafeRunToFuture
-            }
 
             Some(future)
         }

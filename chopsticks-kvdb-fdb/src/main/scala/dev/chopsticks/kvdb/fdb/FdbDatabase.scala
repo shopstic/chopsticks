@@ -181,12 +181,13 @@ object FdbDatabase extends LoggingContext {
     Task.fromCompletionStage[Map[BCF[_, _], Array[Byte]]] {
       db.runAsync { tx =>
         val rootDirectoryPath = config.rootDirectoryPath
-        val directoryFuture = if (rootDirectoryPath.isEmpty) {
-          CompletableFuture.completedFuture(DirectoryLayer.getDefault)
-        }
-        else {
-          DirectoryLayer.getDefault.createOrOpen(tx, List(rootDirectoryPath).asJava)
-        }
+        val directoryFuture =
+          if (rootDirectoryPath.isEmpty) {
+            CompletableFuture.completedFuture(DirectoryLayer.getDefault)
+          }
+          else {
+            DirectoryLayer.getDefault.createOrOpen(tx, List(rootDirectoryPath).asJava)
+          }
 
         directoryFuture.thenCompose { directory =>
           val futures = materialization.columnFamilySet.value.toList.map { cf =>
