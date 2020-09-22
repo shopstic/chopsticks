@@ -39,27 +39,10 @@ package object zio_ext {
       })
     }
 
-    def logResult(name: String, result: A => String)(implicit
-      ctx: LogCtx
-    ): ZIO[R with MeasuredLogging, E, A] = {
-      val start: ZIO[R with MeasuredLogging, E, Long] = nanoTime <* ZLogger.info(s"[$name] started")
-
-      ZIO.bracketExit(start) { (startTime: Long, exit: Exit[E, A]) =>
-        for {
-          elapse <- nanoTime.map(endTime => endTime - startTime)
-          formattedElapse = Nanoseconds(elapse).inBestUnit.rounded(2)
-          _ <- exit.toEither match {
-            case Left(FiberFailure(cause)) if cause.interrupted =>
-              ZLogger.warn(s"[$name] [took $formattedElapse] interrupted")
-
-            case Left(e) =>
-              ZLogger.error(s"[$name] [took $formattedElapse] failed", e)
-
-            case Right(r) =>
-              ZLogger.info(s"[$name] [took $formattedElapse] ${result(r)}")
-          }
-        } yield ()
-      } { startTime =>
+    def logResult(name: String, result: A => String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
+      ZIO.bracketExit(startMeasurement(name))((startTime: Long, exit: Exit[E, A]) =>
+        logElapsedTime(name, startTime, exit, result)
+      ) { startTime =>
         io.onInterrupt(for {
           elapse <- nanoTime.map(endTime => endTime - startTime)
           formattedElapse = Nanoseconds(elapse).inBestUnit.rounded(2)
@@ -90,5 +73,45 @@ package object zio_ext {
         .repeat(repeatSchedule.unit)
         .orDieWith(_ => new IllegalStateException("Can't happen with infinite retries"))
     }
+  }
+
+  implicit final class ZManagedExtensions[R >: Nothing, E <: Any, A](managed: ZManaged[R, E, A]) {
+    def logResult(name: String, result: A => String)(implicit
+      ctx: LogCtx
+    ): ZManaged[R with MeasuredLogging, E, A] = {
+      for {
+        startTime <- ZManaged.fromEffect(startMeasurement(name))
+        result <- managed.onExit(exit => logElapsedTime(name, startTime, exit, result))
+      } yield result
+    }
+
+    def log(name: String)(implicit ctx: LogCtx): ZManaged[R with MeasuredLogging, E, A] = {
+      logResult(name, _ => "completed")
+    }
+  }
+
+  private def startMeasurement(name: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] =
+    nanoTime <* ZLogger.info(s"[$name] started")
+
+  private def logElapsedTime[E, A](
+    name: String,
+    startTimeNanos: Long,
+    exit: Exit[E, A],
+    renderResult: A => String
+  )(implicit logCtx: LogCtx) = {
+    for {
+      elapse <- nanoTime.map(endTime => endTime - startTimeNanos)
+      formattedElapse = Nanoseconds(elapse).inBestUnit.rounded(2)
+      _ <- exit.toEither match {
+        case Left(FiberFailure(cause)) if cause.interrupted =>
+          ZLogger.warn(s"[$name] [took $formattedElapse] interrupted")
+
+        case Left(e) =>
+          ZLogger.error(s"[$name] [took $formattedElapse] failed", e)
+
+        case Right(r) =>
+          ZLogger.info(s"[$name] [took $formattedElapse] ${renderResult(r)}")
+      }
+    } yield ()
   }
 }

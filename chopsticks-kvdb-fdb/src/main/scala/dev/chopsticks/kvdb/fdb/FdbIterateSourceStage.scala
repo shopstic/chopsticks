@@ -59,17 +59,23 @@ object FdbIterateSourceStage {
       while (!isCompleted && continueBatching && accumulatedBatchSize < maxBatchBytes) {
         val hasNextFuture = iterator.onHasNext()
 
-        continueBatching = if (hasNextFuture.isDone && !hasNextFuture.isCompletedExceptionally) {
-          if (hasNextFuture.get()) {
-            val kv = iterator.next()
-            val key = kv.getKey
-            val value = kv.getValue
+        continueBatching =
+          if (hasNextFuture.isDone && !hasNextFuture.isCompletedExceptionally) {
+            if (hasNextFuture.get()) {
+              val kv = iterator.next()
+              val key = kv.getKey
+              val value = kv.getValue
 
-            if (keyValidator(key)) {
-              accumulatedBatchSize += key.length + value.length
-              lastKey = key
-              val _ = reusableBuffer += keyTransformer(key) -> value
-              true
+              if (keyValidator(key)) {
+                accumulatedBatchSize += key.length + value.length
+                lastKey = key
+                val _ = reusableBuffer += keyTransformer(key) -> value
+                true
+              }
+              else {
+                isCompleted = true
+                false
+              }
             }
             else {
               isCompleted = true
@@ -77,25 +83,20 @@ object FdbIterateSourceStage {
             }
           }
           else {
-            isCompleted = true
-            false
-          }
-        }
-        else {
-          if (accumulatedBatchSize == 0) {
-            val _ = hasNextFuture.whenComplete { (hasNext, exception) =>
-              if (exception eq null) {
-                if (hasNext) actor ! IteratorNext(iterator.next())
-                else actor ! IteratorComplete
-              }
-              else {
-                actor ! IteratorFailure(exception)
+            if (accumulatedBatchSize == 0) {
+              val _ = hasNextFuture.whenComplete { (hasNext, exception) =>
+                if (exception eq null) {
+                  if (hasNext) actor ! IteratorNext(iterator.next())
+                  else actor ! IteratorComplete
+                }
+                else {
+                  actor ! IteratorFailure(exception)
+                }
               }
             }
-          }
 
-          false
-        }
+            false
+          }
       }
 
       val pairs = reusableBuffer.result()
