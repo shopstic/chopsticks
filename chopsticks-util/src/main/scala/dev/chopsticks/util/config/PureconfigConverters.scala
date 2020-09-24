@@ -87,7 +87,7 @@ object PureconfigConverters {
                 ConfigReaderFailures(
                   ConvertFailure(
                     reason = CannotConvert(
-                      value = cur.value.render(),
+                      value = cur.valueOpt.map(_.render()).getOrElse("Missing value"),
                       toType = typeTag.tpe.toString,
                       because = because
                     ),
