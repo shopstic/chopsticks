@@ -1,6 +1,6 @@
 package dev.chopsticks.fp
 
-import dev.chopsticks.fp.log_env.{LogCtx, LogEnv}
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.util.implicits.SquantsImplicits._
 import squants.time.Nanoseconds
 import zio._
@@ -17,7 +17,7 @@ package object zio_ext {
   implicit def scalaToZioDuration(d: Duration): zio.duration.Duration =
     zio.duration.Duration.fromScala(d)
 
-  type MeasuredLogging = LogEnv with Clock
+  type MeasuredLogging = IzLogging with Clock
 
   implicit final class TaskExtensions[R >: Nothing, E <: Throwable, A](io: ZIO[R, E, A]) {
     def unsafeRunToFuture(implicit rt: Runtime[R]): Future[A] = {
@@ -39,19 +39,26 @@ package object zio_ext {
       })
     }
 
-    def logResult(name: String, result: A => String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
+    def logResult(name: String, result: A => String)(implicit
+      line: sourcecode.Line,
+      file: sourcecode.FileName
+    ): ZIO[R with MeasuredLogging, E, A] = {
       ZIO.bracketExit(startMeasurement(name))((startTime: Long, exit: Exit[E, A]) =>
         logElapsedTime(name, startTime, exit, result)
       ) { startTime =>
         io.onInterrupt(for {
+          logger <- ZIO.access[IzLogging](_.get).map(_.zioLocationLogger)
           elapse <- nanoTime.map(endTime => endTime - startTime)
-          formattedElapse = Nanoseconds(elapse).inBestUnit.rounded(2)
-          _ <- ZLogger.info(s"[$name] [elapsed $formattedElapse] interrupting...")
+          elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
+          _ <- logger.info(s"[$name] [$elapsed] interrupting...")
         } yield ())
       }
     }
 
-    def log(name: String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
+    def log(name: String)(implicit
+      line: sourcecode.Line,
+      file: sourcecode.FileName
+    ): ZIO[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed")
     }
 
@@ -77,7 +84,8 @@ package object zio_ext {
 
   implicit final class ZManagedExtensions[R >: Nothing, E <: Any, A](managed: ZManaged[R, E, A]) {
     def logResult(name: String, result: A => String)(implicit
-      ctx: LogCtx
+      line: sourcecode.Line,
+      file: sourcecode.FileName
     ): ZManaged[R with MeasuredLogging, E, A] = {
       for {
         startTime <- ZManaged.fromEffect(startMeasurement(name))
@@ -85,32 +93,45 @@ package object zio_ext {
       } yield result
     }
 
-    def log(name: String)(implicit ctx: LogCtx): ZManaged[R with MeasuredLogging, E, A] = {
+    def log(name: String)(implicit
+      line: sourcecode.Line,
+      file: sourcecode.FileName
+    ): ZManaged[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed")
     }
   }
 
-  private def startMeasurement(name: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] =
-    nanoTime <* ZLogger.info(s"[$name] started")
+  private def startMeasurement(name: String)(implicit
+    line: sourcecode.Line,
+    file: sourcecode.FileName
+  ): URIO[MeasuredLogging, Long] = {
+    for {
+      time <- nanoTime
+      logger <- ZIO.access[IzLogging](_.get).map(_.zioLocationLogger)
+      _ <- logger.info(s"[$name] started")
+    } yield time
+  }
 
   private def logElapsedTime[E, A](
     name: String,
     startTimeNanos: Long,
     exit: Exit[E, A],
     renderResult: A => String
-  )(implicit logCtx: LogCtx) = {
+  )(implicit line: sourcecode.Line, file: sourcecode.FileName) = {
     for {
+      logger <- ZIO.access[IzLogging](_.get).map(_.zioLocationLogger)
       elapse <- nanoTime.map(endTime => endTime - startTimeNanos)
-      formattedElapse = Nanoseconds(elapse).inBestUnit.rounded(2)
+      took = Nanoseconds(elapse).inBestUnit.rounded(2)
       _ <- exit.toEither match {
         case Left(FiberFailure(cause)) if cause.interrupted =>
-          ZLogger.warn(s"[$name] [took $formattedElapse] interrupted")
+          logger.warn(s"[$name] [$took] interrupted")
 
         case Left(e) =>
-          ZLogger.error(s"[$name] [took $formattedElapse] failed", e)
+          logger.error(s"[$name] [$took] failed, error stacktrace: $e")
 
         case Right(r) =>
-          ZLogger.info(s"[$name] [took $formattedElapse] ${renderResult(r)}")
+          val renderedResult = renderResult(r)
+          logger.info(s"[$name] [$took] ${renderedResult -> "renderedResult" -> null}")
       }
     } yield ()
   }

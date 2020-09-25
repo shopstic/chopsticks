@@ -12,13 +12,15 @@ object MetricServiceManager {
       for {
         registryFactory <- ZManaged.access[MetricRegistryFactory[Grp]](_.get)
         factory = ZLayer.succeed {
-          new SharedResourceFactory.Service[Any, Cfg, Svc] {
-            override def manage(id: Cfg): UManaged[Svc] = {
-              registryFactory.fresh.build.map(_.get).map { registry =>
-                serviceFactory.create(registry, id)
+          val result: SharedResourceFactory.Service[Any, Cfg, Svc] =
+            new SharedResourceFactory.Service[Any, Cfg, Svc] {
+              override def manage(id: Cfg): UManaged[Svc] = {
+                registryFactory.fresh.build.map(_.get).map { registry =>
+                  serviceFactory.create(registry, id)
+                }
               }
             }
-          }
+          result
         }
         manager <- SharedResourceManager.fromFactory(factory).build
       } yield manager

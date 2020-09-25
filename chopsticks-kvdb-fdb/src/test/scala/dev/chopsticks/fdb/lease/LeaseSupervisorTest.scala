@@ -12,6 +12,8 @@ import dev.chopsticks.fdb.lease.LeaseSupervisorTest.LeaseSupervisorTestDatabase.
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.LiveDiEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
 import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.fp.{AkkaApp, AppLayer, DiEnv, DiLayers, LoggingContext}
@@ -25,6 +27,7 @@ import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import eu.timepit.refined.auto._
 import izumi.distage.constructors.HasConstructor
+import logstage.Log
 import org.scalatest.{Inspectors, Succeeded}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
@@ -104,7 +107,7 @@ object LeaseSupervisorTest {
   }
 
   private[lease] def liveSupervisor(config: LeaseSupervisorConfig)
-    : RLayer[AkkaEnv with LogEnv with Clock with Has[KvdbDatabaseApi[LeaseSupervisorTestDbCf]] with Has[
+    : RLayer[AkkaEnv with MeasuredLogging with Has[KvdbDatabaseApi[LeaseSupervisorTestDbCf]] with Has[
       LeaseSupervisorTestDatabase.Db
     ], Has[LeaseSupervisor.Service[LeaseSupervisorTestDatabase.LeaseKeyspace]]] = {
     val managed = for {
@@ -302,7 +305,7 @@ class LeaseSupervisorTest
             acquirer.forceAcquire(partitionNumber)
           }
         }
-        env <- ZIO.environment[AkkaEnv with LogEnv with Clock with Has[
+        env <- ZIO.environment[AkkaEnv with MeasuredLogging with Has[
           KvdbDatabaseApi[LeaseSupervisorTestDbCf]
         ] with Has[LeaseSupervisorTestDatabase.Db]]
         _ <- liveSupervisor(config.leaseSupervisor).build.provide(env).use {
@@ -559,6 +562,7 @@ class LeaseSupervisorTest
     val runEnvIo: UIO[DiEnv[AppEnv]] = UIO {
       LiveDiEnv(
         DiLayers(
+          IzLogging.live(IzLoggingConfig(Log.Level.Warn, coloredOutput = true, None)),
           ZLayer.succeed(config),
           LeaseAcquirer.live,
           KvdbIoThreadPool.live(keepAliveTimeMs = 5000),

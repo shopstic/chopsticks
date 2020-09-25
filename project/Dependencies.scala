@@ -7,7 +7,7 @@ object Dependencies {
   val AKKA_VERSION = "2.6.9"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.1"
-  val IZUMI_VERSION = "0.10.18"
+  val IZUMI_VERSION = "0.10.19"
   val REFINED_VERSION = "0.9.16"
   val CALIBAN_VERSION = "0.9.2"
 
@@ -68,7 +68,7 @@ object Dependencies {
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.13.0")
+    .map(p => "com.github.pureconfig" %% p % "0.14.0")
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
@@ -79,8 +79,7 @@ object Dependencies {
 
   val loggingDeps = Seq(
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
-    "ch.qos.logback" % "logback-classic" % "1.2.3",
-    "org.slf4j" % "log4j-over-slf4j" % "1.7.30",
+    "io.7mind.izumi" %% "logstage-adapter-slf4j" % IZUMI_VERSION,
     "org.slf4j" % "jul-to-slf4j" % "1.7.30"
   )
 
@@ -168,10 +167,14 @@ object Dependencies {
 
   val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.9")
 
-  val calibanDeps = List(
+  val calibanDeps = Seq(
     "com.github.ghostdogpr" %% "caliban",
     "com.github.ghostdogpr" %% "caliban-client",
     "com.github.ghostdogpr" %% "caliban-akka-http"
   ).map(_ % CALIBAN_VERSION)
+  
+  val sourcecodeDeps = Seq(
+    "com.lihaoyi" %% "sourcecode" % "0.1.9"
+  )
 
 }
