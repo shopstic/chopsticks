@@ -167,10 +167,14 @@ object Dependencies {
 
   val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.9")
 
-  val calibanDeps = List(
+  val calibanDeps = Seq(
     "com.github.ghostdogpr" %% "caliban",
     "com.github.ghostdogpr" %% "caliban-client",
     "com.github.ghostdogpr" %% "caliban-akka-http"
   ).map(_ % CALIBAN_VERSION)
+  
+  val sourcecodeDeps = Seq(
+    "com.lihaoyi" %% "sourcecode" % "0.1.9"
+  )
 
 }

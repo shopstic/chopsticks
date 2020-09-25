@@ -18,7 +18,7 @@ object ZioTestApp extends AkkaApp {
 
   private def testManaged = {
     for {
-      logger <- ZManaged.access[IzLogging](_.get).map(_.ctxZioLogger)
+      logger <- ZManaged.access[IzLogging](_.get).map(_.zioLogger)
       _ <- {
         ZManaged
           .makeInterruptible {
@@ -43,7 +43,7 @@ object ZioTestApp extends AkkaApp {
   override def run: RIO[Env, Unit] = {
     testManaged.use { r =>
       for {
-        logger <- ZIO.access[IzLogging](_.get).map(_.ctxZioLogger)
+        logger <- ZIO.access[IzLogging](_.get).map(_.zioLogger)
         _ <- logger.info(s"run with $r")
       } yield ()
     }
