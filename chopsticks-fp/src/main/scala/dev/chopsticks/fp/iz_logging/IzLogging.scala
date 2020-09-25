@@ -48,6 +48,44 @@ object IzLogging {
       zioLogger(IzLogRenderingExtractors.LocationCtxKey -> s"${file.value}:${line.value}")
   }
 
+  def create(lbConfig: LbConfig, namespace: String = "iz-logging"): Service = {
+    create(PureconfigLoader.unsafeLoad[IzLoggingConfig](lbConfig, namespace))
+  }
+
+  def create(config: IzLoggingConfig): Service = {
+    val consoleSink = {
+      val renderingPolicy =
+        if (config.coloredOutput) RenderingPolicy.coloringPolicy(Some(IzLogTemplates.consoleLayout))
+        else RenderingPolicy.simplePolicy(Some(IzLogTemplates.consoleLayout))
+      ConsoleSink(renderingPolicy)
+    }
+
+    val maybeFileSink = config.jsonFileSink.map { fileSinkConfig =>
+      object jsonFileSink
+          extends FileSink(
+            LogstageCirceRenderingPolicy(prettyPrint = false),
+            new FileServiceImpl(fileSinkConfig.path),
+            FileRotation.FileLimiterRotation(fileSinkConfig.rotationMaxFileCount),
+            FileSinkConfig.soft(fileSinkConfig.rotationMaxFileBytes)
+          ) {
+        override def recoverOnFail(e: String): Unit = Console.err.println(e)
+      }
+
+      new QueueingSink(jsonFileSink)
+    }
+
+    val logger = IzLogger(config.level, sinks = consoleSink :: maybeFileSink.toList)(
+      IzLogRenderingExtractors.LoggerTypeCtxKey -> "iz"
+    )
+    val zioLogger = LogstageZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
+
+    maybeFileSink.foreach(_.start())
+
+    // configure slf4j to use LogStage router
+    StaticLogRouter.instance.setup(logger.router)
+    LiveService(logger, zioLogger)
+  }
+
   def live(lbConfig: LbConfig, namespace: String = "iz-logging"): Layer[Nothing, IzLogging] = {
     live(PureconfigLoader.unsafeLoad[IzLoggingConfig](lbConfig, namespace))
   }
@@ -55,39 +93,7 @@ object IzLogging {
   def live(config: IzLoggingConfig): Layer[Nothing, IzLogging] = {
     val managed: ZManaged[Any, Nothing, Service] = for {
       service <- ZManaged.make {
-        UIO {
-          val consoleSink = {
-            val renderingPolicy = 
-              if (config.coloredOutput) RenderingPolicy.coloringPolicy(Some(IzLogTemplates.consoleLayout))
-              else RenderingPolicy.simplePolicy(Some(IzLogTemplates.consoleLayout))
-            ConsoleSink(renderingPolicy)
-          }
-
-          val maybeFileSink = config.jsonFileSink.map { fileSinkConfig =>
-            object jsonFileSink
-                extends FileSink(
-                  LogstageCirceRenderingPolicy(prettyPrint = false),
-                  new FileServiceImpl(fileSinkConfig.path),
-                  FileRotation.FileLimiterRotation(fileSinkConfig.rotationMaxFileCount),
-                  FileSinkConfig.soft(fileSinkConfig.rotationMaxFileBytes)
-                ) {
-              override def recoverOnFail(e: String): Unit = Console.err.println(e)
-            }
-
-            new QueueingSink(jsonFileSink)
-          }
-
-          val logger = IzLogger(config.level, sinks = consoleSink :: maybeFileSink.toList)(
-            IzLogRenderingExtractors.LoggerTypeCtxKey -> "iz"
-          )
-          val zioLogger = LogstageZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
-
-          maybeFileSink.foreach(_.start())
-
-          // configure slf4j to use LogStage router
-          StaticLogRouter.instance.setup(logger.router)
-          LiveService(logger, zioLogger)
-        }
+        UIO(create(config))
       } { service =>
         UIO(service.logger.router.close())
       }
