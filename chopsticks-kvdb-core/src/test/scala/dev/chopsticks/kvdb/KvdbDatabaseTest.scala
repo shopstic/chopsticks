@@ -7,6 +7,8 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.testkit.{ImplicitSender, TestProbe}
 import com.google.protobuf.ByteString
+import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
 import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.codec.KeyConstraints
 import dev.chopsticks.kvdb.codec.primitive._
@@ -27,6 +29,7 @@ import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.language.implicitConversions
 import eu.timepit.refined.auto._
+import izumi.logstage.api.Log.Level
 import squants.information.InformationConversions._
 
 object KvdbDatabaseTest extends Matchers with Inside {
@@ -115,15 +118,17 @@ abstract private[kvdb] class KvdbDatabaseTest
     with LoggingContext {
   import KvdbDatabaseTest._
 
-  protected def managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool, Throwable, TestDatabase.Db]
+  protected def managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool with IzLogging, Throwable, TestDatabase.Db]
 
   protected def dbMat: TestDatabase.Materialization
 
   private lazy val defaultCf = dbMat.plain
   private lazy val lookupCf = dbMat.lookup
 
+  private val izLoggingConfig = IzLoggingConfig(level = Level.Info, coloredOutput = true, jsonFileSink = None)
+
   private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
-  private lazy val runtimeLayer = AkkaApp.Env.live >+> KvdbIoThreadPool.live()
+  private lazy val runtimeLayer = (IzLogging.live(izLoggingConfig) ++ AkkaApp.Env.live) >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
 
   "wrong column family" should {

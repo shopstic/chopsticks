@@ -4,7 +4,7 @@ import zio._
 import zio.stm.{STM, TMap}
 
 object SharedResourceManager {
-  trait Service[R, Id, Res] {
+  trait Service[-R, Id, Res] {
     def activeSet: UIO[Set[Res]]
     def manage(id: Id): ZManaged[R, Nothing, Res]
   }
@@ -24,7 +24,7 @@ object SharedResourceManager {
     factory >>> live[R, Id, Res]
   }
 
-  def live[R: zio.Tag, Id: zio.Tag, Res: zio.Tag]
+  def live[R: izumi.reflect.Tag, Id: izumi.reflect.Tag, Res: izumi.reflect.Tag]
     : RLayer[SharedResourceFactory[R, Id, Res], SharedResourceManager[R, Id, Res]] = {
     val managedTmap: UManaged[TMap[Id, Either[BusyState, SharedResource[Res]]]] = ZManaged
       .make {
@@ -43,7 +43,7 @@ object SharedResourceManager {
         } yield tmap
       }
 
-    val managed = for {
+    val managed: ZManaged[SharedResourceFactory[R, Id, Res], Nothing, Service[R, Id, Res]] = for {
       tmap <- managedTmap
       factory <- ZManaged.access[SharedResourceFactory[R, Id, Res]](_.get)
     } yield {

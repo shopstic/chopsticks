@@ -15,6 +15,7 @@ import dev.chopsticks.fdb.env.FdbEnv
 import dev.chopsticks.fdb.util.FdbAsyncIteratorGraphStage
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.sample.util.{AppConfigLoader, MiscUtils}
@@ -47,15 +48,13 @@ object FdbTestApp extends AkkaApp {
     }
   }
 
-  override type Env = AkkaApp.Env with FdbEnv with Has[AppConfig]
+  override type Env = AkkaApp.Env with FdbEnv with Has[AppConfig] with IzLogging
 
   override protected def createEnv(config: Config): ZLayer[AkkaApp.Env, Throwable, Env] = {
     val appConfig = AppConfigLoader.load[AppConfig](config)
 
-    ZLayer
-      .requires[AkkaApp.Env] ++
-      FdbEnv.live(appConfig.clusterFilePath) ++
-      ZLayer.succeed(appConfig)
+    IzLogging.live(config) ++ ZLayer.requires[AkkaApp.Env] >+>
+      (FdbEnv.live(appConfig.clusterFilePath) ++ ZLayer.succeed(appConfig))
   }
 
   private def createSubspaceSource(

@@ -10,7 +10,8 @@ import akka.stream.scaladsl.{Keep, Source}
 import com.apple.foundationdb.{ReadTransaction, Transaction}
 import dev.chopsticks.fp.LoggingContext
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.{LogCtx, LogEnv}
+import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.log_env.LogCtx
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
@@ -86,12 +87,12 @@ object LeaseSupervisor extends LoggingContext {
     config: LeaseSupervisorConfig,
     fdb: FdbDatabase[BCF, _],
     leaseKeyspace: A
-  ): URLayer[AkkaEnv with LogEnv with Clock with Has[KvdbDatabaseApi[BCF]], Has[Service[A]]] = {
+  ): URLayer[AkkaEnv with MeasuredLogging with Has[KvdbDatabaseApi[BCF]], Has[Service[A]]] = {
     val managed = for {
       systemSvc <- ZManaged.access[AkkaEnv](_.get)
       clock <- ZManaged.access[Clock](_.get)
       dbApi <- ZManaged.access[Has[KvdbDatabaseApi[BCF]]](_.get)
-      runtime <- ZIO.runtime[AkkaEnv with LogEnv].toManaged_
+      runtime <- ZIO.runtime[AkkaEnv with IzLogging].toManaged_
       currentLeases <- Ref.make(ArraySeq.empty[LeaseSupervisorSession]).toManaged { sessionsRef =>
         val io = for {
           sessions <- sessionsRef.get
