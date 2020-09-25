@@ -31,7 +31,7 @@ final class SpecificFdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private val izLoggingConfig = IzLoggingConfig(level = Level.Info, jsonFileSink = None)
+  private val izLoggingConfig = IzLoggingConfig(level = Level.Info, coloredOutput = true, jsonFileSink = None)
 
   private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
   private lazy val runtimeLayer = (IzLogging.live(izLoggingConfig) ++ AkkaApp.Env.live) >+> KvdbIoThreadPool.live()

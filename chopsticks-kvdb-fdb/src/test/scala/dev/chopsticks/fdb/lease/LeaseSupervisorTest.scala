@@ -562,7 +562,7 @@ class LeaseSupervisorTest
     val runEnvIo: UIO[DiEnv[AppEnv]] = UIO {
       LiveDiEnv(
         DiLayers(
-          IzLogging.live(IzLoggingConfig(Log.Level.Warn, None)),
+          IzLogging.live(IzLoggingConfig(Log.Level.Warn, coloredOutput = true, None)),
           ZLayer.succeed(config),
           LeaseAcquirer.live,
           KvdbIoThreadPool.live(keepAliveTimeMs = 5000),

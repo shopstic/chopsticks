@@ -24,7 +24,7 @@ object IzLogging {
     rotationMaxFileBytes: Int
   )
 
-  final case class IzLoggingConfig(level: Level, jsonFileSink: Option[JsonFileSinkConfig])
+  final case class IzLoggingConfig(level: Level, coloredOutput: Boolean, jsonFileSink: Option[JsonFileSinkConfig])
 
   object IzLoggingConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
@@ -56,8 +56,12 @@ object IzLogging {
     val managed: ZManaged[Any, Nothing, Service] = for {
       service <- ZManaged.make {
         UIO {
-          val consoleSink =
-            ConsoleSink(RenderingPolicy.coloringPolicy(renderingLayout = Some(IzLogTemplates.consoleLayout)))
+          val consoleSink = {
+            val renderingPolicy = 
+              if (config.coloredOutput) RenderingPolicy.coloringPolicy(Some(IzLogTemplates.consoleLayout))
+              else RenderingPolicy.simplePolicy(Some(IzLogTemplates.consoleLayout))
+            ConsoleSink(renderingPolicy)
+          }
 
           val maybeFileSink = config.jsonFileSink.map { fileSinkConfig =>
             object jsonFileSink
