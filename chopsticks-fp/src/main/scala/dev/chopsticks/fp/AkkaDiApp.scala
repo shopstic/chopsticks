@@ -108,15 +108,23 @@ trait AkkaDiApp[Cfg] extends LoggingContext {
       appFib <- runEnv
         .run(ZIO.accessM[AppEnv](_.get), args.headOption.contains("--dump-di-graph"))
         .fork
+      appInterruptionPromise <- Promise.make[Nothing, Unit]
       _ <- UIO {
         shutdown.addTask("app-interruption", "interrupt app") { () =>
-          runtime.unsafeRunToFuture(appFib.interrupt.ignore *> UIO(Done))
+          runtime.unsafeRunToFuture(appInterruptionPromise.completeWith(ZIO.unit).as(Done))
         }
         shutdown.addJvmShutdownHook { () =>
           izLogging.logger.router.close()
         }
       }
-      result <- appFib.join
+      result <- {
+        val interruptTask = appInterruptionPromise
+          .await
+          .raceFirst(Task.fromFuture(_ => akkaActorSystem.whenTerminated))
+          .as(1)
+          .ensuring(appFib.interrupt.ignore *> UIO(Done))
+        appFib.join.raceFirst(interruptTask)
+      }
     } yield result
 
     try {
