@@ -72,7 +72,6 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
     Task {
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
-          IzLogging.live(allConfig),
           Bar.live("bar"),
           Foo.live("foo"),
           AppLayer(app)
