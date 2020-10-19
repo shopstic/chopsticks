@@ -161,31 +161,19 @@ object IzLogTemplates {
         )
       ),
       Extractor.Space,
-      new Styler.Colored(
-        Console.BLACK_B,
+      new Extractor.Constant("["),
+      new Styler.Trim(
         Seq(
-          new Extractor.Constant("["),
-          new Styler.AdaptivePad(
-            Seq(
-              new Styler.Trim(
-                Seq(
-                  new LocationExtractor(
-                    sourceExtractor = new ContextSourcePositionExtractor(new Extractor.SourcePosition()),
-                    loggerNameExtractor = new Extractor.LoggerName()
-                  )
-                ),
-                42,
-                TrimType.Left,
-                Some("…")
-              )
-            ),
-            12,
-            PadType.Left,
-            ' '
-          ),
-          new Extractor.Constant("]")
-        )
+          new LocationExtractor(
+            sourceExtractor = new ContextSourcePositionExtractor(new Extractor.SourcePosition()),
+            loggerNameExtractor = new Extractor.LoggerName()
+          )
+        ),
+        42,
+        TrimType.Left,
+        Some("…")
       ),
+      new Extractor.Constant("]"),
       Extractor.Space,
       new Extractor.Constant("["),
       new Styler.AdaptivePad(Seq(new Extractor.ThreadId()), 1, PadType.Left, ' '),
