@@ -5,6 +5,7 @@ import dev.chopsticks.util.config.PureconfigLoader
 import izumi.fundamentals.platform.time.IzTimeSafe
 import izumi.logstage.api.Log
 import izumi.logstage.api.Log.{CustomContext, Level}
+import izumi.logstage.api.logger.LogSink
 import izumi.logstage.api.rendering.{RenderingOptions, RenderingPolicy}
 import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
 import izumi.logstage.api.rendering.logunits.Styler.{PadType, TrimType}
@@ -48,11 +49,23 @@ object IzLogging {
       zioLogger(IzLogRenderingExtractors.LocationCtxKey -> s"${file.value}:${line.value}")
   }
 
-  def create(lbConfig: LbConfig, namespace: String = "iz-logging"): Service = {
-    create(PureconfigLoader.unsafeLoad[IzLoggingConfig](lbConfig, namespace))
+  def create(lbConfig: LbConfig): Service = {
+    create(lbConfig, List.empty)
+  }
+
+  def create(lbConfig: LbConfig, filters: Iterable[IzLoggingFilter]): Service = {
+    create(lbConfig, "iz-logging", filters)
+  }
+
+  def create(lbConfig: LbConfig, namespace: String, filters: Iterable[IzLoggingFilter]): Service = {
+    create(PureconfigLoader.unsafeLoad[IzLoggingConfig](lbConfig, namespace), filters)
   }
 
   def create(config: IzLoggingConfig): Service = {
+    create(config, List.empty)
+  }
+
+  def create(config: IzLoggingConfig, filters: Iterable[IzLoggingFilter]): Service = {
     val consoleSink = {
       val renderingPolicy =
         if (config.coloredOutput) RenderingPolicy.coloringPolicy(Some(IzLogTemplates.consoleLayout))
@@ -74,9 +87,8 @@ object IzLogging {
       new QueueingSink(jsonFileSink)
     }
 
-    val logger = IzLogger(config.level, sinks = consoleSink :: maybeFileSink.toList)(
-      IzLogRenderingExtractors.LoggerTypeCtxKey -> "iz"
-    )
+    val sinks = (consoleSink :: maybeFileSink.toList).map(sink => IzLoggingSinks.IzFilteringSink(filters, sink))
+    val logger = IzLogger(config.level, sinks)(IzLogRenderingExtractors.LoggerTypeCtxKey -> "iz")
     val zioLogger = LogstageZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
 
     maybeFileSink.foreach(_.start())
@@ -86,14 +98,26 @@ object IzLogging {
     LiveService(logger, zioLogger)
   }
 
-  def live(lbConfig: LbConfig, namespace: String = "iz-logging"): Layer[Nothing, IzLogging] = {
-    live(PureconfigLoader.unsafeLoad[IzLoggingConfig](lbConfig, namespace))
+  def live(lbConfig: LbConfig): Layer[Nothing, IzLogging] = {
+    live(lbConfig, List.empty)
+  }
+
+  def live(lbConfig: LbConfig, filters: Iterable[IzLoggingFilter]): Layer[Nothing, IzLogging] = {
+    live(lbConfig, "iz-logging", filters)
+  }
+
+  def live(lbConfig: LbConfig, namespace: String, filters: Iterable[IzLoggingFilter]): Layer[Nothing, IzLogging] = {
+    live(PureconfigLoader.unsafeLoad[IzLoggingConfig](lbConfig, namespace), filters)
   }
 
   def live(config: IzLoggingConfig): Layer[Nothing, IzLogging] = {
+    live(config, List.empty)
+  }
+
+  def live(config: IzLoggingConfig, filters: Iterable[IzLoggingFilter]): Layer[Nothing, IzLogging] = {
     val managed: ZManaged[Any, Nothing, Service] = for {
       service <- ZManaged.make {
-        UIO(create(config))
+        UIO(create(config, filters))
       } { service =>
         UIO(service.logger.router.close())
       }
@@ -190,4 +214,25 @@ object IzLogTemplates {
       new Extractor.Message()
     )
   )
+}
+
+trait IzLoggingFilter {
+  def exclude(logEntry: Log.Entry): Boolean
+}
+
+object IzLoggingSinks {
+  final class IzFilteringSink(filters: Iterable[IzLoggingFilter], underlying: LogSink) extends LogSink {
+    override def flush(e: Log.Entry): Unit = {
+      if (filters.exists(f => f.exclude(e))) ()
+      else underlying.flush(e)
+    }
+
+    override def close(): Unit = underlying.close()
+  }
+
+  object IzFilteringSink {
+    def apply(filters: Iterable[IzLoggingFilter], underlying: LogSink): IzFilteringSink = {
+      new IzFilteringSink(filters, underlying)
+    }
+  }
 }
