@@ -54,7 +54,7 @@ object Build {
         Build.cq := {
           (Compile / scalafmtCheck).value
           (Test / scalafmtCheck).value
-          (Compile / scalafmtSbtCheck).value
+          val _ = (Compile / scalafmtSbtCheck).value
         },
         Build.fmt := {
           (Compile / scalafmt).value

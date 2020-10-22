@@ -44,7 +44,7 @@ object ConditionalRestartSource {
     val promise = Promise[Mat]()
     val (killSwitch, source) =
       RestartSource
-        .withBackoff(minBackoff, maxBackoff, randomFactor) { () =>
+        .withBackoff(RestartSettings(minBackoff, maxBackoff, randomFactor)) { () =>
           sourceFactory()
             .alsoToMat(Sink.ignore)(Keep.both)
             .withAttributes(
