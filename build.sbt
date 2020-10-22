@@ -6,12 +6,12 @@ ThisBuild / javacOptions ++= Build.javacOptions
 ThisBuild / scalacOptions ++= Build.scalacOptions
 
 ThisBuild / Test / testOptions := Seq(Tests.Argument("-l", Build.ItTagName), Tests.Cleanup(() => System.gc()))
-ThisBuild / Build.ITest / testOptions := Seq(Tests.Argument("-n", Build.ItTagName), Tests.Cleanup(() => System.gc()))
+//ThisBuild / Build.ITest / testOptions := Seq(Tests.Argument("-n", Build.ItTagName), Tests.Cleanup(() => System.gc()))
 
 ThisBuild / Test / fork := Build.forkTests
 ThisBuild / Test / javaOptions += "-Xmx768m"
-ThisBuild / Build.ITest / fork := Build.forkTests
-ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
+//ThisBuild / Build.ITest / fork := Build.forkTests
+//ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
 ThisBuild / resolvers ++= Seq(
   Resolver.bintrayRepo("shopstic", "maven")
