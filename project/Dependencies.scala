@@ -130,7 +130,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.5.3"
+    "io.scalaland" %% "chimney" % "0.6.0"
   )
 
   val snappyDeps = Seq(
