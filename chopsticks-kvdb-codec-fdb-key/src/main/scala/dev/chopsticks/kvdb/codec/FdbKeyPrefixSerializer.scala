@@ -63,7 +63,6 @@ object FdbKeyPrefixSerializer {
               done = true
             }
             else {
-              println(s"${ctx.typeName.full} remaining = $remaining")
               result = params.next().typeclass.serializePrefix(output, remaining)
             }
         }

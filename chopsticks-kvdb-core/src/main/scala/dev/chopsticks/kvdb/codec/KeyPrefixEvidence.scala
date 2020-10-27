@@ -18,30 +18,34 @@ object KeyPrefixEvidence {
   // e.g
   // T as prefix of:
   // case class Bar(one: T, two: Boolean, three: Double)
-  implicit def anyToKeyPrefixOfProduct[A, B <: Product, F <: HList, T <: HList](implicit
-    @nowarn f: KeySerdes.Aux[B, F],
-    @nowarn t: IsHCons.Aux[F, A, T],
-    @nowarn e: A <:!< Product
-  ): KeyPrefixEvidence[A, B] = (prefix: A) => prefix :: HNil
+  implicit def anyToKeyPrefixOfProduct[Prefix, Key <: Product, KeyHList <: HList, KeyFlattened <: HList, T <: HList](
+    implicit
+    @nowarn e: Prefix <:!< Product,
+    @nowarn keyHlist: Generic.Aux[Key, KeyHList],
+    @nowarn keyFlattened: FlatMapper.Aux[flatten.type, KeyHList, KeyFlattened],
+    @nowarn isHcons: IsHCons.Aux[KeyFlattened, Prefix, T]
+  ): KeyPrefixEvidence[Prefix, Key] = (prefix: Prefix) => prefix :: HNil
 
   implicit def productToKeyPrefix[
     Prefix <: Product,
     Key <: Product,
-    PrefixHlist <: HList,
-    PrefixFlattenedHlist <: HList,
-    KeyHlist <: HList,
+    PrefixHList <: HList,
+    PrefixFlattened <: HList,
+    KeyHList <: HList,
+    KeyFlattened <: HList,
     N <: Nat,
-    TakenHlist <: HList
+    TakenHList <: HList
   ](implicit
     @nowarn neqEvidence: Prefix =:!= Key,
-    prefixHlist: Generic.Aux[Prefix, PrefixHlist],
-    prefixFlattenedHlist: FlatMapper.Aux[flatten.type, PrefixHlist, PrefixFlattenedHlist],
-    @nowarn length: Length.Aux[PrefixFlattenedHlist, N],
-    @nowarn keyHlist: KeySerdes.Aux[Key, KeyHlist],
-    @nowarn takenHlist: Take.Aux[KeyHlist, N, TakenHlist],
-    evidence: PrefixFlattenedHlist =:= TakenHlist
+    prefixHList: Generic.Aux[Prefix, PrefixHList],
+    prefixFlattened: FlatMapper.Aux[flatten.type, PrefixHList, PrefixFlattened],
+    @nowarn keyHList: Generic.Aux[Key, KeyHList],
+    @nowarn keyFlattened: FlatMapper.Aux[flatten.type, KeyHList, KeyFlattened],
+    @nowarn length: Length.Aux[PrefixFlattened, N],
+    @nowarn takenHList: Take.Aux[KeyFlattened, N, TakenHList],
+    evidence: PrefixFlattened =:= TakenHList
   ): KeyPrefixEvidence[Prefix, Key] = {
-    (prefix: Prefix) => prefixFlattenedHlist(prefixHlist.to(prefix))
+    (prefix: Prefix) => prefixFlattened(prefixHList.to(prefix))
   }
 
   def apply[A, B](implicit e: KeyPrefixEvidence[A, B]): KeyPrefixEvidence[A, B] = e
