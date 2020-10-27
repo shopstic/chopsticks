@@ -48,7 +48,7 @@ object FdbKeyCodecTestEntities {
   object ContravariantKeyPrefixTest {
     import dev.chopsticks.kvdb.codec.fdb_key._
     implicit val dbKey = KeySerdes[ContravariantKeyPrefixTest]
-    implicit val dbKeyPrefix = KeyPrefix[(EnumTest, IntEnumTest), ContravariantKeyPrefixTest]
+    implicit val dbKeyPrefix = KeyPrefixEvidence[(EnumTest, IntEnumTest), ContravariantKeyPrefixTest]
   }
 
   final case class TestKeyWithRefined(foo: NonEmptyString, bar: PortNumber)
@@ -60,13 +60,15 @@ object FdbKeyCodecTestEntities {
   type NonEmptyStringAlias = Refined[String, NonEmpty]
   final case class TestKeyWithRefinedAlias(bar: PortNumber, foo: NonEmptyStringAlias)
 
-  sealed trait SealedTraitTest
-  object SealedTraitTest {
-    import dev.chopsticks.kvdb.codec.fdb_key._
-    implicit val dbKey = KeySerdes[SealedTraitTest]
-  }
+  /*sealed trait SealedTraitTest
   final case class SealedTraitTestFoo(foo: Int) extends SealedTraitTest
   final case class SealedTraitTestBar(bar: Int) extends SealedTraitTest
   final case class SealedTraitTestBaz(baz: Int) extends SealedTraitTest
   final case class SealedTraitTestBoo(boom: Int) extends SealedTraitTest
+
+  final case class KeyWithSealedTraitTest(param: SealedTraitTest)
+  object KeyWithSealedTraitTest {
+    import dev.chopsticks.kvdb.codec.fdb_key._
+    implicit val dbKey = KeySerdes[KeyWithSealedTraitTest]
+  }*/
 }

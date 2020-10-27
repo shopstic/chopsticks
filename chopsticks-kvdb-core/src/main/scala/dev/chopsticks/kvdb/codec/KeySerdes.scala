@@ -7,9 +7,9 @@ import shapeless.ops.hlist.FlatMapper
 
 import scala.annotation.nowarn
 
-trait KeySerdes[P] extends KeySerializer[P] with KeyDeserializer[P] {
+trait KeySerdes[K] extends KeySerializer[K] with KeyDeserializer[K] with KeyPrefixSerializer[K] {
   type Flattened <: HList
-
+  def flatten(value: K): Flattened
   def describe: String
 }
 
@@ -41,9 +41,10 @@ object KeySerdes extends StrictLogging {
   }
 
   implicit def deriveProduct[P <: Product, R <: HList, F <: HList](implicit
-    @nowarn g: Generic.Aux[P, R],
-    @nowarn f: FlatMapper.Aux[flatten.type, R, F],
+    generic: Generic.Aux[P, R],
+    flat: FlatMapper.Aux[flatten.type, R, F],
     serializer: KeySerializer[P],
+    prefixSerializer: KeyPrefixSerializer[P],
     deserializer: KeyDeserializer[P],
     typ: Typeable[P]
   ): Aux[P, F] = {
@@ -52,20 +53,26 @@ object KeySerdes extends StrictLogging {
     new KeySerdes[P] {
       type Flattened = F
 
-      def describe: String = typ.describe
+      override def flatten(value: P): Flattened = flat(generic.to(value))
 
-      def deserialize(bytes: Array[Byte]): KeyDeserializationResult[P] = {
+      override def describe: String = typ.describe
+
+      override def deserialize(bytes: Array[Byte]): KeyDeserializationResult[P] = {
         deserializer.deserialize(bytes)
       }
 
-      def serialize(value: P): Array[Byte] = {
+      override def serialize(value: P): Array[Byte] = {
         serializer.serialize(value)
       }
+
+      override def serializePrefix[V](prefix: V)(implicit ev: KeyPrefixEvidence[V, P]): Array[Byte] =
+        prefixSerializer.serializePrefix(prefix)
     }
   }
 
   implicit def deriveAny[V](implicit
     serializer: KeySerializer[V],
+    prefixSerializer: KeyPrefixSerializer[V],
     deserializer: KeyDeserializer[V],
     typ: Typeable[V],
     @nowarn ev: V <:!< Product
@@ -75,15 +82,20 @@ object KeySerdes extends StrictLogging {
     new KeySerdes[V] {
       type Flattened = V :: HNil
 
-      def describe: String = typ.describe
+      override def flatten(value: V): Flattened = value :: HNil
 
-      def deserialize(bytes: Array[Byte]): KeyDeserializationResult[V] = {
+      override def describe: String = typ.describe
+
+      override def deserialize(bytes: Array[Byte]): KeyDeserializationResult[V] = {
         deserializer.deserialize(bytes)
       }
 
-      def serialize(value: V): Array[Byte] = {
+      override def serialize(value: V): Array[Byte] = {
         serializer.serialize(value)
       }
+
+      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefixEvidence[P, V]): Array[Byte] =
+        prefixSerializer.serializePrefix(prefix)
     }
   }
 

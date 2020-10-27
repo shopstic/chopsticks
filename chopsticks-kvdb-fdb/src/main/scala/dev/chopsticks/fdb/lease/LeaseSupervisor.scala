@@ -342,7 +342,8 @@ object LeaseSupervisor extends LoggingContext {
     leaseKeyspace: A,
     config: LeaseSupervisorConfig
   ): CompletableFuture[Seq[Lease]] = {
-    val rangeConstraint = KeyConstraints.range[Lease](_.first, _.last)
+    val rangeConstraint = KeyConstraints.range[LeaseKey](_.first, _.last)(leaseKeyspace.keySerdes)
+
     fdb
       .doGetRangeFuture(
         tx,

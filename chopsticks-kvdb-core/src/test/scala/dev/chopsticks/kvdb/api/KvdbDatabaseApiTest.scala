@@ -3,7 +3,6 @@ package dev.chopsticks.kvdb.api
 import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
-import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.matchers.should.Matchers

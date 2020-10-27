@@ -13,6 +13,8 @@ import scalapb.GeneratedEnum
 
 import scala.annotation.{implicitNotFound, nowarn}
 import scala.language.experimental.macros
+import scala.reflect.ClassTag
+
 @implicitNotFound(
   msg = "Implicit FdbKeySerializer[${T}] not found. Try supplying an implicit instance of FdbKeySerializer[${T}]"
 )
@@ -20,74 +22,83 @@ trait FdbKeySerializer[T] {
   def serialize(o: Tuple, t: T): Tuple
 }
 
+trait PredefinedFdbKeySerializer[T] extends FdbKeySerializer[T]
+trait CaseClassFdbKeySerializer[T] extends FdbKeySerializer[T]
+trait SealedTraitFdbKeySerializer[T] extends FdbKeySerializer[T]
+
 object FdbKeySerializer {
   type Typeclass[A] = FdbKeySerializer[A]
 
-  implicit val stringFdbKeyEncoder: FdbKeySerializer[String] = create((o, v) => o.add(v))
-  implicit val booleanFdbKeyEncoder: FdbKeySerializer[Boolean] = create((o, v) => o.add(v))
-  implicit val byteFdbKeyEncoder: FdbKeySerializer[Byte] = create((o, v) => o.add(v.toLong))
-  implicit val shortFdbKeyEncoder: FdbKeySerializer[Short] = create((o, v) => o.add(v.toLong))
-  implicit val intFdbKeyEncoder: FdbKeySerializer[Int] = create((o, v) => o.add(v.toLong))
-  implicit val longFdbKeyEncoder: FdbKeySerializer[Long] = create((o, v) => o.add(v))
-  implicit val doubleFdbKeyEncoder: FdbKeySerializer[Double] = create((o, v) => o.add(v))
-  implicit val floatFdbKeyEncoder: FdbKeySerializer[Float] = create((o, v) => o.add(v))
+  implicit val stringFdbKeyEncoder: PredefinedFdbKeySerializer[String] = define((o, v) => o.add(v))
+  implicit val booleanFdbKeyEncoder: PredefinedFdbKeySerializer[Boolean] = define((o, v) => o.add(v))
+  implicit val byteFdbKeyEncoder: PredefinedFdbKeySerializer[Byte] = define((o, v) => o.add(v.toLong))
+  implicit val shortFdbKeyEncoder: PredefinedFdbKeySerializer[Short] = define((o, v) => o.add(v.toLong))
+  implicit val intFdbKeyEncoder: PredefinedFdbKeySerializer[Int] = define((o, v) => o.add(v.toLong))
+  implicit val longFdbKeyEncoder: PredefinedFdbKeySerializer[Long] = define((o, v) => o.add(v))
+  implicit val doubleFdbKeyEncoder: PredefinedFdbKeySerializer[Double] = define((o, v) => o.add(v))
+  implicit val floatFdbKeyEncoder: PredefinedFdbKeySerializer[Float] = define((o, v) => o.add(v))
 
-  implicit val ldFdbKeyEncoder: FdbKeySerializer[LocalDate] =
-    create((o, v) => longFdbKeyEncoder.serialize(o, v.toEpochDay))
-  implicit val ldtFdbKeyEncoder: FdbKeySerializer[LocalDateTime] = create { (o, v) =>
+  implicit val ldFdbKeyEncoder: PredefinedFdbKeySerializer[LocalDate] =
+    define((o, v) => longFdbKeyEncoder.serialize(o, v.toEpochDay))
+  implicit val ldtFdbKeyEncoder: PredefinedFdbKeySerializer[LocalDateTime] = define { (o, v) =>
     o.add(KvdbSerdesUtils.localDateTimeToEpochNanos(v).underlying)
   }
-  implicit val instantFdbKeyEncoder: FdbKeySerializer[Instant] = create { (o, v) =>
+  implicit val instantFdbKeyEncoder: PredefinedFdbKeySerializer[Instant] = define { (o, v) =>
     o.add(KvdbSerdesUtils.instantToEpochNanos(v).underlying)
   }
-  implicit val ltFdbKeyEncoder: FdbKeySerializer[LocalTime] =
-    create((o, v) => longFdbKeyEncoder.serialize(o, v.toNanoOfDay))
-  implicit val ymFdbKeyEncoder: FdbKeySerializer[YearMonth] =
-    create((o, v) => longFdbKeyEncoder.serialize(o, v.getYear.toLong * 100 + v.getMonthValue))
-  implicit val uuidFdbKeyEncoder: FdbKeySerializer[UUID] =
-    create((o, v) => o.add(v))
-  implicit val versionStampFdbKeyEncoder: FdbKeySerializer[Versionstamp] =
-    create((o, v) => o.add(v))
+  implicit val ltFdbKeyEncoder: PredefinedFdbKeySerializer[LocalTime] =
+    define((o, v) => longFdbKeyEncoder.serialize(o, v.toNanoOfDay))
+  implicit val ymFdbKeyEncoder: PredefinedFdbKeySerializer[YearMonth] =
+    define((o, v) => longFdbKeyEncoder.serialize(o, v.getYear.toLong * 100 + v.getMonthValue))
+  implicit val uuidFdbKeyEncoder: PredefinedFdbKeySerializer[UUID] =
+    define((o, v) => o.add(v))
+  implicit val versionStampFdbKeyEncoder: PredefinedFdbKeySerializer[Versionstamp] =
+    define((o, v) => o.add(v))
 
-  implicit def protobufEnumFdbKeyEncoder[T <: GeneratedEnum]: FdbKeySerializer[T] =
-    create((o, v) => intFdbKeyEncoder.serialize(o, v.value))
+  implicit def protobufEnumFdbKeyEncoder[T <: GeneratedEnum: ClassTag]: PredefinedFdbKeySerializer[T] =
+    define((o, v) => intFdbKeyEncoder.serialize(o, v.value))
 
-  implicit def enumeratumByteEnumKeyEncoder[E <: ByteEnumEntry]: FdbKeySerializer[E] =
-    (o: Tuple, t: E) => o.add(t.value.toLong)
+  implicit def enumeratumByteEnumKeyEncoder[E <: ByteEnumEntry: ClassTag]: PredefinedFdbKeySerializer[E] =
+    define((o: Tuple, t: E) => o.add(t.value.toLong))
 
-  implicit def enumeratumShortEnumKeyEncoder[E <: ShortEnumEntry]: FdbKeySerializer[E] =
-    (o: Tuple, t: E) => o.add(t.value.toLong)
+  implicit def enumeratumShortEnumKeyEncoder[E <: ShortEnumEntry: ClassTag]: PredefinedFdbKeySerializer[E] =
+    define((o: Tuple, t: E) => o.add(t.value.toLong))
 
-  implicit def enumeratumIntEnumKeyEncoder[E <: IntEnumEntry]: FdbKeySerializer[E] =
-    (o: Tuple, t: E) => o.add(t.value.toLong)
+  implicit def enumeratumIntEnumKeyEncoder[E <: IntEnumEntry: ClassTag]: PredefinedFdbKeySerializer[E] =
+    define((o: Tuple, t: E) => o.add(t.value.toLong))
 
-  implicit def enumeratumEnumKeyEncoder[E <: EnumEntry]: FdbKeySerializer[E] =
-    (o: Tuple, t: E) => o.add(t.entryName)
+  implicit def enumeratumEnumKeyEncoder[E <: EnumEntry: ClassTag]: PredefinedFdbKeySerializer[E] =
+    define((o: Tuple, t: E) => o.add(t.entryName))
 
   implicit def refinedFdbKeySerializer[F[_, _], T, P](implicit
     serializer: FdbKeySerializer[T],
     refType: RefType[F],
-    @nowarn validate: Validate[T, P]
-  ): FdbKeySerializer[F[T, P]] = {
-    (o: Tuple, t: F[T, P]) => serializer.serialize(o, refType.unwrap(t))
+    @nowarn validate: Validate[T, P],
+    @nowarn ct: ClassTag[F[T, P]]
+  ): PredefinedFdbKeySerializer[F[T, P]] = {
+    define((o: Tuple, t: F[T, P]) => serializer.serialize(o, refType.unwrap(t)))
   }
 
   def apply[V](implicit f: FdbKeySerializer[V]): FdbKeySerializer[V] = f
 
-  def create[T](f: (Tuple, T) => Tuple): FdbKeySerializer[T] = { (o: Tuple, t: T) => f(o, t) }
+  def define[T](ser: (Tuple, T) => Tuple): PredefinedFdbKeySerializer[T] =
+    (tupleOutput: Tuple, value: T) => ser(tupleOutput, value)
 
-  def combine[A](ctx: CaseClass[FdbKeySerializer, A]): FdbKeySerializer[A] =
-    (o: Tuple, a: A) => ctx.parameters.foldLeft(o) { (tuple, p) => p.typeclass.serialize(tuple, p.dereference(a)) }
+  def combine[T](ctx: CaseClass[FdbKeySerializer, T]): CaseClassFdbKeySerializer[T] =
+    (tupleOutput: Tuple, value: T) => {
+      ctx.parameters.foldLeft(tupleOutput) { (tuple, p) => p.typeclass.serialize(tuple, p.dereference(value)) }
+    }
 
-  def dispatch[A](ctx: SealedTrait[FdbKeySerializer, A]): FdbKeySerializer[A] = (o: Tuple, a: A) => {
+  // TODO Need a better serialization approach for coproducts that don't easily break data compatibility
+  /*def dispatch[A](ctx: SealedTrait[FdbKeySerializer, A]): SealedTraitFdbKeySerializer[A] = (o: Tuple, a: A) => {
     ctx.dispatch(a) { sub: Subtype[Typeclass, A] =>
       sub.typeclass.serialize(o.add(sub.index.toLong), sub.cast(a))
     }
-  }
+  }*/
 
   //noinspection MatchToPartialFunction
-  implicit def deriveOption[T](implicit encoder: FdbKeySerializer[T]): FdbKeySerializer[Option[T]] = {
-    create { (o, maybeValue) =>
+  implicit def deriveOption[T](implicit encoder: FdbKeySerializer[T]): PredefinedFdbKeySerializer[Option[T]] = {
+    define { (o, maybeValue) =>
       maybeValue match {
         case Some(v) => encoder.serialize(o.add(true), v)
         case None => o.add(false)

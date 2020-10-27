@@ -7,6 +7,8 @@ import dev.chopsticks.kvdb.util.KvdbSerdesUtils
 import dev.chopsticks.kvdb.codec.KeySerdes.Aux
 import shapeless._
 
+import scala.reflect.ClassTag
+
 package object primitive {
   implicit val literalStringDbValue: ValueSerdes[String] = ValueSerdes
     .create[String](KvdbSerdesUtils.stringToByteArray, bytes => Right(KvdbSerdesUtils.byteArrayToString(bytes)))
@@ -20,16 +22,25 @@ package object primitive {
     }
   )
 
-  def literalStringDbKeyFor[K](from: String => K, to: K => String): Aux[K, HNil] =
+  def literalStringDbKeyFor[K: ClassTag](from: String => K, to: K => String): Aux[K, HNil] =
     new KeySerdes[K] {
       type Flattened = HNil
 
-      def describe: String = "literalStringDbKey"
+      override def describe: String = "literalStringDbKey"
 
-      def serialize(value: K): Array[Byte] = KvdbSerdesUtils.stringToByteArray(to(value))
+      override def serialize(value: K): Array[Byte] = KvdbSerdesUtils.stringToByteArray(to(value))
 
-      def deserialize(bytes: Array[Byte]): KeyDeserializationResult[K] =
+      override def deserialize(bytes: Array[Byte]): KeyDeserializationResult[K] =
         Right(from(KvdbSerdesUtils.byteArrayToString(bytes)))
+
+      override def flatten(value: K): HNil = ???
+
+      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefixEvidence[P, K]): Array[Byte] = {
+        prefix match {
+          case p: K => KvdbSerdesUtils.stringToByteArray(to(p))
+          case _ => throw new IllegalStateException("Prefix type is different from key type, which is not supported")
+        }
+      }
     }
 
   implicit val literalStringDbKey: Aux[String, HNil] =

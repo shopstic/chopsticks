@@ -44,15 +44,15 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
     implicit val testVersionstampValueSerdes: ValueSerdes[TestValueWithVersionstamp] = ValueSerdes.fromKeySerdes
 
     object default extends SampleDb.Default
-    object test extends SampleDb.Test
+    object versionstampKeyTest extends SampleDb.VersionstampKeyTest
     object time extends SampleDb.Time
-    object testVersionstampValue extends SampleDb.TestVersionstampValue
+    object versionstampValueTest extends SampleDb.VersionstampValueTest
 
     override val keyspacesWithVersionstampKey = Set(
-      KeyspaceWithVersionstampKey(test)
+      KeyspaceWithVersionstampKey(versionstampKeyTest)
     )
     override val keyspacesWithVersionstampValue = Set(
-      KeyspaceWithVersionstampValue(testVersionstampValue)
+      KeyspaceWithVersionstampValue(versionstampValueTest)
     )
   }
 
@@ -66,7 +66,7 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
       _ <- ZAkkaStreams
         .interruptibleGraph(
           dbApi
-            .columnFamily(sampleDb.testVersionstampValue)
+            .columnFamily(sampleDb.versionstampValueTest)
             .watchKeySource("foo")
             .viaMat(KillSwitches.single)(Keep.right)
             .toMat(Sink.foreach { v =>
@@ -80,7 +80,7 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
 
       fib <- ZIO.effectSuspend {
         changeCounter.increment()
-        dbApi.columnFamily(sampleDb.testVersionstampValue).putTask(
+        dbApi.columnFamily(sampleDb.versionstampValueTest).putTask(
           "foo",
           TestValueWithVersionstamp(Versionstamp.incomplete())
         )

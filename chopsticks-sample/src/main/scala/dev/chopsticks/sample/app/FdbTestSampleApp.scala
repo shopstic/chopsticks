@@ -45,15 +45,15 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
     implicit val testVersionstampValueSerdes: ValueSerdes[TestValueWithVersionstamp] = ValueSerdes.fromKeySerdes
 
     object default extends SampleDb.Default
-    object test extends SampleDb.Test
+    object versionstampKeyTest extends SampleDb.VersionstampKeyTest
     object time extends SampleDb.Time
-    object testVersionstampValue extends SampleDb.TestVersionstampValue
+    object versionstampValueTest extends SampleDb.VersionstampValueTest
 
     override val keyspacesWithVersionstampKey = Set(
-      KeyspaceWithVersionstampKey(test)
+      KeyspaceWithVersionstampKey(versionstampKeyTest)
     )
     override val keyspacesWithVersionstampValue = Set(
-      KeyspaceWithVersionstampValue(testVersionstampValue)
+      KeyspaceWithVersionstampValue(versionstampValueTest)
     )
   }
 
@@ -103,7 +103,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       )
       .log("Default dump")
 
-    testKeyspace = dbApi.columnFamily(sampleDb.test)
+    testKeyspace = dbApi.columnFamily(sampleDb.versionstampKeyTest)
 
     _ <- testKeyspace
       .drop()
