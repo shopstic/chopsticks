@@ -16,7 +16,7 @@ import dev.chopsticks.kvdb.codec.KeyConstraints.{
   ConstraintsRangesWithLimitBuilder,
   ConstraintsSeqBuilder
 }
-import dev.chopsticks.kvdb.codec.{KeyConstraints, KeyTransformer}
+import dev.chopsticks.kvdb.codec.{KeyConstraints, KeySerdes, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbPair, KvdbTailBatch, KvdbValueBatch}
@@ -40,6 +40,8 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 ) {
   private val akkaEnv = ZService.get[AkkaEnv.Service](rt.environment)
   import akkaEnv._
+
+  implicit private val keySerdes: KeySerdes[K] = cf.keySerdes
 
   def withOptions(
     modifier: KvdbApiClientOptions => KvdbApiClientOptions
@@ -82,7 +84,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   def batchGetByKeysTask(keys: Seq[K]): Task[Seq[Option[(K, V)]]] = {
-    db.batchGetTask(cf, keys.map(k => KeyConstraints.toList(KeyConstraints.seed[K].is(k)(cf.keySerdes))))
+    db.batchGetTask(cf, keys.map(k => KeyConstraints.toList(KeyConstraints.seed[K].is(k))))
       .map(_.map(_.map(cf.unsafeDeserialize)))
   }
 

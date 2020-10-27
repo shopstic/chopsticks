@@ -17,8 +17,8 @@ object KeyPrefix extends StrictLogging {
     def serialize(a: A): Array[Byte] = serializer.serialize(a)
   }
 
-  implicit def selfKeyPrefix[A](implicit deserializer: KeySerializer[A]): KeyPrefix[A, A] =
-    new KeyPrefixWithSerializer(deserializer)
+  implicit def selfKeyPrefix[A](implicit serializer: KeySerializer[A]): KeyPrefix[A, A] =
+    new KeyPrefixWithSerializer(serializer)
 
   // e.g
   // T as prefix of:

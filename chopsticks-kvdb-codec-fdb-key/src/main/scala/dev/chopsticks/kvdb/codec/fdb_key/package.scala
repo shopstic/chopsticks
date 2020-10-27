@@ -10,6 +10,7 @@ import eu.timepit.refined.types.string.NonEmptyString
 import scala.util.control.NonFatal
 import eu.timepit.refined.shapeless.typeable._
 import eu.timepit.refined.types.numeric.{PosInt, PosLong}
+import shapeless.HNil
 
 //noinspection TypeAnnotation
 package object fdb_key {
@@ -22,6 +23,24 @@ package object fdb_key {
     else tuple.pack()
   }
 
+  implicit def fdbKeyPrefixSerializer[T](implicit
+    serializer: FdbKeyPrefixSerializer[T]
+  ): KeyPrefixSerializer[T] = {
+    new KeyPrefixSerializer[T] {
+      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefixEvidence[P, T]): Array[Byte] = {
+        val flattened = ev.flatten(prefix)
+        serializer.serializePrefix(new Tuple(), flattened) match {
+          case (output, HNil) =>
+            if (output.hasIncompleteVersionstamp) output.packWithVersionstamp()
+            else output.pack()
+
+          case (_, leftover) => throw new IllegalStateException(
+              s"Prefix has not been fully consumed during serialization. Leftovers: $leftover"
+            )
+        }
+      }
+    }
+  }
   implicit def fdbKeyDeserializer[T](implicit deserializer: FdbKeyDeserializer[T]): KeyDeserializer[T] = {
     bytes: Array[Byte] =>
       {
