@@ -6,7 +6,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     container:
-      image: shopstic/jdk11-sbt-fdb-server:1.3.12
+      image: shopstic/jdk11-sbt-fdb-server:1.4.1
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2

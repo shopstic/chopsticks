@@ -93,8 +93,7 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
 
     case class Prefix(symbol: Sym, dateTime: LocalDateTime)
     object Prefix {
-      import fdb_key._
-      implicit val dbKeyPrefix = KeyPrefix[Prefix, TradeTick]
+      implicit val dbKeyPrefix = KeyPrefixEvidence[Prefix, TradeTick]
     }
 
     "serialize" in {
@@ -102,7 +101,7 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
 
       val tick = TradeTick(Sym("AAPL"), now, 1234.67d, 1000)
       val prefix = Prefix(Sym("AAPL"), now)
-      assert(KeySerdes.isPrefix(KeyPrefix[Prefix, TradeTick].serialize(prefix), KeySerdes.serialize(tick)))
+      assert(KeySerdes.isPrefix(KeySerdes[TradeTick].serializePrefix(prefix), KeySerdes.serialize(tick)))
     }
   }
 
@@ -412,24 +411,32 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
       }
     }
 
-    "sealed trait" should {
+    /*"sealed trait" should {
       "serdes" in {
 //        import fdb_key._
-        val foo = SealedTraitTestFoo(1)
-        val bar = SealedTraitTestBar(2)
-        val baz = SealedTraitTestBaz(3)
-        val boo = SealedTraitTestBoo(4)
+        val foo = KeyWithSealedTraitTest(SealedTraitTestFoo(1))
+        val bar = KeyWithSealedTraitTest(SealedTraitTestBar(2))
+        val baz = KeyWithSealedTraitTest(SealedTraitTestBaz(3))
+        val boo = KeyWithSealedTraitTest(SealedTraitTestBoo(4))
 
-        KeySerdes.deserialize[SealedTraitTest](KeySerdes.serialize[SealedTraitTest](foo)) should equal(Right(foo))
-        KeySerdes.deserialize[SealedTraitTest](KeySerdes.serialize[SealedTraitTest](bar)) should equal(Right(bar))
-        KeySerdes.deserialize[SealedTraitTest](KeySerdes.serialize[SealedTraitTest](baz)) should equal(Right(baz))
-        KeySerdes.deserialize[SealedTraitTest](KeySerdes.serialize[SealedTraitTest](boo)) should equal(Right(boo))
+        KeySerdes.deserialize[KeyWithSealedTraitTest](KeySerdes.serialize[KeyWithSealedTraitTest](foo)) should equal(
+          Right(foo)
+        )
+        KeySerdes.deserialize[KeyWithSealedTraitTest](KeySerdes.serialize[KeyWithSealedTraitTest](bar)) should equal(
+          Right(bar)
+        )
+        KeySerdes.deserialize[KeyWithSealedTraitTest](KeySerdes.serialize[KeyWithSealedTraitTest](baz)) should equal(
+          Right(baz)
+        )
+        KeySerdes.deserialize[KeyWithSealedTraitTest](KeySerdes.serialize[KeyWithSealedTraitTest](boo)) should equal(
+          Right(boo)
+        )
       }
-    }
+    }*/
 
-    "KeyPrefix" should {
+    "KeyPrefixEvidence" should {
       "be contravariant" in {
-        KeyPrefix[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(
+        KeyPrefixEvidence[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(
           ContravariantKeyPrefixTest.dbKeyPrefix
         )
       }

@@ -56,7 +56,7 @@ object BerkeleydbKeyCodecTest {
   object ContravariantKeyPrefixTest {
     import dev.chopsticks.kvdb.codec.berkeleydb_key._
     implicit val dbKey = KeySerdes[ContravariantKeyPrefixTest]
-    implicit val dbKeyPrefix = KeyPrefix[(EnumTest, IntEnumTest), ContravariantKeyPrefixTest]
+    implicit val dbKeyPrefix = KeyPrefixEvidence[(EnumTest, IntEnumTest), ContravariantKeyPrefixTest]
   }
 
   final case class TestKeyWithRefined(foo: NonEmptyString, bar: PortNumber)
@@ -148,8 +148,7 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
 
     case class Prefix(symbol: Sym, dateTime: LocalDateTime)
     object Prefix {
-      import berkeleydb_key._
-      implicit val dbKeyPrefix = KeyPrefix[Prefix, TradeTick]
+      implicit val dbKeyPrefix = KeyPrefixEvidence[Prefix, TradeTick]
     }
 
     "serialize" in {
@@ -157,14 +156,14 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
 
       val tick = TradeTick(Sym("AAPL"), now, BigDecimal("1234.67"), 1000)
       val prefix = Prefix(Sym("AAPL"), now)
-      assert(KeySerdes.isPrefix(KeyPrefix[Prefix, TradeTick].serialize(prefix), KeySerdes.serialize(tick)))
+      assert(KeySerdes.isPrefix(KeySerdes[TradeTick].serializePrefix(prefix), KeySerdes.serialize(tick)))
     }
   }
 
   "legacy literal string keys" should {
     import dev.chopsticks.kvdb.codec.primitive._
-    "compile for KeyPrefix" in {
-      implicitly[KeyPrefix[String, String]]
+    "compile for KeyPrefixEvidence" in {
+      implicitly[KeyPrefixEvidence[String, String]]
     }
 
     "compile for KeySerdes" in {
@@ -187,7 +186,7 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
 //                             |  KeySerdes[TestKey]
 //                             |}
 //                             |import dev.chopsticks.kvdb.codec.primitive._
-//                             |implicitly[KeyPrefix[String, TestKey]]
+//                             |implicitly[KeyPrefixEvidence[String, TestKey]]
 //        """.stripMargin)
 //    }
 //  }
@@ -489,10 +488,10 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
       }
     }
 
-    "KeyPrefix" should {
+    "KeyPrefixEvidence" should {
       "be contravariant" in {
         import BerkeleydbKeyCodecTest._
-        KeyPrefix[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(
+        KeyPrefixEvidence[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(
           ContravariantKeyPrefixTest.dbKeyPrefix
         )
       }

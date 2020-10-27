@@ -11,24 +11,24 @@ object SampleDb extends KvdbDefinition {
   final case class TestValueWithVersionstamp(version: Versionstamp)
 
   trait Default extends BaseCf[String, String]
-  trait Test extends BaseCf[TestKeyWithVersionstamp, String]
+  trait VersionstampKeyTest extends BaseCf[TestKeyWithVersionstamp, String]
   trait Time extends BaseCf[Instant, String]
-  trait TestVersionstampValue extends BaseCf[String, TestValueWithVersionstamp]
+  trait VersionstampValueTest extends BaseCf[String, TestValueWithVersionstamp]
 
-  type CfSet = Default with Test with Time with TestVersionstampValue
+  type CfSet = Default with VersionstampKeyTest with Time with VersionstampValueTest
 
   trait Materialization extends KvdbMaterialization[BaseCf, CfSet] with FdbMaterialization[BaseCf] {
     def default: Default
-    def test: Test
+    def versionstampKeyTest: VersionstampKeyTest
     def time: Time
-    def testVersionstampValue: TestVersionstampValue
+    def versionstampValueTest: VersionstampValueTest
 
     override lazy val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = {
       ColumnFamilySet[BaseCf]
         .of(default)
-        .and(test)
+        .and(versionstampKeyTest)
         .and(time)
-        .and(testVersionstampValue)
+        .and(versionstampValueTest)
     }
   }
 }
