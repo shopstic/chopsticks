@@ -3,7 +3,6 @@ package dev.chopsticks.kvdb.rocksdb
 import akka.testkit.ImplicitSender
 import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.KvdbDatabaseTest
-import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}

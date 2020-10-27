@@ -93,7 +93,6 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
 
     case class Prefix(symbol: Sym, dateTime: LocalDateTime)
     object Prefix {
-      import fdb_key._
       implicit val dbKeyPrefix = KeyPrefixEvidence[Prefix, TradeTick]
     }
 

@@ -148,7 +148,6 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
 
     case class Prefix(symbol: Sym, dateTime: LocalDateTime)
     object Prefix {
-      import berkeleydb_key._
       implicit val dbKeyPrefix = KeyPrefixEvidence[Prefix, TradeTick]
     }
 
