@@ -1,6 +1,8 @@
 /.idea
+/.vscode
 target/
-/.bloop
+.bloop
+/.bsp
 /.metals
 /out
-
+metals.sbt
