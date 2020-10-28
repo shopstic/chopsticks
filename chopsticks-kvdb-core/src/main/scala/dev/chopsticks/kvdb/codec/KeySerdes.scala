@@ -7,9 +7,7 @@ import shapeless.ops.hlist.FlatMapper
 
 import scala.annotation.nowarn
 
-trait KeySerdes[K] extends KeySerializer[K] with KeyDeserializer[K] with KeyPrefixSerializer[K] {
-  type Flattened <: HList
-  def flatten(value: K): Flattened
+trait KeySerdes[K] extends KeySerializer[K] with KeyDeserializer[K] with KeyPrefixSerializer[K] with KeyFlattening[K] {
   def describe: String
 }
 

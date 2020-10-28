@@ -17,6 +17,7 @@ ThisBuild / resolvers ++= Seq(
   Resolver.bintrayRepo("shopstic", "maven")
 //  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 )
+ThisBuild / run / fork := true
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
@@ -99,7 +100,11 @@ lazy val kvdbFdb = Build
   .settings(
     libraryDependencies ++= fdbDeps
   )
-  .dependsOn(kvdbCore % "compile->compile;test->test", kvdbCodecFdbKey % "compile->test", testkit % "test->test")
+  .dependsOn(
+    kvdbCore % "compile->compile;test->test",
+    kvdbCodecFdbKey % "compile->compile;test->test",
+    testkit % "test->test"
+  )
 
 lazy val graphql = Build
   .defineProject("graphql")
