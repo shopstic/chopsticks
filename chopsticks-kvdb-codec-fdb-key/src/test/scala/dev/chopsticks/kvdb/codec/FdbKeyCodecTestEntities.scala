@@ -48,7 +48,7 @@ object FdbKeyCodecTestEntities {
   object ContravariantKeyPrefixTest {
     import dev.chopsticks.kvdb.codec.fdb_key._
     implicit val dbKey = KeySerdes[ContravariantKeyPrefixTest]
-    implicit val dbKeyPrefix = KeyPrefixEvidence[(EnumTest, IntEnumTest), ContravariantKeyPrefixTest]
+    implicit val dbKeyPrefix = KeyPrefix[(EnumTest, IntEnumTest), ContravariantKeyPrefixTest]
   }
 
   final case class TestKeyWithRefined(foo: NonEmptyString, bar: PortNumber)

@@ -18,7 +18,7 @@ final class KeyConstraintsTest extends AnyWordSpecLike with Matchers {
   import KeyConstraints.Implicits._
 
   "work" in {
-    implicitly[KeyPrefixEvidence[String, StockDbKeyTest]]
+    implicitly[KeyPrefix[String, StockDbKeyTest]]
 
     println(KeyConstraints.range[StockDbKeyTest](_ is StockDbKeyTest("AAPL", 2017, 3), _ ^= "AAPL").show)
     println(KeyConstraints.range[StockDbKeyTest](_ >= "AAPL123" ^= "AAPL", _ <= "AAPL456").show)

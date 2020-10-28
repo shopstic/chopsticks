@@ -63,7 +63,7 @@ object KeySerdes extends StrictLogging {
         serializer.serialize(value)
       }
 
-      override def serializePrefix[V](prefix: V)(implicit ev: KeyPrefixEvidence[V, P]): Array[Byte] =
+      override def serializePrefix[V](prefix: V)(implicit ev: KeyPrefix[V, P]): Array[Byte] =
         prefixSerializer.serializePrefix(prefix)
     }
   }
@@ -92,7 +92,7 @@ object KeySerdes extends StrictLogging {
         serializer.serialize(value)
       }
 
-      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefixEvidence[P, V]): Array[Byte] =
+      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefix[P, V]): Array[Byte] =
         prefixSerializer.serializePrefix(prefix)
     }
   }
