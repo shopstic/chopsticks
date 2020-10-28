@@ -22,10 +22,10 @@ import pureconfig.ConfigReader
 import zio.{RIO, Task, ZIO, ZLayer}
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.TestKey
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.TestValue
-import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.FdbService
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.RocksdbService
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.DbService
 import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.RocksdbDatabaseConfig
+import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.FdbService
 
 final case class KvdbMultiBackendSampleAppConfig(fdb: FdbDatabaseConfig, rocksdb: RocksdbDatabaseConfig)
 

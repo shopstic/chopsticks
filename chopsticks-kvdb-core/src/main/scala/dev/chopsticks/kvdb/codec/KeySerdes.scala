@@ -2,10 +2,9 @@ package dev.chopsticks.kvdb.codec
 
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.codec.KeyDeserializer.KeyDeserializationResult
-import shapeless._
-import shapeless.ops.hlist.FlatMapper
 
 import scala.annotation.nowarn
+import shapeless.{::, <:!<, HList, HNil, Typeable}
 
 trait KeySerdes[K] extends KeySerializer[K] with KeyDeserializer[K] with KeyPrefixSerializer[K] with KeyFlattening[K] {
   def describe: String
@@ -21,26 +20,8 @@ object KeySerdes extends StrictLogging {
 
   def apply[T](implicit s: KeySerdes[T]): Aux[T, s.Flattened] = s
 
-  trait LowPriorityFlatten extends Poly1 {
-    implicit def default[T]: Case.Aux[T, T :: HNil] = at[T](v => v :: HNil)
-  }
-
-  object flatten extends LowPriorityFlatten {
-    implicit def hlistCase[L <: HList, O <: HList](implicit
-      lfm: Lazy[FlatMapper.Aux[flatten.type, L, O]]
-    ): Case.Aux[L, O] = at[L](lfm.value(_))
-
-    implicit def instanceCase[C <: Product, H <: HList, O <: HList](implicit
-      gen: Lazy[Generic.Aux[C, H]],
-      lfm: Lazy[FlatMapper.Aux[flatten.type, H, O]]
-    ): Case.Aux[C, O] = {
-      at[C](c => lfm.value(gen.value.to(c)))
-    }
-  }
-
-  implicit def deriveProduct[P <: Product, R <: HList, F <: HList](implicit
-    generic: Generic.Aux[P, R],
-    flat: FlatMapper.Aux[flatten.type, R, F],
+  implicit def deriveProduct[P <: Product, F <: HList](implicit
+    flattening: KeyFlattening.Aux[P, F],
     serializer: KeySerializer[P],
     prefixSerializer: KeyPrefixSerializer[P],
     deserializer: KeyDeserializer[P],
@@ -51,7 +32,7 @@ object KeySerdes extends StrictLogging {
     new KeySerdes[P] {
       type Flattened = F
 
-      override def flatten(value: P): Flattened = flat(generic.to(value))
+      override def flatten(value: P): Flattened = flattening.flatten(value)
 
       override def describe: String = typ.describe
 
@@ -69,11 +50,11 @@ object KeySerdes extends StrictLogging {
   }
 
   implicit def deriveAny[V](implicit
+    @nowarn ev: V <:!< Product,
     serializer: KeySerializer[V],
     prefixSerializer: KeyPrefixSerializer[V],
     deserializer: KeyDeserializer[V],
-    typ: Typeable[V],
-    @nowarn ev: V <:!< Product
+    typ: Typeable[V]
   ): Aux[V, V :: HNil] = {
     logger.debug(s"[DerivedDbKey][deriveAny] ${typ.describe}")
 
