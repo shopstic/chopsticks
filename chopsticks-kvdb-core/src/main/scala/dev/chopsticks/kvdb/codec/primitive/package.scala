@@ -35,7 +35,7 @@ package object primitive {
 
       override def flatten(value: K): HNil = ???
 
-      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefixEvidence[P, K]): Array[Byte] = {
+      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefix[P, K]): Array[Byte] = {
         prefix match {
           case p: K => KvdbSerdesUtils.stringToByteArray(to(p))
           case _ => throw new IllegalStateException("Prefix type is different from key type, which is not supported")

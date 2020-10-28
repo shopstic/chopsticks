@@ -9,10 +9,17 @@ import dev.chopsticks.kvdb.fdb.FdbMaterialization
 import dev.chopsticks.kvdb.fdb.FdbMaterialization.{KeyspaceWithVersionstampKey, KeyspaceWithVersionstampValue}
 import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.PrefixedScanPattern
 import dev.chopsticks.kvdb.rocksdb.{RocksdbColumnFamilyConfig, RocksdbColumnFamilyOptionsMap, RocksdbMaterialization}
+import dev.chopsticks.kvdb.codec.KeyPrefix
 
 object MultiBackendSampleDb {
   object Definition extends KvdbDefinition {
     final case class TestKey(name: String, time: Instant, version: Int)
+    object TestKey {
+      // Optional for absolute performance
+      implicit lazy val p1 = KeyPrefix[String, TestKey]
+      implicit lazy val p2 = KeyPrefix[(String, Instant), TestKey]
+    }
+
     final case class TestValue(quantity: Long, amount: Double)
 
     trait Default extends BaseCf[TestKey, TestValue]

@@ -1,7 +1,7 @@
 package dev.chopsticks.kvdb.codec
 
 trait KeyPrefixSerializer[T] {
-  def serializePrefix[P](prefix: P)(implicit ev: KeyPrefixEvidence[P, T]): Array[Byte]
+  def serializePrefix[P](prefix: P)(implicit ev: KeyPrefix[P, T]): Array[Byte]
 }
 
 object KeyPrefixSerializer {

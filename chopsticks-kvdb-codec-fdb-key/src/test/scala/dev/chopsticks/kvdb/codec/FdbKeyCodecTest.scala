@@ -93,7 +93,7 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
 
     case class Prefix(symbol: Sym, dateTime: LocalDateTime)
     object Prefix {
-      implicit val dbKeyPrefix = KeyPrefixEvidence[Prefix, TradeTick]
+      implicit val dbKeyPrefix = KeyPrefix[Prefix, TradeTick]
     }
 
     "serialize" in {
@@ -436,7 +436,7 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
 
     "KeyPrefixEvidence" should {
       "be contravariant" in {
-        KeyPrefixEvidence[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(
+        KeyPrefix[(EnumTest.One.type, IntEnumTest.Two.type), ContravariantKeyPrefixTest] should be(
           ContravariantKeyPrefixTest.dbKeyPrefix
         )
       }

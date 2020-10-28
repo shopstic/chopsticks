@@ -16,7 +16,7 @@ package object berkeleydb_key {
     serializer: BerkeleydbKeyPrefixSerializer[T]
   ): KeyPrefixSerializer[T] = {
     new KeyPrefixSerializer[T] {
-      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefixEvidence[P, T]): Array[Byte] = {
+      override def serializePrefix[P](prefix: P)(implicit ev: KeyPrefix[P, T]): Array[Byte] = {
         val flattened = ev.flatten(prefix)
         serializer.serializePrefix(new TupleOutput(), flattened) match {
           case (output, HNil) => output.toByteArray

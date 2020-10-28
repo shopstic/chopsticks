@@ -6,12 +6,12 @@ import shapeless.{<:!<, =:!=, HList, HNil, Nat}
 import scala.annotation.{implicitNotFound, nowarn}
 
 @implicitNotFound(msg = "Cannot prove that ${A} is a prefix of ${B}.")
-trait KeyPrefixEvidence[-A, B] {
+trait KeyPrefix[-A, B] {
   def flatten(prefix: A): HList
 }
 
-object KeyPrefixEvidence {
-  implicit def selfKeyPrefix[A](implicit flattening: KeyFlattening[A]): KeyPrefixEvidence[A, A] =
+object KeyPrefix {
+  implicit def selfKeyPrefix[A](implicit flattening: KeyFlattening[A]): KeyPrefix[A, A] =
     (prefix: A) => flattening.flatten(prefix)
 
   // e.g
@@ -22,7 +22,9 @@ object KeyPrefixEvidence {
     @nowarn e: Prefix <:!< Product,
     @nowarn keyFlattening: KeyFlattening.Aux[Key, KeyFlattened],
     @nowarn isHcons: IsHCons.Aux[KeyFlattened, Prefix, _]
-  ): KeyPrefixEvidence[Prefix, Key] = (prefix: Prefix) => prefix :: HNil
+  ): KeyPrefix[Prefix, Key] = {
+    (prefix: Prefix) => prefix :: HNil
+  }
 
   implicit def productToKeyPrefixOfProduct[
     Prefix <: Product,
@@ -38,9 +40,9 @@ object KeyPrefixEvidence {
     @nowarn length: Length.Aux[PrefixFlattened, N],
     @nowarn takenHList: Take.Aux[KeyFlattened, N, TakenHList],
     evidence: PrefixFlattened =:= TakenHList
-  ): KeyPrefixEvidence[Prefix, Key] = {
+  ): KeyPrefix[Prefix, Key] = {
     (prefix: Prefix) => prefixFlattening.flatten(prefix)
   }
 
-  def apply[A, B](implicit e: KeyPrefixEvidence[A, B]): KeyPrefixEvidence[A, B] = e
+  def apply[A, B](implicit e: KeyPrefix[A, B]): KeyPrefix[A, B] = e
 }

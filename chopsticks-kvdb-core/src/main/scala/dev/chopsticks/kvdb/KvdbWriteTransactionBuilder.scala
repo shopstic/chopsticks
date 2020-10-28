@@ -3,7 +3,7 @@ package dev.chopsticks.kvdb
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
-import dev.chopsticks.kvdb.codec.{KeyPrefixEvidence, KeyTransformer}
+import dev.chopsticks.kvdb.codec.{KeyPrefix, KeyTransformer}
 import dev.chopsticks.kvdb.util.KvdbUtils
 
 object KvdbWriteTransactionBuilder {
@@ -71,8 +71,8 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
     fromPrefix: FP,
     toPrefix: TP
   )(implicit
-    ev1: KeyPrefixEvidence[FP, K],
-    ev2: KeyPrefixEvidence[TP, K]
+    ev1: KeyPrefix[FP, K],
+    ev2: KeyPrefix[TP, K]
   ): KvdbWriteTransactionBuilder[BCF] = {
     val _ = buffer.add(
       TransactionDeleteRange(
@@ -85,7 +85,7 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
   }
 
   def deletePrefix[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K, P](column: CF[K, _] with CF2, prefix: P)(
-    implicit ev: KeyPrefixEvidence[P, K]
+    implicit ev: KeyPrefix[P, K]
   ): KvdbWriteTransactionBuilder[BCF] = {
     val prefixBytes = column.serializeKeyPrefix(prefix)
     val _ = buffer.add(

@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb
 
 import dev.chopsticks.kvdb.codec.KeyDeserializer.KeyDeserializationResult
 import dev.chopsticks.kvdb.codec.ValueDeserializer.ValueDeserializationResult
-import dev.chopsticks.kvdb.codec.{KeyPrefixEvidence, KeySerdes, ValueSerdes}
+import dev.chopsticks.kvdb.codec.{KeyPrefix, KeySerdes, ValueSerdes}
 import dev.chopsticks.kvdb.util.KvdbAliases.KvdbPair
 import dev.chopsticks.kvdb.util.KvdbUtils
 
@@ -19,7 +19,7 @@ abstract class ColumnFamily[K: KeySerdes, V: ValueSerdes] {
   def serializeKey(key: K): Array[Byte] = keySerdes.serialize(key)
   def deserializeKey(bytes: Array[Byte]): KeyDeserializationResult[K] = keySerdes.deserialize(bytes)
 
-  def serializeKeyPrefix[P](prefix: P)(implicit ev: KeyPrefixEvidence[P, K]): Array[Byte] =
+  def serializeKeyPrefix[P](prefix: P)(implicit ev: KeyPrefix[P, K]): Array[Byte] =
     keySerdes.serializePrefix(prefix)
 
   def serializeValue(value: V): Array[Byte] = valueSerdes.serialize(value)
