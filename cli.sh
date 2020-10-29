@@ -82,8 +82,19 @@ loc() {
   find . -type f \( -name "*.scala" -o -name "*.sbt" -o -name "*.proto" -o -name "*.conf" \) -not -path "./*/target/*" | xargs wc -l | awk '{total += $1} END{print total}'
 }
 
-sbt_server() {
-  sbt -Dsbt.semanticdb=true
+sbt_shell() {
+  if ! ls ./project/target/active.json > /dev/null 2>&1; then
+    sbt -Dsbt.semanticdb=true
+  else
+    sbt --client
+  fi
 }
+
+sbt_shutdown() {
+  if ls ./project/target/active.json > /dev/null 2>&1; then
+    sbt --client shutdown
+  fi
+}
+
 
 "$@"
