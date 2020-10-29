@@ -1,5 +1,7 @@
 import Dependencies._
 
+Global / semanticdbEnabled := true
+
 ThisBuild / organization := "dev.chopsticks"
 ThisBuild / scalaVersion := SCALA_VERSION
 ThisBuild / javacOptions ++= Build.javacOptions
