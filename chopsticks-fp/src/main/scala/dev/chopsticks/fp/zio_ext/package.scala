@@ -22,8 +22,9 @@ package object zio_ext {
   implicit final class TaskExtensions[R >: Nothing, E <: Throwable, A](io: ZIO[R, E, A]) {
     def unsafeRunToFuture(implicit rt: Runtime[R]): Future[A] = {
       val promise = scala.concurrent.Promise[A]()
+//      rt.unsafeRunAsync(io.tap(x => UIO(promise.trySuccess(x)).unit)) { // todo remove it
       rt.unsafeRunAsync(io) {
-        case Exit.Success(value) => promise.success(value)
+        case Exit.Success(value) => val _ = promise.trySuccess(value)
         case Exit.Failure(cause) => promise.failure(cause.squashTrace)
       }
       promise.future

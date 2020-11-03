@@ -52,13 +52,13 @@ lazy val stream = Build
   )
   .dependsOn(fp, testkit % "test->test")
 
-//lazy val dstream = Build
-//  .defineProject("dstream")
-//  .settings(
-//    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-//    libraryDependencies ++= akkaGrpcRuntimeDeps
-//  )
-//  .dependsOn(stream)
+lazy val dstream = Build
+  .defineProject("dstream")
+  .settings(
+    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
+    libraryDependencies ++= akkaGrpcRuntimeDeps
+  )
+  .dependsOn(stream)
 
 lazy val kvdbCore = Build
   .defineProject("kvdb-core")
@@ -162,7 +162,8 @@ lazy val sample = Build
     kvdbCodecProtobufValue,
     kvdbCodecFdbKey,
     metric,
-    kvdbFdb /*, dstream*/
+    kvdbFdb,
+    dstream
   )
 
 lazy val root = (project in file("."))
