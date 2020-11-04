@@ -126,18 +126,18 @@ object DstreamSampleApp extends AkkaDiApp[None.type] {
     Dstreams
       .work(client.work().addHeader(Dstreams.WORKER_ID_HEADER, id.toString)) { a =>
         ZIO.access[AkkaEnv] { _ =>
-//          println(s"Client < [worker=$id][assignment=${a.valueIn}]")
           Source
             .single(1)
             .map(v => Result(a.valueIn * 10 + v))
-          //            .throttle(1, 1.second)
-          //            .wireTap(r => println(s"Client > [worker=$id][assignment=${a.valueIn}] $r"))
-          //            .map { v =>
-          //              if (math.random() > 0.9) {
-          //                throw new IllegalStateException("test worker death")
-          //              }
-          //              vE
-          //            }
+        //            .delay(1.second, DelayOverflowStrategy.backpressure)
+        //            .throttle(1, 1.second)
+        //            .wireTap(r => println(s"Client > [worker=$id][assignment=${a.valueIn}] $r"))
+        //            .map { v =>
+        //              if (math.random() > 0.9) {
+        //                throw new IllegalStateException("test worker death")
+        //              }
+        //              vE
+        //            }
         }
       }
       .log(s"Running worker $id")
@@ -178,7 +178,8 @@ object DstreamSampleApp extends AkkaDiApp[None.type] {
             .fork
           _ <- ZIO.forkAll_ {
             (1 to 8).map { id =>
-              runWorker(client, id).either
+              runWorker(client, id)
+                .either
                 .repeat(Schedule.forever)
             }
           }

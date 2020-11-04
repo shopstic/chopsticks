@@ -67,7 +67,6 @@ object Dstreams extends LoggingContext {
             .catchAll(e => zLogger.error(s"Failed unbinding dstream server: $e"))
         }
       }
-      .log("dstream server") // todo leave either this log or the ones inside .make and release
   }
 
   def createManagedClientFromConfig[R, E, Client <: AkkaGrpcClient](
@@ -115,7 +114,6 @@ object Dstreams extends LoggingContext {
             .catchAll(e => zLogger.error(s"Failed closing dstream client: $e"))
         }
       }
-      .log("dstream client") // todo leave either this log or the ones inside .make and release
   }
 
   def distribute[Req: Tag, Res: Tag, R <: AkkaEnv, A](
@@ -141,14 +139,12 @@ object Dstreams extends LoggingContext {
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with LogEnv with R, Done] = {
     for {
-      akkaService <- ZIO.access[AkkaEnv](_.get)
       graph <- ZIO.runtime[AkkaEnv with R].map { implicit rt =>
         val promise = Promise[Source[Res, NotUsed]]()
         requestBuilder
           .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
           .viaMat(KillSwitches.single)(Keep.right)
           .via(ZAkkaStreams.interruptibleMapAsync(1) { assignment: Req =>
-            println(s"Got assignment $assignment")
             makeSource(assignment)
               .map(s => promise.success(s))
               .zipRight(Task.fromFuture(_ => promise.future))
@@ -192,10 +188,7 @@ object Dstreams extends LoggingContext {
       env
         .get[DstreamEnv.Service[Req, Res]]
         .enqueueWorker(inSource, metadata)
-        .zipLeft(UIO(println(s"Enqueuing ZIO has completed")))
         .unsafeRunToFuture(rt)
-
-    futureSource.onComplete { x => println(s"enqueueWorker has completed $x") }
 
     Source
       .futureSource(futureSource)
