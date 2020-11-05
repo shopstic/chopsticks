@@ -16,7 +16,6 @@ import com.apple.foundationdb.directory.DirectoryLayer
 import com.apple.foundationdb.tuple.ByteArrayUtil
 import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.fp.LoggingContext
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext._
@@ -49,7 +48,7 @@ import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
 import scala.util.{Failure, Success}
 
-object FdbDatabase extends LoggingContext {
+object FdbDatabase {
   final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](
     db: Database,
     prefixMap: Map[BCF[_, _], Array[Byte]],
@@ -70,8 +69,7 @@ object FdbDatabase extends LoggingContext {
     def close(): ZIO[Blocking with Clock, Throwable, Unit] = {
       val task = for {
         _ <- Task(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
-          if (isClosed) Task.unit
-          else Task.fail(KvdbAlreadyClosedException("Database was already closed"))
+          Task.fail(KvdbAlreadyClosedException("Database was already closed")).unless(isClosed)
         }
         _ <- Task(dbCloseSignal.tryComplete(Failure(KvdbAlreadyClosedException("Database was already closed"))))
         _ <- Task(dbCloseSignal.hasNoListeners)

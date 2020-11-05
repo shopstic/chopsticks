@@ -1,7 +1,7 @@
 package dev.chopsticks.kvdb.api
 
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.{AkkaDiApp, LoggingContext}
+import dev.chopsticks.fp.AkkaDiApp
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestUtils}
@@ -14,8 +14,7 @@ abstract class KvdbDatabaseApiTest
     extends AkkaTestKit
     with AsyncWordSpecLike
     with Matchers
-    with AkkaTestKitAutoShutDown
-    with LoggingContext {
+    with AkkaTestKitAutoShutDown {
   protected def managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1

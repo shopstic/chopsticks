@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicLong
 import akka.testkit.ImplicitSender
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
-import dev.chopsticks.fp.{AkkaDiApp, LoggingContext}
+import dev.chopsticks.fp.AkkaDiApp
 import dev.chopsticks.kvdb.KvdbDatabaseTest
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
@@ -22,8 +22,7 @@ final class SpecificFdbDatabaseTest
     with Matchers
     with Inside
     with ImplicitSender
-    with AkkaTestKitAutoShutDown
-    with LoggingContext {
+    with AkkaTestKitAutoShutDown {
   import KvdbDatabaseTest._
 
   private val dbMat = FdbDatabaseTest.dbMaterialization

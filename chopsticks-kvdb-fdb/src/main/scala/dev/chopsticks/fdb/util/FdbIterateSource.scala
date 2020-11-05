@@ -9,7 +9,7 @@ import com.apple.foundationdb.tuple.Tuple
 import dev.chopsticks.fdb.env.FdbEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.{LoggingContext, ZService}
+import dev.chopsticks.fp.ZService
 import dev.chopsticks.stream.LastStateFlow
 import zio.{URIO, ZIO}
 
@@ -17,7 +17,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.{Failure, Success, Try}
 
-object FdbIterateSource extends LoggingContext {
+object FdbIterateSource {
   final case class IterateSourceAttempt[S](
     lastState: S,
     delay: FiniteDuration = Duration.Zero,

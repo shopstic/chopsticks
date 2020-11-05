@@ -86,7 +86,7 @@ object AkkaDiApp {
   }
 }
 
-trait AkkaDiApp[Cfg] extends LoggingContext {
+trait AkkaDiApp[Cfg] {
 
   type AppConfig = Has[Cfg]
 

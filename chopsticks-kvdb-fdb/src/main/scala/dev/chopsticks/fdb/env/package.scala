@@ -1,7 +1,6 @@
 package dev.chopsticks.fdb
 
 import com.apple.foundationdb.{Database, FDB, Transaction}
-import dev.chopsticks.fp.LoggingContext
 import zio.blocking.{blocking, Blocking}
 import zio.{Has, Task, ZLayer, ZManaged}
 
@@ -12,7 +11,7 @@ import dev.chopsticks.fp.zio_ext._
 package object env {
   type FdbEnv = Has[FdbEnv.Service]
 
-  object FdbEnv extends LoggingContext {
+  object FdbEnv {
     trait Service {
       def database: Database
       def runAsync[T](run: Transaction => Future[T]): Future[T]
