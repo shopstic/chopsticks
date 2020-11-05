@@ -80,10 +80,6 @@ object Dstreams extends LoggingContext {
           GrpcClientSettings
             .connectToServiceAt(config.serverHost, config.serverPort)
             .withTls(config.withTls)
-//            .withChannelBuilderOverrides(
-//              _.eventLoopGroup(new io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoopGroup(1))
-//                .executor(env.dispatcher)
-//            )
         }
         .flatMap(make)
         .logResult("dstream client Startup", _ => s"dstream client created")

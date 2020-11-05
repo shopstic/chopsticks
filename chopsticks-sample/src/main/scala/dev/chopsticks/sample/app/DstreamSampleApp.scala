@@ -19,6 +19,7 @@ import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
 import dev.chopsticks.fp.{AkkaApp, AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
 import dev.chopsticks.stream.ZAkkaStreams
+import io.grpc.StatusRuntimeException
 import io.prometheus.client.{Counter, Gauge}
 import zio._
 
@@ -26,7 +27,7 @@ import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 
-object DstreamSampleApp extends AkkaDiApp[None.type] {
+object DstreamSampleApp extends AkkaDiApp[Unit] {
 
   type DsEnv = DstreamEnv[Assignment, Result]
   type Env = AkkaApp.Env with DsEnv with MeasuredLogging
@@ -38,12 +39,11 @@ object DstreamSampleApp extends AkkaDiApp[None.type] {
     val mapGauge: Gauge = Gauge.build("dstream_map", "dstream_map").register()
   }
 
-  //noinspection SimplifySucceedOptionInspection
-  override def config(allConfig: Config): Task[None.type] = ZIO.succeed(None)
+  override def config(allConfig: Config): Task[Unit] = Task.unit
 
   override def liveEnv(
     akkaAppDi: DiModule,
-    appConfig: None.type,
+    appConfig: Unit,
     allConfig: Config
   ): Task[DiEnv[AppEnv]] = {
     Task {
@@ -179,7 +179,13 @@ object DstreamSampleApp extends AkkaDiApp[None.type] {
           _ <- ZIO.forkAll_ {
             (1 to 8).map { id =>
               runWorker(client, id)
-                .either
+                .foldM(
+                  {
+                    case e: StatusRuntimeException => ZIO.fail(e)
+                    case e => ZIO.left(e)
+                  },
+                  r => ZIO.right(r)
+                )
                 .repeat(Schedule.forever)
             }
           }
