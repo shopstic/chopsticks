@@ -13,10 +13,9 @@ import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
-import dev.chopsticks.fp.{AkkaApp, AkkaDiApp, AppLayer, DiEnv, DiLayers}
+import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetrics
 import dev.chopsticks.metric.{MetricCounter, MetricGauge}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
@@ -31,7 +30,7 @@ import scala.jdk.DurationConverters.ScalaDurationOps
 
 object DstreamSampleApp extends AkkaDiApp[Unit] {
 
-  type Env = AkkaApp.Env with DstreamStateFactory with MeasuredLogging
+  type Env = AkkaEnv with DstreamStateFactory with MeasuredLogging
 
   private object dstreamMetrics extends DstreamStateMetrics {
     val workerGauge: MetricGauge =
@@ -97,7 +96,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
   }
 
   private def runServer(dstreamState: DstreamState.Service[Assignment, Result])
-    : RIO[AkkaEnv with LogEnv with MeasuredLogging, Done] = {
+    : RIO[AkkaEnv with MeasuredLogging, Done] = {
     for {
       graph <- ZIO.runtime[AkkaEnv with MeasuredLogging].map { implicit rt =>
         val ks = KillSwitches.shared("server shared killswitch")

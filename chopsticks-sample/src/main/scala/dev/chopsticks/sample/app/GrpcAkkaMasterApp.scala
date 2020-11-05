@@ -14,7 +14,7 @@ import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
-import dev.chopsticks.fp.{AkkaApp, AkkaDiApp, AppLayer, DiEnv, DiLayers}
+import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetrics
 import dev.chopsticks.metric.{MetricCounter, MetricGauge}
 import dev.chopsticks.sample.app.proto.grpc_akka_master_worker._
@@ -34,8 +34,6 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
   lazy val expected = sys.env.get("EXPECTED").map(BigInt.apply).getOrElse(BigInt("160128167199229050000"))
 
   private val counter = new LongAdder()
-
-  type Env = AkkaApp.Env with MeasuredLogging
 
   private object metrics extends DstreamStateMetrics {
     val workerGauge: MetricGauge =

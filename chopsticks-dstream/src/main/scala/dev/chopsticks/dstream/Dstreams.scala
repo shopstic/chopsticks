@@ -11,9 +11,7 @@ import akka.{Done, NotUsed}
 import dev.chopsticks.dstream.DstreamState.WorkResult
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.fp._
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaStreams
 import zio._
@@ -22,7 +20,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success}
 
-object Dstreams extends LoggingContext {
+object Dstreams {
   final case class DstreamServerConfig(port: Int, idleTimeout: Duration)
   final case class DstreamClientConfig(serverHost: String, serverPort: Int, withTls: Boolean)
   final case class DstreamWorkerConfig(nodeId: String, poolSize: Int)
@@ -129,7 +127,7 @@ object Dstreams extends LoggingContext {
 
   def work[R <: Has[_], Req, Res](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
-  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with LogEnv with R, Done] = {
+  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with IzLogging with R, Done] = {
     for {
       graph <- ZIO.runtime[AkkaEnv with R].map { implicit rt =>
         val promise = Promise[Source[Res, NotUsed]]()
@@ -152,7 +150,7 @@ object Dstreams extends LoggingContext {
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(
     makeSource: Req => RIO[R, Source[Res, NotUsed]]
-  ): ZIO[R with MeasuredLogging with LogEnv, Throwable, Unit] = {
+  ): ZIO[R with MeasuredLogging, Throwable, Unit] = {
     ZIO
       .foreachPar((1 to config.poolSize).toList) { id =>
         work(requestBuilder.addHeader(WORKER_ID_HEADER, id.toString).addHeader(WORKER_NODE_HEADER, config.nodeId))(
