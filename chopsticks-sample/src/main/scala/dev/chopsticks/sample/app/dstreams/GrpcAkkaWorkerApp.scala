@@ -1,4 +1,4 @@
-package dev.chopsticks.sample.app
+package dev.chopsticks.sample.app.dstreams
 
 import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.{Keep, Source}
@@ -10,7 +10,7 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
-import dev.chopsticks.sample.app.proto.grpc_akka_master_worker.{Result, StreamMasterClient}
+import dev.chopsticks.sample.app.dstreams.proto.grpc_akka_master_worker.{Result, StreamMasterClient}
 import io.grpc.{Status, StatusRuntimeException}
 import zio.{Schedule, Task, UIO, ZIO}
 

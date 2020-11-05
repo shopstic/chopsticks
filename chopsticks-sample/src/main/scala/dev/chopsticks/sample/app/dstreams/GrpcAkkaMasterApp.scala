@@ -1,4 +1,4 @@
-package dev.chopsticks.sample.app
+package dev.chopsticks.sample.app.dstreams
 
 import java.util.concurrent.atomic.LongAdder
 
@@ -7,6 +7,7 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamState.WorkResult
+import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetricsGroup
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream._
 import dev.chopsticks.fp.AppLayer.AppEnv
@@ -15,11 +16,9 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
-import dev.chopsticks.metric.prom.PromMetrics
-import dev.chopsticks.metric.{MetricCounter, MetricGauge}
-import dev.chopsticks.sample.app.proto.grpc_akka_master_worker._
+import dev.chopsticks.metric.prom.PromMetricRegistry
+import dev.chopsticks.sample.app.dstreams.proto.grpc_akka_master_worker._
 import dev.chopsticks.stream.ZAkkaStreams
-import io.prometheus.client.{Counter, Gauge}
 import zio._
 
 import scala.concurrent.duration._
@@ -35,16 +34,7 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
 
   private val counter = new LongAdder()
 
-  private object metrics extends DstreamStateMetrics {
-    val workerGauge: MetricGauge =
-      new PromMetrics.PromGauge(Gauge.build("dstream_workers", "dstream_workers").register())
-    val attemptCounter: MetricCounter =
-      new PromMetrics.PromCounter(Counter.build("dstream_attempts_total", "dstream_attempts_total").register())
-    val queueGauge: MetricGauge =
-      new PromMetrics.PromGauge(Gauge.build("dstream_queue", "dstream_queue").register())
-    val mapGauge: MetricGauge =
-      new PromMetrics.PromGauge(Gauge.build("dstream_map", "dstream_map").register())
-  }
+  private lazy val serviceId = "grpc_akka_master_app"
 
   override def config(allConfig: Config): Task[Unit] = Task.unit
 
@@ -55,6 +45,8 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
   ): Task[DiEnv[AppEnv]] = {
     Task {
       val extraLayers = DiLayers(
+        ZLayer.succeed(PromMetricRegistry.live[DstreamStateMetricsGroup](serviceId)),
+        DstreamStateMetricsManager.live,
         DstreamStateFactory.live,
         AppLayer(app)
       )
@@ -65,7 +57,7 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
   private def app = {
     val managedZio = for {
       dstreamStateFactory <- ZManaged.access[DstreamStateFactory](_.get)
-      dstreamState <- dstreamStateFactory.createStateService[Assignment, Result](metrics)
+      dstreamState <- dstreamStateFactory.createStateService[Assignment, Result](serviceId)
       akkaService <- ZManaged.access[AkkaEnv](_.get)
       _ <- Dstreams.createManagedServer(
         DstreamServerConfig(port = port, idleTimeout = 30.seconds), {

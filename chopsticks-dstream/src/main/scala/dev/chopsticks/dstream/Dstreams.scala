@@ -57,7 +57,7 @@ object Dstreams {
         acquire
           .logResult("dstream server startup", b => s"Dstream server bound: ${b.localAddress}")
       ) { binding =>
-        ZIO.access[IzLogging](_.get).map(_.zioLogger).flatMap { zLogger =>
+        ZIO.access[IzLogging](_.get.zioLogger).flatMap { zLogger =>
           Task
             .fromFuture(_ => binding.terminate(10.seconds))
             .log("dstream server teardown")
@@ -82,7 +82,7 @@ object Dstreams {
         .flatMap(make)
         .logResult("dstream client Startup", _ => s"dstream client created")
     ) { client =>
-      ZIO.access[IzLogging](_.get).map(_.zioLogger).flatMap { zLogger =>
+      ZIO.access[IzLogging](_.get.zioLogger).flatMap { zLogger =>
         Task
           .fromFuture(_ => client.close())
           .log("dstream client teardown")
@@ -100,7 +100,7 @@ object Dstreams {
         make
           .logResult("dstream client Startup", _ => s"dstream client created")
       ) { client =>
-        ZIO.access[IzLogging](_.get).map(_.zioLogger).flatMap { zLogger =>
+        ZIO.access[IzLogging](_.get.zioLogger).flatMap { zLogger =>
           Task
             .fromFuture(_ => client.close())
             .log("dstream client teardown")

@@ -32,10 +32,11 @@ object DstreamState {
     def report(assignmentId: Long): IO[InvalidAssignment, Unit]
   }
 
-  def managed[Req: Tag, Res: Tag](metrics: DstreamStateMetrics)
-    : ZManaged[AkkaEnv with Clock, Nothing, Service[Req, Res]] = {
+  def managed[Req: Tag, Res: Tag](serviceId: String)
+    : ZManaged[AkkaEnv with Clock with DstreamStateMetricsManager, Nothing, Service[Req, Res]] = {
     for {
       akkaService <- ZManaged.access[AkkaEnv](_.get)
+      metrics <- ZManaged.accessManaged[DstreamStateMetricsManager](_.get.manage(serviceId))
       workerGauge = metrics.workerGauge
       attemptCounter = metrics.attemptCounter
       queueGauge = metrics.queueGauge
@@ -55,7 +56,7 @@ object DstreamState {
       def enqueueWorker(in: Source[Res, NotUsed], metadata: Metadata): UIO[Source[Req, NotUsed]] = {
         val (inFuture, inSource) = in.watchTermination() { case (_, f) => f }.preMaterialize()
 
-        val completionSignal = Task.fromFuture(_ => inFuture).fold(_ => (), _ => ())
+        val completionSignal = Task.fromFuture(_ => inFuture).ignore
         val stats =
           UIO(attemptCounter.inc())
             .zipRight(UIO(workerGauge.inc()))
