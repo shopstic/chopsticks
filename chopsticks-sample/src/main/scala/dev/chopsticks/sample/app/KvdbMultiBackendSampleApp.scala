@@ -8,7 +8,7 @@ import com.typesafe.config.Config
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.LogEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
@@ -74,7 +74,7 @@ object KvdbMultiBackendSampleApp extends AkkaDiApp[KvdbMultiBackendSampleAppConf
     }
   }
 
-  private def populate(db: DbService): RIO[AkkaEnv with LogEnv, Int] = {
+  private def populate(db: DbService): RIO[AkkaEnv with IzLogging, Int] = {
     ZAkkaStreams
       .interruptibleGraph(
         Source(1 to 100)
@@ -95,7 +95,7 @@ object KvdbMultiBackendSampleApp extends AkkaDiApp[KvdbMultiBackendSampleAppConf
 
   private def scanAndCollect(
     db: DbService
-  ): RIO[AkkaEnv with LogEnv, Seq[(TestKey, TestValue)]] = {
+  ): RIO[AkkaEnv with IzLogging, Seq[(TestKey, TestValue)]] = {
     ZAkkaStreams
       .interruptibleGraph(
         db

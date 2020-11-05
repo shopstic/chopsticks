@@ -3,11 +3,10 @@ package dev.chopsticks.sample.util
 import akka.Done
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
-import dev.chopsticks.fp.ZService
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.{LogCtx, LogEnv}
+import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.stream.ZAkkaStreams
-import zio.RIO
+import zio.{RIO, ZIO}
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -23,9 +22,9 @@ object MiscUtils {
 
   def logRates(interval: FiniteDuration)(collect: => ListMap[String, Double])(implicit
     logCtx: LogCtx
-  ): RIO[AkkaEnv with LogEnv, Done] = {
+  ): RIO[AkkaEnv with IzLogging, Done] = {
     val graphTask = for {
-      logger <- ZService[LogEnv.Service].map(_.logger)
+      logger <- ZIO.access[IzLogging](_.get.logger)
     } yield {
       Source
         .tick(Duration.Zero, interval, ())
@@ -50,14 +49,12 @@ object MiscUtils {
         })
         .viaMat(KillSwitches.single)(Keep.right)
         .toMat(Sink.foreach { elapsed =>
-          logger.info(
-            elapsed
-              .map {
-                case (k, v) =>
-                  s"$k=$v"
-              }
-              .mkString(" ")
-          )
+          logger.info(s"${elapsed
+            .map {
+              case (k, v) =>
+                s"$k=$v"
+            }
+            .mkString(" ") -> "snapshot" -> null}")
         })(Keep.both)
     }
 

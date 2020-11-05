@@ -7,9 +7,10 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.testkit.{ImplicitSender, TestProbe}
 import com.google.protobuf.ByteString
+import dev.chopsticks.fp.AkkaDiApp
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
-import dev.chopsticks.fp.{AkkaApp, LoggingContext}
 import dev.chopsticks.kvdb.codec.KeyConstraints
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
@@ -63,7 +64,7 @@ object KvdbDatabaseTest extends Matchers with Inside {
 
   private def collectPairs(
     source: Source[KvdbBatch, Any]
-  ): RIO[AkkaApp.Env, immutable.Seq[(Array[Byte], Array[Byte])]] = {
+  ): RIO[AkkaEnv with IzLogging, immutable.Seq[(Array[Byte], Array[Byte])]] = {
     ZAkkaStreams.graphM(UIO {
       source
         .toMat(collectSink)(Keep.right)
@@ -72,7 +73,7 @@ object KvdbDatabaseTest extends Matchers with Inside {
 
   private def collectValues(
     source: Source[KvdbValueBatch, Any]
-  ): RIO[AkkaApp.Env, immutable.Seq[Array[Byte]]] = {
+  ): RIO[AkkaEnv with IzLogging, immutable.Seq[Array[Byte]]] = {
     ZAkkaStreams.graphM(UIO {
       source
         .toMat(collectValuesSink)(Keep.right)
@@ -114,11 +115,10 @@ abstract private[kvdb] class KvdbDatabaseTest
     with Inside
 //    with ParallelTestExecution
     with ImplicitSender
-    with AkkaTestKitAutoShutDown
-    with LoggingContext {
+    with AkkaTestKitAutoShutDown {
   import KvdbDatabaseTest._
 
-  protected def managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool with IzLogging, Throwable, TestDatabase.Db]
+  protected def managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool with IzLogging, Throwable, TestDatabase.Db]
 
   protected def dbMat: TestDatabase.Materialization
 
@@ -127,8 +127,8 @@ abstract private[kvdb] class KvdbDatabaseTest
 
   private val izLoggingConfig = IzLoggingConfig(level = Level.Info, coloredOutput = true, jsonFileSink = None)
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
-  private lazy val runtimeLayer = (IzLogging.live(izLoggingConfig) ++ AkkaApp.Env.live) >+> KvdbIoThreadPool.live()
+  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ IzLogging.live(typesafeConfig))
+  private lazy val runtimeLayer = (IzLogging.live(izLoggingConfig) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
 
   "wrong column family" should {

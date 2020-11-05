@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.lmdb
 
-import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.fp.AkkaDiApp
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, LookupCf, PlainCf}
 import dev.chopsticks.kvdb.codec.primitive._
@@ -22,7 +22,7 @@ object LmdbDatabaseTest {
     }
   }
 
-  val managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool, Throwable, TestDatabase.Db] = {
+  val managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool, Throwable, TestDatabase.Db] = {
     for {
       dir <- KvdbTestUtils.managedTempDir
       db <- LmdbDatabase.manage(

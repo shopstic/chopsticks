@@ -1,6 +1,6 @@
 package dev.chopsticks.fp
 
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.util.implicits.SquantsImplicits._
 import squants.time.Nanoseconds
 import zio._
@@ -39,26 +39,19 @@ package object zio_ext {
       })
     }
 
-    def logResult(name: String, result: A => String)(implicit
-      line: sourcecode.Line,
-      file: sourcecode.FileName
-    ): ZIO[R with MeasuredLogging, E, A] = {
+    def logResult(name: String, result: A => String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
       ZIO.bracketExit(startMeasurement(name))((startTime: Long, exit: Exit[E, A]) =>
         logElapsedTime(name, startTime, exit, result)
       ) { startTime =>
         io.onInterrupt(for {
-          logger <- ZIO.access[IzLogging](_.get).map(_.zioLocationLogger)
           elapse <- nanoTime.map(endTime => endTime - startTime)
           elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
-          _ <- logger.info(s"[$name] [$elapsed] interrupting...")
+          _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).info(s"[$name] [$elapsed] interrupting..."))
         } yield ())
       }
     }
 
-    def log(name: String)(implicit
-      line: sourcecode.Line,
-      file: sourcecode.FileName
-    ): ZIO[R with MeasuredLogging, E, A] = {
+    def log(name: String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed")
     }
 
@@ -83,32 +76,22 @@ package object zio_ext {
   }
 
   implicit final class ZManagedExtensions[R >: Nothing, E <: Any, A](managed: ZManaged[R, E, A]) {
-    def logResult(name: String, result: A => String)(implicit
-      line: sourcecode.Line,
-      file: sourcecode.FileName
-    ): ZManaged[R with MeasuredLogging, E, A] = {
+    def logResult(name: String, result: A => String)(implicit ctx: LogCtx): ZManaged[R with MeasuredLogging, E, A] = {
       for {
         startTime <- ZManaged.fromEffect(startMeasurement(name))
         result <- managed.onExit(exit => logElapsedTime(name, startTime, exit, result))
       } yield result
     }
 
-    def log(name: String)(implicit
-      line: sourcecode.Line,
-      file: sourcecode.FileName
-    ): ZManaged[R with MeasuredLogging, E, A] = {
+    def log(name: String)(implicit ctx: LogCtx): ZManaged[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed")
     }
   }
 
-  private def startMeasurement(name: String)(implicit
-    line: sourcecode.Line,
-    file: sourcecode.FileName
-  ): URIO[MeasuredLogging, Long] = {
+  private def startMeasurement(name: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] = {
     for {
       time <- nanoTime
-      logger <- ZIO.access[IzLogging](_.get).map(_.zioLocationLogger)
-      _ <- logger.info(s"[$name] started")
+      _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).info(s"[$name] started"))
     } yield time
   }
 
@@ -117,9 +100,9 @@ package object zio_ext {
     startTimeNanos: Long,
     exit: Exit[E, A],
     renderResult: A => String
-  )(implicit line: sourcecode.Line, file: sourcecode.FileName) = {
+  )(implicit ctx: LogCtx) = {
     for {
-      logger <- ZIO.access[IzLogging](_.get).map(_.zioLocationLogger)
+      logger <- ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx))
       elapse <- nanoTime.map(endTime => endTime - startTimeNanos)
       took = Nanoseconds(elapse).inBestUnit.rounded(2)
       _ <- exit.toEither match {
