@@ -8,6 +8,7 @@ import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.{Done, NotUsed}
+import dev.chopsticks.dstream.DstreamState.WorkResult
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp._
@@ -120,7 +121,7 @@ object Dstreams extends LoggingContext {
         _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
           worker.source.runWith(Sink.cancelled)
         }
-        _ <- stateService.report(assignment)
+        _ <- stateService.report(worker.assignmentId)
       } yield ()
       cleanup.orDie
     }(run)

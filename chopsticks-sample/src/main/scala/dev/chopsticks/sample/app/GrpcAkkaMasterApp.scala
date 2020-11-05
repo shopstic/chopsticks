@@ -6,6 +6,7 @@ import akka.actor.ActorSystem
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.typesafe.config.Config
+import dev.chopsticks.dstream.DstreamState.WorkResult
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream._
 import dev.chopsticks.fp.AppLayer.AppEnv

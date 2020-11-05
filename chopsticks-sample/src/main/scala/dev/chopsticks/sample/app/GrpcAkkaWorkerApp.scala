@@ -75,8 +75,8 @@ object GrpcAkkaWorkerApp extends AkkaDiApp[Unit] {
     Dstreams.work(client.doWork().addHeader(Dstreams.WORKER_ID_HEADER, workerId)) { assignment =>
       for {
         akkaService <- ZIO.access[AkkaEnv](_.get)
-        willCrash <- UIO(Math.random() > 0.5)
-        willFail <- UIO(Math.random() > 0.5)
+        willCrash <- UIO(Math.random() > 0.9)
+        willFail <- UIO(Math.random() > 0.9)
         (futureDone, source) <- Task {
           import akkaService.actorSystem
           Source(1 to assignment.iteration)
