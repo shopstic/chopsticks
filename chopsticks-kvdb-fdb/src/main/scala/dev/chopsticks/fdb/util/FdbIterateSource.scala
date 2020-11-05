@@ -8,7 +8,7 @@ import com.apple.foundationdb._
 import com.apple.foundationdb.tuple.Tuple
 import dev.chopsticks.fdb.env.FdbEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.LogEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.{LoggingContext, ZService}
 import dev.chopsticks.stream.LastStateFlow
 import zio.{URIO, ZIO}
@@ -45,7 +45,7 @@ object FdbIterateSource extends LoggingContext {
     reverse: Boolean = false,
     streamingMode: StreamingMode = StreamingMode.ITERATOR,
     retryAfter: Option[FiniteDuration]
-  ): ZIO[AkkaEnv with LogEnv with FdbEnv, Nothing, Source[KeyValue, NotUsed]] = {
+  ): ZIO[AkkaEnv with IzLogging with FdbEnv, Nothing, Source[KeyValue, NotUsed]] = {
     for {
       db <- ZService[FdbEnv.Service].map(_.database)
       createRequest = (attempt: IterateSourceAttempt[MaybeLastKey]) => {
@@ -112,10 +112,10 @@ object FdbIterateSource extends LoggingContext {
     lastStateFlow: Flow[B, B, Future[(S, Try[Done])]]
   )(
     retryMatcher: (S, S) => PartialFunction[Try[Done], RetryOutput[S]]
-  ): URIO[AkkaEnv with LogEnv, Source[B, NotUsed]] = {
+  ): URIO[AkkaEnv with IzLogging, Source[B, NotUsed]] = {
     for {
       actorSystem <- ZService[AkkaEnv.Service].map(_.actorSystem)
-      logger <- ZService[LogEnv.Service].map(_.logger)
+      logger <- ZService[IzLogging.Service].map(_.logger)
     } yield {
       implicit val as: ActorSystem = actorSystem
       import as.dispatcher
@@ -156,7 +156,9 @@ object FdbIterateSource extends LoggingContext {
                   attempt =>
                     val (maybeLog, source) = createRequest(attempt)
 
-                    maybeLog.foreach(m => logger.warn(m))
+                    maybeLog.foreach { m =>
+                      logger.warn(s"${m -> "" -> null}")
+                    }
 
                     source
                       .viaMat(lastStateFlow)(Keep.right)

@@ -14,9 +14,8 @@ import dev.chopsticks.fp.DiEnv.LiveDiEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
-import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
-import dev.chopsticks.fp.{AkkaApp, AppLayer, DiEnv, DiLayers, LoggingContext}
+import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers, LoggingContext}
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.{KeySerdes, ValueSerdes}
@@ -145,8 +144,8 @@ class LeaseSupervisorTest
     with LoggingContext {
   import LeaseSupervisorTest._
 
-  private val runtime = AkkaApp.createRuntime(AkkaEnv.live(system) ++ LogEnv.live)
-  private val akkaAppDi = AkkaApp.Env.createModule(system)
+  private val runtime = AkkaDiApp.createRuntime(AkkaEnv.live(system) ++ IzLogging.live(typesafeConfig))
+  private val akkaAppDi = AkkaDiApp.Env.createModule(system)
   private val shutdown = CoordinatedShutdown(system)
 
   "LeaseSupervisor" should {

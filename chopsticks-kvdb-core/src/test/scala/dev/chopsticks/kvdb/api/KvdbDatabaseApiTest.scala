@@ -1,6 +1,7 @@
 package dev.chopsticks.kvdb.api
 
-import dev.chopsticks.fp.{AkkaApp, LoggingContext}
+import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.{AkkaDiApp, LoggingContext}
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestUtils}
@@ -15,12 +16,12 @@ abstract class KvdbDatabaseApiTest
     with Matchers
     with AkkaTestKitAutoShutDown
     with LoggingContext {
-  protected def managedDb: ZManaged[AkkaApp.Env with KvdbIoThreadPool, Throwable, DbApi]
+  protected def managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
-  private lazy val runtimeLayer = AkkaApp.Env.live >+> KvdbIoThreadPool.live()
+  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ IzLogging.live(typesafeConfig))
+  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
   private lazy val withCf = KvdbTestUtils.createTestRunner(
     managedDb.map(_.columnFamily(dbMat.plain)),

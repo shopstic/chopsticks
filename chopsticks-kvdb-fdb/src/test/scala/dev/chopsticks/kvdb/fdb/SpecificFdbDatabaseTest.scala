@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicLong
 import akka.testkit.ImplicitSender
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
-import dev.chopsticks.fp.{AkkaApp, LoggingContext}
+import dev.chopsticks.fp.{AkkaDiApp, LoggingContext}
 import dev.chopsticks.kvdb.KvdbDatabaseTest
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
@@ -32,8 +32,8 @@ final class SpecificFdbDatabaseTest
 
   private val izLoggingConfig = IzLoggingConfig(level = Level.Info, coloredOutput = true, jsonFileSink = None)
 
-  private lazy val runtime = AkkaApp.createRuntime(AkkaApp.Env.live)
-  private lazy val runtimeLayer = (IzLogging.live(izLoggingConfig) ++ AkkaApp.Env.live) >+> KvdbIoThreadPool.live()
+  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ IzLogging.live(typesafeConfig))
+  private lazy val runtimeLayer = (IzLogging.live(izLoggingConfig) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(FdbDatabaseTest.managedDb, runtimeLayer)(runtime)
 
   "conditionalTransactionTask" should {

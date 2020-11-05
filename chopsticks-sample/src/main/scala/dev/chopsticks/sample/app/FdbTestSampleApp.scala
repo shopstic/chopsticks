@@ -8,7 +8,7 @@ import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.LogEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.ValueSerdes
@@ -78,7 +78,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
     PureconfigLoader.unsafeLoad[FdbTestSampleAppConfig](allConfig, "app")
   }
 
-  def app: ZIO[AkkaEnv with LogEnv with MeasuredLogging with Has[SampleDb.Db], Throwable, Unit] = for {
+  def app: ZIO[AkkaEnv with IzLogging with MeasuredLogging with Has[SampleDb.Db], Throwable, Unit] = for {
     db <- ZService[SampleDb.Db]
     dbApi <- KvdbDatabaseApi(db)
     _ <- dbApi
@@ -218,7 +218,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
 //      tailFiber <- ZAkkaStreams
 //        .interruptibleGraph(
 //          for {
-//            log <- ZService[LogEnv.Service].map(_.logger)
+//            log <- ZService[IzLogging.Service].map(_.logger)
 //          } yield {
 //            defaultCf
 //              .tailSource(_ >= LocalDate.now.getYear.toString, _.last)

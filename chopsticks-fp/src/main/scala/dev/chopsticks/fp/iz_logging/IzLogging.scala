@@ -37,16 +37,16 @@ object IzLogging {
 
   trait Service {
     def logger: IzLogger
-    def locationLogger(implicit line: sourcecode.Line, file: sourcecode.FileName): IzLogger
+    def loggerWithCtx(ctx: LogCtx): IzLogger
     def zioLogger: LogBIO3[ZIO]
-    def zioLocationLogger(implicit line: sourcecode.Line, file: sourcecode.FileName): LogBIO3[ZIO]
+    def zioLoggerWithCtx(ctx: LogCtx): LogBIO3[ZIO]
   }
 
   final case class LiveService(logger: IzLogger, zioLogger: LogBIO3[ZIO]) extends Service {
-    override def locationLogger(implicit line: sourcecode.Line, file: sourcecode.FileName) =
-      logger(IzLogRenderingExtractors.LocationCtxKey -> s"${file.value}:${line.value}")
-    override def zioLocationLogger(implicit line: sourcecode.Line, file: sourcecode.FileName) =
-      zioLogger(IzLogRenderingExtractors.LocationCtxKey -> s"${file.value}:${line.value}")
+    override def loggerWithCtx(ctx: LogCtx): IzLogger =
+      logger(IzLogRenderingExtractors.LocationCtxKey -> ctx.sourceLocation)
+    override def zioLoggerWithCtx(ctx: LogCtx): LogBIO3[ZIO] =
+      zioLogger(IzLogRenderingExtractors.LocationCtxKey -> ctx.sourceLocation)
   }
 
   def create(lbConfig: LbConfig): Service = {
@@ -132,7 +132,7 @@ object IzLogRenderingExtractors {
   private val ExcludedCtxKeys = Set(LocationCtxKey, LoggerTypeCtxKey)
 
   class ContextSourcePositionExtractor(fallback: Extractor) extends Extractor {
-    override def render(entry: Log.Entry, context: RenderingOptions) = {
+    override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
       entry.context.customContext.values.find(_.path.exists(_ == LocationCtxKey)) match {
         case Some(arg) =>
           val stringArg = if (arg.value == null) "null" else "(" + arg.value.toString + ")"
@@ -144,7 +144,7 @@ object IzLogRenderingExtractors {
   }
 
   class FilteringContextExtractor(fallback: Extractor) extends Extractor {
-    override def render(entry: Log.Entry, context: RenderingOptions) = {
+    override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
       val originalCtx = entry.context.customContext
       val filteredCustomContext = {
         val filteredValues = originalCtx.values.filterNot(_.path.exists(ExcludedCtxKeys))
@@ -156,7 +156,7 @@ object IzLogRenderingExtractors {
   }
 
   class LocationExtractor(sourceExtractor: Extractor, loggerNameExtractor: Extractor) extends Extractor {
-    override def render(entry: Log.Entry, context: RenderingOptions) = {
+    override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
       entry.context.customContext.values.find(_.path.exists(_ == LoggerTypeCtxKey)) match {
         case Some(_) =>
           sourceExtractor.render(entry, context)

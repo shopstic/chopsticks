@@ -6,7 +6,7 @@ import akka.stream._
 import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
 import dev.chopsticks.fp.ZService
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.{LogCtx, LogEnv}
+import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext._
 import zio.{Has, RIO, Task, UIO, ZIO}
 
@@ -66,8 +66,8 @@ object ZAkkaStreams {
 
   def graph[R <: Has[_], A](
     make: => RunnableGraph[Future[A]]
-  ): RIO[AkkaEnv with LogEnv with R, A] = {
-    ZIO.accessM[AkkaEnv with LogEnv with R] { env =>
+  ): RIO[AkkaEnv with IzLogging with R, A] = {
+    ZIO.accessM[AkkaEnv with IzLogging with R] { env =>
       val akkaService = ZService.get[AkkaEnv.Service](env)
       import akkaService.{actorSystem, dispatcher}
 
@@ -87,17 +87,17 @@ object ZAkkaStreams {
 
   def graphM[R <: Has[_], A](
     make: RIO[R, RunnableGraph[Future[A]]]
-  ): RIO[AkkaEnv with LogEnv with R, A] = {
+  ): RIO[AkkaEnv with IzLogging with R, A] = {
     make.flatMap(graph(_))
   }
 
   def interruptibleGraph[A](
     make: => RunnableGraph[(KillSwitch, Future[A])],
     graceful: Boolean
-  )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv, A] = {
+  )(implicit ctx: LogCtx): RIO[AkkaEnv with IzLogging, A] = {
     for {
-      akkaService <- ZService[AkkaEnv.Service]
-      logService <- ZService[LogEnv.Service]
+      akkaService <- ZIO.access[AkkaEnv](_.get)
+      logger <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx))
       ret <- {
         val graph = make
         import akkaService.{actorSystem, dispatcher}
@@ -117,9 +117,7 @@ object ZAkkaStreams {
             if (graceful) ks.shutdown()
             else ks.abort(new InterruptedException("Stream (interruptibleGraph) was interrupted"))
           } *> task.fold(
-            e =>
-              logService.logger
-                .error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}", e),
+            e => logger.error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}"),
             _ => ()
           )
         )
@@ -130,7 +128,7 @@ object ZAkkaStreams {
   def interruptibleGraphM[R <: Has[_], A](
     make: RIO[R, RunnableGraph[(KillSwitch, Future[A])]],
     graceful: Boolean
-  )(implicit ctx: LogCtx): RIO[AkkaEnv with LogEnv with R, A] = {
+  )(implicit ctx: LogCtx): RIO[AkkaEnv with IzLogging with R, A] = {
     make.flatMap(interruptibleGraph(_, graceful))
   }
 

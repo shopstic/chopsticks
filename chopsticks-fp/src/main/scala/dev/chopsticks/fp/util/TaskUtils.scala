@@ -2,6 +2,7 @@ package dev.chopsticks.fp.util
 
 import java.util.concurrent.{CompletableFuture, CompletionException}
 
+import dev.chopsticks.fp.iz_logging.LogCtx
 import dev.chopsticks.fp.zio_ext._
 import zio.{RIO, Task, UIO, ZIO}
 
@@ -51,10 +52,7 @@ object TaskUtils {
       }
     }
 
-  def raceFirst(tasks: Iterable[(String, Task[Unit])])(implicit
-    line: sourcecode.Line,
-    file: sourcecode.FileName
-  ): RIO[MeasuredLogging, Unit] = {
+  def raceFirst(tasks: Iterable[(String, Task[Unit])])(implicit logCtx: LogCtx): RIO[MeasuredLogging, Unit] = {
     val list = tasks.map {
       case (name, task) =>
         task.log(name)

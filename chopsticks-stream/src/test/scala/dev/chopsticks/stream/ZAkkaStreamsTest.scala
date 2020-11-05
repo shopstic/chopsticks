@@ -6,9 +6,9 @@ import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{Attributes, KillSwitches}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.fp.{AkkaApp, ZService}
+import dev.chopsticks.fp.{AkkaDiApp, ZService}
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.LogEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
 import dev.chopsticks.testkit.{AkkaTestKitAutoShutDown, ManualTimeAkkaTestKit}
@@ -36,8 +36,8 @@ final class ZAkkaStreamsTest
 
   private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Assertion] = {
     val testClock = zio.ZEnv.live >>> (zio.test.environment.Live.default ++ Annotations.live) >>> TestClock.default
-    val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live ++ LogEnv.live
-    val rt = AkkaApp.createRuntime(env)
+    val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live ++ IzLogging.live(typesafeConfig)
+    val rt = AkkaDiApp.createRuntime(env)
     rt.unsafeRunToFuture(run)
   }
 
