@@ -58,7 +58,7 @@ lazy val dstream = Build
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
     libraryDependencies ++= akkaGrpcRuntimeDeps
   )
-  .dependsOn(stream)
+  .dependsOn(metric, stream)
 
 lazy val kvdbCore = Build
   .defineProject("kvdb-core")

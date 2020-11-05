@@ -6,15 +6,16 @@ import akka.actor.ActorSystem
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.typesafe.config.Config
-import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
-import dev.chopsticks.dstream.{DstreamEnv, Dstreams}
+import dev.chopsticks.dstream._
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
 import dev.chopsticks.fp.{AkkaApp, AkkaDiApp, AppLayer, DiEnv, DiLayers}
+import dev.chopsticks.metric.prom.PromMetrics
+import dev.chopsticks.metric.{MetricCounter, MetricGauge}
 import dev.chopsticks.sample.app.proto.grpc_akka_master_worker._
 import dev.chopsticks.stream.ZAkkaStreams
 import io.prometheus.client.{Counter, Gauge}
@@ -33,14 +34,17 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
 
   private val counter = new LongAdder()
 
-  type DsEnv = DstreamEnv[Assignment, Result]
-  type Env = AkkaApp.Env with DsEnv with MeasuredLogging
+  type Env = AkkaApp.Env with MeasuredLogging
 
-  private object metrics extends DstreamEnv.Metrics {
-    val workerGauge: Gauge = Gauge.build("dstream_workers", "dstream_workers").register()
-    val attemptCounter: Counter = Counter.build("dstream_attempts_total", "dstream_attempts_total").register()
-    val queueGauge: Gauge = Gauge.build("dstream_queue", "dstream_queue").register()
-    val mapGauge: Gauge = Gauge.build("dstream_map", "dstream_map").register()
+  private object metrics extends DstreamStateMetrics {
+    val workerGauge: MetricGauge =
+      new PromMetrics.PromGauge(Gauge.build("dstream_workers", "dstream_workers").register())
+    val attemptCounter: MetricCounter =
+      new PromMetrics.PromCounter(Counter.build("dstream_attempts_total", "dstream_attempts_total").register())
+    val queueGauge: MetricGauge =
+      new PromMetrics.PromGauge(Gauge.build("dstream_queue", "dstream_queue").register())
+    val mapGauge: MetricGauge =
+      new PromMetrics.PromGauge(Gauge.build("dstream_map", "dstream_map").register())
   }
 
   override def config(allConfig: Config): Task[Unit] = Task.unit
@@ -52,7 +56,7 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
   ): Task[DiEnv[AppEnv]] = {
     Task {
       val extraLayers = DiLayers(
-        DstreamEnv.live[Assignment, Result](metrics),
+        DstreamStateFactory.live,
         AppLayer(app)
       )
       LiveDiEnv(extraLayers ++ akkaAppDi)
@@ -60,20 +64,25 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
   }
 
   private def app = {
-    val createService = ZIO.runtime[AkkaEnv with DsEnv].map { implicit rt =>
-      val akkaEnv = rt.environment.get[AkkaEnv.Service]
-      import akkaEnv.actorSystem
-      StreamMasterPowerApiHandler {
-        (source, metadata) =>
-          Dstreams.handle[Assignment, Result](source, metadata)
-      }
-    }
-    val managedServer =
-      Dstreams.createManagedServer(DstreamServerConfig(port = port, idleTimeout = 30.seconds), createService)
-    managedServer.use { _ =>
+    val managedZio = for {
+      dstreamStateFactory <- ZManaged.access[DstreamStateFactory](_.get)
+      dstreamState <- dstreamStateFactory.createStateService[Assignment, Result](metrics)
+      akkaService <- ZManaged.access[AkkaEnv](_.get)
+      _ <- Dstreams.createManagedServer(
+        DstreamServerConfig(port = port, idleTimeout = 30.seconds), {
+          ZIO.runtime[AkkaEnv].map { implicit rt =>
+            import akkaService.actorSystem
+            StreamMasterPowerApiHandler {
+              (source, metadata) =>
+                Dstreams.handle[Assignment, Result](dstreamState, source, metadata)
+            }
+          }
+        }
+      )
+    } yield {
       for {
-        logger <- ZIO.access[IzLogging](_.get).map(_.logger)
-        result <- runMaster.log("Running master")
+        logger <- ZIO.access[IzLogging](_.get.logger)
+        result <- runMaster(dstreamState).log("Running master")
         _ <- Task {
           val matched = if (result == expected) "Yes" else "No"
           logger.info("STREAM COMPLETED **************************************")
@@ -81,12 +90,13 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
         }
       } yield ()
     }
+    managedZio.use(identity)
   }
 
-  private def runMaster = {
+  private def runMaster(dstreamState: DstreamState.Service[Assignment, Result]) = {
     for {
-      logger <- ZIO.access[IzLogging](_.get).map(_.logger)
-      graph <- ZIO.runtime[AkkaEnv with DsEnv with MeasuredLogging].map { implicit rt =>
+      logger <- ZIO.access[IzLogging](_.get.logger)
+      graph <- ZIO.runtime[AkkaEnv with MeasuredLogging].map { implicit rt =>
         val ks = KillSwitches.shared("server shared killswitch")
         implicit val as: ActorSystem = rt.environment.get[AkkaEnv.Service].actorSystem
         import as.dispatcher
@@ -95,7 +105,7 @@ object GrpcAkkaMasterApp extends AkkaDiApp[Unit] {
           .map(v => Assignment(addition = v, from = 1, to = 178956970, iteration = iteration))
           .via(ZAkkaStreams.interruptibleMapAsyncUnordered(12) { assignment: Assignment =>
             Dstreams
-              .distribute(assignment) { result: WorkResult[Result] =>
+              .distribute(dstreamState, assignment) { result: WorkResult[Result] =>
                 val workerId = result.metadata.getText(Dstreams.WORKER_ID_HEADER).get
                 UIO(logger.info(s"$assignment assigned to $workerId")) *>
                   Task

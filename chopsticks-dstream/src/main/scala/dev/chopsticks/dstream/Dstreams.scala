@@ -8,7 +8,6 @@ import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.{Done, NotUsed}
-import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp._
@@ -113,22 +112,18 @@ object Dstreams extends LoggingContext {
   }
 
   def distribute[Req: Tag, Res: Tag, R <: AkkaEnv, A](
+    stateService: DstreamState.Service[Req, Res],
     assignment: Req
-  )(run: WorkResult[Res] => RIO[R, A]): RIO[R with DstreamEnv[Req, Res], A] = {
-    ZIO
-      .bracket {
-        ZIO
-          .accessM[DstreamEnv[Req, Res]](_.get[DstreamEnv.Service[Req, Res]].enqueueAssignment(assignment))
-      } { worker =>
-        val cleanup = for {
-          _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
-            worker.source.runWith(Sink.cancelled)
-          }
-          _ <- ZIO.accessM[DstreamEnv[Req, Res]](_.get.report(assignment))
-        } yield ()
-
-        cleanup.orDie
-      }(run)
+  )(run: WorkResult[Res] => RIO[R, A]): RIO[R, A] = {
+    ZIO.bracket { stateService.enqueueAssignment(assignment) } { worker =>
+      val cleanup = for {
+        _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
+          worker.source.runWith(Sink.cancelled)
+        }
+        _ <- stateService.report(assignment)
+      } yield ()
+      cleanup.orDie
+    }(run)
   }
 
   def work[R <: Has[_], Req, Res](
@@ -169,9 +164,10 @@ object Dstreams extends LoggingContext {
   }
 
   def handle[Req: Tag, Res: Tag](
+    stateService: DstreamState.Service[Req, Res],
     in: Source[Res, NotUsed],
     metadata: Metadata
-  )(implicit rt: zio.Runtime[AkkaEnv with DstreamEnv[Req, Res]]): Source[Req, NotUsed] = {
+  )(implicit rt: zio.Runtime[AkkaEnv]): Source[Req, NotUsed] = {
     val env = rt.environment
     val akkaService = env.get[AkkaEnv.Service]
     import akkaService.{actorSystem, dispatcher}
@@ -180,12 +176,7 @@ object Dstreams extends LoggingContext {
       .viaMat(KillSwitches.single)(Keep.right)
       .preMaterialize()
 
-    val futureSource =
-      env
-        .get[DstreamEnv.Service[Req, Res]]
-        .enqueueWorker(inSource, metadata)
-        .unsafeRunToFuture(rt)
-
+    val futureSource = stateService.enqueueWorker(inSource, metadata).unsafeRunToFuture(rt)
     Source
       .futureSource(futureSource)
       .watchTermination() {

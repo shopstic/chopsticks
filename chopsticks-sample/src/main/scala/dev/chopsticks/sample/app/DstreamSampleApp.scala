@@ -6,9 +6,8 @@ import akka.grpc.GrpcClientSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.typesafe.config.Config
-import dev.chopsticks.dstream.DstreamEnv.WorkResult
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
-import dev.chopsticks.dstream.{DstreamEnv, Dstreams}
+import dev.chopsticks.dstream._
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
@@ -17,6 +16,8 @@ import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
 import dev.chopsticks.fp.{AkkaApp, AkkaDiApp, AppLayer, DiEnv, DiLayers}
+import dev.chopsticks.metric.prom.PromMetrics
+import dev.chopsticks.metric.{MetricCounter, MetricGauge}
 import dev.chopsticks.sample.app.proto.dstream_sample_app._
 import dev.chopsticks.stream.ZAkkaStreams
 import io.grpc.StatusRuntimeException
@@ -29,14 +30,17 @@ import scala.jdk.DurationConverters.ScalaDurationOps
 
 object DstreamSampleApp extends AkkaDiApp[Unit] {
 
-  type DsEnv = DstreamEnv[Assignment, Result]
-  type Env = AkkaApp.Env with DsEnv with MeasuredLogging
+  type Env = AkkaApp.Env with DstreamStateFactory with MeasuredLogging
 
-  private object dstreamMetrics extends DstreamEnv.Metrics {
-    val workerGauge: Gauge = Gauge.build("dstream_workers", "dstream_workers").register()
-    val attemptCounter: Counter = Counter.build("dstream_attempts_total", "dstream_attempts_total").register()
-    val queueGauge: Gauge = Gauge.build("dstream_queue", "dstream_queue").register()
-    val mapGauge: Gauge = Gauge.build("dstream_map", "dstream_map").register()
+  private object dstreamMetrics extends DstreamStateMetrics {
+    val workerGauge: MetricGauge =
+      new PromMetrics.PromGauge(Gauge.build("dstream_workers", "dstream_workers").register())
+    val attemptCounter: MetricCounter =
+      new PromMetrics.PromCounter(Counter.build("dstream_attempts_total", "dstream_attempts_total").register())
+    val queueGauge: MetricGauge =
+      new PromMetrics.PromGauge(Gauge.build("dstream_queue", "dstream_queue").register())
+    val mapGauge: MetricGauge =
+      new PromMetrics.PromGauge(Gauge.build("dstream_map", "dstream_map").register())
   }
 
   override def config(allConfig: Config): Task[Unit] = Task.unit
@@ -48,7 +52,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
   ): Task[DiEnv[AppEnv]] = {
     Task {
       val extraLayers = DiLayers(
-        DstreamEnv.live[Assignment, Result](dstreamMetrics),
+        DstreamStateFactory.live,
         AppLayer(app)
       )
       LiveDiEnv(extraLayers ++ akkaAppDi)
@@ -56,16 +60,22 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
   }
 
   def app = {
-    for {
-      runEnv <- ZIO.environment[Env]
-      logEnv <- ZIO.environment[MeasuredLogging]
-      _ <- TaskUtils.raceFirst(
-        List(
-          "Run task" -> run.provide(runEnv),
-          "Periodic logging" -> periodicallyLog.provide(logEnv)
+    val managedZio = for {
+      dstreamStateFactory <- ZManaged.access[DstreamStateFactory](_.get)
+      dstreamState <- dstreamStateFactory.createStateService[Assignment, Result](dstreamMetrics)
+    } yield {
+      for {
+        runEnv <- ZIO.environment[Env]
+        logEnv <- ZIO.environment[MeasuredLogging]
+        _ <- TaskUtils.raceFirst(
+          List(
+            "Run task" -> run(dstreamState).provide(runEnv),
+            "Periodic logging" -> periodicallyLog.provide(logEnv)
+          )
         )
-      )
-    } yield ()
+      } yield ()
+    }
+    managedZio.use(identity)
   }
 
   private def periodicallyLog = {
@@ -73,10 +83,10 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
       logger <- ZIO.access[IzLogging](_.get).map(_.zioLogger)
       metrics <- UIO {
         ListMap(
-          "workerGauge" -> dstreamMetrics.workerGauge.get().toString,
-          "attemptCounter" -> dstreamMetrics.attemptCounter.get().toString,
-          "queueGauge" -> dstreamMetrics.queueGauge.get().toString,
-          "mapGauge" -> dstreamMetrics.mapGauge.get().toString
+          "workerGauge" -> dstreamMetrics.workerGauge.get.toString,
+          "attemptCounter" -> dstreamMetrics.attemptCounter.get.toString,
+          "queueGauge" -> dstreamMetrics.queueGauge.get.toString,
+          "mapGauge" -> dstreamMetrics.mapGauge.get.toString
         )
       }
       formatted = metrics.iterator.map { case (k, v) => s"$k=$v" }.mkString(" ")
@@ -85,9 +95,10 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
     io.repeat(Schedule.fixed(1.second.toJava)).unit
   }
 
-  private def runServer: ZIO[AkkaEnv with LogEnv with DsEnv with MeasuredLogging, Throwable, Done] = {
+  private def runServer(dstreamState: DstreamState.Service[Assignment, Result])
+    : RIO[AkkaEnv with LogEnv with MeasuredLogging, Done] = {
     for {
-      graph <- ZIO.runtime[AkkaEnv with DsEnv with MeasuredLogging].map { implicit rt =>
+      graph <- ZIO.runtime[AkkaEnv with MeasuredLogging].map { implicit rt =>
         val ks = KillSwitches.shared("server shared killswitch")
         implicit val as: ActorSystem = rt.environment.get[AkkaEnv.Service].actorSystem
 
@@ -95,7 +106,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
           .map(Assignment(_))
           .via(ZAkkaStreams.interruptibleMapAsyncUnordered(12) { assignment: Assignment =>
             Dstreams
-              .distribute(assignment) { result: WorkResult[Result] =>
+              .distribute(dstreamState, assignment) { result: WorkResult[Result] =>
                 Task.fromFuture { _ =>
                   result
                     .source
@@ -143,13 +154,13 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
       .log(s"Running worker $id")
   }
 
-  def run: ZIO[Env, Throwable, Unit] = {
-    val createService = ZIO.runtime[AkkaEnv with DsEnv].map { implicit rt =>
+  def run(dstreamState: DstreamState.Service[Assignment, Result]): RIO[Env, Unit] = {
+    val createService = ZIO.runtime[AkkaEnv].map { implicit rt =>
       val akkaEnv = rt.environment.get[AkkaEnv.Service]
       import akkaEnv.actorSystem
       DstreamSampleAppPowerApiHandler {
         (source, metadata) =>
-          Dstreams.handle[Assignment, Result](source, metadata)
+          Dstreams.handle[Assignment, Result](dstreamState, source, metadata)
       }
     }
     val port = 9999
@@ -173,7 +184,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
     resources.use {
       case (_, client) =>
         for {
-          s <- runServer
+          s <- runServer(dstreamState)
             .log("server graph")
             .fork
           _ <- ZIO.forkAll_ {
