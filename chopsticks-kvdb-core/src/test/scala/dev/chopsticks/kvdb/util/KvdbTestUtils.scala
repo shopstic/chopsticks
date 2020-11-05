@@ -1,7 +1,7 @@
 package dev.chopsticks.kvdb.util
 
 import better.files.File
-import dev.chopsticks.fp.AkkaApp
+import dev.chopsticks.fp.AkkaDiApp
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.BaseCf
@@ -18,7 +18,7 @@ object KvdbTestUtils {
     } { f => blocking(Task(f.delete())).orDie }
   }
 
-  def createTestRunner[R <: AkkaApp.Env, Db](
+  def createTestRunner[R <: AkkaDiApp.Env, Db](
     managed: ZManaged[R, Throwable, Db],
     layer: ULayer[R]
   )(implicit

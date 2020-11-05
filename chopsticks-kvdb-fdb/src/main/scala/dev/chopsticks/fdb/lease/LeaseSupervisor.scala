@@ -8,10 +8,8 @@ import akka.NotUsed
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Keep, Source}
 import com.apple.foundationdb.{ReadTransaction, Transaction}
-import dev.chopsticks.fp.LoggingContext
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.log_env.LogCtx
+import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
@@ -29,7 +27,7 @@ import scala.collection.immutable.ArraySeq
 import scala.concurrent.duration._
 import scala.math.Ordered.orderingToOrdered
 
-object LeaseSupervisor extends LoggingContext {
+object LeaseSupervisor {
 
   final case class LeaseSupervisorConfig(
     partitionCount: PosInt,
