@@ -9,7 +9,7 @@ object Dependencies {
   val ZIO_VERSION = "1.0.3"
   val IZUMI_VERSION = "0.10.19"
   val REFINED_VERSION = "0.9.17"
-  val CALIBAN_VERSION = "0.9.2"
+  val CALIBAN_VERSION = "0.9.3"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -64,7 +64,7 @@ object Dependencies {
   )
 
   val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "2.1.0"
+    "org.typelevel" %% "kittens" % "2.2.0"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
@@ -130,7 +130,7 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.6.0"
+    "io.scalaland" %% "chimney" % "0.6.1"
   )
 
   val snappyDeps = Seq(
