@@ -202,12 +202,7 @@ object IzLogTemplates {
       new Extractor.Constant("["),
       new Styler.AdaptivePad(Seq(new Extractor.ThreadId()), 1, PadType.Left, ' '),
       new Extractor.Constant(":"),
-      new Styler.AdaptivePad(
-        Seq(new Styler.Trim(Seq(new Extractor.ThreadName()), 20, TrimType.Center, Some("…"))),
-        4,
-        PadType.Right,
-        ' '
-      ),
+      new Styler.Trim(Seq(new Extractor.ThreadName()), 20, TrimType.Center, Some("…")),
       new Extractor.Constant("]"),
       Extractor.Space,
       new Styler.TrailingSpace(Seq(new FilteringContextExtractor(new Extractor.LoggerContext()))),
