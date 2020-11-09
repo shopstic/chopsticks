@@ -49,7 +49,7 @@ object DstreamState {
         _ <- UIO(queueGauge.set(queueSize.toDouble))
         _ <- UIO(mapGauge.set(map.size.toDouble))
       } yield ()
-      _ <- updateQueueGauge.repeat(Schedule.fixed(500.millis.toJava)).fork.toManaged_
+      _ <- updateQueueGauge.repeat(Schedule.fixed(1.second.toJava)).fork.toManaged_
     } yield new Service[Req, Res] {
       import akkaService.{actorSystem, dispatcher}
 

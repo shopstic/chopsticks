@@ -34,13 +34,20 @@ object DstreamStateMetricsManager {
   def live: RLayer[MetricRegistryFactory[DstreamStateMetricsGroup], DstreamStateMetricsManager] = {
     val metricsServiceFactory: MetricServiceFactory[DstreamStateMetricsGroup, String, DstreamStateMetrics] =
       new MetricServiceFactory[DstreamStateMetricsGroup, String, DstreamStateMetrics] {
-        override def create(registry: MetricRegistry.Service[DstreamStateMetricsGroup], config: String) = {
+        override def create(
+          registry: MetricRegistry.Service[DstreamStateMetricsGroup],
+          config: String
+        ): DstreamStateMetrics = {
           val labels = LabelValues.of(dstreamStateLabel -> config)
           new DstreamStateMetrics {
-            override val workerGauge = registry.gaugeWithLabels(DstreamStateMetrics.workerGauge, labels)
-            override val attemptCounter = registry.counterWithLabels(DstreamStateMetrics.attemptCounter, labels)
-            override val queueGauge = registry.gaugeWithLabels(DstreamStateMetrics.queueGauge, labels)
-            override val mapGauge = registry.gaugeWithLabels(DstreamStateMetrics.mapGauge, labels)
+            override val workerGauge: MetricGauge =
+              registry.gaugeWithLabels(DstreamStateMetrics.workerGauge, labels)
+            override val attemptCounter: MetricCounter =
+              registry.counterWithLabels(DstreamStateMetrics.attemptCounter, labels)
+            override val queueGauge: MetricGauge =
+              registry.gaugeWithLabels(DstreamStateMetrics.queueGauge, labels)
+            override val mapGauge: MetricGauge =
+              registry.gaugeWithLabels(DstreamStateMetrics.mapGauge, labels)
           }
         }
       }
