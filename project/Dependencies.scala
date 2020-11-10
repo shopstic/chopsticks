@@ -177,4 +177,8 @@ object Dependencies {
     "com.lihaoyi" %% "sourcecode" % "0.2.1"
   )
 
+  // TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98
+  val overrideDeps = Seq(
+    "dev.zio" %% "izumi-reflect" % "1.0.0-M7"
+  )
 }
