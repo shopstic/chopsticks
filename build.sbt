@@ -20,6 +20,8 @@ ThisBuild / resolvers ++= Seq(
 //  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 )
 ThisBuild / run / fork := true
+// TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98
+ThisBuild / dependencyOverrides := overrideDeps
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 

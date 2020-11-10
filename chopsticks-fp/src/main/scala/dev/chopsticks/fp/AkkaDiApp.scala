@@ -84,9 +84,6 @@ object AkkaDiApp {
 
     factoryRuntime.unsafeRun(task.provideLayer(layer))
   }
-
-  // TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98
-  System.setProperty("izumi.reflect.rtti.optimized.equals", "false")
 }
 
 trait AkkaDiApp[Cfg] {
