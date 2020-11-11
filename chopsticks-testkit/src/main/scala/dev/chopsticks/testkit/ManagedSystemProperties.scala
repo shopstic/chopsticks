@@ -3,8 +3,8 @@ package dev.chopsticks.testkit
 import com.typesafe.config.ConfigFactory
 import zio.{UIO, ZIO, ZManaged}
 
-trait ManagedProps {
-  def manageProps[R, E, A](props: Map[String, String])(use: => ZIO[R, E, A]): ZIO[R, E, A] = {
+trait ManagedSystemProperties {
+  def manageSystemProperties[R, E, A](props: Map[String, String])(use: => ZIO[R, E, A]): ZIO[R, E, A] = {
     ZManaged
       .make {
         UIO {

@@ -1,12 +1,12 @@
 package dev.chopsticks.sample.app
 
 import dev.chopsticks.sample.app.dstreams.{DstreamSampleApp, DstreamsSampleMasterApp, DstreamsSampleWorkerApp}
-import dev.chopsticks.testkit.{LiveAppEnvTest, ManagedProps}
+import dev.chopsticks.testkit.{LiveAppEnvTest, ManagedSystemProperties}
 import zio.console.Console
 import zio.test.TestAspect.sequential
 import zio.test._
 
-object SampleAppsEnvTest extends DefaultRunnableSpec with LiveAppEnvTest with ManagedProps {
+object SampleAppsEnvTest extends DefaultRunnableSpec with LiveAppEnvTest with ManagedSystemProperties {
 
   override def spec: ZSpec[Console, Throwable] =
     suite("Sample apps env test")(

@@ -1,11 +1,9 @@
 package dev.chopsticks.sample.dstreams
 
-import akka.actor.ActorSystem
-import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+import com.typesafe.config.{Config, ConfigValueFactory}
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetricsGroup
 import dev.chopsticks.dstream.{DstreamStateFactory, DstreamStateMetricsManager}
-import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.DiLayers
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
 import dev.chopsticks.metric.prom.PromMetricRegistry
 import dev.chopsticks.sample.app.dstreams.{
@@ -14,20 +12,19 @@ import dev.chopsticks.sample.app.dstreams.{
   DstreamsSampleMasterAppConfig,
   DstreamsSampleWorkerApp
 }
-import dev.chopsticks.testkit.LiveRunnableSpec
-import dev.chopsticks.testkit.LiveRunnableSpec.LiveRunnableEnv
-import pureconfig.{KebabCase, PascalCase}
-import zio.clock.Clock
-import zio.{Task, UIO, ZIO, ZLayer, ZManaged, ZRef}
+import dev.chopsticks.testkit.AkkaDiRunnableSpec
+import izumi.distage.model.definition
+import zio.{Task, UIO, ZIO, ZLayer, ZRef}
 import zio.test.Assertion._
 import zio.test.TestAspect.timeout
 import zio.test._
+import zio.test.environment.TestEnvironment
 
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 import scala.util.{Failure, Success}
 
-object DstreamsMasterWorkerTest extends LiveRunnableSpec {
+object DstreamsMasterWorkerTest extends AkkaDiRunnableSpec {
 
   private val masterConfig = DstreamsSampleMasterAppConfig(
     port = 0,
@@ -41,19 +38,22 @@ object DstreamsMasterWorkerTest extends LiveRunnableSpec {
     distributionRetryInterval = 5.millis
   )
 
-  private val typesafeConfig: Config = {
-    val cfg = ConfigFactory.load().withValue("iz-logging.level", ConfigValueFactory.fromAnyRef("Crit"))
-    if (!cfg.getBoolean("akka.stream.materializer.debug.fuzzing-mode")) {
-      throw new IllegalArgumentException(
-        "akka.stream.materializer.debug.fuzzing-mode is not 'on' for testing, config loading is not working properly?"
-      )
-    }
-    cfg
+  override protected val loadConfig: Config = {
+    super.loadConfig.withValue("iz-logging.level", ConfigValueFactory.fromAnyRef("Crit"))
   }
 
-  override def spec: ZSpec[LiveRunnableEnv, Any] = {
+  override protected def testEnv(config: Config): Task[definition.Module] = Task {
+    DiLayers(
+      ZLayer.succeed(PromMetricRegistry.live[DstreamStateMetricsGroup]("MasterWorkerTest")),
+      DstreamStateMetricsManager.live,
+      ZLayer.succeed(masterConfig),
+      DstreamStateFactory.live
+    )
+  }
+
+  override def spec: ZSpec[TestEnvironment, Any] = {
     suite("Master worker suite")(
-      testM("Master worker test") {
+      diTestM("Master worker test") {
         val managedZio = for {
           manageServerResult <- DstreamsSampleMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
@@ -109,35 +109,7 @@ object DstreamsMasterWorkerTest extends LiveRunnableSpec {
         }
         managedZio.use(identity)
       } @@ timeout(20.seconds.toJava)
-    ).provideSomeLayer[LiveRunnableEnv].apply(extraLayer.mapError(TestFailure.fail))
-  }
-
-  private def extraLayer = {
-    val metricsManagerLayer =
-      ZLayer.succeed(PromMetricRegistry.live[DstreamStateMetricsGroup]("MasterWorkerTest")) >>>
-        DstreamStateMetricsManager.live
-    (ZLayer.requires[Clock] ++ metricsManagerLayer ++ akkaLayer) >+>
-      IzLogging.live(typesafeConfig) ++
-      ZLayer.succeed(masterConfig) ++
-      DstreamStateFactory.live
-  }
-
-  private def akkaLayer: ZLayer[Any, Nothing, AkkaEnv] = {
-    val managed = ZManaged.make {
-      UIO {
-        val system = ActorSystem(
-          getClass.getName
-            .filter(_.isLetterOrDigit).split("\\.")
-            .map(n => KebabCase.fromTokens(PascalCase.toTokens(n)))
-            .mkString("-"),
-          typesafeConfig
-        )
-        AkkaEnv.Live(system): AkkaEnv.Service
-      }
-    } { system =>
-      Task.fromFuture(_ => system.actorSystem.terminate()).unit.orDie
-    }
-    managed.toLayer
+    )
   }
 
 }
