@@ -117,7 +117,7 @@ object ZAkkaStreams {
             if (graceful) ks.shutdown()
             else ks.abort(new InterruptedException("Stream (interruptibleGraph) was interrupted"))
           } *> task.fold(
-            e => logger.error(s"Graph interrupted (graceful=$graceful) which resulted in exception: ${e.getMessage}"),
+            e => logger.error(s"Graph interrupted ($graceful) which led to: ${e.getMessage -> "exception"}"),
             _ => ()
           )
         )

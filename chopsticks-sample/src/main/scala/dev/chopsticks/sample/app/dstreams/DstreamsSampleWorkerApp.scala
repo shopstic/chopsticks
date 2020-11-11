@@ -19,6 +19,7 @@ import zio._
 
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
+import scala.util.control.NoStackTrace
 
 final case class DstreamsSampleWorkersConfig(
   count: Option[Int],
@@ -50,6 +51,9 @@ object DstreamsSampleWorkerAppConfig {
 }
 
 object DstreamsSampleWorkerApp extends AkkaDiApp[DstreamsSampleWorkerAppConfig] {
+  final case object RandomFailureTestException
+      extends RuntimeException("Failed randomly for testing...")
+      with NoStackTrace
 
   override def config(allConfig: Config): Task[DstreamsSampleWorkerAppConfig] = {
     Task(PureconfigLoader.unsafeLoad[DstreamsSampleWorkerAppConfig](allConfig, "app"))
@@ -131,7 +135,7 @@ object DstreamsSampleWorkerApp extends AkkaDiApp[DstreamsSampleWorkerAppConfig] 
                     sum += i + assignment.addition + iteration
                   }
                   if (willCrash && iteration == assignment.iteration) {
-                    throw new RuntimeException("Failed randomly for testing...")
+                    throw RandomFailureTestException
                   }
 
                   if (willFail && iteration == assignment.iteration) Result(body = Result.Body.ErrorCode(123))
@@ -142,11 +146,11 @@ object DstreamsSampleWorkerApp extends AkkaDiApp[DstreamsSampleWorkerAppConfig] 
             }
             _ <- Task
               .fromFuture(_ => futureDone)
-              .log(s"$workerId processing $assignment")
+              .log(s"$workerId processing $assignment", logTraceOnError = false)
               .forkDaemon
           } yield source
         }
-        .log(s"Client: running $workerId")
+        .log(s"Client: running $workerId", logTraceOnError = false)
     }
   }
 
