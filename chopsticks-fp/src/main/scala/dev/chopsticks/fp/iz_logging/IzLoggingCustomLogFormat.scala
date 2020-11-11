@@ -144,7 +144,9 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
     process(occurences, templateBuilder, messageBuilder, parameters, withColors)(balanced)
 
     val unbalancedArgs = mutable.ArrayBuffer[RenderedParameter]()
-    val unbalanced = entry.message.args.takeRight(entry.message.args.length - balanced.length)
+    val unbalanced = entry.message.args.takeRight(entry.message.args.length - balanced.length).filterNot(
+      _.value.isInstanceOf[Throwable]
+    )
     processUnbalanced(occurences, withColors, templateBuilder, messageBuilder, unbalancedArgs, unbalanced)
 
     if (options.withExceptions) {
@@ -158,6 +160,32 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
       parameters.toSeq,
       unbalancedArgs.toSeq
     )
+  }
+
+  override def traceThrowables(options: RenderingOptions, entry: Log.Entry): String = {
+    import izumi.fundamentals.platform.exceptions.IzThrowable._
+
+    val throwables = entry.throwables
+    if (throwables.nonEmpty) {
+      throwables
+        .zipWithIndex
+        .map {
+          case (t, idx) =>
+            val builder = new StringBuilder
+            if (throwables.size > 1) {
+              val _ = builder.append(s"Exception #$idx:\n")
+            }
+
+            // TODO: we may try to use codec here
+            builder
+              .append(t.value.stackTrace)
+              .toString()
+        }
+        .mkString("\n", "\n", "")
+    }
+    else {
+      ""
+    }
   }
 
   @inline private[this] def wrapped(withColors: Boolean, color: String, message: String): String = {

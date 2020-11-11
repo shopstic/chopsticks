@@ -1,10 +1,11 @@
 package dev.chopsticks.fp.iz_logging
 
+import izumi.fundamentals.platform.language.Quirks
 import izumi.logstage.api.Log
 import izumi.logstage.api.rendering.RenderingOptions
-import izumi.logstage.api.rendering.logunits.{Extractor, LETree}
+import izumi.logstage.api.rendering.logunits.{Extractor, LETree, Renderer}
 
-object IzLoggingCustomExtractors {
+object IzLoggingCustomRenderers {
   val LocationCtxKey = "location"
   val LoggerTypeCtxKey = "loggerType"
   private val ExcludedCtxKeys = Set(LocationCtxKey, LoggerTypeCtxKey)
@@ -33,13 +34,20 @@ object IzLoggingCustomExtractors {
     }
   }
 
-  final class LocationExtractor(sourceExtractor: Extractor, loggerNameExtractor: Extractor) extends Extractor {
+  object LoggerName extends Extractor {
     override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
+      Quirks.discard(context)
+      LETree.TextNode("(" + entry.context.static.id.id + ")")
+    }
+  }
+
+  final class LocationRenderer(sourceExtractor: Extractor, fallbackRenderer: Renderer) extends Renderer {
+    override def render(entry: Log.Entry, context: RenderingOptions): LETree = {
       entry.context.customContext.values.find(_.path.exists(_ == LoggerTypeCtxKey)) match {
         case Some(_) =>
           sourceExtractor.render(entry, context)
         case None =>
-          loggerNameExtractor.render(entry, context)
+          fallbackRenderer.render(entry, context)
       }
     }
   }
@@ -66,6 +74,12 @@ object IzLoggingCustomExtractors {
   final class MessageExtractor extends Extractor {
     override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
       LETree.TextNode(IzLoggingCustomLogFormat.formatMessage(entry, context).message)
+    }
+  }
+
+  final class ConcatRenderer(renderers: Seq[Renderer]) extends Renderer {
+    override def render(entry: Log.Entry, context: RenderingOptions): LETree = {
+      LETree.Sequence(renderers.map(_.render(entry, context)))
     }
   }
 }

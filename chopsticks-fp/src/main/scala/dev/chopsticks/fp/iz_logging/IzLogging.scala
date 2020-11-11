@@ -44,9 +44,9 @@ object IzLogging {
 
   final case class LiveService(logger: IzLogger, zioLogger: LogBIO3[ZIO]) extends Service {
     override def loggerWithCtx(ctx: LogCtx): IzLogger =
-      logger(IzLoggingCustomExtractors.LocationCtxKey -> ctx.sourceLocation)
+      logger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
     override def zioLoggerWithCtx(ctx: LogCtx): LogBIO3[ZIO] =
-      zioLogger(IzLoggingCustomExtractors.LocationCtxKey -> ctx.sourceLocation)
+      zioLogger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
   }
 
   def create(lbConfig: LbConfig): Service = {
@@ -88,7 +88,7 @@ object IzLogging {
     }
 
     val sinks = (consoleSink :: maybeFileSink.toList).map(sink => IzLoggingSinks.IzFilteringSink(filters, sink))
-    val logger = IzLogger(config.level, sinks)(IzLoggingCustomExtractors.LoggerTypeCtxKey -> "iz")
+    val logger = IzLogger(config.level, sinks)(IzLoggingCustomRenderers.LoggerTypeCtxKey -> "iz")
     val zioLogger = LogstageZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
 
     maybeFileSink.foreach(_.start())
@@ -127,7 +127,7 @@ object IzLogging {
 }
 
 object IzLogTemplates {
-  import IzLoggingCustomExtractors._
+  import IzLoggingCustomRenderers._
 
   val consoleLayout = new Renderer.Aggregate(
     Seq(
@@ -143,19 +143,17 @@ object IzLogTemplates {
         )
       ),
       Extractor.Space,
-      new Extractor.Constant("["),
-      new Styler.Trim(
-        Seq(
-          new LocationExtractor(
-            sourceExtractor = new ContextSourcePositionExtractor(new Extractor.SourcePosition()),
-            loggerNameExtractor = new Extractor.LoggerName()
-          )
-        ),
-        42,
-        TrimType.Left,
-        Some("…")
+      new LocationRenderer(
+        sourceExtractor = new ContextSourcePositionExtractor(new Extractor.SourcePosition()),
+        fallbackRenderer = new ConcatRenderer(Seq(
+          new Extractor.Constant("("),
+          new Styler.Compact(
+            Seq(new Extractor.LoggerName()),
+            1
+          ),
+          new Extractor.Constant(")")
+        ))
       ),
-      new Extractor.Constant("]"),
       Extractor.Space,
       new Extractor.Constant("["),
       new Styler.AdaptivePad(Seq(new Extractor.ThreadId()), 1, PadType.Left, ' '),
