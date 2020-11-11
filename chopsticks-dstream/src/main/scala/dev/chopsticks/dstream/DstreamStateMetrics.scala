@@ -13,19 +13,23 @@ import dev.chopsticks.metric.{
 import zio.RLayer
 
 trait DstreamStateMetrics {
-  def workerGauge: MetricGauge
-  def attemptCounter: MetricCounter
-  def queueGauge: MetricGauge
-  def mapGauge: MetricGauge
+  def dstreamWorkerGauge: MetricGauge
+  def dstreamAttemptCounter: MetricCounter
+  def dstreamQueueGauge: MetricGauge
+  def dstreamMapGauge: MetricGauge
 }
 
 object DstreamStateMetrics {
   final object dstreamStateLabel extends MetricLabel
   sealed trait DstreamStateMetricsGroup extends MetricGroup
-  final case object workerGauge extends GaugeConfig(LabelNames of dstreamStateLabel) with DstreamStateMetricsGroup
-  final case object attemptCounter extends CounterConfig(LabelNames of dstreamStateLabel) with DstreamStateMetricsGroup
-  final case object queueGauge extends GaugeConfig(LabelNames of dstreamStateLabel) with DstreamStateMetricsGroup
-  final case object mapGauge extends GaugeConfig(LabelNames of dstreamStateLabel) with DstreamStateMetricsGroup
+  final case object dstreamWorkerGauge
+      extends GaugeConfig(LabelNames of dstreamStateLabel)
+      with DstreamStateMetricsGroup
+  final case object dstreamAttemptCounter
+      extends CounterConfig(LabelNames of dstreamStateLabel)
+      with DstreamStateMetricsGroup
+  final case object dstreamQueueGauge extends GaugeConfig(LabelNames of dstreamStateLabel) with DstreamStateMetricsGroup
+  final case object dstreamMapGauge extends GaugeConfig(LabelNames of dstreamStateLabel) with DstreamStateMetricsGroup
 }
 
 object DstreamStateMetricsManager {
@@ -40,14 +44,14 @@ object DstreamStateMetricsManager {
         ): DstreamStateMetrics = {
           val labels = LabelValues.of(dstreamStateLabel -> config)
           new DstreamStateMetrics {
-            override val workerGauge: MetricGauge =
-              registry.gaugeWithLabels(DstreamStateMetrics.workerGauge, labels)
-            override val attemptCounter: MetricCounter =
-              registry.counterWithLabels(DstreamStateMetrics.attemptCounter, labels)
-            override val queueGauge: MetricGauge =
-              registry.gaugeWithLabels(DstreamStateMetrics.queueGauge, labels)
-            override val mapGauge: MetricGauge =
-              registry.gaugeWithLabels(DstreamStateMetrics.mapGauge, labels)
+            override val dstreamWorkerGauge: MetricGauge =
+              registry.gaugeWithLabels(DstreamStateMetrics.dstreamWorkerGauge, labels)
+            override val dstreamAttemptCounter: MetricCounter =
+              registry.counterWithLabels(DstreamStateMetrics.dstreamAttemptCounter, labels)
+            override val dstreamQueueGauge: MetricGauge =
+              registry.gaugeWithLabels(DstreamStateMetrics.dstreamQueueGauge, labels)
+            override val dstreamMapGauge: MetricGauge =
+              registry.gaugeWithLabels(DstreamStateMetrics.dstreamMapGauge, labels)
           }
         }
       }
