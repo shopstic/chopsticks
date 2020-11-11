@@ -7,7 +7,7 @@ object Dependencies {
   val AKKA_VERSION = "2.6.10"
   val AKKA_HTTP_VERSION = "10.1.10"
   val ZIO_VERSION = "1.0.3"
-  val IZUMI_VERSION = "0.10.19"
+  val IZUMI_VERSION = "1.0.0-M1"
   val REFINED_VERSION = "0.9.17"
   val CALIBAN_VERSION = "0.9.3"
 
