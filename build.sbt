@@ -38,14 +38,14 @@ lazy val testkit = Build
     libraryDependencies ++= akkaTestDeps ++ scalatestDeps ++ janinoDeps ++ zioTestDeps,
     Compile / packageBin / mappings ~= { _.filter(_._1.name != "logback-test.xml") }
   )
-  .dependsOn(util)
+  .dependsOn(fp, util)
 
 lazy val fp = Build
   .defineProject("fp")
   .settings(
     libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ distageDeps ++ sourcecodeDeps
   )
-  .dependsOn(util, testkit % "test->test")
+  .dependsOn(util)
 
 lazy val stream = Build
   .defineProject("stream")
@@ -54,13 +54,14 @@ lazy val stream = Build
   )
   .dependsOn(fp, testkit % "test->test")
 
-//lazy val dstream = Build
-//  .defineProject("dstream")
-//  .settings(
-//    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-//    libraryDependencies ++= akkaGrpcRuntimeDeps
-//  )
-//  .dependsOn(stream)
+lazy val dstream = Build
+  .defineProject("dstream")
+  .settings(
+    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
+    libraryDependencies ++= akkaGrpcRuntimeDeps,
+    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+  )
+  .dependsOn(metric, stream, testkit % "test->test")
 
 lazy val kvdbCore = Build
   .defineProject("kvdb-core")
@@ -155,7 +156,8 @@ lazy val sample = Build
     akkaGrpcCodeGeneratorSettings += "server_power_apis",
     scalacOptions ++= Seq(
       s"-Wconf:src=${(Compile / sourceManaged).value.getCanonicalPath}/dev/chopsticks/sample/app/proto/.*&cat=deprecation:s"
-    )
+    ),
+    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
   )
   .dependsOn(
     kvdbLmdb,
@@ -164,7 +166,9 @@ lazy val sample = Build
     kvdbCodecProtobufValue,
     kvdbCodecFdbKey,
     metric,
-    kvdbFdb /*, dstream*/
+    kvdbFdb,
+    dstream,
+    testkit % "test->test"
   )
 
 lazy val root = (project in file("."))
@@ -179,6 +183,7 @@ lazy val root = (project in file("."))
     util,
     testkit,
     fp,
+    dstream,
     stream,
     graphql,
     kvdbCore,

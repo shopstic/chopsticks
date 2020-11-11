@@ -8,21 +8,19 @@ import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.{Done, NotUsed}
-import dev.chopsticks.dstream.DstreamEnv.WorkResult
+import dev.chopsticks.dstream.DstreamState.WorkResult
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.fp._
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.log_env.LogEnv
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaStreams
 import zio._
-import zio.clock.Clock
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success}
 
-object Dstreams extends LoggingContext {
+object Dstreams {
   final case class DstreamServerConfig(port: Int, idleTimeout: Duration)
   final case class DstreamClientConfig(serverHost: String, serverPort: Int, withTls: Boolean)
   final case class DstreamWorkerConfig(nodeId: String, poolSize: Int)
@@ -54,16 +52,19 @@ object Dstreams extends LoggingContext {
       }
     } yield binding
 
-    ZManaged.make(
-      acquire
-        .logResult("dstream server startup", b => s"Dstream server bound: ${b.localAddress}")
-    ) { binding =>
-      Task
-        .fromFuture(_ => binding.terminate(10.seconds))
-        .log("dstream server teardown")
-        .map(_ => ())
-        .catchAll(e => ZLogger.error("Failed unbinding dstream server", e))
-    }
+    ZManaged
+      .make(
+        acquire
+          .logResult("dstream server startup", b => s"Dstream server bound: ${b.localAddress}")
+      ) { binding =>
+        ZIO.access[IzLogging](_.get.zioLogger).flatMap { zLogger =>
+          Task
+            .fromFuture(_ => binding.terminate(10.seconds))
+            .log("dstream server teardown")
+            .unit
+            .catchAll(e => zLogger.error(s"Failed unbinding dstream server: $e"))
+        }
+      }
   }
 
   def createManagedClientFromConfig[R, E, Client <: AkkaGrpcClient](
@@ -77,72 +78,71 @@ object Dstreams extends LoggingContext {
           GrpcClientSettings
             .connectToServiceAt(config.serverHost, config.serverPort)
             .withTls(config.withTls)
-//            .withChannelBuilderOverrides(
-//              _.eventLoopGroup(new io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoopGroup(1))
-//                .executor(env.dispatcher)
-//            )
         }
         .flatMap(make)
         .logResult("dstream client Startup", _ => s"dstream client created")
     ) { client =>
-      Task
-        .fromFuture(_ => client.close())
-        .log("dstream client teardown")
-        .map(_ => ())
-        .catchAll(e => ZLogger.error("Failed closing dstream client", e))
+      ZIO.access[IzLogging](_.get.zioLogger).flatMap { zLogger =>
+        Task
+          .fromFuture(_ => client.close())
+          .log("dstream client teardown")
+          .unit
+          .catchAll(e => zLogger.error(s"Failed closing dstream client: $e"))
+      }
     }
   }
 
   def createManagedClient[R, E, Client <: AkkaGrpcClient](
     make: => ZIO[R, E, Client]
   ): ZManaged[R with MeasuredLogging, E, Client] = {
-    ZManaged.make(
-      make
-        .logResult("dstream client Startup", _ => s"dstream client created")
-    ) { client =>
-      Task
-        .fromFuture(_ => client.close())
-        .log("dstream client teardown")
-        .map(_ => ())
-        .catchAll(e => ZLogger.error("Failed closing dstream client", e))
-    }
+    ZManaged
+      .make(
+        make
+          .logResult("dstream client Startup", _ => s"dstream client created")
+      ) { client =>
+        ZIO.access[IzLogging](_.get.zioLogger).flatMap { zLogger =>
+          Task
+            .fromFuture(_ => client.close())
+            .log("dstream client teardown")
+            .unit
+            .catchAll(e => zLogger.error(s"Failed closing dstream client: $e"))
+        }
+      }
   }
 
-  def distribute[Req, Res, R <: AkkaEnv, A](
+  def distribute[Req: Tag, Res: Tag, R <: AkkaEnv, A](
+    stateService: DstreamState.Service[Req, Res],
     assignment: Req
-  )(run: WorkResult[Res] => RIO[R, A]): RIO[R with DstreamEnv[Req, Res], A] = {
-    ZIO
-      .bracket {
-        ZIO
-          .accessM[DstreamEnv[Req, Res]](_.get[DstreamEnv.Service[Req, Res]].enqueueAssignment(assignment))
-      } { worker =>
-        val cleanup = for {
-          _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
-            worker.source.runWith(Sink.cancelled)
-          }
-          _ <- ZIO.accessM[DstreamEnv[Req, Res]](_.get.report(assignment))
-        } yield ()
-
-        cleanup.orDie
-      }(run)
+  )(run: WorkResult[Res] => RIO[R, A]): RIO[R, A] = {
+    ZIO.bracket { stateService.enqueueAssignment(assignment) } { worker =>
+      val cleanup = for {
+        _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
+          worker.source.runWith(Sink.cancelled)
+        }
+        _ <- stateService.report(worker.assignmentId)
+      } yield ()
+      cleanup.orDie
+    }(run)
   }
 
   def work[R <: Has[_], Req, Res](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
-  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with LogEnv with R, Done] = {
-    val graph = ZIO.runtime[AkkaEnv with R].map { implicit rt =>
-      val promise = Promise[Source[Res, NotUsed]]()
-
-      requestBuilder
-        .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
-        .viaMat(KillSwitches.single)(Keep.right)
-        .via(ZAkkaStreams.interruptibleMapAsync(1) { assignment: Req =>
-          makeSource(assignment).map(s => promise.success(s)) *> Task.fromFuture(_ => promise.future)
-        })
-        .toMat(Sink.ignore)(Keep.both)
-    }
-
-    ZAkkaStreams.interruptibleGraph(graph, graceful = true)
+  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with IzLogging with R, Done] = {
+    for {
+      graph <- ZIO.runtime[AkkaEnv with R].map { implicit rt =>
+        val promise = Promise[Source[Res, NotUsed]]()
+        requestBuilder
+          .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
+          .viaMat(KillSwitches.single)(Keep.right)
+          .via(ZAkkaStreams.interruptibleMapAsync(1) { assignment: Req =>
+            makeSource(assignment)
+              .map(s => promise.success(s))
+              .zipRight(Task.fromFuture(_ => promise.future))
+          })
+          .toMat(Sink.ignore)(Keep.both)
+      }
+      result <- ZAkkaStreams.interruptibleGraph(graph, graceful = true)
+    } yield result
   }
 
   def workPool[Req, Res, R <: AkkaEnv](
@@ -150,22 +150,23 @@ object Dstreams extends LoggingContext {
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(
     makeSource: Req => RIO[R, Source[Res, NotUsed]]
-  ): ZIO[R with MeasuredLogging with Clock, Throwable, Unit] = {
+  ): ZIO[R with MeasuredLogging, Throwable, Unit] = {
     ZIO
-      .foreachPar(1 to config.poolSize) { id =>
+      .foreachPar((1 to config.poolSize).toList) { id =>
         work(requestBuilder.addHeader(WORKER_ID_HEADER, id.toString).addHeader(WORKER_NODE_HEADER, config.nodeId))(
           makeSource
         ).logResult(s"dstream-worker-$id", _.toString)
           .forever
           .retry(Schedule.exponential(100.millis) || Schedule.fixed(1.second))
-      }
+      }(List)
       .unit
   }
 
-  def handle[Req, Res](
+  def handle[Req: Tag, Res: Tag](
+    stateService: DstreamState.Service[Req, Res],
     in: Source[Res, NotUsed],
     metadata: Metadata
-  )(implicit rt: zio.Runtime[AkkaEnv with DstreamEnv[Req, Res]]): Source[Req, NotUsed] = {
+  )(implicit rt: zio.Runtime[AkkaEnv]): Source[Req, NotUsed] = {
     val env = rt.environment
     val akkaService = env.get[AkkaEnv.Service]
     import akkaService.{actorSystem, dispatcher}
@@ -174,8 +175,9 @@ object Dstreams extends LoggingContext {
       .viaMat(KillSwitches.single)(Keep.right)
       .preMaterialize()
 
+    val futureSource = stateService.enqueueWorker(inSource, metadata).unsafeRunToFuture(rt)
     Source
-      .futureSource(env.get[DstreamEnv.Service[Req, Res]].enqueueWorker(inSource, metadata)).unsafeRunToFuture)
+      .futureSource(futureSource)
       .watchTermination() {
         case (_, f) =>
           f.onComplete {

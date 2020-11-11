@@ -23,7 +23,7 @@ package object zio_ext {
     def unsafeRunToFuture(implicit rt: Runtime[R]): Future[A] = {
       val promise = scala.concurrent.Promise[A]()
       rt.unsafeRunAsync(io) {
-        case Exit.Success(value) => promise.success(value)
+        case Exit.Success(value) => val _ = promise.success(value)
         case Exit.Failure(cause) => promise.failure(cause.squashTrace)
       }
       promise.future
