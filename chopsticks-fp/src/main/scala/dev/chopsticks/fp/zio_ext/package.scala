@@ -39,20 +39,33 @@ package object zio_ext {
       })
     }
 
-    def logResult(name: String, result: A => String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
+    def logResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
+      ctx: LogCtx
+    ): ZIO[R with MeasuredLogging, E, A] = {
       ZIO.bracketExit(startMeasurement(name))((startTime: Long, exit: Exit[E, A]) =>
-        logElapsedTime(name, startTime, exit, result)
+        logElapsedTime(
+          name = name,
+          startTimeNanos = startTime,
+          exit = exit,
+          renderResult = result,
+          logTraceOnError = logTraceOnError
+        )
       ) { startTime =>
         io.onInterrupt(for {
           elapse <- nanoTime.map(endTime => endTime - startTime)
           elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
-          _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).info(s"[$name] [$elapsed] interrupting..."))
+          _ <-
+            ZIO.access[IzLogging](_
+              .get
+              .loggerWithCtx(ctx)
+              .withCustomContext("name" -> name, "elapsed" -> elapsed)
+              .info("interrupting..."))
         } yield ())
       }
     }
 
-    def log(name: String)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
-      logResult(name, _ => "completed")
+    def log(name: String, logTraceOnError: Boolean = true)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
+      logResult(name, _ => "completed", logTraceOnError)
     }
 
     def retryForever[R1 <: R](
@@ -76,15 +89,27 @@ package object zio_ext {
   }
 
   implicit final class ZManagedExtensions[R >: Nothing, E <: Any, A](managed: ZManaged[R, E, A]) {
-    def logResult(name: String, result: A => String)(implicit ctx: LogCtx): ZManaged[R with MeasuredLogging, E, A] = {
+    def logResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
+      ctx: LogCtx
+    ): ZManaged[R with MeasuredLogging, E, A] = {
       for {
         startTime <- ZManaged.fromEffect(startMeasurement(name))
-        result <- managed.onExit(exit => logElapsedTime(name, startTime, exit, result))
+        result <- managed.onExit(exit =>
+          logElapsedTime(
+            name = name,
+            startTimeNanos = startTime,
+            exit = exit,
+            renderResult = result,
+            logTraceOnError = logTraceOnError
+          )
+        )
       } yield result
     }
 
-    def log(name: String)(implicit ctx: LogCtx): ZManaged[R with MeasuredLogging, E, A] = {
-      logResult(name, _ => "completed")
+    def log(name: String, logTraceOnError: Boolean = true)(implicit
+      ctx: LogCtx
+    ): ZManaged[R with MeasuredLogging, E, A] = {
+      logResult(name, _ => "completed", logTraceOnError)
     }
   }
 
@@ -99,22 +124,37 @@ package object zio_ext {
     name: String,
     startTimeNanos: Long,
     exit: Exit[E, A],
-    renderResult: A => String
+    renderResult: A => String,
+    logTraceOnError: Boolean
   )(implicit ctx: LogCtx) = {
     for {
-      logger <- ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx))
       elapse <- nanoTime.map(endTime => endTime - startTimeNanos)
-      took = Nanoseconds(elapse).inBestUnit.rounded(2)
+      elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
+      logger <-
+        ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("name" -> name, "elapsed" -> elapsed))
       _ <- exit.toEither match {
         case Left(FiberFailure(cause)) if cause.interrupted =>
-          logger.warn(s"[$name] [$took] interrupted")
+          logger.warn(s"interrupted")
 
-        case Left(e) =>
-          logger.error(s"[$name] [$took] failed, error stacktrace: $e")
+        case Left(exception @ FiberFailure(cause)) =>
+          if (logTraceOnError) {
+            logger.error(s"failed $exception")
+          }
+          else {
+            logger.error(s"failed ${cause.untraced -> "cause"}")
+          }
+
+        case Left(exception) =>
+          if (logTraceOnError) {
+            logger.error(s"failed $exception")
+          }
+          else {
+            logger.error(s"failed ${exception.getMessage -> "message"}")
+          }
 
         case Right(r) =>
           val renderedResult = renderResult(r)
-          logger.info(s"[$name] [$took] ${renderedResult -> "renderedResult" -> null}")
+          logger.info(s"${renderedResult -> "" -> null}")
       }
     } yield ()
   }

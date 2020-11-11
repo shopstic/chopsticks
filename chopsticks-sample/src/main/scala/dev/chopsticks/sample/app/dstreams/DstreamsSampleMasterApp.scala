@@ -161,12 +161,8 @@ object DstreamsSampleMasterApp extends AkkaDiApp[DstreamsSampleMasterAppConfig] 
                         }
                     }
               }
-              .log(s"Distribute $assignment")
-              .retry(Schedule.fixed(appConfig.distributionRetryInterval.toJava).tapInput((e: Throwable) =>
-                ZIO.accessM[IzLogging](
-                  _.get.zioLogger.error(s"Distribute failed for $assignment, it will be retried. Cause: $e")
-                )
-              ))
+              .log(s"Distribute $assignment", logTraceOnError = false)
+              .retry(Schedule.fixed(appConfig.distributionRetryInterval.toJava))
           })
           .viaMat(ks.flow)(Keep.right)
           .toMat(Sink.fold(BigInt(0)) { (s, v) =>
