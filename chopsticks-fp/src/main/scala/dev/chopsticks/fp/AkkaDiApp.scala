@@ -60,20 +60,20 @@ object AkkaDiApp {
     tracingConfig: TracingConfig = TracingConfig.enabled
   ): zio.Runtime[R] = {
     val task = ZIO.environment[R].map { r =>
-      val akkaService = ZService.get[AkkaEnv.Service](r)
-      val loggerService = ZService.get[IzLogging.Service](r)
+      val akkaSvc = r.get[AkkaEnv.Service]
+      val logger = r.get[IzLogging.Service].logger
 
-      val shutdown: CoordinatedShutdown = CoordinatedShutdown(akkaService.actorSystem)
+      val shutdown: CoordinatedShutdown = CoordinatedShutdown(akkaSvc.actorSystem)
       val platform: zio.internal.Platform = new zio.internal.Platform.Proxy(
         zio.internal.Platform
-          .fromExecutionContext(akkaService.dispatcher)
+          .fromExecutionContext(akkaSvc.dispatcher)
           .withTracingConfig(tracingConfig)
       ) {
         private val isShuttingDown = new AtomicBoolean(false)
 
         override def reportFailure(cause: Cause[Any]): Unit = {
           if (cause.died && shutdown.shutdownReason().isEmpty && isShuttingDown.compareAndSet(false, true)) {
-            loggerService.logger.error("Application failure:\n" + cause.prettyPrint)
+            logger.error(s"Application failure:\n${cause.prettyPrint -> "cause" -> null}")
             val _ = shutdown.run(JvmExitReason)
           }
         }
