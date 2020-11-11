@@ -1,7 +1,6 @@
 package dev.chopsticks.fp.iz_logging
 
 import izumi.fundamentals.platform.language.Quirks
-import izumi.fundamentals.platform.strings.IzString
 import izumi.logstage.api.Log
 import izumi.logstage.api.rendering.RenderingOptions
 import izumi.logstage.api.rendering.logunits.{Extractor, LETree, Renderer}
