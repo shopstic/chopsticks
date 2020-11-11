@@ -37,7 +37,7 @@ object SharedResourceManager {
             } *> STM.succeed(map.values.collect {
               case Right(r) =>
                 r
-            })
+            }.toList)
           }.commit
           _ <- ZIO.foreach_(resources)(_.release)
         } yield tmap

@@ -17,12 +17,12 @@ object DistageTest {
       make[Bar.Service].fromHas(ZLayer.succeed(BarService("foo")))
     }
 
-    val plan = Injector().plan(definition, Roots.Everything)
+    val plan = Injector[Task]().plan(definition, Roots.Everything)
     println(plan.render())
-    plan.assertImportsResolvedOrThrow()
+    plan.assertValidOrThrow[Task]()
 
-    val _ = Injector()
-      .produceGetF[Task, Has[Foo.Service] with Has[Bar.Service]](definition).toZIO
+    val _ = Injector[Task]()
+      .produceGet[Has[Foo.Service] with Has[Bar.Service]](definition).toZIO
       .use { _ =>
         ZIO.unit
       }
