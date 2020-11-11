@@ -6,14 +6,14 @@ import izumi.fundamentals.platform.time.IzTimeSafe
 import izumi.logstage.api.Log
 import izumi.logstage.api.Log.{CustomContext, Level}
 import izumi.logstage.api.logger.LogSink
-import izumi.logstage.api.rendering.{RenderingOptions, RenderingPolicy}
+import izumi.logstage.api.rendering.RenderingPolicy
 import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
 import izumi.logstage.api.rendering.logunits.Styler.{PadType, TrimType}
-import izumi.logstage.api.rendering.logunits.{Extractor, LETree, Renderer, Styler}
+import izumi.logstage.api.rendering.logunits.{Extractor, Renderer, Styler}
 import izumi.logstage.sink.QueueingSink
 import izumi.logstage.sink.file.models.{FileRotation, FileSinkConfig}
 import izumi.logstage.sink.file.{FileServiceImpl, FileSink}
-import logstage.{ConsoleSink, IzLogger, LogBIO3, LogstageZIO, StaticLogRouter}
+import logstage._
 import pureconfig.ConfigReader
 import zio.{Layer, UIO, ZIO, ZManaged}
 
@@ -44,9 +44,9 @@ object IzLogging {
 
   final case class LiveService(logger: IzLogger, zioLogger: LogBIO3[ZIO]) extends Service {
     override def loggerWithCtx(ctx: LogCtx): IzLogger =
-      logger(IzLogRenderingExtractors.LocationCtxKey -> ctx.sourceLocation)
+      logger(IzLoggingCustomExtractors.LocationCtxKey -> ctx.sourceLocation)
     override def zioLoggerWithCtx(ctx: LogCtx): LogBIO3[ZIO] =
-      zioLogger(IzLogRenderingExtractors.LocationCtxKey -> ctx.sourceLocation)
+      zioLogger(IzLoggingCustomExtractors.LocationCtxKey -> ctx.sourceLocation)
   }
 
   def create(lbConfig: LbConfig): Service = {
@@ -88,7 +88,7 @@ object IzLogging {
     }
 
     val sinks = (consoleSink :: maybeFileSink.toList).map(sink => IzLoggingSinks.IzFilteringSink(filters, sink))
-    val logger = IzLogger(config.level, sinks)(IzLogRenderingExtractors.LoggerTypeCtxKey -> "iz")
+    val logger = IzLogger(config.level, sinks)(IzLoggingCustomExtractors.LoggerTypeCtxKey -> "iz")
     val zioLogger = LogstageZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
 
     maybeFileSink.foreach(_.start())
@@ -126,54 +126,12 @@ object IzLogging {
   }
 }
 
-object IzLogRenderingExtractors {
-  val LocationCtxKey = "location"
-  val LoggerTypeCtxKey = "loggerType"
-  private val ExcludedCtxKeys = Set(LocationCtxKey, LoggerTypeCtxKey)
-
-  class ContextSourcePositionExtractor(fallback: Extractor) extends Extractor {
-    override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
-      entry.context.customContext.values.find(_.path.exists(_ == LocationCtxKey)) match {
-        case Some(arg) =>
-          val stringArg = if (arg.value == null) "null" else "(" + arg.value.toString + ")"
-          LETree.TextNode(stringArg)
-        case None =>
-          fallback.render(entry, context)
-      }
-    }
-  }
-
-  class FilteringContextExtractor(fallback: Extractor) extends Extractor {
-    override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
-      val originalCtx = entry.context.customContext
-      val filteredCustomContext = {
-        val filteredValues = originalCtx.values.filterNot(_.path.exists(ExcludedCtxKeys))
-        originalCtx.copy(values = filteredValues)
-      }
-      val filteredEntry = entry.copy(context = entry.context.copy(customContext = filteredCustomContext))
-      fallback.render(filteredEntry, context)
-    }
-  }
-
-  class LocationExtractor(sourceExtractor: Extractor, loggerNameExtractor: Extractor) extends Extractor {
-    override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
-      entry.context.customContext.values.find(_.path.exists(_ == LoggerTypeCtxKey)) match {
-        case Some(_) =>
-          sourceExtractor.render(entry, context)
-        case None =>
-          loggerNameExtractor.render(entry, context)
-      }
-    }
-  }
-
-}
-
 object IzLogTemplates {
-  import IzLogRenderingExtractors._
+  import IzLoggingCustomExtractors._
 
   val consoleLayout = new Renderer.Aggregate(
     Seq(
-      new Styler.LevelColor(
+      new IzLoggingCustomStylers.LevelColor(
         Seq(
           new Extractor.Constant("["),
           new Extractor.Level(1),
@@ -205,8 +163,8 @@ object IzLogTemplates {
       new Styler.Trim(Seq(new Extractor.ThreadName()), 20, TrimType.Center, Some("…")),
       new Extractor.Constant("]"),
       Extractor.Space,
-      new Styler.TrailingSpace(Seq(new FilteringContextExtractor(new Extractor.LoggerContext()))),
-      new Extractor.Message()
+      new Styler.TrailingSpace(Seq(new FilteringContextExtractor(new LoggerContext()))),
+      new MessageExtractor()
     )
   )
 }
