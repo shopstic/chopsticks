@@ -6,10 +6,13 @@ import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers, ZService}
+import org.slf4j.LoggerFactory
 import zio._
 import zio.clock.Clock
 
 object AkkaDiTestApp extends AkkaDiApp[Unit] {
+  private val classicLogger = LoggerFactory.getLogger("classic")
+
   type Foo = Has[Foo.Service]
 
   object Foo {
@@ -51,6 +54,7 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
     ZService[IzLogging.Service].flatMap(_.zioLogger.error("test error here"))
   }
 
+  //noinspection TypeAnnotation
   def app = {
     val effect = for {
       bar <- ZIO.access[Bar](_.get)
@@ -61,6 +65,8 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
       _ <- zioLogger.info(s"${bar.bar} ${akkaService.actorSystem.startTime}")
       _ <- doFoo()
     } yield {
+      classicLogger.info("From classic logger")
+      classicLogger.error("Test error from classic logger", new RuntimeException("Test exception"))
       logger.info("From sync logger here")
     }
 
