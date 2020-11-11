@@ -39,7 +39,7 @@ object SharedResourceManager {
                 r
             })
           }.commit
-          _ <- ZIO.foreach(resources)(_.release)
+          _ <- ZIO.foreach_(resources)(_.release)
         } yield tmap
       }
 

@@ -11,11 +11,11 @@ import dev.chopsticks.fp.zio_ext._
 
 import scala.concurrent.TimeoutException
 
-object ZioTestApp extends AkkaDiApp[None.type] {
+object ZioTestApp extends AkkaDiApp[Unit] {
 
-  override def config(allConfig: Config) = Task(None)
+  override def config(allConfig: Config) = Task.unit
 
-  override def liveEnv(akkaAppDi: DiModule, appConfig: None.type, allConfig: Config) = {
+  override def liveEnv(akkaAppDi: DiModule, appConfig: Unit, allConfig: Config) = {
     Task {
       LiveDiEnv(akkaAppDi ++ DiLayers(AppLayer(app)))
     }
