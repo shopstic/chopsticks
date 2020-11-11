@@ -2,7 +2,7 @@ package dev.chopsticks.fp
 
 import distage.{HasConstructor, ModuleDef}
 import izumi.distage.model.definition.Module
-import zio.{Has, RLayer, RManaged, ZIO}
+import zio.{Has, RLayer, RManaged, Tag, ZIO}
 
 object DiLayers {
   def apply(layers: LayerBinding*): Module = layers.foldLeft(Module.empty)(_ ++ _.layerModule)

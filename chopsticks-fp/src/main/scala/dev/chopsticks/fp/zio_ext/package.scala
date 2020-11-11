@@ -58,7 +58,7 @@ package object zio_ext {
             ZIO.access[IzLogging](_
               .get
               .loggerWithCtx(ctx)
-              .withCustomContext("name" -> name, "elapsed" -> elapsed)
+              .withCustomContext("task" -> name, "elapsed" -> elapsed)
               .info("interrupting..."))
         } yield ())
       }
@@ -116,7 +116,7 @@ package object zio_ext {
   private def startMeasurement(name: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] = {
     for {
       time <- nanoTime
-      _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).info(s"[$name] started"))
+      _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).withCustomContext("task" -> name).info("started"))
     } yield time
   }
 
@@ -131,7 +131,7 @@ package object zio_ext {
       elapse <- nanoTime.map(endTime => endTime - startTimeNanos)
       elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
       logger <-
-        ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("name" -> name, "elapsed" -> elapsed))
+        ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("task" -> name, "elapsed" -> elapsed))
       _ <- exit.toEither match {
         case Left(FiberFailure(cause)) if cause.interrupted =>
           logger.warn(s"interrupted")
