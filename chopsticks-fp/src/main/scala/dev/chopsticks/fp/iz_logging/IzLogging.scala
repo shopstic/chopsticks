@@ -145,14 +145,7 @@ object IzLogTemplates {
       Extractor.Space,
       new LocationRenderer(
         sourceExtractor = new ContextSourcePositionExtractor(new Extractor.SourcePosition()),
-        fallbackRenderer = new ConcatRenderer(Seq(
-          new Extractor.Constant("("),
-          new Styler.Compact(
-            Seq(new Extractor.LoggerName()),
-            1
-          ),
-          new Extractor.Constant(")")
-        ))
+        fallbackRenderer = new LoggerName(42)
       ),
       Extractor.Space,
       new Extractor.Constant("["),

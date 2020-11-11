@@ -1,6 +1,7 @@
 package dev.chopsticks.fp.iz_logging
 
 import izumi.fundamentals.platform.language.Quirks
+import izumi.fundamentals.platform.strings.IzString
 import izumi.logstage.api.Log
 import izumi.logstage.api.rendering.RenderingOptions
 import izumi.logstage.api.rendering.logunits.{Extractor, LETree, Renderer}
@@ -34,10 +35,13 @@ object IzLoggingCustomRenderers {
     }
   }
 
-  object LoggerName extends Extractor {
+  final class LoggerName(compactIfLongerThan: Int) extends Extractor {
     override def render(entry: Log.Entry, context: RenderingOptions): LETree.TextNode = {
+      import izumi.fundamentals.platform.strings.IzString._
       Quirks.discard(context)
-      LETree.TextNode("(" + entry.context.static.id.id + ")")
+      val loggerName = entry.context.static.id.id
+      val compacted = if (loggerName.length > compactIfLongerThan) loggerName.minimize(1) else loggerName
+      LETree.TextNode("(" + compacted + ")")
     }
   }
 
