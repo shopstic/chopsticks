@@ -149,7 +149,7 @@ object IzLogTemplates {
       ),
       Extractor.Space,
       new Extractor.Constant("["),
-      new Styler.AdaptivePad(Seq(new Extractor.ThreadId()), 1, PadType.Left, ' '),
+      new Extractor.ThreadId(),
       new Extractor.Constant(":"),
       new Styler.Trim(Seq(new Extractor.ThreadName()), 20, TrimType.Center, Some("…")),
       new Extractor.Constant("]"),
