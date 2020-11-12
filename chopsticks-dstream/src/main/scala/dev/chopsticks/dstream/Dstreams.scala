@@ -40,14 +40,14 @@ object Dstreams {
 
         Task
           .fromFuture { _ =>
-            Http().bindAndHandleAsync(
-              service,
-              interface = "0.0.0.0",
-              port = config.port,
-              settings = settings
-                .withTimeouts(settings.timeouts.withIdleTimeout(config.idleTimeout))
-                .withPreviewServerSettings(settings.previewServerSettings.withEnableHttp2(true))
-            )
+            Http()
+              .newServerAt(interface = "0.0.0.0", port = config.port)
+              .withSettings(
+                settings
+                  .withTimeouts(settings.timeouts.withIdleTimeout(config.idleTimeout))
+                  .withPreviewServerSettings(settings.previewServerSettings.withEnableHttp2(true))
+              )
+              .bind(service)
           }
       }
     } yield binding
@@ -70,25 +70,16 @@ object Dstreams {
   def createManagedClientFromConfig[R, E, Client <: AkkaGrpcClient](
     config: DstreamClientConfig
   )(make: GrpcClientSettings => ZIO[R, E, Client]): ZManaged[R with AkkaEnv with MeasuredLogging, E, Client] = {
-    ZManaged.make(
+    createManagedClient {
       ZIO
         .access[AkkaEnv](_.get[AkkaEnv.Service])
         .map { env =>
-          import env._
+          import env.actorSystem
           GrpcClientSettings
             .connectToServiceAt(config.serverHost, config.serverPort)
             .withTls(config.withTls)
         }
         .flatMap(make)
-        .logResult("dstream client Startup", _ => s"dstream client created")
-    ) { client =>
-      ZIO.access[IzLogging](_.get.zioLogger).flatMap { zLogger =>
-        Task
-          .fromFuture(_ => client.close())
-          .log("dstream client teardown")
-          .unit
-          .catchAll(e => zLogger.error(s"Failed closing dstream client: $e"))
-      }
     }
   }
 
@@ -110,19 +101,25 @@ object Dstreams {
       }
   }
 
-  def distribute[Req: Tag, Res: Tag, R <: AkkaEnv, A](
-    stateService: DstreamState.Service[Req, Res],
-    assignment: Req
-  )(run: WorkResult[Res] => RIO[R, A]): RIO[R, A] = {
-    ZIO.bracket { stateService.enqueueAssignment(assignment) } { worker =>
-      val cleanup = for {
-        _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
-          worker.source.runWith(Sink.cancelled)
-        }
-        _ <- stateService.report(worker.assignmentId)
-      } yield ()
-      cleanup.orDie
-    }(run)
+  def distribute[Req: Tag, Res: Tag, R0, R1, A](
+    stateService: DstreamState.Service[Req, Res]
+  )(
+    makeAssignment: RIO[R0, Req]
+  )(run: WorkResult[Res] => RIO[R1, A]): RIO[R0 with R1 with AkkaEnv, A] = {
+    for {
+      assignment <- makeAssignment
+      result <- {
+        ZIO.bracket { stateService.enqueueAssignment(assignment) } { worker =>
+          val cleanup = for {
+            _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
+              worker.source.runWith(Sink.cancelled)
+            }
+            _ <- stateService.report(worker.assignmentId)
+          } yield ()
+          cleanup.orDie
+        }(run)
+      }
+    } yield result
   }
 
   def work[R <: Has[_], Req, Res](

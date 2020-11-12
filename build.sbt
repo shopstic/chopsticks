@@ -1,4 +1,5 @@
 import Dependencies._
+import sbt.Resolver
 
 Global / semanticdbEnabled := true
 
@@ -16,6 +17,7 @@ ThisBuild / Test / javaOptions += "-Xmx768m"
 //ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
 ThisBuild / resolvers ++= Seq(
+  Resolver.bintrayRepo("akka", "snapshots"),
   Resolver.bintrayRepo("shopstic", "maven")
 //  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 )

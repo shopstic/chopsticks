@@ -138,7 +138,7 @@ object DstreamsSampleMasterApp extends AkkaDiApp[DstreamsSampleMasterAppConfig] 
           )
           .via(ZAkkaStreams.interruptibleMapAsyncUnordered(12) { assignment: Assignment =>
             Dstreams
-              .distribute(dstreamState, assignment) { result: WorkResult[Result] =>
+              .distribute(dstreamState)(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
                 val workerId = result.metadata.getText(Dstreams.WORKER_ID_HEADER).get
                 UIO(logger.info(s"$assignment assigned to $workerId")) *>
                   Task
