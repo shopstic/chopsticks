@@ -8,7 +8,7 @@ import izumi.logstage.api.Log.{CustomContext, Level}
 import izumi.logstage.api.logger.LogSink
 import izumi.logstage.api.rendering.RenderingPolicy
 import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
-import izumi.logstage.api.rendering.logunits.Styler.{PadType, TrimType}
+import izumi.logstage.api.rendering.logunits.Styler.TrimType
 import izumi.logstage.api.rendering.logunits.{Extractor, Renderer, Styler}
 import izumi.logstage.sink.QueueingSink
 import izumi.logstage.sink.file.models.{FileRotation, FileSinkConfig}
