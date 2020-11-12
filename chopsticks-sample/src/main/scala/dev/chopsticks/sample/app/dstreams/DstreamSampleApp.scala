@@ -99,7 +99,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
           .map(Assignment(_))
           .via(ZAkkaStreams.interruptibleMapAsyncUnordered(12) { assignment: Assignment =>
             Dstreams
-              .distribute(dstreamState, assignment) { result: WorkResult[Result] =>
+              .distribute(dstreamState)(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
                 Task.fromFuture { _ =>
                   result
                     .source
