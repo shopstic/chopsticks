@@ -5,7 +5,7 @@ import scalapb.compiler.Version.scalapbVersion
 object Dependencies {
   val SCALA_VERSION = "2.13.3"
   val AKKA_VERSION = "2.6.10"
-  val AKKA_HTTP_VERSION = "10.1.10"
+  val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.3"
   val IZUMI_VERSION = "1.0.0-M1"
   val REFINED_VERSION = "0.9.17"
@@ -56,7 +56,7 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "0.8.4"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "1.0.2-30-8780b706"
   )
 
   val catsCoreDeps = Seq(
