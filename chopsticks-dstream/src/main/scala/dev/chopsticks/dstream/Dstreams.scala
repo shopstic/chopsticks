@@ -15,9 +15,10 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaStreams
 import zio._
+import zio.clock.Clock
 
 import scala.concurrent.duration._
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{Future, Promise, TimeoutException}
 import scala.util.{Failure, Success}
 
 object Dstreams {
@@ -27,6 +28,11 @@ object Dstreams {
 
   val WORKER_NODE_HEADER = "dstream-worker-node"
   val WORKER_ID_HEADER = "dstream-worker-id"
+
+  val DefaultWorkRetryPolicy: Schedule[Any, Throwable, Throwable] = Schedule.recurWhile[Throwable] {
+    case _: TimeoutException => true
+    case _ => false
+  }
 
   def createManagedServer[R](
     config: DstreamServerConfig,
@@ -123,14 +129,17 @@ object Dstreams {
   }
 
   def work[R <: Has[_], Req, Res](
-    requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
-  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with IzLogging with R, Done] = {
-    for {
+    requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req],
+    initialTimeout: FiniteDuration = 5.seconds,
+    retryPolicy: Schedule[Any, Throwable, Any] = DefaultWorkRetryPolicy
+  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with IzLogging with Clock with R, Done] = {
+    val work = for {
       graph <- ZIO.runtime[AkkaEnv with R].map { implicit rt =>
         val promise = Promise[Source[Res, NotUsed]]()
         requestBuilder
           .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
           .viaMat(KillSwitches.single)(Keep.right)
+          .initialTimeout(initialTimeout)
           .via(ZAkkaStreams.interruptibleMapAsync(1) { assignment: Req =>
             makeSource(assignment)
               .map(s => promise.success(s))
@@ -140,6 +149,7 @@ object Dstreams {
       }
       result <- ZAkkaStreams.interruptibleGraph(graph, graceful = true)
     } yield result
+    work.retry(retryPolicy)
   }
 
   def workPool[Req, Res, R <: AkkaEnv](
