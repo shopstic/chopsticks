@@ -34,7 +34,8 @@ final case class DstreamsSampleMasterAppConfig(
   partitions: Int,
   addition: AdditionConfig,
   expected: BigInt,
-  distributionRetryInterval: FiniteDuration
+  distributionRetryInterval: FiniteDuration,
+  idleTimeout: FiniteDuration
 )
 
 object DstreamsSampleMasterAppConfig {
@@ -91,7 +92,7 @@ object DstreamsSampleMasterApp extends AkkaDiApp[DstreamsSampleMasterAppConfig] 
       dstreamState <- dstreamStateFactory.createStateService[Assignment, Result](serviceId)
       akkaService <- ZManaged.access[AkkaEnv](_.get)
       binding <- Dstreams.createManagedServer(
-        DstreamServerConfig(port = appConfig.port, idleTimeout = 30.seconds), {
+        DstreamServerConfig(port = appConfig.port, idleTimeout = appConfig.idleTimeout), {
           ZIO.runtime[AkkaEnv].map { implicit rt =>
             import akkaService.actorSystem
             StreamMasterPowerApiHandler {

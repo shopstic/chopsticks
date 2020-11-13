@@ -1,10 +1,7 @@
 package dev.chopsticks.sample.dstreams
 
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
-import dev.chopsticks.sample.app.dstreams.{
-  DstreamsSampleMasterApp,
-  DstreamsSampleWorkerApp
-}
+import dev.chopsticks.sample.app.dstreams.{DstreamsSampleMasterApp, DstreamsSampleWorkerApp}
 import zio.{UIO, ZIO, ZRef}
 import zio.test.Assertion._
 import zio.test.TestAspect.timeout
