@@ -23,7 +23,8 @@ abstract class DstreamsDiRunnableSpec extends AkkaDiRunnableSpec {
       iterations = 10
     ),
     expected = BigInt("295000"),
-    distributionRetryInterval = 5.millis
+    distributionRetryInterval = 5.millis,
+    idleTimeout = 30.seconds
   )
 
   override protected val loadConfig: Config = {
