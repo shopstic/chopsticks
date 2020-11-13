@@ -1,20 +1,11 @@
 package dev.chopsticks.sample.dstreams
 
-import com.typesafe.config.{Config, ConfigValueFactory}
-import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetricsGroup
-import dev.chopsticks.dstream.{DstreamStateFactory, DstreamStateMetricsManager}
-import dev.chopsticks.fp.DiLayers
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
-import dev.chopsticks.metric.prom.PromMetricRegistry
 import dev.chopsticks.sample.app.dstreams.{
-  AdditionConfig,
   DstreamsSampleMasterApp,
-  DstreamsSampleMasterAppConfig,
   DstreamsSampleWorkerApp
 }
-import dev.chopsticks.testkit.AkkaDiRunnableSpec
-import izumi.distage.model.definition
-import zio.{Task, UIO, ZIO, ZLayer, ZRef}
+import zio.{UIO, ZIO, ZRef}
 import zio.test.Assertion._
 import zio.test.TestAspect.timeout
 import zio.test._
@@ -24,36 +15,11 @@ import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 import scala.util.{Failure, Success}
 
-object DstreamsMasterWorkerTest extends AkkaDiRunnableSpec {
-
-  private val masterConfig = DstreamsSampleMasterAppConfig(
-    port = 0,
-    partitions = 5,
-    addition = AdditionConfig(
-      from = 1,
-      to = 100,
-      iterations = 10
-    ),
-    expected = BigInt("295000"),
-    distributionRetryInterval = 5.millis
-  )
-
-  override protected val loadConfig: Config = {
-    super.loadConfig.withValue("iz-logging.level", ConfigValueFactory.fromAnyRef("Crit"))
-  }
-
-  override protected def testEnv(config: Config): Task[definition.Module] = Task {
-    DiLayers(
-      ZLayer.succeed(PromMetricRegistry.live[DstreamStateMetricsGroup]("MasterWorkerTest")),
-      DstreamStateMetricsManager.live,
-      ZLayer.succeed(masterConfig),
-      DstreamStateFactory.live
-    )
-  }
+object DstreamsMasterWorkerTest extends DstreamsDiRunnableSpec {
 
   override def spec: ZSpec[TestEnvironment, Any] = {
     suite("Master worker suite")(
-      diTestM("Master worker test") {
+      diTestM("Master worker smoke test") {
         val managedZio = for {
           manageServerResult <- DstreamsSampleMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
