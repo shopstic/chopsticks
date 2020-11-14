@@ -1,5 +1,6 @@
 package dev.chopsticks.sample.dstreams
 
+import akka.NotUsed
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
@@ -224,7 +225,7 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
             serverFork <- {
               Dstreams
                 .distribute(dstreamState)(assignmentPromise.await) { work =>
-                  Task.fromFuture(_ => work.source.take(2).runWith(Sink.seq))
+                  Task.fromFuture(_ => work.source.runWith(Sink.seq))
                 }
                 // due to unfortunate timings in this test
                 //there may be a situation when distribute fails and needs to be retried
@@ -240,6 +241,42 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
           } yield assert(())(anything)
         }
         managedZio.use(identity)
+      } @@ timeout(10.seconds.toJava),
+      diTestM("Worker should keep retring by default if master closed a stream because of its timeout") {
+        val managedZio = for {
+          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          (serverBinding, dstreamState) = manageServerResult
+          grpcClient <- DstreamsSampleWorkerApp.manageClient(serverBinding.localAddress.getPort)
+          akkaService <- ZManaged.access[AkkaEnv](_.get)
+        } yield {
+          import akkaService.actorSystem
+          for {
+            assignmentPromise <- Promise.make[Nothing, Assignment]
+            serverFork <- {
+              Dstreams
+                .distribute(dstreamState)(assignmentPromise.await) { work =>
+                  Task.fromFuture(_ => work.source.take(2).runWith(Sink.seq))
+                }
+                .retry(Schedule.forever)
+                .fork
+            }
+            _ <- ZIO.succeed(Assignment(1)).flatMap(assignmentPromise.succeed).fork
+            sourcePromise <- Promise.make[Nothing, Source[Result, NotUsed]]
+            clientFork <- Dstreams.work(grpcClient.doWork())(_ => sourcePromise.await).fork
+            _ <- {
+              ZIO
+                .succeed(Source.repeat(Result(Result.Body.Value(1L))))
+                .delay(310.millis.toJava)
+                .flatMap(sourcePromise.succeed)
+                .fork
+            }
+            _ <- clientFork.join
+            _ <- serverFork.join
+          } yield assert(())(anything)
+        }
+        managedZio
+          .use(identity)
+          .updateService[DstreamsSampleMasterAppConfig](conf => conf.copy(idleTimeout = 150.millis))
       } @@ timeout(10.seconds.toJava)
     )
   }
