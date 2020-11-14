@@ -14,6 +14,7 @@ import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaStreams
+import io.grpc.{Status, StatusRuntimeException}
 import zio._
 import zio.clock.Clock
 
@@ -31,6 +32,7 @@ object Dstreams {
 
   val DefaultWorkRetryPolicy: Schedule[Any, Throwable, Throwable] = Schedule.recurWhile[Throwable] {
     case _: TimeoutException => true
+    case e: StatusRuntimeException => e.getStatus.getCode == Status.Code.UNAVAILABLE
     case _ => false
   }
 
