@@ -14,22 +14,24 @@ import scala.concurrent.duration.DurationInt
 import scala.jdk.DurationConverters.ScalaDurationOps
 
 object DstreamState {
+  type AssignmentId = Long
 
-  final case class WorkResult[Res](source: Source[Res, NotUsed], metadata: Metadata, assignmentId: Long)
-  final case class InvalidAssignment(assignmentId: Long)
+  final case class WorkResult[Res](source: Source[Res, NotUsed], metadata: Metadata, assignmentId: AssignmentId)
+  final case class InvalidAssignment(assignmentId: AssignmentId)
       extends RuntimeException(s"Report was invoked for an invalid $assignmentId")
 
   final private case class WorkItem[Req, Res](assignment: Req, workResult: Option[WorkResult[Res]])
   private object WorkItem {
-    def empty[Req, Res](assignment: Req) = WorkItem[Req, Res](assignment, Option.empty)
+    def empty[Req, Res](assignment: Req): WorkItem[Req, Res] = WorkItem[Req, Res](assignment, Option.empty)
   }
 
-  final private case class AssignmentItem[Req](assignmentId: Long, assignment: Req)
+  final private case class AssignmentItem[Req](assignmentId: AssignmentId, assignment: Req)
 
   trait Service[Req, Res] {
     def enqueueWorker(in: Source[Res, NotUsed], metadata: Metadata): UIO[Source[Req, NotUsed]]
-    def enqueueAssignment(assignment: Req): UIO[WorkResult[Res]]
-    def report(assignmentId: Long): IO[InvalidAssignment, Unit]
+    def awaitForWorker(assignmentId: AssignmentId): UIO[WorkResult[Res]]
+    def enqueueAssignment(assignment: Req): UIO[AssignmentId]
+    def report(assignmentId: AssignmentId): IO[InvalidAssignment, Option[WorkResult[Res]]]
   }
 
   def managed[Req: Tag, Res: Tag](serviceId: String)
@@ -75,7 +77,20 @@ object DstreamState {
         } yield Source.single(assignment) ++ Source.futureSource(inFuture.map(_ => Source.empty))
       }
 
-      def enqueueAssignment(assignment: Req): UIO[WorkResult[Res]] = {
+      override def awaitForWorker(assignmentId: AssignmentId): UIO[WorkResult[Res]] = {
+        STM.atomically {
+          for {
+            maybeWorkItem <- workResultMap.get(assignmentId)
+            ret <- maybeWorkItem match {
+              case Some(WorkItem(_, Some(in))) => STM.succeed(in)
+              case Some(WorkItem(_, None)) => STM.retry
+              case None => STM.die(new IllegalStateException("Invalid STM state"))
+            }
+          } yield ret
+        }
+      }
+
+      def enqueueAssignment(assignment: Req): UIO[AssignmentId] = {
         for {
           assignmentId <- UIO(assignmentCounter.incrementAndGet())
           _ <- STM.atomically {
@@ -84,20 +99,10 @@ object DstreamState {
               _ <- workResultMap.put(assignmentId, WorkItem.empty(assignment))
             } yield ()
           }
-          in <- STM.atomically {
-            for {
-              maybeWorkItem <- workResultMap.get(assignmentId)
-              ret <- maybeWorkItem match {
-                case Some(WorkItem(_, Some(in))) => STM.succeed(in)
-                case Some(WorkItem(_, None)) => STM.retry
-                case None => STM.die(new IllegalStateException("Invalid STM state"))
-              }
-            } yield ret
-          }
-        } yield in
+        } yield assignmentId
       }
 
-      def report(assignmentId: Long): IO[InvalidAssignment, Unit] = {
+      def report(assignmentId: Long): IO[InvalidAssignment, Option[WorkResult[Res]]] = {
         STM.atomically {
           for {
             maybeWorkItem <- workResultMap.get(assignmentId)
@@ -113,7 +118,7 @@ object DstreamState {
               case None =>
                 STM.fail(InvalidAssignment(assignmentId))
             }
-          } yield ()
+          } yield maybeWorkItem.flatMap(_.workResult)
         }
       }
     }
