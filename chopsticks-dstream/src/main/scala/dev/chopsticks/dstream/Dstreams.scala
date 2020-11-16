@@ -117,15 +117,25 @@ object Dstreams {
     for {
       assignment <- makeAssignment
       result <- {
-        ZIO.bracket { stateService.enqueueAssignment(assignment) } { worker =>
-          val cleanup = for {
-            _ <- ZIO.access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem).map { implicit as =>
-              worker.source.runWith(Sink.cancelled)
+        ZIO.bracket(stateService.enqueueAssignment(assignment)) { assignmentId =>
+          stateService
+            .report(assignmentId)
+            .flatMap {
+              case None => ZIO.unit
+              case Some(worker) =>
+                ZIO
+                  .access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem)
+                  .map { implicit as =>
+                    worker.source.runWith(Sink.cancelled)
+                  }
+                  .ignore
             }
-            _ <- stateService.report(worker.assignmentId)
-          } yield ()
-          cleanup.orDie
-        }(run)
+            .orDie
+        } { assignmentId =>
+          stateService
+            .awaitForWorker(assignmentId)
+            .flatMap(run)
+        }
       }
     } yield result
   }

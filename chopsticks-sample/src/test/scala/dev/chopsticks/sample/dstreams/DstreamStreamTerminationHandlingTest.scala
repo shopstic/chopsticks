@@ -36,9 +36,8 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
           import akkaService.actorSystem
           for {
             serverProbeFork <- {
-              val assignment = Assignment(1)
               Dstreams
-                .distribute(dstreamState)(ZIO.succeed(assignment)) { work =>
+                .distribute(dstreamState)(ZIO.succeed(Assignment(1))) { work =>
                   Task(work.source.runWith(TestSink.probe[Result]))
                 }
                 .fork
@@ -251,16 +250,14 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
         } yield {
           import akkaService.actorSystem
           for {
-            assignmentPromise <- Promise.make[Nothing, Assignment]
             serverFork <- {
               Dstreams
-                .distribute(dstreamState)(assignmentPromise.await) { work =>
+                .distribute(dstreamState)(ZIO.succeed(Assignment(1))) { work =>
                   Task.fromFuture(_ => work.source.take(2).runWith(Sink.seq))
                 }
                 .retry(Schedule.forever)
                 .fork
             }
-            _ <- ZIO.succeed(Assignment(1)).flatMap(assignmentPromise.succeed).fork
             sourcePromise <- Promise.make[Nothing, Source[Result, NotUsed]]
             clientFork <- Dstreams.work(grpcClient.doWork())(_ => sourcePromise.await).fork
             _ <- {
@@ -277,6 +274,28 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
         managedZio
           .use(identity)
           .updateService[DstreamsSampleMasterAppConfig](conf => conf.copy(idleTimeout = 150.millis))
+      } @@ timeout(10.seconds.toJava),
+      diTestM(
+        "Fork of distribute method should be interrupted when there is no worker and parent effect has completed"
+      ) {
+        val managedZio = for {
+          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          (_, dstreamState) = manageServerResult
+          akkaService <- ZManaged.access[AkkaEnv](_.get)
+        } yield {
+          import akkaService.actorSystem
+          for {
+            _ <- {
+              Dstreams
+                .distribute(dstreamState)(ZIO.succeed(Assignment(1))) { work =>
+                  Task.fromFuture(_ => work.source.runWith(Sink.seq))
+                }
+                .fork
+            }
+            _ <- ZIO.unit
+          } yield assert(())(anything)
+        }
+        managedZio.use(identity)
       } @@ timeout(10.seconds.toJava)
     )
   }
