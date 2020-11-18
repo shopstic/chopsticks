@@ -69,7 +69,7 @@ lazy val kvdbCore = Build
   .defineProject("kvdb-core")
   .settings(
     libraryDependencies ++= shapelessDeps ++ scalapbRuntimeDeps ++ chimneyDeps ++
-      kittensDeps ++ betterFilesDeps,
+      kittensDeps ++ betterFilesDeps ++ snappyDeps,
     Compile / PB.targets := Seq(
       scalapb
         .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value

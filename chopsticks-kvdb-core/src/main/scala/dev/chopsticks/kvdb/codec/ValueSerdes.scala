@@ -2,6 +2,8 @@ package dev.chopsticks.kvdb.codec
 
 import dev.chopsticks.kvdb.codec.ValueDeserializer.{GenericValueDeserializationException, ValueDeserializationResult}
 import cats.syntax.either._
+import dev.chopsticks.kvdb.codec.compressed.{CompressionDescription, SnappyCompressed}
+import org.xerial.snappy.{Snappy, SnappyCodec}
 
 trait ValueSerdes[T] extends ValueSerializer[T] with ValueDeserializer[T]
 
@@ -40,4 +42,19 @@ object ValueSerdes {
   implicit val byteArrayValueSerdes: ValueSerdes[Array[Byte]] =
     ValueSerdes.create[Array[Byte]](identity, bytes => Right(bytes))
   implicit val unitValueSerdes: ValueSerdes[Unit] = ValueSerdes.create[Unit](_ => Array.emptyByteArray, _ => Right(()))
+
+  implicit def snappyCompressedValueSerdes[A: ValueSerdes: CompressionDescription]: ValueSerdes[SnappyCompressed[A]] = {
+    new ValueSerdes[SnappyCompressed[A]] {
+      override def deserialize(bytes: Array[Byte]): ValueDeserializationResult[SnappyCompressed[A]] = {
+        val raw = if (SnappyCodec.hasMagicHeaderPrefix(bytes)) Snappy.uncompress(bytes) else bytes
+        ValueSerdes.deserialize[A](raw).map(new SnappyCompressed(_))
+      }
+
+      override def serialize(value: SnappyCompressed[A]): Array[Byte] = {
+        val serializedValue = ValueSerdes.serialize(value.value)
+        val minCompressionBlockSize = implicitly[CompressionDescription[A]].minCompressionBlockSize
+        if (serializedValue.length >= minCompressionBlockSize) Snappy.compress(serializedValue) else serializedValue
+      }
+    }
+  }
 }
