@@ -15,7 +15,7 @@ import izumi.logstage.sink.file.models.{FileRotation, FileSinkConfig}
 import izumi.logstage.sink.file.{FileServiceImpl, FileSink}
 import logstage._
 import pureconfig.ConfigReader
-import zio.{Layer, UIO, ZIO, ZManaged}
+import zio.{Has, Layer, UIO, ULayer, ZIO, ZManaged}
 
 object IzLogging {
 
@@ -114,14 +114,13 @@ object IzLogging {
     live(config, List.empty)
   }
 
-  def live(config: IzLoggingConfig, filters: Iterable[IzLoggingFilter]): Layer[Nothing, IzLogging] = {
-    val managed: ZManaged[Any, Nothing, Service] = for {
-      service <- ZManaged.make {
-        UIO(create(config, filters))
-      } { service =>
-        UIO(service.logger.router.close())
-      }
-    } yield service
+  def live(config: IzLoggingConfig, filters: Iterable[IzLoggingFilter]): ULayer[IzLogging] = {
+    val managed = ZManaged.make {
+      UIO(create(config, filters))
+    } { service =>
+      UIO(service.logger.router.close())
+    }
+
     managed.toLayer
   }
 }
