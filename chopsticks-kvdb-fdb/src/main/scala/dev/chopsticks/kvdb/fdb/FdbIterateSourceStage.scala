@@ -4,8 +4,11 @@ import akka.actor.ActorRef
 import akka.stream.KillSwitches.KillableGraphStageLogic
 import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
 import akka.stream.{Attributes, Outlet, SourceShape}
-import com.apple.foundationdb.KeyValue
+import com.apple.foundationdb.{FDBException, KeyValue}
 import com.apple.foundationdb.async.AsyncIterator
+import com.google.protobuf.ByteString
+import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
+import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyRange}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbPair}
 import dev.chopsticks.kvdb.util.KvdbCloseSignal
 import dev.chopsticks.stream.GraphStageWithActorLogic
@@ -117,12 +120,13 @@ object FdbIterateSourceStage {
 }
 
 final class FdbIterateSourceStage(
-  iterator: AsyncIterator[KeyValue],
+  initialRange: KvdbKeyRange,
+  iterate: (Boolean, KvdbKeyRange) => (AsyncIterator[KeyValue], () => Unit),
   keyValidator: Array[Byte] => Boolean,
   keyTransformer: Array[Byte] => Array[Byte],
-  close: () => Unit,
   shutdownSignal: KvdbCloseSignal,
-  maxBatchBytes: Information
+  maxBatchBytes: Information,
+  disableIsolationGuarantee: Boolean
 ) extends GraphStage[SourceShape[KvdbBatch]] {
   import FdbIterateSourceStage._
 
@@ -134,14 +138,9 @@ final class FdbIterateSourceStage(
     val shutdownListener = shutdownSignal.createListener()
 
     new KillableGraphStageLogic(shutdownListener.future, shape) with GraphStageWithActorLogic {
-      private lazy val batchEmitter = new BatchEmitter(
-        actor = self,
-        iterator = iterator,
-        maxBatchBytes = maxBatchBytesInt,
-        keyValidator = keyValidator,
-        keyTransformer = keyTransformer,
-        emit = emit(out, _)
-      )
+      private var batchEmitter: BatchEmitter = _
+      private var close: () => Unit = _
+      private var range: KvdbKeyRange = _
 
       setHandler(
         out,
@@ -164,14 +163,45 @@ final class FdbIterateSourceStage(
             completeStage()
           case IteratorNext(kv) =>
             val _ = batchEmitter.batchAndEmit(Some(kv.getKey -> kv.getValue))
+          case IteratorFailure(ex: FDBException)
+              if disableIsolationGuarantee && (ex.getCode == 1007 /* Transaction too old */ || ex.getCode == 1009 /* Request for future version */ ) =>
+            close()
+            val maybeLastKey = batchEmitter.maybeLastKey
+            range = range.withFrom(
+              maybeLastKey.fold(range.from) { lastKey =>
+                KvdbKeyConstraint(Operator.GREATER, ByteString.copyFrom(lastKey)) :: range.from.tail
+              }
+            )
+            val (newIterator, newClose) = iterate(false, range)
+            close = newClose
+            batchEmitter = new BatchEmitter(
+              actor = self,
+              iterator = newIterator,
+              maxBatchBytes = maxBatchBytesInt,
+              keyValidator = keyValidator,
+              keyTransformer = keyTransformer,
+              emit = emit(out, _)
+            )
+            self ! DownstreamPull
           case IteratorFailure(ex) =>
             failStage(ex)
         }))
+        range = initialRange
+        val (initialIterator, closeTransaction) = iterate(true, range)
+        close = closeTransaction
+        batchEmitter = new BatchEmitter(
+          actor = self,
+          iterator = initialIterator,
+          maxBatchBytes = maxBatchBytesInt,
+          keyValidator = keyValidator,
+          keyTransformer = keyTransformer,
+          emit = emit(out, _)
+        )
       }
 
       override def postStop(): Unit = {
         try {
-          close()
+          if (close != null) close()
         }
         finally {
           shutdownListener.unregister()
