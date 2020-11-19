@@ -15,7 +15,7 @@ import izumi.logstage.sink.file.models.{FileRotation, FileSinkConfig}
 import izumi.logstage.sink.file.{FileServiceImpl, FileSink}
 import logstage._
 import pureconfig.ConfigReader
-import zio.{Has, Layer, UIO, ULayer, ZIO, ZManaged}
+import zio._
 
 object IzLogging {
 
