@@ -696,18 +696,28 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
   override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source
-      .lazyFuture(() => {
-        val tx = dbContext.db.createTransaction()
-        val closeTx = () => tx.close()
+      .lazyFutureSource { () =>
+        val fromConstraints = dbContext.prefixKeyConstraints(column, range.from)
+        val toConstraints = dbContext.prefixKeyConstraints(column, range.to)
 
-        val future: Future[Source[KvdbBatch, NotUsed]] = doGet(tx, column, range.from).thenApply {
-          //noinspection MatchToPartialFunction
-          result =>
-            val fromConstraints = dbContext.prefixKeyConstraints(column, range.from)
-            val toConstraints = dbContext.prefixKeyConstraints(column, range.to)
+        val keyValidator = keySatisfies(_: Array[Byte], toConstraints)
+        val keyTransformer = dbContext.unprefixKey(column, _: Array[Byte])
 
-            result match {
-              case Right((key, _)) if keySatisfies(key, toConstraints) =>
+        val initialTx = dbContext.db.createTransaction()
+        val closeTx = () => initialTx.close()
+
+        //noinspection MatchToPartialFunction
+        val future: Future[Source[KvdbBatch, NotUsed]] = doGet(initialTx, column, range.from).thenApply { result =>
+          result match {
+            case Right((key, _)) if keySatisfies(key, toConstraints) =>
+              val iterate = (firstRun: Boolean, newRange: KvdbKeyRange) => {
+                val fromHead = newRange.from.head
+                val fromOperator = fromHead.operator
+                val fromOperand = fromHead.operand.toByteArray
+                val startKeySelector = fromOperator match {
+                  case Operator.EQUAL => KeySelector.firstGreaterOrEqual(fromOperand)
+                  case _ => nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
+                }
                 val toConstraintHead = toConstraints.head
                 val endKeySelector =
                   toConstraintToKeySelector(
@@ -715,45 +725,48 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                     toConstraintHead.operand.toByteArray,
                     dbContext.strinc(column)
                   )
-                val iterator = tx.snapshot().getRange(KeySelector.firstGreaterOrEqual(key), endKeySelector).iterator()
-                val keyValidator = keySatisfies(_: Array[Byte], toConstraints)
-                val keyTransformer = dbContext.unprefixKey(column, _: Array[Byte])
+                val tx = if (firstRun) initialTx else dbContext.db.createTransaction()
+                val closeTx = () => tx.close()
+                val iterator = tx.snapshot().getRange(startKeySelector, endKeySelector).iterator()
+                iterator -> closeTx
+              }
 
-                Source
-                  .fromGraph(
-                    new FdbIterateSourceStage(
-                      iterator,
-                      keyValidator,
-                      keyTransformer,
-                      closeTx,
-                      dbContext.dbCloseSignal,
-                      clientOptions.batchReadMaxBatchBytes
-                    )
+              Source
+                .fromGraph(
+                  new FdbIterateSourceStage(
+                    KvdbKeyRange(fromConstraints, toConstraints),
+                    iterate,
+                    keyValidator,
+                    keyTransformer,
+                    dbContext.dbCloseSignal,
+                    clientOptions.batchReadMaxBatchBytes,
+                    clientOptions.disableIsolationGuarantee
                   )
+                )
 
-              case Right((k, _)) =>
-                closeTx()
-                val message =
-                  s"Starting key: [${ByteArrayUtil.printable(k)}] satisfies fromConstraints ${fromConstraints.show} " +
-                    s"but does not satisfy toConstraint: ${toConstraints.show}"
-                Source.failed(SeekFailure(message))
+            case Right((k, _)) =>
+              closeTx()
+              val message =
+                s"Starting key: [${ByteArrayUtil.printable(k)}] satisfies fromConstraints ${fromConstraints.show} " +
+                  s"but does not satisfy toConstraint: ${toConstraints.show}"
+              Source.failed(SeekFailure(message))
 
-              case Left(k) =>
-                closeTx()
-                val message = {
-                  if (k.nonEmpty) {
-                    s"Starting key: [${ByteArrayUtil.printable(k)}] does not satisfy constraints: ${fromConstraints.show}"
-                  }
-                  else s"There's no starting key satisfying constraint: ${fromConstraints.show}"
+            case Left(k) =>
+              closeTx()
+              val message = {
+                if (k.nonEmpty) {
+                  s"Starting key: [${ByteArrayUtil.printable(k)}] does not satisfy constraints: ${fromConstraints.show}"
                 }
+                else s"There's no starting key satisfying constraint: ${fromConstraints.show}"
+              }
 
-                Source.failed(SeekFailure(message))
-            }
+              Source.failed(SeekFailure(message))
+          }
         }.asScala
 
         future
-      })
-      .flatMapConcat(identity)
+      }
+      .mapMaterializedValue(_ => NotUsed)
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
