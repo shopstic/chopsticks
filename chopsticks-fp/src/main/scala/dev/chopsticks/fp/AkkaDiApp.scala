@@ -25,6 +25,8 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.random.Random
 
+import scala.concurrent.Future
+
 object AkkaDiApp {
   type Env = Clock with zio.console.Console with zio.system.System with Random with Blocking with AkkaEnv
 
@@ -165,24 +167,29 @@ trait AkkaDiApp[Cfg] {
       appFib <- runEnv
         .run(ZIO.accessM[AppEnv](_.get), args.headOption.contains("--dump-di-graph"))
         .fork
-      appInterruptionPromise <- Promise.make[Nothing, Unit]
       _ <- UIO {
         shutdown.addTask("app-interruption", "interrupt app") { () =>
-          runtime.unsafeRunToFuture(appInterruptionPromise.completeWith(ZIO.unit).as(Done))
+          runtime.unsafeRunToFuture(appFib.interrupt.as(Done))
         }
-        shutdown.addJvmShutdownHook { () =>
-          izLogging.logger.router.close()
+        shutdown.addTask("before-actor-system-terminate", "close IzLogging router") { () =>
+          Future.successful {
+            izLogging.logger.router.close()
+            Done
+          }
         }
       }
-      result <- {
-        val interruptTask = appInterruptionPromise
-          .await
-          .raceFirst(Task.fromFuture(_ => akkaActorSystem.whenTerminated))
-          .as(1)
-          .ensuring(appFib.interrupt.ignore *> UIO(Done))
-        appFib.join.raceFirst(interruptTask)
-      }
-    } yield result
+      exitCode <- appFib
+        .join
+        .raceFirst(
+          // This will win the race when the actor system crashes outright
+          // without going through CoordinatedShutdown
+          Task
+            .fromFuture { _ =>
+              akkaActorSystem.whenTerminated
+            }
+            .as(254)
+        )
+    } yield exitCode
 
     try {
       val exitCode = runtime.unsafeRun(main)

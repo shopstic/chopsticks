@@ -34,17 +34,17 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
 
     def live(bar: String): URLayer[Clock with IzLogging with Foo, Bar] = {
       ZLayer.fromManaged(
-        ZManaged.makeInterruptible {
+        ZManaged.make {
           import zio.duration._
 
           for {
             foo <- ZIO.access[Foo](_.get)
             zioLogger <- ZIO.access[IzLogging](_.get.zioLogger)
-            fib <- zioLogger.info(s"Still going: ${foo.foo}").repeat(Schedule.fixed(1.second)).forkDaemon
+            fib <- zioLogger.info(s"Still going: ${foo.foo}").repeat(Schedule.fixed(1.second)).interruptible.forkDaemon
           } yield fib
         } { fib =>
-          UIO(println("INTERRUPTING===================")) *>
-            fib.interrupt
+          UIO(println("Interrupting daemon fiber")) *>
+            fib.interrupt.ignore *> UIO(println("Interrupted daemon fiber"))
         }.as(BarService(bar))
       )
     }
@@ -56,6 +56,12 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
 
   //noinspection TypeAnnotation
   def app = {
+    val managed = ZManaged.make(UIO("whatever")) { _ =>
+      UIO(println("Test long release...")) *> ZIO.unit.delay(java.time.Duration.ofSeconds(5)) *> UIO(
+        println("Long release completed")
+      )
+    }
+
     val effect = for {
       bar <- ZIO.access[Bar](_.get)
       akkaService <- ZIO.access[AkkaEnv](_.get)
@@ -70,8 +76,10 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
       logger.info("From sync logger here")
     }
 
-    import zio.duration._
-    effect.repeat(Schedule.fixed(1.second)).unit
+    managed.use { _ =>
+      import zio.duration._
+      effect.repeat(Schedule.fixed(1.second)).unit
+    }
   }
 
   override def liveEnv(akkaAppDi: DiModule, appConfig: Unit, allConfig: Config): Task[DiEnv[AppEnv]] = {
