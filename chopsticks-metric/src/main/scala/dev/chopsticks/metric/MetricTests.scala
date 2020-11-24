@@ -95,14 +95,16 @@ object MetricTests {
   }
 
   def main(args: Array[String]): Unit = {
+    val layer = ZLayer.succeed(CollectorRegistry.defaultRegistry) >>> (
+      PromMetricRegistry.live[Foo.Metric]("foo") ++
+        PromMetricRegistry.live[Bar.Metric]("bar") ++
+        PromMetricRegistry.live[Baz.Metric]("baz")
+    )
+
     val _ = zio.Runtime.default.unsafeRunSync(
       app
         .build
-        .provideLayer(
-          PromMetricRegistry.live[Foo.Metric]("foo") ++ PromMetricRegistry.live[Bar.Metric](
-            "bar"
-          ) ++ PromMetricRegistry.live[Baz.Metric]("baz")
-        )
+        .provideLayer(layer)
         .useNow
     )
 
