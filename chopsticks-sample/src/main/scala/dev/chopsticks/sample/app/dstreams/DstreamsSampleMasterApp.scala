@@ -17,10 +17,11 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
-import dev.chopsticks.metric.prom.PromMetricRegistry
+import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstreams.proto.grpc_akka_master_worker._
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
+import io.prometheus.client.CollectorRegistry
 import pureconfig.ConfigConvert
 import zio._
 
@@ -64,7 +65,8 @@ object DstreamsSampleMasterApp extends AkkaDiApp[DstreamsSampleMasterAppConfig] 
     Task {
       val extraLayers = DiLayers(
         ZLayer.succeed(appConfig),
-        ZLayer.succeed(PromMetricRegistry.live[DstreamStateMetricsGroup](serviceId)),
+        ZLayer.succeed(CollectorRegistry.defaultRegistry),
+        PromMetricRegistryFactory.live[DstreamStateMetricsGroup](serviceId),
         DstreamStateMetricsManager.live,
         DstreamStateFactory.live,
         AppLayer(app)
