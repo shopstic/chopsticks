@@ -4,7 +4,7 @@ import com.typesafe.config.{Config, ConfigValueFactory}
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetricsGroup
 import dev.chopsticks.dstream.{DstreamStateFactory, DstreamStateMetricsManager}
 import dev.chopsticks.fp.DiLayers
-import dev.chopsticks.metric.prom.{PromMetricRegistry, PromMetricRegistryFactory}
+import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstreams.{AdditionConfig, DstreamsSampleMasterAppConfig}
 import dev.chopsticks.testkit.AkkaDiRunnableSpec
 import io.prometheus.client.CollectorRegistry
