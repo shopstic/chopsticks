@@ -4,9 +4,10 @@ import com.typesafe.config.{Config, ConfigValueFactory}
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetricsGroup
 import dev.chopsticks.dstream.{DstreamStateFactory, DstreamStateMetricsManager}
 import dev.chopsticks.fp.DiLayers
-import dev.chopsticks.metric.prom.PromMetricRegistry
+import dev.chopsticks.metric.prom.{PromMetricRegistry, PromMetricRegistryFactory}
 import dev.chopsticks.sample.app.dstreams.{AdditionConfig, DstreamsSampleMasterAppConfig}
 import dev.chopsticks.testkit.AkkaDiRunnableSpec
+import io.prometheus.client.CollectorRegistry
 import izumi.distage.model.definition
 import zio.{Task, ZLayer}
 
@@ -33,9 +34,10 @@ abstract class DstreamsDiRunnableSpec extends AkkaDiRunnableSpec {
 
   override protected def testEnv(config: Config): Task[definition.Module] = Task {
     DiLayers(
-      ZLayer.succeed(PromMetricRegistry.live[DstreamStateMetricsGroup]("MasterWorkerTest")),
-      DstreamStateMetricsManager.live,
       ZLayer.succeed(masterConfig),
+      ZLayer.succeed(CollectorRegistry.defaultRegistry),
+      PromMetricRegistryFactory.live[DstreamStateMetricsGroup]("MasterWorkerTest"),
+      DstreamStateMetricsManager.live,
       DstreamStateFactory.live
     )
   }
