@@ -23,13 +23,9 @@ object PromMetricRegistry {
 
   def live[C <: MetricGroup: zio.Tag](
     prefix: String,
-    registry: CollectorRegistry = CollectorRegistry.defaultRegistry
+    registry: CollectorRegistry
   ): ULayer[MetricRegistry[C]] = {
-    ZLayer.fromManaged(ZManaged.make {
-      UIO(new PromMetricRegistry[C](prefix, registry))
-    } { registry =>
-      UIO(registry.removeAll())
-    })
+    ZLayer.succeed(registry) >>> live[C](prefix)
   }
 
   def live[C <: MetricGroup: zio.Tag](prefix: String): URLayer[Has[CollectorRegistry], MetricRegistry[C]] = {
