@@ -1,11 +1,11 @@
-package dev.chopsticks.sample.dstreams
+package dev.chopsticks.sample.dstream
 
 import com.typesafe.config.{Config, ConfigValueFactory}
-import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetricsGroup
+import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.{DstreamStateFactory, DstreamStateMetricsManager}
 import dev.chopsticks.fp.DiLayers
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
-import dev.chopsticks.sample.app.dstreams.{AdditionConfig, DstreamsSampleMasterAppConfig}
+import dev.chopsticks.sample.app.dstream.{AdditionConfig, DstreamLoadTestMasterAppConfig}
 import dev.chopsticks.testkit.AkkaDiRunnableSpec
 import io.prometheus.client.CollectorRegistry
 import izumi.distage.model.definition
@@ -15,7 +15,7 @@ import scala.concurrent.duration._
 
 abstract class DstreamsDiRunnableSpec extends AkkaDiRunnableSpec {
 
-  protected val masterConfig: DstreamsSampleMasterAppConfig = DstreamsSampleMasterAppConfig(
+  protected val masterConfig: DstreamLoadTestMasterAppConfig = DstreamLoadTestMasterAppConfig(
     port = 0,
     partitions = 5,
     addition = AdditionConfig(
@@ -36,7 +36,7 @@ abstract class DstreamsDiRunnableSpec extends AkkaDiRunnableSpec {
     DiLayers(
       ZLayer.succeed(masterConfig),
       ZLayer.succeed(CollectorRegistry.defaultRegistry),
-      PromMetricRegistryFactory.live[DstreamStateMetricsGroup]("MasterWorkerTest"),
+      PromMetricRegistryFactory.live[DstreamStateMetric]("MasterWorkerTest"),
       DstreamStateMetricsManager.live,
       DstreamStateFactory.live
     )

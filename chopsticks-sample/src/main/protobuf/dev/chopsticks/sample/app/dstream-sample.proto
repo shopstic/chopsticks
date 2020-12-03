@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package dev.chopsticks.sample.app.dstreams.proto.dstream_sample_app;
+package dev.chopsticks.sample.app.dstream.proto;
 
 service DstreamSampleApp {
   rpc Work (stream Result) returns (stream Assignment) {

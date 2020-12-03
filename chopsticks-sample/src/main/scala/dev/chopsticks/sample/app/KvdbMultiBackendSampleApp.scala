@@ -1,7 +1,5 @@
 package dev.chopsticks.sample.app
 
-import java.time.Instant
-
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.typesafe.config.Config
@@ -15,17 +13,15 @@ import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbDatabaseConfig
 import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase
+import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.RocksdbDatabaseConfig
 import dev.chopsticks.kvdb.util.KvdbIoThreadPool
+import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition._
 import dev.chopsticks.stream.ZAkkaStreams
 import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigReader
 import zio.{RIO, Task, ZIO, ZLayer}
-import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.TestKey
-import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.TestValue
-import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.RocksdbService
-import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.DbService
-import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.RocksdbDatabaseConfig
-import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.FdbService
+
+import java.time.Instant
 
 final case class KvdbMultiBackendSampleAppConfig(fdb: FdbDatabaseConfig, rocksdb: RocksdbDatabaseConfig)
 
