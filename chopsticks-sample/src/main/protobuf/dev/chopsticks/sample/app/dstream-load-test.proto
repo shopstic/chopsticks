@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package dev.chopsticks.sample.app.dstreams.proto.grpc_akka_master_worker;
+package dev.chopsticks.sample.app.dstream.proto.load_test;
 
 service StreamMaster {
   rpc DoWork (stream Result) returns (stream Assignment) {

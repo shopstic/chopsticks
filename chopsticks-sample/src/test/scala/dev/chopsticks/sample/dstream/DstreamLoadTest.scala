@@ -1,7 +1,7 @@
-package dev.chopsticks.sample.dstreams
+package dev.chopsticks.sample.dstream
 
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
-import dev.chopsticks.sample.app.dstreams.{DstreamsSampleMasterApp, DstreamsSampleWorkerApp}
+import dev.chopsticks.sample.app.dstream.{DstreamLoadTestMasterApp, DstreamLoadTestWorkerApp}
 import zio.{UIO, ZIO, ZRef}
 import zio.test.Assertion._
 import zio.test.TestAspect.timeout
@@ -12,28 +12,28 @@ import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 import scala.util.{Failure, Success}
 
-object DstreamsMasterWorkerTest extends DstreamsDiRunnableSpec {
+object DstreamLoadTest extends DstreamsDiRunnableSpec {
 
   override def spec: ZSpec[TestEnvironment, Any] = {
-    suite("Master worker suite")(
-      diTestM("Master worker smoke test") {
+    suite("Load test suite")(
+      diTestM("Load smoke test") {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
           port = serverBinding.localAddress.getPort
           lastValue <- ZRef.make(BigInt(0)).toManaged_
         } yield {
-          import DstreamsSampleWorkerApp.runWorker
+          import DstreamLoadTestWorkerApp.runWorker
           val assertCurrentValueIsBiggerThanLastSeen =
-            UIO(DstreamsSampleMasterApp.currentValue.get).flatMap { current =>
+            UIO(DstreamLoadTestMasterApp.currentValue.get).flatMap { current =>
               assertM(lastValue.get)(isLessThan(current)) <* lastValue.set(current)
             }
           val assertCurrentValueIsTheSameAsLastSeen =
-            UIO(DstreamsSampleMasterApp.currentValue.get).flatMap { current =>
+            UIO(DstreamLoadTestMasterApp.currentValue.get).flatMap { current =>
               assertM(lastValue.get)(equalTo(current))
             }
           for {
-            forkedResult <- DstreamsSampleMasterApp.calculateResult(dstreamState).log("Test: calculating result").fork
+            forkedResult <- DstreamLoadTestMasterApp.calculateResult(dstreamState).log("Test: calculating result").fork
 
             _ <- runWorker(port, 1, willCrash = false, willFail = false)
             _ <- assertCurrentValueIsBiggerThanLastSeen

@@ -1,6 +1,6 @@
 package dev.chopsticks.sample.app
 
-import dev.chopsticks.sample.app.dstreams.{DstreamSampleApp, DstreamsSampleMasterApp, DstreamsSampleWorkerApp}
+import dev.chopsticks.sample.app.dstream.{DstreamLoadTestMasterApp, DstreamLoadTestWorkerApp, DstreamSampleApp}
 import dev.chopsticks.testkit.{LiveAppEnvTest, ManagedSystemProperties}
 import zio.console.Console
 import zio.test.TestAspect.sequential
@@ -17,12 +17,12 @@ object SampleAppsEnvTest extends DefaultRunnableSpec with LiveAppEnvTest with Ma
       },
       testM("bootstrap DstreamsSampleMasterApp") {
         bootstrapTest {
-          DstreamsSampleMasterApp.create
+          DstreamLoadTestMasterApp.create
         }
       },
       testM("bootstrap DstreamsSampleWorkerApp") {
         bootstrapTest {
-          DstreamsSampleWorkerApp.create
+          DstreamLoadTestWorkerApp.create
         }
       }
     ) @@ sequential

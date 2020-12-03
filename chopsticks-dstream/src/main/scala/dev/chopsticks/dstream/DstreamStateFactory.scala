@@ -8,17 +8,18 @@ import zio.{UManaged, URLayer, ZManaged}
 object DstreamStateFactory {
 
   trait Service {
-    def createStateService[Req: Tag, Res: Tag](serviceId: String): UManaged[DstreamState.Service[Req, Res]]
+    def manage[Req: Tag, Res: Tag](serviceId: String): UManaged[DstreamState.Service[Req, Res]]
   }
 
   def live: URLayer[AkkaEnv with Clock with DstreamStateMetricsManager, DstreamStateFactory] = {
     val managed = ZManaged.environment[AkkaEnv with Clock with DstreamStateMetricsManager].map { env =>
       new Service {
-        override def createStateService[Req: Tag, Res: Tag](serviceId: String) = {
-          DstreamState.managed[Req, Res](serviceId).provide(env)
+        override def manage[Req: Tag, Res: Tag](serviceId: String): UManaged[DstreamState.Service[Req, Res]] = {
+          DstreamState.manage[Req, Res](serviceId).provide(env)
         }
       }
     }
+
     managed.toLayer
   }
 

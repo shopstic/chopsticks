@@ -1,4 +1,4 @@
-package dev.chopsticks.sample.dstreams
+package dev.chopsticks.sample.dstream
 
 import akka.NotUsed
 import akka.stream.scaladsl.{Sink, Source}
@@ -6,11 +6,11 @@ import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import dev.chopsticks.dstream.Dstreams
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.sample.app.dstreams.proto.grpc_akka_master_worker.{Assignment, Result}
-import dev.chopsticks.sample.app.dstreams.{
-  DstreamsSampleMasterApp,
-  DstreamsSampleMasterAppConfig,
-  DstreamsSampleWorkerApp
+import dev.chopsticks.sample.app.dstream.proto.load_test.{Assignment, Result}
+import dev.chopsticks.sample.app.dstream.{
+  DstreamLoadTestMasterApp,
+  DstreamLoadTestMasterAppConfig,
+  DstreamLoadTestWorkerApp
 }
 import zio.{Promise, Schedule, Task, ZIO, ZManaged}
 import zio.test.Assertion._
@@ -28,9 +28,9 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
     suite("Dstream stream termination handing")(
       diTestM("Worker should deliver its whole stream even in the presence in the long pause on the master side") {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
-          grpcClient <- DstreamsSampleWorkerApp.manageClient(serverBinding.localAddress.getPort)
+          grpcClient <- DstreamLoadTestWorkerApp.manageClient(serverBinding.localAddress.getPort)
           akkaService <- ZManaged.access[AkkaEnv](_.get)
         } yield {
           import akkaService.actorSystem
@@ -67,9 +67,9 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
       } @@ timeout(10.seconds.toJava),
       diTestM("Master should see canceled stream when worker fails its stream") {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
-          grpcClient <- DstreamsSampleWorkerApp.manageClient(serverBinding.localAddress.getPort)
+          grpcClient <- DstreamLoadTestWorkerApp.manageClient(serverBinding.localAddress.getPort)
           akkaService <- ZManaged.access[AkkaEnv](_.get)
         } yield {
           import akkaService.actorSystem
@@ -111,9 +111,9 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
       } @@ timeout(10.seconds.toJava),
       diTestM("Master should be able to collect only a part of a worker's source") {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
-          grpcClient <- DstreamsSampleWorkerApp.manageClient(serverBinding.localAddress.getPort)
+          grpcClient <- DstreamLoadTestWorkerApp.manageClient(serverBinding.localAddress.getPort)
           akkaService <- ZManaged.access[AkkaEnv](_.get)
         } yield {
           import akkaService.actorSystem
@@ -149,9 +149,9 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
       } @@ timeout(10.seconds.toJava),
       diTestM("Master should disconnect worker if it didn't receive any message within specified idleTimeout") {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
-          grpcClient <- DstreamsSampleWorkerApp.manageClient(serverBinding.localAddress.getPort)
+          grpcClient <- DstreamLoadTestWorkerApp.manageClient(serverBinding.localAddress.getPort)
           akkaService <- ZManaged.access[AkkaEnv](_.get)
         } yield {
           import akkaService.actorSystem
@@ -181,13 +181,13 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
         }
         managedZio
           .use(identity)
-          .updateService[DstreamsSampleMasterAppConfig](conf => conf.copy(idleTimeout = 150.millis))
+          .updateService[DstreamLoadTestMasterAppConfig](conf => conf.copy(idleTimeout = 150.millis))
       } @@ timeout(10.seconds.toJava),
       diTestM("Worker should disconnect itself if it didn't receive assignment within specified initialTimeout") {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
-          grpcClient <- DstreamsSampleWorkerApp.manageClient(serverBinding.localAddress.getPort)
+          grpcClient <- DstreamLoadTestWorkerApp.manageClient(serverBinding.localAddress.getPort)
           akkaService <- ZManaged.access[AkkaEnv](_.get)
         } yield {
           import akkaService.actorSystem
@@ -213,9 +213,9 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
       } @@ timeout(10.seconds.toJava),
       diTestM("Worker should keep retring by default if it didn't receive assignment within specified initialTimeout") {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
-          grpcClient <- DstreamsSampleWorkerApp.manageClient(serverBinding.localAddress.getPort)
+          grpcClient <- DstreamLoadTestWorkerApp.manageClient(serverBinding.localAddress.getPort)
           akkaService <- ZManaged.access[AkkaEnv](_.get)
         } yield {
           import akkaService.actorSystem
@@ -243,9 +243,9 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
       } @@ timeout(10.seconds.toJava),
       diTestM("Worker should keep retring by default if master closed a stream because of its timeout") {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (serverBinding, dstreamState) = manageServerResult
-          grpcClient <- DstreamsSampleWorkerApp.manageClient(serverBinding.localAddress.getPort)
+          grpcClient <- DstreamLoadTestWorkerApp.manageClient(serverBinding.localAddress.getPort)
           akkaService <- ZManaged.access[AkkaEnv](_.get)
         } yield {
           import akkaService.actorSystem
@@ -273,13 +273,13 @@ object DstreamStreamTerminationHandlingTest extends DstreamsDiRunnableSpec {
         }
         managedZio
           .use(identity)
-          .updateService[DstreamsSampleMasterAppConfig](conf => conf.copy(idleTimeout = 150.millis))
+          .updateService[DstreamLoadTestMasterAppConfig](conf => conf.copy(idleTimeout = 150.millis))
       } @@ timeout(10.seconds.toJava),
       diTestM(
         "Fork of distribute method should be interrupted when there is no worker and parent effect has completed"
       ) {
         val managedZio = for {
-          manageServerResult <- DstreamsSampleMasterApp.manageServer
+          manageServerResult <- DstreamLoadTestMasterApp.manageServer
           (_, dstreamState) = manageServerResult
           akkaService <- ZManaged.access[AkkaEnv](_.get)
         } yield {

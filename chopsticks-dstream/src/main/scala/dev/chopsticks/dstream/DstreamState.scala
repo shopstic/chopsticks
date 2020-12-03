@@ -34,22 +34,22 @@ object DstreamState {
     def report(assignmentId: AssignmentId): IO[InvalidAssignment, Option[WorkResult[Res]]]
   }
 
-  def managed[Req: Tag, Res: Tag](serviceId: String)
+  def manage[Req: Tag, Res: Tag](serviceId: String)
     : ZManaged[AkkaEnv with Clock with DstreamStateMetricsManager, Nothing, Service[Req, Res]] = {
     for {
       akkaService <- ZManaged.access[AkkaEnv](_.get)
       metrics <- ZManaged.accessManaged[DstreamStateMetricsManager](_.get.manage(serviceId))
-      workerGauge = metrics.dstreamWorkerGauge
-      attemptCounter = metrics.dstreamAttemptCounter
-      queueGauge = metrics.dstreamQueueGauge
-      mapGauge = metrics.dstreamMapGauge
+      workerGauge = metrics.dstreamWorkers
+      attemptCounter = metrics.dstreamAttemptsTotal
+      queueSizeGauge = metrics.dstreamQueueSize
+      mapSizeGauge = metrics.dstreamMapSize
       assignmentCounter = new AtomicLong(0L)
       assignmentQueue <- TQueue.unbounded[AssignmentItem[Req]].commit.toManaged_
       workResultMap <- TMap.empty[Long, WorkItem[Req, Res]].commit.toManaged_
       updateQueueGauge = for {
         (queueSize, map) <- assignmentQueue.size.zip(workResultMap.toMap).commit
-        _ <- UIO(queueGauge.set(queueSize.toDouble))
-        _ <- UIO(mapGauge.set(map.size.toDouble))
+        _ <- UIO(queueSizeGauge.set(queueSize.toDouble))
+        _ <- UIO(mapSizeGauge.set(map.size.toDouble))
       } yield ()
       _ <- updateQueueGauge.repeat(Schedule.fixed(1.second.toJava)).fork.toManaged_
     } yield new Service[Req, Res] {
