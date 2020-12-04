@@ -94,10 +94,11 @@ object Dstreams {
       }
   }
 
-  def distribute[Req: Tag, Res: Tag, R0, R1, A](stateService: DstreamState.Service[Req, Res])(
+  def distribute[Req: Tag, Res: Tag, R0, R1, A](
     makeAssignment: RIO[R0, Req]
-  )(run: WorkResult[Res] => RIO[R1, A]): RIO[R0 with R1 with AkkaEnv, A] = {
+  )(run: WorkResult[Res] => RIO[R1, A]): RIO[R0 with R1 with DstreamState[Req, Res] with AkkaEnv, A] = {
     for {
+      stateService <- ZIO.access[DstreamState[Req, Res]](_.get)
       assignment <- makeAssignment
       result <- {
         ZIO.bracket(stateService.enqueueAssignment(assignment)) { assignmentId =>

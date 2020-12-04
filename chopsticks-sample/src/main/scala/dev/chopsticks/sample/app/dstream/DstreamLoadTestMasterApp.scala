@@ -66,7 +66,7 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
         ZLayer.succeed(CollectorRegistry.defaultRegistry),
         PromMetricRegistryFactory.live[DstreamStateMetric](serviceId),
         DstreamStateMetricsManager.live,
-        DstreamStateFactory.live,
+        DstreamState.manage[Assignment, Result](serviceId),
         AppLayer(app)
       )
       LiveDiEnv(extraLayers ++ akkaAppDi)
@@ -75,17 +75,16 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
 
   //noinspection TypeAnnotation
   def app = {
-    manageServer.use { case (_, dstreamState) =>
-      calculateResult(dstreamState).unit
+    manageServer.use { _ =>
+      calculateResult.unit
     }
   }
 
   private[sample] def manageServer = {
     for {
       appConfig <- ZManaged.access[AppConfig](_.get)
-      dstreamStateFactory <- ZManaged.access[DstreamStateFactory](_.get)
-      dstreamState <- dstreamStateFactory.manage[Assignment, Result](serviceId)
       akkaRuntime <- ZManaged.runtime[AkkaEnv]
+      dstreamState <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
       binding <- Dstreams
         .manageServer(DstreamServerConfig(port = appConfig.port, idleTimeout = appConfig.idleTimeout)) {
           UIO {
@@ -98,14 +97,14 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
             }
           }
         }
-    } yield (binding, dstreamState)
+    } yield binding
   }
 
-  private[sample] def calculateResult(dstreamState: DstreamState.Service[Assignment, Result]) = {
+  private[sample] def calculateResult = {
     for {
       appConfig <- ZIO.access[AppConfig](_.get)
       logger <- ZIO.access[IzLogging](_.get.logger)
-      result <- runMaster(dstreamState).log("Master")
+      result <- runMaster.log("Master")
       _ <- Task {
         val matched = if (result == appConfig.expected) "Yes" else "No"
         logger.info("STREAM COMPLETED **************************************")
@@ -114,13 +113,13 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
     } yield result
   }
 
-  private[sample] def runMaster(dstreamState: DstreamState.Service[Assignment, Result]) = {
+  private[sample] def runMaster = {
     for {
       appConfig <- ZIO.access[AppConfig](_.get)
       ks = KillSwitches.shared("server shared killswitch")
       workDistributionFlow <- ZAkkaStreams.interruptibleMapAsyncUnorderedM(12) { assignment: Assignment =>
         Dstreams
-          .distribute(dstreamState)(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
+          .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
             val workerId = result.metadata.getText(Dstreams.WORKER_ID_HEADER).get
 
             ZAkkaStreams
