@@ -35,7 +35,7 @@ object DstreamState {
   }
 
   def manage[Req: Tag, Res: Tag](serviceId: String)
-    : ZManaged[AkkaEnv with Clock with DstreamStateMetricsManager, Nothing, Service[Req, Res]] = {
+    : URManaged[AkkaEnv with Clock with DstreamStateMetricsManager, Service[Req, Res]] = {
     for {
       akkaService <- ZManaged.access[AkkaEnv](_.get)
       metrics <- ZManaged.accessManaged[DstreamStateMetricsManager](_.get.manage(serviceId))
@@ -46,12 +46,15 @@ object DstreamState {
       assignmentCounter = new AtomicLong(0L)
       assignmentQueue <- TQueue.unbounded[AssignmentItem[Req]].commit.toManaged_
       workResultMap <- TMap.empty[Long, WorkItem[Req, Res]].commit.toManaged_
-      updateQueueGauge = for {
-        (queueSize, map) <- assignmentQueue.size.zip(workResultMap.toMap).commit
-        _ <- UIO(queueSizeGauge.set(queueSize.toDouble))
-        _ <- UIO(mapSizeGauge.set(map.size.toDouble))
-      } yield ()
-      _ <- updateQueueGauge.repeat(Schedule.fixed(1.second.toJava)).fork.toManaged_
+      _ <- ZManaged.make {
+        val updateGaugesTask = for {
+          (queueSize, map) <- assignmentQueue.size.zip(workResultMap.toMap).commit
+          _ <- UIO(queueSizeGauge.set(queueSize.toDouble))
+          _ <- UIO(mapSizeGauge.set(map.size.toDouble))
+        } yield ()
+
+        updateGaugesTask.repeat(Schedule.fixed(1.second.toJava)).interruptible.forkDaemon
+      }(_.interrupt)
     } yield new Service[Req, Res] {
       import akkaService.{actorSystem, dispatcher}
 

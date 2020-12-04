@@ -1,6 +1,5 @@
 package dev.chopsticks.sample.app.dstream
 
-import akka.Done
 import akka.grpc.GrpcClientSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Sink, Source}
@@ -43,7 +42,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
         ZLayer.succeed(CollectorRegistry.defaultRegistry),
         PromMetricRegistryFactory.live[DstreamStateMetric](serviceId),
         DstreamStateMetricsManager.live,
-        DstreamStateFactory.live,
+        DstreamState.manage[Assignment, Result](serviceId),
         AppLayer(app)
       )
       LiveDiEnv(extraLayers ++ akkaAppDi)
@@ -52,23 +51,16 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
 
   //noinspection TypeAnnotation
   def app = {
-    val managed = for {
-      dstreamStateFactory <- ZManaged.access[DstreamStateFactory](_.get)
-      dstreamState <- dstreamStateFactory.manage[Assignment, Result](serviceId)
-    } yield {
-      for {
-        runFib <- run(dstreamState).fork
-        periodicLoggingFib <- periodicallyLog.fork
-        _ <- TaskUtils.raceFirst(
-          List(
-            "Run" -> runFib.join,
-            "Periodic logging" -> periodicLoggingFib.join
-          )
+    for {
+      runFib <- run.fork
+      periodicLoggingFib <- periodicallyLog.fork
+      _ <- TaskUtils.raceFirst(
+        List(
+          "Run" -> runFib.join,
+          "Periodic logging" -> periodicLoggingFib.join
         )
-      } yield ()
-    }
-
-    managed.use(identity)
+      )
+    } yield ()
   }
 
   private def periodicallyLog = {
@@ -89,14 +81,13 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
     io.repeat(Schedule.fixed(1.second.toJava)).unit
   }
 
-  private def runMaster(dstreamState: DstreamState.Service[Assignment, Result])
-    : RIO[AkkaEnv with MeasuredLogging, Done] = {
+  private def runMaster = {
     for {
       ks <- UIO(KillSwitches.shared("server shared killswitch"))
       logger <- ZIO.access[IzLogging](_.get.logger)
       workDistributionFlow <- ZAkkaStreams.interruptibleMapAsyncUnorderedM(12) { assignment: Assignment =>
         Dstreams
-          .distribute(dstreamState)(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
+          .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
             ZAkkaStreams
               .interruptibleGraph(
                 result
@@ -136,10 +127,11 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
       }
   }
 
-  private def run(dstreamState: DstreamState.Service[Assignment, Result]) = {
+  private def run = {
     val managed = for {
       akkaRuntime <- ZManaged.runtime[AkkaEnv]
       akkaSvc = akkaRuntime.environment.get
+      dstreamState <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
       _ <- Dstreams
         .manageServer(DstreamServerConfig(port = 9999, idleTimeout = 30.seconds)) {
           UIO {
@@ -171,7 +163,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
         }
     } yield {
       for {
-        masterFiber <- runMaster(dstreamState)
+        masterFiber <- runMaster
           .log("Master")
           .fork
         workersFiber <- ZIO.forkAll {

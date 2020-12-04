@@ -12,14 +12,13 @@ import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 import scala.util.{Failure, Success}
 
-object DstreamLoadTest extends DstreamsDiRunnableSpec {
+object DstreamLoadTest extends DstreamDiRunnableSpec {
 
   override def spec: ZSpec[TestEnvironment, Any] = {
     suite("Load test suite")(
       diTestM("Load smoke test") {
         val managedZio = for {
-          manageServerResult <- DstreamLoadTestMasterApp.manageServer
-          (serverBinding, dstreamState) = manageServerResult
+          serverBinding <- DstreamLoadTestMasterApp.manageServer
           port = serverBinding.localAddress.getPort
           lastValue <- ZRef.make(BigInt(0)).toManaged_
         } yield {
@@ -33,7 +32,7 @@ object DstreamLoadTest extends DstreamsDiRunnableSpec {
               assertM(lastValue.get)(equalTo(current))
             }
           for {
-            forkedResult <- DstreamLoadTestMasterApp.calculateResult(dstreamState).log("Test: calculating result").fork
+            forkedResult <- DstreamLoadTestMasterApp.calculateResult.log("Test: calculating result").fork
 
             _ <- runWorker(port, 1, willCrash = false, willFail = false)
             _ <- assertCurrentValueIsBiggerThanLastSeen
