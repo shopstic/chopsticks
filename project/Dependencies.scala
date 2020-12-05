@@ -64,7 +64,7 @@ object Dependencies {
   )
 
   val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "2.2.0"
+    "org.typelevel" %% "kittens" % "2.2.1"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
