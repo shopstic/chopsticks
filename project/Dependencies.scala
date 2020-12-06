@@ -8,8 +8,8 @@ object Dependencies {
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.3"
   val IZUMI_VERSION = "1.0.0-M1"
-  val REFINED_VERSION = "0.9.18"
-  val CALIBAN_VERSION = "0.9.4"
+  val REFINED_VERSION = "0.9.19"
+  val CALIBAN_VERSION = "0.9.3"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -92,7 +92,7 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % "3.2.3",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.15.1",
-    "org.scalamock" %% "scalamock" % "5.0.0"
+    "org.scalamock" %% "scalamock" % "5.1.0"
   )
 
   val hamstersDeps = Seq(
