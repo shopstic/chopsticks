@@ -10,6 +10,7 @@ import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext._
 import zio.{Has, RIO, Task, UIO, ZIO}
 
+import scala.annotation.nowarn
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
@@ -132,88 +133,34 @@ object ZAkkaStreams {
     make.flatMap(interruptibleGraph(_, graceful))
   }
 
+  @deprecated("Use ZAkkaFlow[In].interruptibleMapAsync(...) instead", "2.26.2")
   def interruptibleMapAsyncM[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
-    ZIO.runtime[AkkaEnv with R].map { implicit rt =>
-      val env = rt.environment
-      val akkaService = ZService.get[AkkaEnv.Service](env)
-      import akkaService._
-
-      Flow
-        .lazyFutureFlow(() => {
-          val completionPromise = rt.unsafeRun(zio.Promise.make[Nothing, Unit])
-
-          Future.successful(
-            Flow[A]
-              .mapAsync(parallelism) { a =>
-                val interruptibleTask = for {
-                  fib <- runTask(a).fork
-                  c <- (completionPromise.await *> fib.interrupt).fork
-                  ret <- fib.join
-                  _ <- c.interrupt
-                } yield ret
-
-                interruptibleTask.unsafeRunToFuture
-              }
-              .watchTermination() { (_, f) =>
-                f.onComplete { _ =>
-                  val _ = rt.unsafeRun(completionPromise.succeed(()))
-                }
-                NotUsed
-              }
-          )
-        })
-        .mapMaterializedValue(_.map(_ => NotUsed))
-    }
+    ZAkkaFlow[A].interruptibleMapAsync(parallelism)(runTask)
   }
 
+  @deprecated("Use ZAkkaFlow[In].interruptibleMapAsync(...) instead", "2.26.2")
   def interruptibleMapAsync[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, Future[NotUsed]] = {
     rt.unsafeRun(interruptibleMapAsyncM(parallelism)(runTask))
   }
 
+  @deprecated("Use ZAkkaFlow[In].interruptibleMapAsyncUnordered(...) instead", "2.26.2")
   def interruptibleMapAsyncUnorderedM[R <: Has[_], A, B](
     parallelism: Int,
     attributes: Option[Attributes] = None
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, Future[NotUsed]]] = {
-    ZIO.runtime[AkkaEnv with R].map { implicit rt =>
-      val env = rt.environment
-      val akkaService = ZService.get[AkkaEnv.Service](env)
-      import akkaService._
+    ZAkkaFlow[A].interruptibleMapAsyncUnordered(parallelism, attributes)(runTask)
+  }
 
-      Flow
-        .lazyFutureFlow(() => {
-          val completionPromise = rt.unsafeRun(zio.Promise.make[Nothing, Unit])
-          val interruption = completionPromise.await
-
-          val flow = Flow[A]
-            .mapAsyncUnordered(parallelism) { a =>
-              val interruptibleTask = for {
-                fib <- runTask(a).fork
-                c <- (interruption *> fib.interrupt).fork
-                ret <- fib.join
-                _ <- c.interrupt
-              } yield ret
-
-              interruptibleTask.unsafeRunToFuture
-            }
-
-          val flowWithAttrs = attributes.fold(flow)(attrs => flow.withAttributes(attrs))
-
-          Future.successful(
-            flowWithAttrs
-              .watchTermination() { (_, f) =>
-                f.onComplete { _ =>
-                  val _ = rt.unsafeRun(completionPromise.succeed(()))
-                }
-                NotUsed
-              }
-          )
-        })
-        .mapMaterializedValue(_.map(_ => NotUsed)(akkaService.dispatcher))
-    }
+  @deprecated("Use ZAkkaFlow[In].interruptibleMapAsyncUnordered(...) instead", "2.26.2")
+  def interruptibleMapAsyncUnordered[R, A, B](
+    parallelism: Int,
+    attributes: Option[Attributes] = None
+  )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, Future[NotUsed]] = {
+    rt.unsafeRun(interruptibleMapAsyncUnorderedM(parallelism, attributes)(runTask))
   }
 
   def interruptibleLazySource[R <: Has[_], A, B](
@@ -242,74 +189,42 @@ object ZAkkaStreams {
     }
   }
 
+  @deprecated("Use ZAkkaFlow[In].switchFlatMapConcat(...) instead", "2.26.2")
   def switchFlatMapConcatM[R <: Has[_], In, Out](
     f: In => RIO[R, Source[Out, Any]]
   ): ZIO[AkkaEnv with R, Nothing, Flow[In, Out, NotUsed]] = {
-    ZIO.runtime[AkkaEnv with R].map { rt =>
-      val env = rt.environment
-      val akkaService = ZService.get[AkkaEnv.Service](env)
-      import akkaService.actorSystem
-
-      Flow[In]
-        .statefulMapConcat(() => {
-          var currentKillSwitch = Option.empty[KillSwitch]
-
-          in => {
-            currentKillSwitch.foreach(_.shutdown())
-
-            val (ks, s) = rt
-              .unsafeRun(f(in))
-              .viaMat(KillSwitches.single)(Keep.right)
-              .preMaterialize()
-
-            currentKillSwitch = Some(ks)
-            List(s)
-          }
-        })
-        .async
-        .flatMapConcat(identity)
-    }
+    ZAkkaFlow[In].switchFlatMapConcat(f)
   }
 
+  @deprecated("Use ZAkkaFlow[In].switchFlatMapConcat(...) instead", "2.26.2")
   def switchFlatMapConcat[R <: Has[_], In, Out](
     f: In => RIO[R, Source[Out, Any]]
   )(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Out, NotUsed] = {
     rt.unsafeRun(switchFlatMapConcatM[R, In, Out](f))
   }
 
-  def interruptibleMapAsyncUnordered[R, A, B](
-    parallelism: Int,
-    attributes: Option[Attributes] = None
-  )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, Future[NotUsed]] = {
-    rt.unsafeRun(interruptibleMapAsyncUnorderedM(parallelism, attributes)(runTask))
-  }
-
+  @deprecated("Use ZAkkaFlow[In].mapAsync(...) instead", "2.26.2")
   def mapAsyncM[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, NotUsed]] = {
-    ZIO.runtime[AkkaEnv with R].map { implicit rt =>
-      Flow[A]
-        .mapAsync(parallelism) { a => runTask(a).fold(Future.failed, Future.successful).unsafeRunToFuture.flatten }
-    }
+    ZAkkaFlow[A].mapAsync(parallelism)(runTask)
   }
 
+  @deprecated("Use ZAkkaFlow[In].mapAsync(...) instead", "2.26.2")
   def mapAsync[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, NotUsed] = {
     rt.unsafeRun(mapAsyncM(parallelism)(runTask))
   }
 
+  @deprecated("Use ZAkkaFlow[In].mapAsyncUnordered(...) instead", "2.26.2")
   def mapAsyncUnorderedM[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B]): ZIO[AkkaEnv with R, Nothing, Flow[A, B, NotUsed]] = {
-    ZIO.runtime[AkkaEnv with R].map { implicit rt =>
-      Flow[A]
-        .mapAsyncUnordered(parallelism) { a: A =>
-          runTask(a).fold(Future.failed, Future.successful).unsafeRunToFuture.flatten
-        }
-    }
+    ZAkkaFlow[A].mapAsyncUnordered(parallelism)(runTask)
   }
 
+  @deprecated("Use ZAkkaFlow[In].mapAsyncUnordered(...) instead", "2.26.2")
   def mapAsyncUnordered[R <: Has[_], A, B](
     parallelism: Int
   )(runTask: A => RIO[R, B])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[A, B, NotUsed] = {
@@ -324,6 +239,7 @@ object ZAkkaStreams {
 
   object ops {
     implicit class AkkaStreamFlowZioOps[-In, +Out, +Mat](flow: Flow[In, Out, Mat]) {
+      @nowarn("cat=deprecation")
       def effectMapAsync[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
@@ -331,6 +247,7 @@ object ZAkkaStreams {
           .via(mapAsync[R, Out, Next](parallelism)(runTask))
       }
 
+      @nowarn("cat=deprecation")
       def effectMapAsyncUnordered[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
@@ -338,6 +255,7 @@ object ZAkkaStreams {
           .via(mapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
+      @nowarn("cat=deprecation")
       def interruptibleEffectMapAsync[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
@@ -345,6 +263,7 @@ object ZAkkaStreams {
           .via(interruptibleMapAsync[R, Out, Next](parallelism)(runTask))
       }
 
+      @nowarn("cat=deprecation")
       def interruptibleEffectMapAsyncUnordered[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
@@ -352,6 +271,7 @@ object ZAkkaStreams {
           .via(interruptibleMapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
+      @nowarn("cat=deprecation")
       def switchFlatMapConcat[R <: Has[_], Next](
         f: Out => RIO[R, Source[Next, Any]]
       )(implicit rt: zio.Runtime[AkkaEnv with R]): Flow[In, Next, Mat] = {
@@ -361,6 +281,7 @@ object ZAkkaStreams {
     }
 
     implicit class AkkaStreamSourceZioOps[+Out, +Mat](source: Source[Out, Mat]) {
+      @nowarn("cat=deprecation")
       def effectMapAsync[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
@@ -368,6 +289,7 @@ object ZAkkaStreams {
           .via(mapAsync[R, Out, Next](parallelism)(runTask))
       }
 
+      @nowarn("cat=deprecation")
       def effectMapAsyncUnordered[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
@@ -375,6 +297,7 @@ object ZAkkaStreams {
           .via(mapAsyncUnordered[R, Out, Next](parallelism)(runTask))
       }
 
+      @nowarn("cat=deprecation")
       def interruptibleEffectMapAsync[R <: Has[_], Next](
         parallelism: Int
       )(runTask: Out => RIO[R, Next])(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {
@@ -382,6 +305,7 @@ object ZAkkaStreams {
           .via(interruptibleMapAsync[R, Out, Next](parallelism)(runTask))
       }
 
+      @nowarn("cat=deprecation")
       def interruptibleEffectMapAsyncUnordered[R <: Has[_], Next](
         parallelism: Int,
         attributes: Option[Attributes] = None
@@ -390,6 +314,7 @@ object ZAkkaStreams {
           .via(interruptibleMapAsyncUnordered[R, Out, Next](parallelism, attributes)(runTask))
       }
 
+      @nowarn("cat=deprecation")
       def switchFlatMapConcat[R <: Has[_], Next](
         f: Out => RIO[R, Source[Next, Any]]
       )(implicit rt: zio.Runtime[AkkaEnv with R]): Source[Next, Mat] = {

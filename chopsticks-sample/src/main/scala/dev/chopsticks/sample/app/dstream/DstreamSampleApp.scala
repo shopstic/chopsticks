@@ -17,7 +17,7 @@ import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto._
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.{ZAkkaFlow, ZAkkaStreams}
 import io.grpc.StatusRuntimeException
 import io.prometheus.client.CollectorRegistry
 import zio._
@@ -85,7 +85,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
     for {
       ks <- UIO(KillSwitches.shared("server shared killswitch"))
       logger <- ZIO.access[IzLogging](_.get.logger)
-      workDistributionFlow <- ZAkkaStreams.interruptibleMapAsyncUnorderedM(12) { assignment: Assignment =>
+      workDistributionFlow <- ZAkkaFlow[Assignment].interruptibleMapAsyncUnordered(12) { assignment =>
         Dstreams
           .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
             ZAkkaStreams

@@ -16,7 +16,7 @@ import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.load_test._
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.{ZAkkaFlow, ZAkkaStreams}
 import dev.chopsticks.util.config.PureconfigLoader
 import io.prometheus.client.CollectorRegistry
 import pureconfig.ConfigConvert
@@ -117,7 +117,7 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
     for {
       appConfig <- ZIO.access[AppConfig](_.get)
       ks = KillSwitches.shared("server shared killswitch")
-      workDistributionFlow <- ZAkkaStreams.interruptibleMapAsyncUnorderedM(12) { assignment: Assignment =>
+      workDistributionFlow <- ZAkkaFlow[Assignment].interruptibleMapAsyncUnordered(12) { assignment =>
         Dstreams
           .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
             val workerId = result.metadata.getText(Dstreams.WORKER_ID_HEADER).get
