@@ -98,25 +98,24 @@ object Dstreams {
     makeAssignment: RIO[R0, Req]
   )(run: WorkResult[Res] => RIO[R1, A]): RIO[R0 with R1 with DstreamState[Req, Res] with AkkaEnv, A] = {
     for {
-      stateService <- ZIO.access[DstreamState[Req, Res]](_.get)
+      stateSvc <- ZIO.access[DstreamState[Req, Res]](_.get)
+      akkaSvc <- ZIO.access[AkkaEnv](_.get)
       assignment <- makeAssignment
       result <- {
-        ZIO.bracket(stateService.enqueueAssignment(assignment)) { assignmentId =>
-          stateService
+        ZIO.bracket(stateSvc.enqueueAssignment(assignment)) { assignmentId =>
+          stateSvc
             .report(assignmentId)
             .flatMap {
               case None => ZIO.unit
               case Some(worker) =>
-                ZIO
-                  .access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem)
-                  .map { implicit as =>
-                    worker.source.runWith(Sink.cancelled)
-                  }
-                  .ignore
+                UIO {
+                  import akkaSvc.actorSystem
+                  worker.source.runWith(Sink.cancelled)
+                }.ignore
             }
             .orDie
         } { assignmentId =>
-          stateService
+          stateSvc
             .awaitForWorker(assignmentId)
             .flatMap(run)
         }
