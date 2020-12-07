@@ -13,7 +13,7 @@ import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.{ZAkkaFlow, ZAkkaStreams}
 import io.grpc.{Status, StatusRuntimeException}
 import zio._
 import zio.clock.Clock
@@ -131,7 +131,7 @@ object Dstreams {
   )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with IzLogging with Clock with R, Done] = {
     val task = for {
       promise <- UIO(Promise[Source[Res, NotUsed]]())
-      flow <- ZAkkaStreams.interruptibleMapAsyncM(1) { assignment: Req =>
+      flow <- ZAkkaFlow[Req].interruptibleMapAsync(1) { assignment =>
         makeSource(assignment)
           .map(s => promise.success(s))
           .zipRight(Task.fromFuture(_ => promise.future))
