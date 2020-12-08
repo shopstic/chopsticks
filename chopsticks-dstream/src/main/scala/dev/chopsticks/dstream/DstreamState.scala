@@ -64,6 +64,10 @@ object DstreamState {
         UIO.effectSuspendTotal {
           val (inFuture, inSource) = in.watchTermination() { case (_, f) => f }.preMaterialize()
 
+          attemptCounter.inc()
+          workerGauge.inc()
+          inFuture.onComplete(_ => workerGauge.dec())
+
           val provideAssignmentTask = for {
             assignment <- STM.atomically {
               for {
@@ -75,20 +79,10 @@ object DstreamState {
             }
           } yield Source.single(assignment) ++ Source.futureSource(inFuture.map(_ => Source.empty))
 
-          val workerWatchTask = ZIO
-            .bracketExit {
-              UIO {
-                attemptCounter.inc()
-                workerGauge.inc()
-              }
-            } { (_, _: Any) =>
-              UIO(workerGauge.dec())
-            } { _ =>
-              Task
-                .fromFuture(_ => inFuture)
-                .ignore
-                .as(Source.empty)
-            }
+          val workerWatchTask = Task
+            .fromFuture(_ => inFuture)
+            .ignore
+            .as(Source.empty)
 
           provideAssignmentTask.raceFirst(workerWatchTask)
         }
