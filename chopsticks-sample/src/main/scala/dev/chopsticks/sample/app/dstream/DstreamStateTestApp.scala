@@ -52,7 +52,7 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
 
   private def runMaster = {
     for {
-      logger <- ZIO.access[IzLogging](_.get.logger)
+      zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
       workDistributionFlow <- ZAkkaFlow[Assignment].interruptibleMapAsyncUnordered(1) { assignment =>
         Dstreams
           .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
@@ -61,14 +61,14 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
                 result
                   .source
                   .viaMat(KillSwitches.single)(Keep.right)
-                  .take(1)
-                  .toMat(Sink.foreach { item =>
-                    logger.info(
-                      s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $item"
-                    )
-                  })(Keep.both),
+                  .toMat(Sink.last)(Keep.both),
                 graceful = true
               )
+              .flatMap { last =>
+                zlogger.info(
+                  s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
+                )
+              }
           }
       }
       _ <- ZAkkaStreams
@@ -91,8 +91,7 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
       resultPromise <- UIO(Promise[Source[Result, NotUsed]]())
       flow <- ZAkkaFlow[Assignment].interruptibleMapAsync(1) { assignment =>
         UIO {
-          Source
-            .single(1)
+          Source(1 to 100)
             .map(v => Result(assignment.valueIn * 10 + v))
         }
           .tap(s => UIO(resultPromise.success(s)))
