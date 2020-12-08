@@ -91,8 +91,9 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
       resultPromise <- UIO(Promise[Source[Result, NotUsed]]())
       flow <- ZAkkaFlow[Assignment].interruptibleMapAsync(1) { assignment =>
         UIO {
-          Source(1 to 100)
+          Source(1 to 10)
             .map(v => Result(assignment.valueIn * 10 + v))
+            .throttle(1, 1.second)
         }
           .tap(s => UIO(resultPromise.success(s)))
           .zipRight(Task.fromFuture(_ => resultPromise.future))
