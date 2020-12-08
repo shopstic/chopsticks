@@ -178,18 +178,22 @@ object Dstreams {
       .viaMat(KillSwitches.single)(Keep.right)
       .preMaterialize()
 
-    val futureSource = stateService
-      .enqueueWorker(inSource, metadata)
-      .unsafeRunToFuture(rt)
+    val futureSource = rt.unsafeRunToFuture(stateService.enqueueWorker(inSource, metadata))
 
     Source
       .futureSource(futureSource)
       .watchTermination() {
         case (_, f) =>
-          f.onComplete {
-            case Success(_) => ks.shutdown()
-            case Failure(ex) => ks.abort(ex)
-          }
+          f
+            .transformWith { result =>
+              futureSource
+                .cancel()
+                .map(exit => result.flatMap(_ => exit.toEither.toTry))
+            }
+            .onComplete {
+              case Success(_) => ks.shutdown()
+              case Failure(ex) => ks.abort(ex)
+            }
           NotUsed
       }
   }
