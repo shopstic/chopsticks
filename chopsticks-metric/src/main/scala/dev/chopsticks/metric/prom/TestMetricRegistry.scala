@@ -62,6 +62,30 @@ final class TestMetricRegistry[C <: MetricGroup] extends MetricRegistry.Service[
     )
   }
 
+  override def reference[V: MetricReference.MetricReferenceValue](config: GaugeConfig[NoLabel] with C)
+    : MetricReference[V] = {
+    new PromReference[V](
+      Gauge
+        .build(config.name, config.name)
+        .create()
+    )
+  }
+
+  override def referenceWithLabels[L <: MetricLabel, V: MetricReference.MetricReferenceValue](
+    config: GaugeConfig[L] with C,
+    labelValues: LabelValues[L]
+  ): MetricReference[V] = {
+    val values = config.labelNames.names.map(k => labelValues.map(k))
+    val names = config.labelNames.names
+    new PromChildReference[V](
+      Gauge
+        .build(config.name, config.name)
+        .labelNames(names: _*)
+        .create()
+        .labels(values: _*)
+    )
+  }
+
   override def histogram(config: HistogramConfig[NoLabel] with C): MetricHistogram = {
     new PromHistogram(
       Histogram

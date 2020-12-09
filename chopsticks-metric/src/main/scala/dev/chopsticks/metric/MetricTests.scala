@@ -1,7 +1,6 @@
 package dev.chopsticks.metric
 
 import java.io.CharArrayWriter
-
 import dev.chopsticks.metric.MetricConfigs.{
   CounterConfig,
   GaugeConfig,
@@ -9,13 +8,16 @@ import dev.chopsticks.metric.MetricConfigs.{
   LabelNames,
   LabelValues,
   MetricLabel,
-  NoLabelCounterConfig
+  NoLabelCounterConfig,
+  NoLabelGaugeConfig
 }
 import dev.chopsticks.metric.MetricRegistry.MetricGroup
 import dev.chopsticks.metric.prom.PromMetricRegistry
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.TextFormat
 import zio.{Has, URLayer, ZIO, ZLayer}
+
+import java.time.Instant
 
 object MetricTests {
   object WritesPerTx extends MetricLabel
@@ -37,6 +39,7 @@ object MetricTests {
     sealed trait Metric extends MetricGroup
     object RandomWritesTotal extends GaugeConfig(LabelNames of WritesPerTx and TxParallelism) with Metric
     object LatencyDistribution extends HistogramConfig(LabelNames of Partition, List(0.01, 0.5, 0.9)) with Metric
+    object LastUpdatedEpochMs extends NoLabelGaugeConfig with Metric
   }
 
   object Baz {
@@ -68,6 +71,8 @@ object MetricTests {
         labelValues
       )
 
+      val lastUpdated = barMetrics.reference[Instant](Bar.LastUpdatedEpochMs)
+
       val hist1 = barMetrics.histogramWithLabels(Bar.LatencyDistribution, LabelValues of Bar.Partition -> "1")
       val hist2 = barMetrics.histogramWithLabels(Bar.LatencyDistribution, LabelValues of Bar.Partition -> "1")
       val hist3 = barMetrics.histogramWithLabels(Bar.LatencyDistribution, LabelValues of Bar.Partition -> "2")
@@ -83,8 +88,11 @@ object MetricTests {
 
       counter.inc(123)
       gauge.set(999)
+      lastUpdated.set(Instant.now)
+
       println(counter2.get)
       println(gauge.get)
+      println(lastUpdated.get)
 
       val writer = new CharArrayWriter()
       TextFormat.write004(writer, CollectorRegistry.defaultRegistry.metricFamilySamples())

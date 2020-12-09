@@ -1,7 +1,10 @@
 package dev.chopsticks.metric.prom
 
-import dev.chopsticks.metric.{MetricCounter, MetricGauge, MetricHistogram, MetricSummary}
+import dev.chopsticks.metric.MetricReference.MetricReferenceValue
+import dev.chopsticks.metric._
 import io.prometheus.client.{Counter, Gauge, Histogram, Summary}
+
+import java.util.concurrent.atomic.AtomicReference
 
 object PromMetrics {
   final class PromCounter(counter: Counter) extends MetricCounter {
@@ -36,8 +39,29 @@ object PromMetrics {
     override def get: Double = gauge.get
   }
 
+  final class PromReference[V: MetricReferenceValue](gauge: Gauge) extends MetricReference[V] {
+    private val ref = new AtomicReference(Option.empty[V])
+    override def set(value: V): Unit = {
+      ref.set(Some(value))
+      gauge.set(MetricReferenceValue[V].getValue(value))
+    }
+    override def get: Option[V] = ref.get()
+  }
+
+  object PromReference {
+    def test[V: MetricReferenceValue]: PromReference[V] = new PromReference[V](Gauge.build("test", "test").create())
+  }
   final class PromHistogram(histogram: Histogram) extends MetricHistogram {
     override def observe(value: Double): Unit = histogram.observe(value)
+  }
+
+  final class PromChildReference[V: MetricReferenceValue](gauge: Gauge.Child) extends MetricReference[V] {
+    private val ref = new AtomicReference(Option.empty[V])
+    override def set(value: V): Unit = {
+      ref.set(Some(value))
+      gauge.set(MetricReferenceValue[V].getValue(value))
+    }
+    override def get: Option[V] = ref.get()
   }
 
   object PromHistogram {
