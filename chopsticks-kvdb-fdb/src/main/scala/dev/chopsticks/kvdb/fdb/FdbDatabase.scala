@@ -5,7 +5,6 @@ import java.time.Instant
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-
 import akka.NotUsed
 import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Source}
@@ -42,6 +41,7 @@ import zio.blocking.{blocking, Blocking}
 import zio.clock.Clock
 import zio.duration.Duration
 
+import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
 import scala.jdk.CollectionConverters._
@@ -707,6 +707,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
         val closeTx = () => initialTx.close()
 
         //noinspection MatchToPartialFunction
+        @nowarn("cat=other-match-analysis") // Bug in Scala 2.13.4 that falsely warns that this match is non-exhaustive
         val future: Future[Source[KvdbBatch, NotUsed]] = doGet(initialTx, column, range.from).thenApply { result =>
           result match {
             case Right((key, _)) if keySatisfies(key, toConstraints) =>
