@@ -3,7 +3,7 @@ package dev.chopsticks.util.config
 import com.typesafe.config.Config
 import japgolly.microlibs.utils.AsciiTable
 import pureconfig.{ConfigReader, ConfigSource}
-import pureconfig.error.{CannotParse, ConfigReaderFailures, ConvertFailure, ThrowableFailure}
+import pureconfig.error.{CannotParse, CannotRead, ConfigReaderFailures, ConvertFailure, ThrowableFailure}
 import pureconfig.generic.ProductHint
 
 object PureconfigLoader {
@@ -18,17 +18,22 @@ object PureconfigLoader {
       case Left(failures: ConfigReaderFailures) =>
         Left(
           AsciiTable(
-            List("Path", "Reason", "Origin") :: failures.toList.map {
-              case ConvertFailure(reason, location, path) =>
-                val origin = path match {
-                  case "" => ""
-                  case _ => location.map(_.toString).getOrElse(config.getValue(path).origin().description())
-                }
-                List(path, sanitizeReason(reason.description), origin)
-              case CannotParse(reason, location) =>
-                List("", sanitizeReason(reason), location.toString)
-              case ThrowableFailure(e, location) =>
-                List("", sanitizeReason(e.getMessage), location.toString)
+            List("Path", "Reason", "Origin") :: {
+              failures.toList.map {
+                case ConvertFailure(reason, location, path) =>
+                  val origin = path match {
+                    case "" => ""
+                    case _ => location.map(_.toString).getOrElse(config.getValue(path).origin().description())
+                  }
+                  List(path, sanitizeReason(reason.description), origin)
+                case CannotParse(reason, location) =>
+                  List("", sanitizeReason(reason), location.toString)
+                case ThrowableFailure(e, location) =>
+                  List("", sanitizeReason(e.getMessage), location.toString)
+                case cannotRead: CannotRead =>
+                  List("", sanitizeReason(cannotRead.description), "")
+                case _ => ???
+              }
             },
             separateDataRows = false
           )
