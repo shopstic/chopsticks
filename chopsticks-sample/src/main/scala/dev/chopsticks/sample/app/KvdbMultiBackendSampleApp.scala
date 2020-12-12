@@ -1,7 +1,6 @@
 package dev.chopsticks.sample.app
 
-import akka.stream.KillSwitches
-import akka.stream.scaladsl.{Keep, Sink, Source}
+import akka.stream.scaladsl.{Sink, Source}
 import com.typesafe.config.Config
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
@@ -16,7 +15,7 @@ import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase
 import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.RocksdbDatabaseConfig
 import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition._
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigReader
 import zio.{RIO, Task, ZIO, ZLayer}
@@ -71,37 +70,30 @@ object KvdbMultiBackendSampleApp extends AkkaDiApp[KvdbMultiBackendSampleAppConf
   }
 
   private def populate(db: DbService): RIO[AkkaEnv with IzLogging, Int] = {
-    ZAkkaStreams
-      .interruptibleGraph(
+    Source(1 to 100)
+      .flatMapConcat { i =>
         Source(1 to 100)
-          .flatMapConcat { i =>
-            Source(1 to 100)
-              .map { j =>
-                val key = TestKey(name = s"item $i", Instant.MIN.plusSeconds(j.toLong), version = i * j)
-                val value = TestValue(quantity = i.toLong * 123, amount = Math.pow(j.toDouble, 2))
-                key -> value
-              }
+          .map { j =>
+            val key = TestKey(name = s"item $i", Instant.MIN.plusSeconds(j.toLong), version = i * j)
+            val value = TestValue(quantity = i.toLong * 123, amount = Math.pow(j.toDouble, 2))
+            key -> value
           }
-          .viaMat(KillSwitches.single)(Keep.right)
-          .via(db.api.columnFamily(db.storage.default).putPairsInBatchesFlow)
-          .toMat(Sink.fold(0)((s, b) => s + b.size))(Keep.both),
-        graceful = true
-      )
+      }
+      .toZAkkaSource
+      .interruptible
+      .via(db.api.columnFamily(db.storage.default).putPairsInBatchesFlow)
+      .interruptibleRunWith(Sink.fold(0)((s, b) => s + b.size))
   }
 
   private def scanAndCollect(
     db: DbService
   ): RIO[AkkaEnv with IzLogging, Seq[(TestKey, TestValue)]] = {
-    ZAkkaStreams
-      .interruptibleGraph(
-        db
-          .api
-          .columnFamily(db.storage.default)
-          .source(_ startsWith "item 49", _ lt "item 49" -> Instant.MIN.plusSeconds(50))
-          .viaMat(KillSwitches.single)(Keep.right)
-          .toMat(Sink.seq)(Keep.both),
-        graceful = true
-      )
+    db
+      .api
+      .columnFamily(db.storage.default)
+      .source(_ startsWith "item 49", _ lt "item 49" -> Instant.MIN.plusSeconds(50))
+      .toZAkkaSource
+      .interruptibleRunWith(Sink.seq)
   }
 
   private def lookup(db: DbService, key: TestKey): Task[Option[(TestKey, TestValue)]] = {

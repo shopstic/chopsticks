@@ -1,9 +1,6 @@
 package dev.chopsticks.sample.app
 
-import java.util.concurrent.atomic.{AtomicReference, LongAdder}
-
-import akka.stream.KillSwitches
-import akka.stream.scaladsl.{Keep, Sink}
+import akka.stream.scaladsl.Sink
 import com.apple.foundationdb.tuple.Versionstamp
 import com.typesafe.config.Config
 import dev.chopsticks.fp.AppLayer.AppEnv
@@ -17,11 +14,13 @@ import dev.chopsticks.kvdb.fdb.FdbMaterialization.{KeyspaceWithVersionstampKey, 
 import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.sample.kvdb.SampleDb.TestValueWithVersionstamp
 import dev.chopsticks.sample.kvdb.{SampleDb, SampleDbEnv}
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigReader
 import zio._
 import zio.duration._
+
+import java.util.concurrent.atomic.{AtomicReference, LongAdder}
 
 final case class FdbWatchTestAppConfig(
   db: FdbDatabase.FdbDatabaseConfig
@@ -63,18 +62,14 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
       changeCounter = new LongAdder()
       lastAtomic = new AtomicReference(Option.empty[TestValueWithVersionstamp])
       dbApi <- KvdbDatabaseApi(db)
-      _ <- ZAkkaStreams
-        .interruptibleGraph(
-          dbApi
-            .columnFamily(sampleDb.versionstampValueTest)
-            .watchKeySource("foo")
-            .viaMat(KillSwitches.single)(Keep.right)
-            .toMat(Sink.foreach { v =>
-              lastAtomic.set(v)
-              watchCounter.increment()
-            })(Keep.both),
-          graceful = true
-        )
+      _ <- dbApi
+        .columnFamily(sampleDb.versionstampValueTest)
+        .watchKeySource("foo")
+        .toZAkkaSource
+        .interruptibleRunWith(Sink.foreach { v =>
+          lastAtomic.set(v)
+          watchCounter.increment()
+        })
         .log("Watch stream")
         .fork
 

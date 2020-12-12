@@ -1,7 +1,6 @@
 package dev.chopsticks.sample.app
 
-import akka.stream.KillSwitches
-import akka.stream.scaladsl.{Keep, Sink, Source}
+import akka.stream.scaladsl.{Sink, Source}
 import com.apple.foundationdb.tuple.Versionstamp
 import com.typesafe.config.Config
 import dev.chopsticks.fp.AppLayer.AppEnv
@@ -20,7 +19,7 @@ import dev.chopsticks.kvdb.fdb.FdbMaterialization.{KeyspaceWithVersionstampKey, 
 import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.sample.kvdb.SampleDb.{TestKeyWithVersionstamp, TestValueWithVersionstamp}
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigConvert
 import zio._
@@ -94,13 +93,11 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       .getTask(_ is "foo1000")
       .logResult("get", _.toString)
 
-    _ <- ZAkkaStreams
-      .graph(
-        dbApi
-          .columnFamily(sampleDb.default)
-          .source
-          .toMat(Sink.foreach(println))(Keep.right)
-      )
+    _ <- dbApi
+      .columnFamily(sampleDb.default)
+      .source
+      .toZAkkaSource
+      .interruptibleRunWith(Sink.foreach(println))
       .log("Default dump")
 
     testKeyspace = dbApi.columnFamily(sampleDb.versionstampKeyTest)
@@ -109,103 +106,81 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       .drop()
       .log("Drop test")
 
-    _ <- ZAkkaStreams
-      .graph {
-        Source(1 to 100)
-          .via(dbApi.batchTransact(batch => {
-            val pairs = batch.zipWithIndex.map {
-              case (i, index) =>
-                TestKeyWithVersionstamp("foo", i, Versionstamp.incomplete(index)) -> s"foo$i"
-            }
+    _ <- Source(1 to 100)
+      .via(dbApi.batchTransact(batch => {
+        val pairs = batch.zipWithIndex.map {
+          case (i, index) =>
+            TestKeyWithVersionstamp("foo", i, Versionstamp.incomplete(index)) -> s"foo$i"
+        }
 
-            testKeyspace.batchPut(pairs).result -> pairs
-          }))
-          .toMat(Sink.ignore)(Keep.right)
-      }
+        testKeyspace.batchPut(pairs).result -> pairs
+      }))
+      .toZAkkaSource
+      .interruptibleRunIgnore()
       .log("Range populate foo")
 
-    _ <- ZAkkaStreams
-      .graph(
-        Source(1 to 100000)
-          .via(dbApi.batchTransact(batch => {
-            val pairs = batch.zipWithIndex.map {
-              case (i, index) =>
-                TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
-            }
+    _ <- Source(1 to 100000)
+      .via(dbApi.batchTransact(batch => {
+        val pairs = batch.zipWithIndex.map {
+          case (i, index) =>
+            TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+        }
 
-            testKeyspace.batchPut(pairs).result -> pairs
-          }))
-          .toMat(Sink.ignore)(Keep.right)
-      )
+        testKeyspace.batchPut(pairs).result -> pairs
+      }))
+      .toZAkkaSource
+      .interruptibleRunIgnore()
       .log("Range populate bar")
 
-    _ <- ZAkkaStreams
-      .interruptibleGraph(
-        testKeyspace
-          .source(_ startsWith "bar", _ ltEq "bar" -> 50000)
-          .viaMat(KillSwitches.single)(Keep.right)
-          .toMat(Sink.fold(0)((s, _) => s + 1))(Keep.both),
-        graceful = true
-      )
+    _ <- testKeyspace
+      .source(_ startsWith "bar", _ ltEq "bar" -> 50000)
+      .toZAkkaSource
+      .interruptibleRunWith(Sink.fold(0)((s, _) => s + 1))
       //        .repeat(Schedule.forever)
       .logResult("Range scan", r => s"counted $r")
 
-    _ <- ZAkkaStreams
-      .interruptibleGraphM(
-        {
-          for {
-            lastKey <- testKeyspace
-              .getKeyTask(_ lastStartsWith "bar")
-              .logResult("Get last test key", _.toString)
-            source <- UIO(
-              Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
-                .throttle(1, 1.second)
-                .viaMat(KillSwitches.single)(Keep.right)
-                .via(dbApi.batchTransact(batch => {
-                  val pairs = batch.zipWithIndex.map {
-                    case (i, index) =>
-                      TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
-                  }
+    lastKey <- testKeyspace
+      .getKeyTask(_ lastStartsWith "bar")
+      .logResult("Get last test key", _.toString)
 
-                  testKeyspace.batchPut(pairs).result -> pairs
-                }))
-                .toMat(Sink.ignore)(Keep.both)
-            )
-          } yield source
-        },
-        graceful = true
+    _ <- Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
+      .throttle(1, 1.second)
+      .toZAkkaSource
+      .interruptible
+      .via(
+        dbApi.batchTransact(batch => {
+          val pairs = batch.zipWithIndex.map {
+            case (i, index) =>
+              TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+          }
+
+          testKeyspace.batchPut(pairs).result -> pairs
+        })
       )
+      .interruptibleRunIgnore()
       .log("Append")
       .fork
 
-    _ <- ZAkkaStreams
-      .interruptibleGraph(
-        testKeyspace
-          .source(_ ^= "bar", _ ^= "bar")
-          .map(_._1)
-          .sliding(2)
-          .map(_.toList)
-          .viaMat(KillSwitches.single)(Keep.right)
-          .toMat(Sink.foreach {
-            case previous :: next :: Nil =>
-              assert(previous.version.compareTo(next.version) < 0, s"$previous vs $next")
-            case _ =>
-          })(Keep.both),
-        graceful = true
-      )
+    _ <- testKeyspace
+      .source(_ ^= "bar", _ ^= "bar")
+      .map(_._1)
+      .sliding(2)
+      .map(_.toList)
+      .toZAkkaSource
+      .interruptibleRunWith(Sink.foreach {
+        case previous :: next :: Nil =>
+          assert(previous.version.compareTo(next.version) < 0, s"$previous vs $next")
+        case _ =>
+      })
       .log("Check versionstamp uniqueness")
 
-    _ <- ZAkkaStreams
-      .interruptibleGraph(
-        testKeyspace
-          .tailSource(_ gt "bar" -> 100000, _ startsWith "bar")
-          .viaMat(KillSwitches.single)(Keep.right)
-          .toMat(Sink.foreach {
-            case (k, v) =>
-              println(s"Tail got: k=$k v=$v")
-          })(Keep.both),
-        graceful = true
-      )
+    _ <- testKeyspace
+      .tailSource(_ gt "bar" -> 100000, _ startsWith "bar")
+      .toZAkkaSource
+      .interruptibleRunWith(Sink.foreach {
+        case (k, v) =>
+          println(s"Tail got: k=$k v=$v")
+      })
       .log("Tail")
 //      stats <- dbApi.statsTask
 //      _ <- ZLogger.info(

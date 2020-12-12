@@ -2,8 +2,7 @@ package dev.chopsticks.sample.app.dstream
 
 import akka.NotUsed
 import akka.grpc.GrpcClientSettings
-import akka.stream.KillSwitches
-import akka.stream.scaladsl.{Keep, Sink, Source}
+import akka.stream.scaladsl.{Sink, Source}
 import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamState.WorkResult
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
@@ -22,7 +21,7 @@ import dev.chopsticks.sample.app.dstream.proto.{
   DstreamSampleAppPowerApiHandler,
   Result
 }
-import dev.chopsticks.stream.{ZAkkaFlow, ZAkkaStreams}
+import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import io.prometheus.client.CollectorRegistry
 import zio.{Runtime, Schedule, Task, UIO, ZIO, ZLayer, ZManaged}
 
@@ -53,34 +52,25 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
   private def runMaster = {
     for {
       zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
-      workDistributionFlow <- ZAkkaFlow[Assignment].interruptibleMapAsyncUnordered(1) { assignment =>
-        Dstreams
-          .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
-            ZAkkaStreams
-              .interruptibleGraph(
-                result
-                  .source
-                  .viaMat(KillSwitches.single)(Keep.right)
-                  .toMat(Sink.last)(Keep.both),
-                graceful = true
-              )
-              .flatMap { last =>
-                zlogger.info(
-                  s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
-                )
-              }
-          }
-      }
-      _ <- ZAkkaStreams
-        .interruptibleGraph(
-          Source(1 to 100)
-            .initialDelay(10.seconds)
-            .map(Assignment(_))
-            .via(workDistributionFlow)
-            .viaMat(KillSwitches.single)(Keep.right)
-            .toMat(Sink.ignore)(Keep.both),
-          graceful = true
-        )
+      _ <- Source(1 to 100)
+        .initialDelay(10.seconds)
+        .map(Assignment(_))
+        .toZAkkaSource
+        .interruptibleMapAsyncUnordered(1) { assignment =>
+          Dstreams
+            .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
+              result
+                .source
+                .toZAkkaSource
+                .interruptibleRunWith(Sink.last)
+                .flatMap { last =>
+                  zlogger.info(
+                    s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
+                  )
+                }
+            }
+        }
+        .interruptibleRunIgnore()
     } yield ()
   }
 
@@ -89,25 +79,21 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
       zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
       _ <- zlogger.info("Worker start")
       resultPromise <- UIO(Promise[Source[Result, NotUsed]]())
-      flow <- ZAkkaFlow[Assignment].interruptibleMapAsync(1) { assignment =>
-        UIO {
-          Source(1 to 10)
-            .map(v => Result(assignment.valueIn * 10 + v))
-            .throttle(1, 1.second)
+      result <- client
+        .work(Source.futureSource(resultPromise.future).mapMaterializedValue(_ => NotUsed))
+        .toZAkkaSource
+        .interruptible
+        .viaChain(_.initialTimeout(1.second))
+        .interruptibleMapAsync(1) { assignment =>
+          UIO {
+            Source(1 to 10)
+              .map(v => Result(assignment.valueIn * 10 + v))
+              .throttle(1, 1.second)
+          }
+            .tap(s => UIO(resultPromise.success(s)))
+            .zipRight(Task.fromFuture(_ => resultPromise.future))
         }
-          .tap(s => UIO(resultPromise.success(s)))
-          .zipRight(Task.fromFuture(_ => resultPromise.future))
-      }
-      result <- ZAkkaStreams
-        .interruptibleGraph(
-          client
-            .work(Source.futureSource(resultPromise.future).mapMaterializedValue(_ => NotUsed))
-            .viaMat(KillSwitches.single)(Keep.right)
-            .initialTimeout(1.second)
-            .via(flow)
-            .toMat(Sink.ignore)(Keep.both),
-          graceful = true
-        )
+        .interruptibleRunIgnore()
     } yield result
   }
 
