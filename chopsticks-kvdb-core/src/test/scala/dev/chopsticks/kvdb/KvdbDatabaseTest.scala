@@ -1,7 +1,6 @@
 package dev.chopsticks.kvdb
 
 import java.nio.charset.StandardCharsets.UTF_8
-
 import akka.actor.Status
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
@@ -19,12 +18,12 @@ import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
 import dev.chopsticks.kvdb.util.KvdbTestUtils.populateColumn
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.ZAkkaGraph.UninterruptibleGraphOps
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.{Assertion, Inside}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.{RIO, Task, UIO, ZManaged}
+import zio.{RIO, Task, ZManaged}
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -65,19 +64,17 @@ object KvdbDatabaseTest extends Matchers with Inside {
   private def collectPairs(
     source: Source[KvdbBatch, Any]
   ): RIO[AkkaEnv with IzLogging, immutable.Seq[(Array[Byte], Array[Byte])]] = {
-    ZAkkaStreams.graphM(UIO {
-      source
-        .toMat(collectSink)(Keep.right)
-    })
+    source
+      .toMat(collectSink)(Keep.right)
+      .runToIO
   }
 
   private def collectValues(
     source: Source[KvdbValueBatch, Any]
   ): RIO[AkkaEnv with IzLogging, immutable.Seq[Array[Byte]]] = {
-    ZAkkaStreams.graphM(UIO {
-      source
-        .toMat(collectValuesSink)(Keep.right)
-    })
+    source
+      .toMat(collectValuesSink)(Keep.right)
+      .runToIO
   }
 
   private[kvdb] val $ : (KeyConstraints[String] => KeyConstraints[String]) => KvdbKeyConstraintList =
@@ -856,11 +853,10 @@ abstract private[kvdb] class KvdbDatabaseTest
             .result
         }
         _ <- db.transactionTask(tx)
-        batches <- ZAkkaStreams.graphM(UIO {
-          db.withOptions(_.copy(batchReadMaxBatchBytes = maxBatchBytes))
-            .iterateSource(defaultCf, $$(_.first, _.last))
-            .toMat(Sink.seq)(Keep.right)
-        })
+        batches <- db.withOptions(_.copy(batchReadMaxBatchBytes = maxBatchBytes))
+          .iterateSource(defaultCf, $$(_.first, _.last))
+          .toMat(Sink.seq)(Keep.right)
+          .runToIO
       } yield {
         batches.size should be < count
       }
@@ -1021,11 +1017,9 @@ abstract private[kvdb] class KvdbDatabaseTest
 
   "tailSource" should {
     "complete with UnsupportedKvdbOperationException if constraint list is empty" in withDb { db =>
-      ZAkkaStreams
-        .graphM(UIO {
-          db.tailSource(defaultCf, $$(identity, identity))
-            .toMat(Sink.head)(Keep.right)
-        })
+      db.tailSource(defaultCf, $$(identity, identity))
+        .toMat(Sink.head)(Keep.right)
+        .runToIO
         .either
         .map { ret =>
           ret should matchPattern {
@@ -1049,16 +1043,14 @@ abstract private[kvdb] class KvdbDatabaseTest
             .result
         }
         _ <- db.transactionTask(tx)
-        batches <- ZAkkaStreams
-          .graphM(UIO {
-            db.withOptions(_.copy(batchReadMaxBatchBytes = maxBatchBytes))
-              .tailSource(defaultCf, $$(_.first, _.last))
-              .takeWhile(
-                (b: KvdbTailBatch) => b.forall(a => KvdbSerdesUtils.byteArrayToString(a.last._1) != "10000"),
-                inclusive = true
-              )
-              .toMat(Sink.seq)(Keep.right)
-          })
+        batches <- db.withOptions(_.copy(batchReadMaxBatchBytes = maxBatchBytes))
+          .tailSource(defaultCf, $$(_.first, _.last))
+          .takeWhile(
+            (b: KvdbTailBatch) => b.forall(a => KvdbSerdesUtils.byteArrayToString(a.last._1) != "10000"),
+            inclusive = true
+          )
+          .toMat(Sink.seq)(Keep.right)
+          .runToIO
       } yield {
         batches.size should be < count
       }
@@ -1132,13 +1124,11 @@ abstract private[kvdb] class KvdbDatabaseTest
     "tail last when not empty" in withDb { db =>
       for {
         _ <- db.putTask(defaultCf, "aaaa", "aaaa")
-        head <- ZAkkaStreams
-          .graphM(UIO {
-            db.tailSource(defaultCf, $$(_.last, _.last))
-              .collect { case Right(b) => b }
-              .completionTimeout(1.second)
-              .toMat(Sink.head)(Keep.right)
-          })
+        head <- db.tailSource(defaultCf, $$(_.last, _.last))
+          .collect { case Right(b) => b }
+          .completionTimeout(1.second)
+          .toMat(Sink.head)(Keep.right)
+          .runToIO
           .map(_.head)
       } yield {
         byteArrayToString(head._1) should equal("aaaa")
@@ -1149,11 +1139,9 @@ abstract private[kvdb] class KvdbDatabaseTest
 
   "batchTailSource" should {
     "complete with UnsupportedKvdbOperationException if constraint list is empty" in withDb { db =>
-      ZAkkaStreams
-        .graphM(UIO {
-          db.concurrentTailSource(defaultCf, List.empty)
-            .toMat(Sink.head)(Keep.right)
-        })
+      db.concurrentTailSource(defaultCf, List.empty)
+        .toMat(Sink.head)(Keep.right)
+        .runToIO
         .either
         .map { ret =>
           ret should matchPattern {

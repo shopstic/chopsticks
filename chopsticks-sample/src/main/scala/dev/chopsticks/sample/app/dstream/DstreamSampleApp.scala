@@ -86,22 +86,24 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
     for {
       ks <- UIO(KillSwitches.shared("server shared killswitch"))
       logger <- ZIO.access[IzLogging](_.get.logger)
-      workDistributionFlow <- ZAkkaFlow[Assignment].interruptibleMapAsyncUnordered(12) { assignment =>
-        Dstreams
-          .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
-            result
-              .source
-              .viaMat(ks.flow)(Keep.right)
-              .take(1)
-              .toZAkkaSource
-              .interruptibleRunWith(Sink.foreach { item =>
-                logger.info(
-                  s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $item"
-                )
-              })
-              .retry(Schedule.forever.tapInput((e: Throwable) => UIO(logger.error(s"Distribute failed: $e"))))
-          }
-      }
+      workDistributionFlow <- ZAkkaFlow[Assignment]
+        .interruptibleMapAsyncUnordered(12) { assignment =>
+          Dstreams
+            .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
+              result
+                .source
+                .viaMat(ks.flow)(Keep.right)
+                .take(1)
+                .toZAkkaSource
+                .interruptibleRunWith(Sink.foreach { item =>
+                  logger.info(
+                    s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $item"
+                  )
+                })
+                .retry(Schedule.forever.tapInput((e: Throwable) => UIO(logger.error(s"Distribute failed: $e"))))
+            }
+        }
+        .make
       result <- Source(1 to 100)
         .map(Assignment(_))
         .via(workDistributionFlow)
