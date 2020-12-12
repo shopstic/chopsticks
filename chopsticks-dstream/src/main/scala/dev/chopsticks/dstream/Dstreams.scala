@@ -133,7 +133,7 @@ object Dstreams {
         .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
         .toZAkkaSource
         .interruptible
-        .viaChain(_.initialTimeout(initialTimeout))
+        .viaBuilder(_.initialTimeout(initialTimeout))
         .interruptibleMapAsync(1) {
           assignment =>
             makeSource(assignment)

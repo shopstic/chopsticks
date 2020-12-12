@@ -83,7 +83,7 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
         .work(Source.futureSource(resultPromise.future).mapMaterializedValue(_ => NotUsed))
         .toZAkkaSource
         .interruptible
-        .viaChain(_.initialTimeout(1.second))
+        .viaBuilder(_.initialTimeout(1.second))
         .interruptibleMapAsync(1) { assignment =>
           UIO {
             Source(1 to 10)

@@ -1,7 +1,6 @@
 package dev.chopsticks.stream
 
 import java.util.concurrent.TimeUnit
-
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.{Attributes, KillSwitches}
@@ -22,6 +21,7 @@ import zio.test.Annotations
 import zio.test.environment.TestClock
 import zio.{CancelableFuture, Task, UIO, ZIO}
 
+import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
 
@@ -52,7 +52,7 @@ final class ZAkkaStreamsTest
   "interruptibleLazySource" should {
     "behaves like a normal source" in withEffect {
       for {
-        source <- ZAkkaStreams.interruptibleLazySource {
+        source <- ZAkkaSource.interruptibleLazySource {
           ZIO.succeed(1)
         }
         ret <- Task.fromFuture(_ => source.runWith(Sink.head))
@@ -63,7 +63,7 @@ final class ZAkkaStreamsTest
       for {
         startP <- zio.Promise.make[Nothing, Unit]
         interruptedP <- zio.Promise.make[Nothing, Unit]
-        source <- ZAkkaStreams.interruptibleLazySource {
+        source <- ZAkkaSource.interruptibleLazySource {
           startP.succeed(()) *>
             ZIO
               .succeed(1)
@@ -123,6 +123,7 @@ final class ZAkkaStreamsTest
   "ZAkkaStreams" when {
     "recursiveSource" should {
       "repeat" in withRuntime { implicit env =>
+        @nowarn("cat=deprecation")
         val sink = ZAkkaStreams
           .recursiveSource(ZIO.succeed(1), (_: Int, o: Int) => o) { s => Source(s to s + 2) }
           .toMat(TestSink.probe[Int])(Keep.right)
