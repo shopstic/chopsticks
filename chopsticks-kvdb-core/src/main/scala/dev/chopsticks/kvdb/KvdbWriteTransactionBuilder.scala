@@ -20,7 +20,11 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
   private val buffer = new ConcurrentLinkedQueue[TransactionWrite]
   private val currentVersion = new AtomicInteger(0)
 
-  def put[CF <: BCF[K, V], K, V](column: CF, key: K, value: V): this.type = {
+  def put[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
+    column: CF[K, V] with CF2,
+    key: K,
+    value: V
+  ): this.type = {
     val (k, v) = column.serialize(key, value)
     val _ = buffer.add(
       TransactionPut(
@@ -32,14 +36,14 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
     this
   }
 
-  def putValue[CF <: BCF[K, V], K, V](column: CF, value: V)(implicit
+  def putValue[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](column: CF[K, V] with CF2, value: V)(implicit
     t: KeyTransformer[V, K]
   ): this.type = {
     val key = t.transform(value)
     put(column, key, value)
   }
 
-  def delete[CF <: BCF[K, _], K](column: CF, key: K): this.type = {
+  def delete[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K](column: CF[K, _] with CF2, key: K): this.type = {
     val _ = buffer.add(
       TransactionDelete(
         columnId = column.id,
@@ -49,7 +53,12 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
     this
   }
 
-  def deleteRange[CF <: BCF[K, _], K](column: CF, fromKey: K, toKey: K, inclusive: Boolean): this.type = {
+  def deleteRange[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K](
+    column: CF[K, _] with CF2,
+    fromKey: K,
+    toKey: K,
+    inclusive: Boolean
+  ): this.type = {
     val _ = buffer.add(
       TransactionDeleteRange(
         columnId = column.id,
