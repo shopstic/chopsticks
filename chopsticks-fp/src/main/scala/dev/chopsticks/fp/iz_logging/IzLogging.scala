@@ -38,14 +38,14 @@ object IzLogging {
   trait Service {
     def logger: IzLogger
     def loggerWithCtx(ctx: LogCtx): IzLogger
-    def zioLogger: LogBIO3[ZIO]
-    def zioLoggerWithCtx(ctx: LogCtx): LogBIO3[ZIO]
+    def zioLogger: LogIO3[ZIO]
+    def zioLoggerWithCtx(ctx: LogCtx): LogIO3[ZIO]
   }
 
-  final case class LiveService(logger: IzLogger, zioLogger: LogBIO3[ZIO]) extends Service {
+  final case class LiveService(logger: IzLogger, zioLogger: LogIO3[ZIO]) extends Service {
     override def loggerWithCtx(ctx: LogCtx): IzLogger =
       logger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
-    override def zioLoggerWithCtx(ctx: LogCtx): LogBIO3[ZIO] =
+    override def zioLoggerWithCtx(ctx: LogCtx): LogIO3[ZIO] =
       zioLogger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
   }
 
@@ -89,7 +89,7 @@ object IzLogging {
 
     val sinks = (consoleSink :: maybeFileSink.toList).map(sink => IzLoggingSinks.IzFilteringSink(filters, sink))
     val logger = IzLogger(config.level, sinks)(IzLoggingCustomRenderers.LoggerTypeCtxKey -> "iz")
-    val zioLogger = LogstageZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
+    val zioLogger = LogZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
 
     maybeFileSink.foreach(_.start())
 
