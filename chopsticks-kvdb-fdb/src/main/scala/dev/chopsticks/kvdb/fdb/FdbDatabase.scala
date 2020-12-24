@@ -697,20 +697,20 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source
       .lazyFutureSource { () =>
-        val fromConstraints = dbContext.prefixKeyConstraints(column, range.from)
-        val toConstraints = dbContext.prefixKeyConstraints(column, range.to)
-
-        val keyValidator = keySatisfies(_: Array[Byte], toConstraints)
-        val keyTransformer = dbContext.unprefixKey(column, _: Array[Byte])
-
         val initialTx = dbContext.db.createTransaction()
         val closeTx = () => initialTx.close()
 
         //noinspection MatchToPartialFunction
         @nowarn("cat=other-match-analysis") // Bug in Scala 2.13.4 that falsely warns that this match is non-exhaustive
         val future: Future[Source[KvdbBatch, NotUsed]] = doGet(initialTx, column, range.from).thenApply { result =>
+          val fromConstraints = dbContext.prefixKeyConstraints(column, range.from)
+          val toConstraints = dbContext.prefixKeyConstraints(column, range.to)
+
           result match {
             case Right((key, _)) if keySatisfies(key, toConstraints) =>
+              val keyValidator = keySatisfies(_: Array[Byte], toConstraints)
+              val keyTransformer = dbContext.unprefixKey(column, _: Array[Byte])
+
               val iterate = (firstRun: Boolean, newRange: KvdbKeyRange) => {
                 val fromHead = newRange.from.head
                 val fromOperator = fromHead.operator
@@ -719,13 +719,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                   case Operator.EQUAL => KeySelector.firstGreaterOrEqual(fromOperand)
                   case _ => nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
                 }
-                val toConstraintHead = toConstraints.head
-                val endKeySelector =
-                  toConstraintToKeySelector(
-                    toConstraintHead.operator,
-                    toConstraintHead.operand.toByteArray,
-                    dbContext.strinc(column)
-                  )
+                val toHead = toConstraints.head
+                val endKeySelector = toConstraintToKeySelector(
+                  toHead.operator,
+                  toHead.operand.toByteArray,
+                  dbContext.strinc(column)
+                )
                 val tx = if (firstRun) initialTx else dbContext.db.createTransaction()
                 val closeTx = () => tx.close()
                 val iterator = tx.snapshot().getRange(startKeySelector, endKeySelector).iterator()
@@ -735,13 +734,13 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
               Source
                 .fromGraph(
                   new FdbIterateSourceStage(
-                    KvdbKeyRange(fromConstraints, toConstraints),
-                    iterate,
-                    keyValidator,
-                    keyTransformer,
-                    dbContext.dbCloseSignal,
-                    clientOptions.batchReadMaxBatchBytes,
-                    clientOptions.disableIsolationGuarantee
+                    initialRange = KvdbKeyRange(fromConstraints, toConstraints),
+                    iterate = iterate,
+                    keyValidator = keyValidator,
+                    keyTransformer = keyTransformer,
+                    shutdownSignal = dbContext.dbCloseSignal,
+                    maxBatchBytes = clientOptions.batchReadMaxBatchBytes,
+                    disableIsolationGuarantee = clientOptions.disableIsolationGuarantee
                   )
                 )
 
@@ -935,14 +934,14 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
           Source
             .fromGraph(
               new FdbTailSourceStage(
-                KvdbKeyRange(fromConstraints, toConstraints),
-                iterate,
-                keyValidator,
-                keyTransformer,
-                dbContext.dbCloseSignal,
-                clientOptions.batchReadMaxBatchBytes,
-                clientOptions.tailPollingMaxInterval,
-                clientOptions.tailPollingBackoffFactor
+                initialRange = KvdbKeyRange(fromConstraints, toConstraints),
+                iterate = iterate,
+                keyValidator = keyValidator,
+                keyTransformer = keyTransformer,
+                shutdownSignal = dbContext.dbCloseSignal,
+                maxBatchBytes = clientOptions.batchReadMaxBatchBytes,
+                tailPollingInterval = clientOptions.tailPollingMaxInterval,
+                tailPollingBackoffFactor = clientOptions.tailPollingBackoffFactor
               )
             )
         }

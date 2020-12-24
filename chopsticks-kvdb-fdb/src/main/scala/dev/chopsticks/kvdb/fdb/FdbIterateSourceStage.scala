@@ -131,7 +131,7 @@ final class FdbIterateSourceStage(
   import FdbIterateSourceStage._
 
   private val maxBatchBytesInt = maxBatchBytes.toBytes.toInt
-  private val out: Outlet[KvdbBatch] = Outlet[KvdbBatch]("FdbAsyncIteratorToSourceStage.out")
+  private val out: Outlet[KvdbBatch] = Outlet[KvdbBatch]("FdbIterateSourceStage.out")
   override val shape: SourceShape[KvdbBatch] = SourceShape(out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = {
@@ -140,7 +140,7 @@ final class FdbIterateSourceStage(
     new KillableGraphStageLogic(shutdownListener.future, shape) with GraphStageWithActorLogic {
       private var batchEmitter: BatchEmitter = _
       private var close: () => Unit = _
-      private var range: KvdbKeyRange = _
+      private var range: KvdbKeyRange = initialRange
 
       setHandler(
         out,
@@ -149,20 +149,24 @@ final class FdbIterateSourceStage(
             self ! DownstreamPull
           }
           override def onDownstreamFinish(cause: Throwable): Unit = {
+            setKeepGoing(true)
             self ! DownstreamFinish
-            super.onDownstreamFinish(cause)
           }
         }
       )
 
       override def preStart(): Unit = {
+        super.preStart()
         val _ = getStageActor(makeHandler({
           case DownstreamPull =>
             val _ = batchEmitter.batchAndEmit(None)
+
           case DownstreamFinish | IteratorComplete =>
             completeStage()
+
           case IteratorNext(kv) =>
             val _ = batchEmitter.batchAndEmit(Some(kv.getKey -> kv.getValue))
+
           case IteratorFailure(ex: FDBException)
               if disableIsolationGuarantee && (ex.getCode == 1007 /* Transaction too old */ || ex.getCode == 1009 /* Request for future version */ ) =>
             close()
@@ -172,6 +176,7 @@ final class FdbIterateSourceStage(
                 KvdbKeyConstraint(Operator.GREATER, ByteString.copyFrom(lastKey)) :: range.from.tail
               }
             )
+
             val (newIterator, newClose) = iterate(false, range)
             close = newClose
             batchEmitter = new BatchEmitter(
@@ -183,10 +188,11 @@ final class FdbIterateSourceStage(
               emit = emit(out, _)
             )
             self ! DownstreamPull
+
           case IteratorFailure(ex) =>
             failStage(ex)
         }))
-        range = initialRange
+
         val (initialIterator, closeTransaction) = iterate(true, range)
         close = closeTransaction
         batchEmitter = new BatchEmitter(
@@ -204,8 +210,8 @@ final class FdbIterateSourceStage(
           if (close != null) close()
         }
         finally {
-          shutdownListener.unregister()
           super.postStop()
+          shutdownListener.unregister()
         }
       }
     }
