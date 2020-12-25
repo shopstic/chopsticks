@@ -73,8 +73,7 @@ object LmdbDatabase extends StrictLogging {
 
       val task = for {
         _ <- Task(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
-          if (isClosed) Task.unit
-          else Task.fail(ClosedException)
+          Task.fail(ClosedException).unless(isClosed)
         }
         _ <- Task {
           writeExecutor.shutdown()

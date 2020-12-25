@@ -191,7 +191,9 @@ object FdbDatabase {
           val futures = materialization.columnFamilySet.value.toList.map { cf =>
             directory
               .createOrOpen(tx, List(cf.id).asJava)
-              .thenApply(dir => cf -> dir.pack())
+              .thenApply { dir =>
+                cf -> dir.pack()
+              }
           }
 
           CompletableFuture
