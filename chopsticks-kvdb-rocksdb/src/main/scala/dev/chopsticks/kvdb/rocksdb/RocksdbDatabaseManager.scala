@@ -97,8 +97,7 @@ object RocksdbDatabaseManager {
 
       for {
         _ <- Task(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
-          if (isClosed) Task.unit
-          else Task.fail(KvdbClosedException)
+          Task.fail(KvdbClosedException).unless(isClosed)
         }
         _ <- Task(dbCloseSignal.tryComplete(Failure(KvdbClosedException)))
         _ <- Task(dbCloseSignal.hasNoListeners)

@@ -23,12 +23,19 @@ object MultiBackendSampleDb {
     final case class TestValue(quantity: Long, amount: Double)
 
     trait Default extends BaseCf[TestKey, TestValue]
+    trait Foo extends BaseCf[TestKey, TestValue]
+    trait Bar extends BaseCf[TestKey, TestValue]
 
-    type CfSet = Default
+    type CfSet = Default with Foo with Bar
 
     trait DbStorage extends KvdbMaterialization[BaseCf, CfSet] {
       def default: Default
-      override def columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf].of(default)
+      def foo: Foo
+      def bar: Bar
+      override def columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf]
+        .of(default)
+        .and(foo)
+        .and(bar)
     }
 
     trait FdbStorage extends DbStorage with FdbMaterialization[BaseCf] {
@@ -42,16 +49,17 @@ object MultiBackendSampleDb {
         import squants.information.InformationConversions._
         import eu.timepit.refined.auto._
 
+        val cfConfig = RocksdbColumnFamilyConfig(
+          memoryBudget = 1.mib,
+          blockCache = 1.mib,
+          blockSize = 8.kib,
+          writeBufferCount = 4
+        ).toOptions(PrefixedScanPattern(1))
+
         RocksdbColumnFamilyOptionsMap[BaseCf]
-          .of(
-            default,
-            RocksdbColumnFamilyConfig(
-              memoryBudget = 1.mib,
-              blockCache = 1.mib,
-              blockSize = 8.kib,
-              writeBufferCount = 4
-            ).toOptions(PrefixedScanPattern(1))
-          )
+          .of(default, cfConfig)
+          .and(foo, cfConfig)
+          .and(bar, cfConfig)
       }
     }
 
@@ -72,6 +80,8 @@ object MultiBackendSampleDb {
       implicit val valueSerdes: ValueSerdes[TestValue] = ValueSerdes.fromKeySerdes
 
       object default extends Default
+      object foo extends Foo
+      object bar extends Bar
     }
 
     object rocksdbStorage extends RocksdbStorage {
@@ -79,6 +89,8 @@ object MultiBackendSampleDb {
       implicit val valueSerdes: ValueSerdes[TestValue] = ValueSerdes.fromKeySerdes
 
       object default extends Default
+      object foo extends Foo
+      object bar extends Bar
     }
   }
 }
