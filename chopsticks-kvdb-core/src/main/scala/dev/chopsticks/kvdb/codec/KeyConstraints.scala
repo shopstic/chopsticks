@@ -73,11 +73,36 @@ object KeyConstraints {
     }
   }
 
+  implicit class StringKeyConstraintsOps(builder: KeyConstraints[String]) {
+    def literallyStartsWith(value: String)(implicit e: KeyPrefix[String, String]): KeyConstraints[String] = {
+      val prefix = builder.serdes.serializePrefix(value)
+      val length = prefix.length
+
+      val strippedPrefix =
+        if (length > 0 && prefix.last == 0) {
+          val copy = new Array[Byte](length - 1)
+          System.arraycopy(prefix, 0, copy, 0, length - 1)
+          copy
+        }
+        else {
+          prefix
+        }
+
+      builder
+        .copy(builder.constraints enqueue KvdbKeyConstraint(
+          Operator.PREFIX,
+          ProtoByteString.copyFrom(strippedPrefix),
+          value
+        ))(builder.serdes)
+    }
+  }
 }
 
 //noinspection ScalaStyle
 // scalastyle:off
-final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue.empty)(implicit serdes: KeySerdes[K]) {
+final case class KeyConstraints[K](constraints: Queue[KvdbKeyConstraint] = Queue.empty)(implicit
+  val serdes: KeySerdes[K]
+) {
   def gtEq[P](v: P)(implicit e: KeyPrefix[P, K]): KeyConstraints[K] = {
     copy(
       constraints enqueue KvdbKeyConstraint(
