@@ -791,6 +791,13 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   ): Task[Unit] = {
     ioTask(references.flatMap { refs =>
       val db = refs.txDb
+
+      if (db == null) {
+        throw InvalidKvdbArgumentException(
+          s"Database was opened as read-only, OptimisticTransactionDB is not available"
+        )
+      }
+
       val writeOptions = newWriteOptions()
       val tx = db.beginTransaction(writeOptions)
 
