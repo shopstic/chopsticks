@@ -309,7 +309,7 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
               RocksdbContext[CF](
                 txDb = db match {
                   case odb: OptimisticTransactionDB => odb
-                  case _ => throw InvalidKvdbArgumentException(s"Database was opened as readyOnly")
+                  case _ => null
                 },
                 db = db match {
                   case odb: OptimisticTransactionDB => odb.getBaseDB
