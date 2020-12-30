@@ -33,7 +33,7 @@ object RocksdbDatabaseManager {
   }
 
   final case class RocksdbContext[CF <: ColumnFamily[_, _]](
-    txDb: OptimisticTransactionDB,
+    txDb: Option[OptimisticTransactionDB],
     db: RocksDB,
     columnHandleMap: Map[CF, ColumnFamilyHandle],
     columnPrefixExtractorOptionMap: Map[CF, String],
@@ -103,11 +103,12 @@ object RocksdbDatabaseManager {
         _ <- Task(dbCloseSignal.hasNoListeners)
           .repeat(Schedule.fixed(100.millis).untilInput(identity))
         _ <- Task {
+          val dbHandle = txDb.getOrElse(db)
           stats.close()
-          columnHandleMap.values.foreach { c => txDb.flush(new FlushOptions().setWaitForFlush(true), c) }
+          columnHandleMap.values.foreach { c => dbHandle.flush(new FlushOptions().setWaitForFlush(true), c) }
           columnHandleMap.foreach(_._2.close())
-          txDb.flushWal(true)
-          txDb.closeE()
+          dbHandle.flushWal(true)
+          dbHandle.closeE()
         }.lock(ioExecutor)
       } yield ()
     }
@@ -308,8 +309,8 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
 
               RocksdbContext[CF](
                 txDb = db match {
-                  case odb: OptimisticTransactionDB => odb
-                  case _ => null
+                  case odb: OptimisticTransactionDB => Some(odb)
+                  case _ => None
                 },
                 db = db match {
                   case odb: OptimisticTransactionDB => odb.getBaseDB
