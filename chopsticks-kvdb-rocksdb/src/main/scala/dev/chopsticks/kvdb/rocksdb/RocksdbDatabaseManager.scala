@@ -240,6 +240,9 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
 
       val exists = File(config.path + "/CURRENT").exists
 
+      if (!exists && config.readOnly)
+        throw InvalidKvdbArgumentException(s"Opening database at ${config.path} as readyOnly but it doesn't exist")
+
       def openKvdb() = {
         val handles = new JavaArrayList[ColumnFamilyHandle]
 
@@ -248,7 +251,9 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
           .setStatistics(new Statistics())
 
         val db = {
-          OptimisticTransactionDB.open(dbOptions.setCreateIfMissing(true), config.path, descriptors.asJava, handles)
+          if (config.readOnly) RocksDB.openReadOnly(dbOptions, config.path, descriptors.asJava, handles)
+          else
+            OptimisticTransactionDB.open(dbOptions.setCreateIfMissing(true), config.path, descriptors.asJava, handles)
         }
 
         val columnHandles = handles.asScala.toList
@@ -262,27 +267,29 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
         RocksDB.listColumnFamilies(new Options(), config.path).asScala.map(byteArrayToString).toList
       }
 
-      if (exists) {
-        val existingColumnNames = listExistingColumnNames().toSet
+      if (!config.readOnly) {
+        if (exists) {
+          val existingColumnNames = listExistingColumnNames().toSet
 
-        if (columnNames != existingColumnNames) {
-          syncColumnFamilies(descriptors, existingColumnNames)
+          if (columnNames != existingColumnNames) {
+            syncColumnFamilies(descriptors, existingColumnNames)
 
-          val doubleCheckingColumnNames = listExistingColumnNames().toSet
-          assert(
-            columnNames == doubleCheckingColumnNames,
-            s"Trying to open with $columnNames but existing columns are $doubleCheckingColumnNames"
-          )
+            val doubleCheckingColumnNames = listExistingColumnNames().toSet
+            assert(
+              columnNames == doubleCheckingColumnNames,
+              s"Trying to open with $columnNames but existing columns are $doubleCheckingColumnNames"
+            )
+          }
+          else {
+            assert(
+              columnNames == existingColumnNames,
+              s"Trying to open with $columnNames but existing columns are $existingColumnNames"
+            )
+          }
         }
         else {
-          assert(
-            columnNames == existingColumnNames,
-            s"Trying to open with $columnNames but existing columns are $existingColumnNames"
-          )
+          syncColumnFamilies(descriptors, Set.empty[String])
         }
-      }
-      else {
-        syncColumnFamilies(descriptors, Set.empty[String])
       }
 
       openKvdb()
@@ -300,8 +307,14 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
               }.toMap
 
               RocksdbContext[CF](
-                txDb = db,
-                db = db.getBaseDB,
+                txDb = db match {
+                  case odb: OptimisticTransactionDB => odb
+                  case _ => throw InvalidKvdbArgumentException(s"Database was opened as readyOnly")
+                },
+                db = db match {
+                  case odb: OptimisticTransactionDB => odb.getBaseDB
+                  case _ => db
+                },
                 columnHandleMap = columnHandleMap,
                 columnPrefixExtractorOptionMap = columnHasPrefixExtractorMap,
                 stats = stats,
