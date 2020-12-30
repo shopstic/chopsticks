@@ -45,6 +45,7 @@ object RocksdbDatabase extends StrictLogging {
     startWithBulkInserts: Boolean,
     useDirectIo: Boolean,
     ioDispatcher: NonEmptyString,
+    readOnly: Boolean = false,
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
