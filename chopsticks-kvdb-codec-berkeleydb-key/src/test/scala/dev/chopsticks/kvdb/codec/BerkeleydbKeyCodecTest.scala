@@ -1,8 +1,7 @@
 package dev.chopsticks.kvdb.codec
 
-import java.time.{LocalDate, LocalDateTime, LocalTime, YearMonth}
+import java.time.{LocalDate, LocalDateTime, LocalTime, YearMonth, ZoneId}
 import java.util.UUID
-
 import dev.chopsticks.kvdb.codec.BerkeleydbKeyCodecTest.TestKeyWithRefined
 import dev.chopsticks.testkit.ArbitraryTime._
 import enumeratum.EnumEntry
@@ -17,6 +16,9 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 object BerkeleydbKeyCodecTest {
+  //noinspection TypeAnnotation
+  implicit lazy val defaultZoneIdLocalDateTimeKeySerdes =
+    BerkeleydbKeySerdes.createLocalDateTimeKeySerdes(ZoneId.systemDefault())
   final case class Sym(symbol: String) extends AnyVal
 
   sealed abstract class ByteEnumTest(val value: Byte) extends ByteEnumEntry
@@ -108,6 +110,7 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
     )
     object Person {
       import berkeleydb_key._
+      import BerkeleydbKeyCodecTest.defaultZoneIdLocalDateTimeKeySerdes
       implicit val dbKey = KeySerdes[Person]
     }
 
@@ -143,6 +146,7 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
     case class TradeTick(symbol: Sym, dateTime: LocalDateTime, price: BigDecimal, size: Int)
     object TradeTick {
       import berkeleydb_key._
+      import BerkeleydbKeyCodecTest.defaultZoneIdLocalDateTimeKeySerdes
       implicit val dbKey = KeySerdes[TradeTick]
     }
 
@@ -229,6 +233,7 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
       case class DateTimeKey(date: LocalDateTime)
       object DateTimeKey {
         import berkeleydb_key._
+        import BerkeleydbKeyCodecTest.defaultZoneIdLocalDateTimeKeySerdes
         implicit val dbKey = KeySerdes[DateTimeKey]
       }
 

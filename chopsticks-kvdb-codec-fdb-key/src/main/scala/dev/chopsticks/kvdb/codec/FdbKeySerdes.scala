@@ -8,8 +8,8 @@ import java.time.{LocalDateTime, ZoneId}
 
 object FdbKeySerdes {
   def createLocalDateTimeKeySerdes(zoneId: ZoneId)
-    : FdbKeySerializer[LocalDateTime] with FdbKeyDeserializer[LocalDateTime] = {
-    new FdbKeySerializer[LocalDateTime] with FdbKeyDeserializer[LocalDateTime] {
+    : PredefinedFdbKeySerializer[LocalDateTime] with FdbKeyDeserializer[LocalDateTime] = {
+    new PredefinedFdbKeySerializer[LocalDateTime] with FdbKeyDeserializer[LocalDateTime] {
       private val deserializer = FdbKeyDeserializer.createTry(in => {
         val epochNanos = in.getBigInteger
         KvdbSerdesUtils.epochNanosToLocalDateTime(BigInt(epochNanos), zoneId)
