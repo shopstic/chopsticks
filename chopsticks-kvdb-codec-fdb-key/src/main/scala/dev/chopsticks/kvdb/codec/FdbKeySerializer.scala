@@ -40,9 +40,6 @@ object FdbKeySerializer {
 
   implicit val ldFdbKeyEncoder: PredefinedFdbKeySerializer[LocalDate] =
     define((o, v) => longFdbKeyEncoder.serialize(o, v.toEpochDay))
-  implicit val ldtFdbKeyEncoder: PredefinedFdbKeySerializer[LocalDateTime] = define { (o, v) =>
-    o.add(KvdbSerdesUtils.localDateTimeToEpochNanos(v).underlying)
-  }
   implicit val instantFdbKeyEncoder: PredefinedFdbKeySerializer[Instant] = define { (o, v) =>
     o.add(KvdbSerdesUtils.instantToEpochNanos(v).underlying)
   }

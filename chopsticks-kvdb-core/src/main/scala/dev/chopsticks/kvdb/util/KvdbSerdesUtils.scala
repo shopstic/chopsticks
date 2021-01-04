@@ -4,7 +4,6 @@ import java.time.{Instant, LocalDateTime, ZoneId}
 import java.nio.charset.StandardCharsets.UTF_8
 
 object KvdbSerdesUtils {
-  private val ZONE_ID = ZoneId.systemDefault
   private val NANOS_IN_A_SECOND = 1000000000
 
   def epochNanosToInstant(value: BigInt): Instant = {
@@ -13,15 +12,14 @@ object KvdbSerdesUtils {
     Instant.ofEpochSecond(seconds, nanoSeconds)
   }
 
-  def localDateTimeToEpochNanos(value: LocalDateTime): BigInt = {
-    val seconds = BigInt(value.atZone(ZONE_ID).toEpochSecond)
+  def localDateTimeToEpochNanos(value: LocalDateTime, zoneId: ZoneId): BigInt = {
+    val seconds = BigInt(value.atZone(zoneId).toEpochSecond)
     val nanoSeconds = value.getNano
     seconds * NANOS_IN_A_SECOND + nanoSeconds
   }
 
-  def epochNanosToLocalDateTime(value: BigInt): LocalDateTime = {
-    epochNanosToInstant(value).atZone(ZONE_ID).toLocalDateTime
-    //    LocalDateTime.ofEpochSecond(seconds, nanoSeconds, ZoneOffset.UTC)
+  def epochNanosToLocalDateTime(value: BigInt, zoneId: ZoneId): LocalDateTime = {
+    epochNanosToInstant(value).atZone(zoneId).toLocalDateTime
   }
 
   def instantToEpochNanos(value: Instant): BigInt = {
