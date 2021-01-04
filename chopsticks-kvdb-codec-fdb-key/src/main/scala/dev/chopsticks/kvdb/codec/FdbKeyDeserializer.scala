@@ -28,7 +28,7 @@ trait FdbKeyDeserializer[T] {
 object FdbKeyDeserializer {
   type Typeclass[A] = FdbKeyDeserializer[A]
 
-  private def createTry[T](f: FdbTupleReader => T)(implicit typ: Typeable[T]): FdbKeyDeserializer[T] =
+  private[codec] def createTry[T](f: FdbTupleReader => T)(implicit typ: Typeable[T]): FdbKeyDeserializer[T] =
     (in: FdbTupleReader) => {
       try Right(f(in))
       catch {
@@ -59,10 +59,6 @@ object FdbKeyDeserializer {
   implicit val ldFdbKeyDecoder: FdbKeyDeserializer[LocalDate] = createTry { t =>
     val epochDay = t.getLong
     LocalDate.ofEpochDay(epochDay)
-  }
-  implicit val ldtFdbKeyDecoder: FdbKeyDeserializer[LocalDateTime] = createTry { t =>
-    val epochNanos = t.getBigInteger
-    KvdbSerdesUtils.epochNanosToLocalDateTime(BigInt(epochNanos))
   }
   implicit val ltFdbKeyDecoder: FdbKeyDeserializer[LocalTime] = createTry { t =>
     val nanoOfDay = t.getLong
