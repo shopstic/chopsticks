@@ -8,8 +8,8 @@ import java.time.{LocalDateTime, ZoneId}
 
 object BerkeleydbKeySerdes {
   def createLocalDateTimeKeySerdes(zoneId: ZoneId)
-    : BerkeleydbKeySerializer[LocalDateTime] with BerkeleydbKeyDeserializer[LocalDateTime] = {
-    new BerkeleydbKeySerializer[LocalDateTime] with BerkeleydbKeyDeserializer[LocalDateTime] {
+    : PredefinedBerkeleydbKeySerializer[LocalDateTime] with BerkeleydbKeyDeserializer[LocalDateTime] = {
+    new PredefinedBerkeleydbKeySerializer[LocalDateTime] with BerkeleydbKeyDeserializer[LocalDateTime] {
       private val deserializer = BerkeleydbKeyDeserializer.createTry((in: TupleInput) =>
         KvdbSerdesUtils.epochNanosToLocalDateTime(BigInt(in.readBigInteger()), zoneId)
       )
