@@ -5,7 +5,7 @@ addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.5.1")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.4.2")
 addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.4.13")
 
-addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.0-RC3")
+addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.0-RC7")
 addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "1.0.2-57-c8612a00")
 libraryDependencies ++= Seq(
   "com.thesamet.scalapb" %% "compilerplugin" % "0.10.9"
