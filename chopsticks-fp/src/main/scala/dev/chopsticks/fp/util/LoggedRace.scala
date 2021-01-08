@@ -30,4 +30,10 @@ final class LoggedRace[-R] private (queue: Queue[R with MeasuredLogging => Task[
 
 object LoggedRace {
   def apply() = new LoggedRace[Any](Queue.empty)
+  def apply[R](seq: Iterable[(String, RIO[R, Unit])]): LoggedRace[R] = {
+    seq
+      .foldLeft(new LoggedRace[R](Queue.empty)) { case (race, (name, task)) =>
+        race.add(name, task)
+      }
+  }
 }
