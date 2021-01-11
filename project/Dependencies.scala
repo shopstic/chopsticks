@@ -3,13 +3,13 @@ import scalapb.compiler.Version.scalapbVersion
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
-  val SCALA_VERSION = "2.13.3"
+  val SCALA_VERSION = "2.13.4"
   val AKKA_VERSION = "2.6.10"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.3"
-  val IZUMI_VERSION = "1.0.0-M1"
-  val REFINED_VERSION = "0.9.19"
-  val CALIBAN_VERSION = "0.9.4"
+  val IZUMI_VERSION = "1.0.1"
+  val REFINED_VERSION = "0.9.20"
+  val CALIBAN_VERSION = "0.9.3"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -56,15 +56,15 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "1.0.2-30-8780b706"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "1.0.2-61-132a7f2f"
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.2.0"
+    "org.typelevel" %% "cats-core" % "2.3.1"
   )
 
   val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "2.2.0"
+    "org.typelevel" %% "kittens" % "2.2.1"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
@@ -91,7 +91,7 @@ object Dependencies {
     "org.scalactic" %% "scalactic" % "3.2.3",
     "org.scalatest" %% "scalatest" % "3.2.3",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
-    "org.scalacheck" %% "scalacheck" % "1.15.1",
+    "org.scalacheck" %% "scalacheck" % "1.15.2",
     "org.scalamock" %% "scalamock" % "5.1.0"
   )
 
@@ -100,7 +100,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.13.3"
+    "org.rocksdb" % "rocksdbjni" % "6.15.2"
   )
 
   val lmdbDeps = Seq(

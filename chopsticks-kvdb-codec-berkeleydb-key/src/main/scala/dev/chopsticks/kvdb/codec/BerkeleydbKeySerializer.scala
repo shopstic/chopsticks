@@ -46,9 +46,6 @@ object BerkeleydbKeySerializer {
 
   implicit val ldBerkeleydbKeyEncoder: PredefinedBerkeleydbKeySerializer[LocalDate] =
     define((o, v) => longBerkeleydbKeyEncoder.serialize(o, v.toEpochDay))
-  implicit val ldtBerkeleydbKeyEncoder: PredefinedBerkeleydbKeySerializer[LocalDateTime] = define { (o, v) =>
-    o.writeBigInteger(KvdbSerdesUtils.localDateTimeToEpochNanos(v).underlying)
-  }
   implicit val instantBerkeleydbKeyEncoder: PredefinedBerkeleydbKeySerializer[Instant] = define { (o, v) =>
     o.writeBigInteger(KvdbSerdesUtils.instantToEpochNanos(v).underlying)
   }

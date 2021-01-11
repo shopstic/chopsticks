@@ -45,6 +45,7 @@ object RocksdbDatabase extends StrictLogging {
     startWithBulkInserts: Boolean,
     useDirectIo: Boolean,
     ioDispatcher: NonEmptyString,
+    readOnly: Boolean = false,
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
@@ -789,7 +790,10 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     actions: Seq[TransactionWrite]
   ): Task[Unit] = {
     ioTask(references.flatMap { refs =>
-      val db = refs.txDb
+      val db = refs.txDb.getOrElse(throw InvalidKvdbArgumentException(
+        s"Database was opened as read-only, OptimisticTransactionDB is not available"
+      ))
+
       val writeOptions = newWriteOptions()
       val tx = db.beginTransaction(writeOptions)
 

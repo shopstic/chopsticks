@@ -1,6 +1,12 @@
 syntax = "proto3";
 
+import "scalapb/scalapb.proto";
+
 package dev.chopsticks.sample.app.dstream.proto.load_test;
+
+option (scalapb.options) = {
+  preserve_unknown_fields: false
+};
 
 service StreamMaster {
   rpc DoWork (stream Result) returns (stream Assignment) {

@@ -16,7 +16,7 @@ import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.load_test._
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import dev.chopsticks.util.config.PureconfigLoader
 import io.prometheus.client.CollectorRegistry
 import pureconfig.ConfigConvert
@@ -117,51 +117,44 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
     for {
       appConfig <- ZIO.access[AppConfig](_.get)
       ks = KillSwitches.shared("server shared killswitch")
-      workDistributionFlow <- ZAkkaStreams.interruptibleMapAsyncUnorderedM(12) { assignment: Assignment =>
-        Dstreams
-          .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
-            val workerId = result.metadata.getText(Dstreams.WORKER_ID_HEADER).get
-
-            ZAkkaStreams
-              .interruptibleGraph(
-                result
-                  .source
-                  .map { result =>
-                    result.body.errorCode
-                      .map(errorCode => throw new RuntimeException(s"Obtained error result $errorCode"))
-                      .getOrElse(result.getValue)
-                  }
-                  .viaMat(ks.flow)(Keep.right)
-                  .toMat(Sink.fold(BigInt(0)) { case (s, r) =>
-                    counter.increment()
-                    s + r
-                  })(Keep.both),
-                graceful = true
-              )
-              .log(s"$assignment $workerId", logTraceOnError = false)
-          }
-          .retry(Schedule.fixed(appConfig.distributionRetryInterval.toJava))
-      }
-      result <- ZAkkaStreams
-        .interruptibleGraph(
-          Source(1 to appConfig.partitions)
-            .map(v =>
-              Assignment(
-                addition = v,
-                from = appConfig.addition.from,
-                to = appConfig.addition.to,
-                iteration = appConfig.addition.iterations
-              )
-            )
-            .via(workDistributionFlow)
-            .viaMat(ks.flow)(Keep.right)
-            .toMat(Sink.fold(BigInt(0)) { (s, v) =>
-              val newValue = s + v
-              currentValue.set(newValue)
-              newValue
-            })(Keep.both),
-          graceful = true
+      result <- Source(1 to appConfig.partitions)
+        .map(v =>
+          Assignment(
+            addition = v,
+            from = appConfig.addition.from,
+            to = appConfig.addition.to,
+            iteration = appConfig.addition.iterations
+          )
         )
+        .toZAkkaSource
+        .interruptibleMapAsyncUnordered(12) { assignment =>
+          Dstreams
+            .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
+              val workerId = result.metadata.getText(Dstreams.WORKER_ID_HEADER).get
+
+              result
+                .source
+                .map { result =>
+                  result.body.errorCode
+                    .map(errorCode => throw new RuntimeException(s"Obtained error result $errorCode"))
+                    .getOrElse(result.getValue)
+                }
+                .viaMat(ks.flow)(Keep.right)
+                .toZAkkaSource
+                .interruptibleRunWith(Sink.fold(BigInt(0)) { case (s, r) =>
+                  counter.increment()
+                  s + r
+                })
+                .log(s"$assignment $workerId", logTraceOnError = false)
+            }
+            .retry(Schedule.fixed(appConfig.distributionRetryInterval.toJava))
+        }
+        .viaMat(ks.flow)(Keep.right)
+        .interruptibleRunWith(Sink.fold(BigInt(0)) { (s, v) =>
+          val newValue = s + v
+          currentValue.set(newValue)
+          newValue
+        })
     } yield result
   }
 

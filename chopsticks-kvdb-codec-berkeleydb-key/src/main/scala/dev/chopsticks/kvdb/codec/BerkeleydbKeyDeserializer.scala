@@ -30,7 +30,7 @@ trait BerkeleydbKeyDeserializer[T] {
 object BerkeleydbKeyDeserializer {
   type Typeclass[A] = BerkeleydbKeyDeserializer[A]
 
-  private def createTry[T](f: TupleInput => T)(implicit typ: Typeable[T]): BerkeleydbKeyDeserializer[T] =
+  private[codec] def createTry[T](f: TupleInput => T)(implicit typ: Typeable[T]): BerkeleydbKeyDeserializer[T] =
     (in: TupleInput) => {
       try Right(f(in))
       catch {
@@ -50,8 +50,6 @@ object BerkeleydbKeyDeserializer {
 
   implicit val ldBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalDate] =
     createTry(t => LocalDate.ofEpochDay(t.readLong()))
-  implicit val ldtBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalDateTime] =
-    createTry(t => KvdbSerdesUtils.epochNanosToLocalDateTime(BigInt(t.readBigInteger())))
   implicit val ltBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[LocalTime] =
     createTry(t => LocalTime.ofNanoOfDay(t.readLong()))
   implicit val ymBerkeleydbKeyDecoder: BerkeleydbKeyDeserializer[YearMonth] = createTry { t =>

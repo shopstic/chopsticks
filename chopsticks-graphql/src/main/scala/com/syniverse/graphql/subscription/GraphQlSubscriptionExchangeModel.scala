@@ -104,6 +104,7 @@ private[subscription] object GraphQlSubscriptionExchangeModel {
           case GraphQlConnectionAck.Type => GraphQlConnectionAck.decoder(cursor)
           case GraphQlConnectionData.Type => GraphQlConnectionData.decoder(cursor)
           case GraphQlConnectionKeepAlive.Type => GraphQlConnectionKeepAlive.decoder(cursor)
+          case _ => ???
         }
       } yield result
     }

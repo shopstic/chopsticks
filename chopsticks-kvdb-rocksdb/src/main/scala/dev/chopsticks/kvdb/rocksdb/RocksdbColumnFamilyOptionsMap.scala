@@ -17,4 +17,8 @@ final class RocksdbColumnFamilyOptionsMap[BCF[A, B] <: ColumnFamily[A, B], +CF <
   def of[B <: BCF[_, _]](cf: B, cfg: ColumnFamilyOptions): RocksdbColumnFamilyOptionsMap[BCF, B] = {
     new RocksdbColumnFamilyOptionsMap[BCF, B](Map(cf -> cfg))
   }
+
+  def filter(fn: ((BCF[_, _], ColumnFamilyOptions)) => Boolean): RocksdbColumnFamilyOptionsMap[BCF, CF] = {
+    new RocksdbColumnFamilyOptionsMap[BCF, CF](map.view.filter(fn).toMap)
+  }
 }

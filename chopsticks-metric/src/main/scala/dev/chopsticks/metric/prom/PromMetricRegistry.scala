@@ -1,8 +1,8 @@
 package dev.chopsticks.metric.prom
 
 import java.util.concurrent.ConcurrentLinkedQueue
-
 import dev.chopsticks.metric.MetricConfigs._
+import dev.chopsticks.metric.MetricReference.MetricReferenceValue
 import dev.chopsticks.metric.MetricRegistry.MetricGroup
 import dev.chopsticks.metric._
 import dev.chopsticks.metric.prom.PromMetrics._
@@ -158,6 +158,46 @@ final class PromMetricRegistry[C <: MetricGroup](
 
     val _ = cleanUpQueue.add(() => removeMetricWithLabels(gauges, prefixedName, values))
     new PromChildGauge(promGauge.labels(values: _*))
+  }
+
+  override def reference[V: MetricReferenceValue](config: GaugeConfig[NoLabel] with C): MetricReference[V] = {
+    val prefixedName = prefixMetric(config, prefix)
+
+    val promGauge = gauges.synchronized {
+      gauges.getOrElseUpdate(
+        prefixedName, {
+          Gauge
+            .build(prefixedName, prefixedName)
+            .register()
+        }
+      )
+    }
+
+    val _ = cleanUpQueue.add(() => removeMetric(gauges, prefixedName))
+    new PromReference[V](promGauge)
+  }
+
+  override def referenceWithLabels[L <: MetricLabel, V: MetricReferenceValue](
+    config: GaugeConfig[L] with C,
+    labelValues: LabelValues[L]
+  ): MetricReference[V] = {
+    val values = config.labelNames.names.map(k => labelValues.map(k))
+    val names = config.labelNames.names
+    val prefixedName = prefixMetric(config, prefix)
+
+    val promGauge = gauges.synchronized {
+      gauges.getOrElseUpdate(
+        prefixedName, {
+          Gauge
+            .build(prefixedName, prefixedName)
+            .labelNames(names: _*)
+            .register()
+        }
+      )
+    }
+
+    val _ = cleanUpQueue.add(() => removeMetricWithLabels(gauges, prefixedName, values))
+    new PromChildReference[V](promGauge.labels(values: _*))
   }
 
   override def histogram(config: HistogramConfig[NoLabel] with C): MetricHistogram = {

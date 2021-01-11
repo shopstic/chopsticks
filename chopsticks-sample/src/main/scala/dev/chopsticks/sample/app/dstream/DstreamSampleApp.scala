@@ -2,7 +2,7 @@ package dev.chopsticks.sample.app.dstream
 
 import akka.grpc.GrpcClientSettings
 import akka.stream.KillSwitches
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamState.WorkResult
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
@@ -17,7 +17,8 @@ import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto._
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.stream.ZAkkaFlow
+import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import io.grpc.StatusRuntimeException
 import io.prometheus.client.CollectorRegistry
 import zio._
@@ -85,34 +86,30 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
     for {
       ks <- UIO(KillSwitches.shared("server shared killswitch"))
       logger <- ZIO.access[IzLogging](_.get.logger)
-      workDistributionFlow <- ZAkkaStreams.interruptibleMapAsyncUnorderedM(12) { assignment: Assignment =>
-        Dstreams
-          .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
-            ZAkkaStreams
-              .interruptibleGraph(
-                result
-                  .source
-                  .via(ks.flow)
-                  .take(1)
-                  .toMat(Sink.foreach { item =>
-                    logger.info(
-                      s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $item"
-                    )
-                  })((_, future) => ks -> future),
-                graceful = true
-              )
-              .retry(Schedule.forever.tapInput((e: Throwable) => UIO(logger.error(s"Distribute failed: $e"))))
-          }
-      }
-      result <- ZAkkaStreams
-        .interruptibleGraph(
-          Source(1 to 100)
-            .map(Assignment(_))
-            .via(workDistributionFlow)
-            .via(ks.flow)
-            .toMat(Sink.ignore)((_, future) => ks -> future),
-          graceful = true
-        )
+      workDistributionFlow <- ZAkkaFlow[Assignment]
+        .interruptibleMapAsyncUnordered(12) { assignment =>
+          Dstreams
+            .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
+              result
+                .source
+                .viaMat(ks.flow)(Keep.right)
+                .take(1)
+                .toZAkkaSource
+                .interruptibleRunWith(Sink.foreach { item =>
+                  logger.info(
+                    s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $item"
+                  )
+                })
+                .retry(Schedule.forever.tapInput((e: Throwable) => UIO(logger.error(s"Distribute failed: $e"))))
+            }
+        }
+        .make
+      result <- Source(1 to 100)
+        .map(Assignment(_))
+        .via(workDistributionFlow)
+        .viaMat(ks.flow)(Keep.right)
+        .toZAkkaSource
+        .interruptibleRunIgnore()
     } yield result
   }
 

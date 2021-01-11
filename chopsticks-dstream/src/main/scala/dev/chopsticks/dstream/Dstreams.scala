@@ -1,5 +1,6 @@
 package dev.chopsticks.dstream
 
+import akka.NotUsed
 import akka.grpc.GrpcClientSettings
 import akka.grpc.scaladsl.{AkkaGrpcClient, Metadata, StreamResponseRequestBuilder}
 import akka.http.scaladsl.Http
@@ -7,13 +8,11 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
-import akka.{Done, NotUsed}
 import dev.chopsticks.dstream.DstreamState.WorkResult
-import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.zio_ext.MeasuredLogging
-import dev.chopsticks.stream.ZAkkaStreams
+import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
+import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import io.grpc.{Status, StatusRuntimeException}
 import zio._
 import zio.clock.Clock
@@ -98,25 +97,24 @@ object Dstreams {
     makeAssignment: RIO[R0, Req]
   )(run: WorkResult[Res] => RIO[R1, A]): RIO[R0 with R1 with DstreamState[Req, Res] with AkkaEnv, A] = {
     for {
-      stateService <- ZIO.access[DstreamState[Req, Res]](_.get)
+      stateSvc <- ZIO.access[DstreamState[Req, Res]](_.get)
+      akkaSvc <- ZIO.access[AkkaEnv](_.get)
       assignment <- makeAssignment
       result <- {
-        ZIO.bracket(stateService.enqueueAssignment(assignment)) { assignmentId =>
-          stateService
+        ZIO.bracket(stateSvc.enqueueAssignment(assignment)) { assignmentId =>
+          stateSvc
             .report(assignmentId)
             .flatMap {
               case None => ZIO.unit
               case Some(worker) =>
-                ZIO
-                  .access[AkkaEnv](_.get[AkkaEnv.Service].actorSystem)
-                  .map { implicit as =>
-                    worker.source.runWith(Sink.cancelled)
-                  }
-                  .ignore
+                UIO {
+                  import akkaSvc.actorSystem
+                  worker.source.runWith(Sink.cancelled)
+                }.ignore
             }
             .orDie
         } { assignmentId =>
-          stateService
+          stateSvc
             .awaitForWorker(assignmentId)
             .flatMap(run)
         }
@@ -128,23 +126,21 @@ object Dstreams {
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req],
     initialTimeout: FiniteDuration = 5.seconds,
     retryPolicy: Schedule[Any, Throwable, Any] = DefaultWorkRetryPolicy
-  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with IzLogging with Clock with R, Done] = {
+  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with IzLogging with Clock with R, Unit] = {
     val task = for {
       promise <- UIO(Promise[Source[Res, NotUsed]]())
-      flow <- ZAkkaStreams.interruptibleMapAsyncM(1) { assignment: Req =>
-        makeSource(assignment)
-          .map(s => promise.success(s))
-          .zipRight(Task.fromFuture(_ => promise.future))
-      }
-      result <- ZAkkaStreams.interruptibleGraph(
-        requestBuilder
-          .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
-          .viaMat(KillSwitches.single)(Keep.right)
-          .initialTimeout(initialTimeout)
-          .via(flow)
-          .toMat(Sink.ignore)(Keep.both),
-        graceful = true
-      )
+      result <- requestBuilder
+        .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
+        .toZAkkaSource
+        .interruptible
+        .viaBuilder(_.initialTimeout(initialTimeout))
+        .interruptibleMapAsync(1) {
+          assignment =>
+            makeSource(assignment)
+              .map(s => promise.success(s))
+              .zipRight(Task.fromFuture(_ => promise.future))
+        }
+        .interruptibleRunIgnore()
     } yield result
 
     task.retry(retryPolicy)
@@ -179,18 +175,22 @@ object Dstreams {
       .viaMat(KillSwitches.single)(Keep.right)
       .preMaterialize()
 
-    val futureSource = stateService
-      .enqueueWorker(inSource, metadata)
-      .unsafeRunToFuture(rt)
+    val futureSource = rt.unsafeRunToFuture(stateService.enqueueWorker(inSource, metadata))
 
     Source
       .futureSource(futureSource)
       .watchTermination() {
         case (_, f) =>
-          f.onComplete {
-            case Success(_) => ks.shutdown()
-            case Failure(ex) => ks.abort(ex)
-          }
+          f
+            .transformWith { result =>
+              futureSource
+                .cancel()
+                .map(exit => result.flatMap(_ => exit.toEither.toTry))
+            }
+            .onComplete {
+              case Success(_) => ks.shutdown()
+              case Failure(ex) => ks.abort(ex)
+            }
           NotUsed
       }
   }

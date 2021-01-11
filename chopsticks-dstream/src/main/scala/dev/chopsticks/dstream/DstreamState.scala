@@ -48,36 +48,44 @@ object DstreamState {
       workResultMap <- TMap.empty[Long, WorkItem[Req, Res]].commit.toManaged_
       _ <- ZManaged.make {
         val updateGaugesTask = for {
-          (queueSize, map) <- assignmentQueue.size.zip(workResultMap.toMap).commit
-          _ <- UIO(queueSizeGauge.set(queueSize.toDouble))
-          _ <- UIO(mapSizeGauge.set(map.size.toDouble))
+          (queueSize, mapSize) <- assignmentQueue.size.zip(workResultMap.size).commit
+          _ <- UIO {
+            queueSizeGauge.set(queueSize)
+            mapSizeGauge.set(mapSize)
+          }
         } yield ()
 
-        updateGaugesTask.repeat(Schedule.fixed(1.second.toJava)).interruptible.forkDaemon
+        updateGaugesTask.repeat(Schedule.fixed(100.millis.toJava)).interruptible.forkDaemon
       }(_.interrupt)
     } yield new Service[Req, Res] {
       import akkaService.{actorSystem, dispatcher}
 
       def enqueueWorker(in: Source[Res, NotUsed], metadata: Metadata): UIO[Source[Req, NotUsed]] = {
-        val (inFuture, inSource) = in.watchTermination() { case (_, f) => f }.preMaterialize()
+        UIO.effectSuspendTotal {
+          val (inFuture, inSource) = in.watchTermination() { case (_, f) => f }.preMaterialize()
 
-        val completionSignal = Task.fromFuture(_ => inFuture).ignore
-        val stats =
-          UIO(attemptCounter.inc())
-            .zipRight(UIO(workerGauge.inc()))
-            .ensuring(completionSignal *> UIO(workerGauge.dec()))
+          attemptCounter.inc()
+          workerGauge.inc()
+          inFuture.onComplete(_ => workerGauge.dec())
 
-        for {
-          _ <- stats.forkDaemon
-          assignment <- STM.atomically {
-            for {
-              dequeued <- assignmentQueue.poll
-              a <- dequeued.map(STM.succeed(_)).getOrElse(STM.retry)
-              workItem = WorkItem(a.assignment, Some(WorkResult(inSource, metadata, a.assignmentId)))
-              _ <- workResultMap.put(a.assignmentId, workItem)
-            } yield a.assignment
-          }
-        } yield Source.single(assignment) ++ Source.futureSource(inFuture.map(_ => Source.empty))
+          val provideAssignmentTask = for {
+            assignment <- STM.atomically {
+              for {
+                dequeued <- assignmentQueue.poll
+                a <- dequeued.map(STM.succeed(_)).getOrElse(STM.retry)
+                workItem = WorkItem(a.assignment, Some(WorkResult(inSource, metadata, a.assignmentId)))
+                _ <- workResultMap.put(a.assignmentId, workItem)
+              } yield a.assignment
+            }
+          } yield Source.single(assignment) ++ Source.futureSource(inFuture.map(_ => Source.empty))
+
+          val workerWatchTask = Task
+            .fromFuture(_ => inFuture)
+            .ignore
+            .as(Source.empty)
+
+          provideAssignmentTask.raceFirst(workerWatchTask)
+        }
       }
 
       override def awaitForWorker(assignmentId: AssignmentId): UIO[WorkResult[Res]] = {

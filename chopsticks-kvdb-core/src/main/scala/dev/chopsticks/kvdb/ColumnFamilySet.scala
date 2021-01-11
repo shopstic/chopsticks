@@ -12,4 +12,8 @@ final class ColumnFamilySet[BCF[A, B] <: ColumnFamily[A, B], +CF <: BCF[_, _]] p
   def of[B <: BCF[_, _]](cf: B): ColumnFamilySet[BCF, B] = {
     new ColumnFamilySet[BCF, B](Set(cf))
   }
+
+  def filter(fn: BCF[_, _] => Boolean): ColumnFamilySet[BCF, CF] = {
+    new ColumnFamilySet[BCF, CF](value.filter(fn))
+  }
 }

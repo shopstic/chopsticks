@@ -41,7 +41,7 @@ final class FdbTailSourceStage(
   import FdbTailSourceStage._
 
   private val maxBatchBytesInt = maxBatchBytes.toBytes.toInt
-  private val out: Outlet[KvdbTailBatch] = Outlet[KvdbTailBatch]("FdbAsyncIteratorToSourceStage.out")
+  private val out: Outlet[KvdbTailBatch] = Outlet[KvdbTailBatch]("FdbTailSourceStage.out")
   override val shape: SourceShape[KvdbTailBatch] = SourceShape(out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = {
