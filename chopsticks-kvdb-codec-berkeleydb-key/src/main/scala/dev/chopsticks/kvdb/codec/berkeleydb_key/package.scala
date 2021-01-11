@@ -2,7 +2,6 @@ package dev.chopsticks.kvdb.codec
 
 import java.time._
 import java.util.UUID
-
 import com.sleepycat.bind.tuple.{TupleInput, TupleOutput}
 import shapeless.HNil
 
@@ -42,7 +41,6 @@ package object berkeleydb_key {
   implicit lazy val floatKeySerdes = KeySerdes[Float]
 
   implicit lazy val ldKeySerdes = KeySerdes[LocalDate]
-  implicit lazy val ldtKeySerdes = KeySerdes[LocalDateTime]
   implicit lazy val instantKeySerdes = KeySerdes[Instant]
   implicit lazy val ltKeySerdes = KeySerdes[LocalTime]
   implicit lazy val ymKeySerdes = KeySerdes[YearMonth]

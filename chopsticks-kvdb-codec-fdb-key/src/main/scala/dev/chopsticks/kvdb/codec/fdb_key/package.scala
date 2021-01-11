@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.codec
 
-import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, YearMonth}
+import java.time.{Instant, LocalDate, LocalTime, YearMonth}
 import java.util.UUID
 
 import com.apple.foundationdb.tuple.{ByteArrayUtil, Tuple}
@@ -75,7 +75,6 @@ package object fdb_key {
   implicit lazy val floatKeySerdes = KeySerdes[Float]
 
   implicit lazy val ldKeySerdes = KeySerdes[LocalDate]
-  implicit lazy val ldtKeySerdes = KeySerdes[LocalDateTime]
   implicit lazy val instantKeySerdes = KeySerdes[Instant]
   implicit lazy val ltKeySerdes = KeySerdes[LocalTime]
   implicit lazy val ymKeySerdes = KeySerdes[YearMonth]

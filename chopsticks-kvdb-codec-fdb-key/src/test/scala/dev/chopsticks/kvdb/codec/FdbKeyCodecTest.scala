@@ -1,8 +1,7 @@
 package dev.chopsticks.kvdb.codec
 
-import java.time.{LocalDate, LocalDateTime, LocalTime, YearMonth}
+import java.time.{LocalDate, LocalDateTime, LocalTime, YearMonth, ZoneId}
 import java.util.UUID
-
 import dev.chopsticks.kvdb.codec.FdbKeyCodecTestEntities._
 import dev.chopsticks.testkit.ArbitraryTime._
 import eu.timepit.refined.types.string.NonEmptyString
@@ -12,8 +11,14 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-//noinspection TypeAnnotation
+object FdbKeyCodecTest {
+  //noinspection TypeAnnotation
+  implicit lazy val defaultZoneIdLocalDateTimeKeySerdes =
+    FdbKeySerdes.createLocalDateTimeKeySerdes(ZoneId.systemDefault())
+}
+
 class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with ScalaCheckDrivenPropertyChecks {
+
   "Scala tuple" should {
     import fdb_key._
 
@@ -54,6 +59,7 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
     )
     object Person {
       import fdb_key._
+      import FdbKeyCodecTest.defaultZoneIdLocalDateTimeKeySerdes
       implicit val dbKey = KeySerdes[Person]
     }
 
@@ -88,6 +94,7 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
     case class TradeTick(symbol: Sym, dateTime: LocalDateTime, price: Double, size: Int)
     object TradeTick {
       import fdb_key._
+      import FdbKeyCodecTest.defaultZoneIdLocalDateTimeKeySerdes
       implicit val dbKey = KeySerdes[TradeTick]
     }
 
@@ -143,6 +150,7 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
       case class DateTimeKey(date: LocalDateTime)
       object DateTimeKey {
         import fdb_key._
+        import FdbKeyCodecTest.defaultZoneIdLocalDateTimeKeySerdes
         implicit val dbKey = KeySerdes[DateTimeKey]
       }
 

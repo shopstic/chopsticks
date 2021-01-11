@@ -8,6 +8,7 @@ import java.util.concurrent.{CompletableFuture, TimeUnit}
 import akka.NotUsed
 import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Source}
+import akka.util.Timeout
 import cats.syntax.either._
 import cats.syntax.show._
 import com.apple.foundationdb._
@@ -162,6 +163,7 @@ object FdbDatabase {
     clusterFilePath: Option[String],
     rootDirectoryPath: String,
     stopNetworkOnClose: Boolean = true,
+    initialConnectionTimeout: Timeout = Timeout(2.seconds),
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
@@ -247,7 +249,7 @@ object FdbDatabase {
         .makeInterruptible[AkkaEnv with Blocking with MeasuredLogging, Throwable, FdbContext[BCF]] {
           buildPrefixMap(db, materialization, config)
             .timeoutFail(new TimeoutException("Timed out building directory layer. Check connection to FDB?"))(
-              2.seconds
+              config.initialConnectionTimeout.duration
             )
             .log("Build FDB directory map")
             .map { prefixMap =>
