@@ -8,7 +8,7 @@ object Dependencies {
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.3"
   val IZUMI_VERSION = "1.0.1"
-  val REFINED_VERSION = "0.9.19"
+  val REFINED_VERSION = "0.9.20"
   val CALIBAN_VERSION = "0.9.3"
 
   val akkaSlf4jDeps = Seq(
@@ -100,7 +100,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.14.6"
+    "org.rocksdb" % "rocksdbjni" % "6.15.2"
   )
 
   val lmdbDeps = Seq(
