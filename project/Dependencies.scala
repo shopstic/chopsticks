@@ -7,7 +7,7 @@ object Dependencies {
   val AKKA_VERSION = "2.6.10"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.3"
-  val IZUMI_VERSION = "1.0.0"
+  val IZUMI_VERSION = "1.0.1"
   val REFINED_VERSION = "0.9.20"
   val CALIBAN_VERSION = "0.9.3"
 
@@ -56,7 +56,7 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "1.0.2-57-c8612a00"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "1.0.2-61-132a7f2f"
   )
 
   val catsCoreDeps = Seq(
