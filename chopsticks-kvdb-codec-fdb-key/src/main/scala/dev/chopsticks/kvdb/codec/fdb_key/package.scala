@@ -46,22 +46,22 @@ package object fdb_key {
       {
         val reader =
           try {
-            new FdbTupleReader(Tuple.fromBytes(bytes))
+            Right(new FdbTupleReader(Tuple.fromBytes(bytes)))
           }
           catch {
             case NonFatal(e) =>
-              throw GenericKeyDeserializationException(
+              Left(GenericKeyDeserializationException(
                 s"""
-               |Failed decoding tuple: ${e.toString}
-               |------------------------------------------------
-               |Raw bytes: ${ByteArrayUtil.printable(bytes)}
-               |------------------------------------------------
-               |""".stripMargin,
+                   |Failed decoding tuple: ${e.toString}
+                   |------------------------------------------------
+                   |Raw bytes: ${ByteArrayUtil.printable(bytes)}
+                   |------------------------------------------------
+                   |""".stripMargin,
                 e
-              )
+              ))
           }
 
-        deserializer.deserialize(reader)
+        reader.flatMap(deserializer.deserialize)
       }
   }
 
