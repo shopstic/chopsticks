@@ -1,6 +1,7 @@
 package dev.chopsticks.sample.dstream
 
 import akka.NotUsed
+import akka.http.impl.engine.HttpIdleTimeoutException
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
@@ -171,6 +172,7 @@ object DstreamStreamTerminationHandlingTest extends DstreamDiRunnableSpec {
             serverError <- Task(serverProbe.expectSubscriptionAndError())
             _ <- Task(workerFork.join)
           } yield {
+            assert(serverError)(isSubtype[HttpIdleTimeoutException](Assertion.anything)) ||
             assert(serverError)(hasMessage(equalsIgnoreCase(
               "The HTTP/2 connection was shut down while the request was still ongoing"
             )))
