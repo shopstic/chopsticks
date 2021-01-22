@@ -174,7 +174,7 @@ object Dependencies {
   ).map(_ % CALIBAN_VERSION)
 
   val sourcecodeDeps = Seq(
-    "com.lihaoyi" %% "sourcecode" % "0.2.1"
+    "com.lihaoyi" %% "sourcecode" % "0.2.2"
   )
 
   // TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98
