@@ -35,6 +35,5 @@ jobs:
       - name: Release
         env:
           FATAL_WARNINGS: "true"
-          BINTRAY_USER: ${{ secrets.BINTRAY_USER }}
-          BINTRAY_PASS: ${{ secrets.BINTRAY_PASS }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: sbt "release release-version ${{ github.event.inputs.releaseVersion }} next-version ${{ github.event.inputs.nextVersion }} with-defaults"
