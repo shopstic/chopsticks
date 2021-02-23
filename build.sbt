@@ -25,6 +25,9 @@ ThisBuild / run / fork := true
 // TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98
 ThisBuild / dependencyOverrides := overrideDeps
 
+ThisBuild / githubOwner := "shopstic"
+ThisBuild / githubRepository := "chopsticks"
+
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
 lazy val util = Build
@@ -154,7 +157,6 @@ lazy val sample = Build
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
     libraryDependencies ++= janinoDeps ++ pprintDeps,
     publish / skip := true,
-    bintrayRelease := {},
     akkaGrpcCodeGeneratorSettings += "server_power_apis",
     scalacOptions ++= Seq(
       s"-Wconf:src=${(Compile / sourceManaged).value.getCanonicalPath}/dev/chopsticks/sample/app/proto/.*&cat=deprecation:s"
@@ -177,7 +179,6 @@ lazy val root = (project in file("."))
   .settings(
     name := "chopsticks",
     publish / skip := true,
-    bintrayRelease := {},
     dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
     Build.ossPublishSettings
   )
