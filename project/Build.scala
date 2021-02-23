@@ -85,14 +85,8 @@ object Build {
   def ossPublishSettings: Seq[Def.Setting[_]] = {
     import sbtrelease.ReleaseStateTransformations._
     import sbtrelease.ReleasePlugin.autoImport._
-    import bintray.BintrayKeys._
     Seq(
-      bintrayRepository := {
-        if ((version in ThisBuild).value.endsWith("-SNAPSHOT")) "snapshots" else "maven"
-      },
       releaseVersionBump := sbtrelease.Version.Bump.Minor,
-      bintrayReleaseOnPublish := false,
-      bintrayVcsUrl := Some("https://github.com/shopstic/chopsticks.git"),
       releaseIgnoreUntrackedFiles := true,
       licenses += ("Apache-2.0", url("http://www.apache.org/licenses/")),
       releaseProcess := Seq(
@@ -103,8 +97,7 @@ object Build {
         setReleaseVersion,
         commitReleaseVersion,
         tagRelease,
-        releaseStepCommandAndRemaining("bintray:publish"),
-        releaseStepCommandAndRemaining("bintrayRelease"),
+        releaseStepCommandAndRemaining("publish"),
         setNextVersion,
         commitNextVersion,
         pushChanges

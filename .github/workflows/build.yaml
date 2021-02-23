@@ -20,10 +20,10 @@ jobs:
       - name: Build
         env:
           FATAL_WARNINGS: "true"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: sbt clean compile test:compile cq test
       - name: Publish
         if: ${{ github.ref == 'refs/heads/master' && github.repository == 'shopstic/chopsticks' }}
         env:
-          BINTRAY_USER: ${{ secrets.BINTRAY_USER }}
-          BINTRAY_PASS: ${{ secrets.BINTRAY_PASS }}
-        run: sbt bintray:publish bintrayRelease
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sbt publish
