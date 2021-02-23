@@ -8,7 +8,7 @@ import dev.chopsticks.fp.iz_logging.IzLogging
 import izumi.distage.constructors.HasConstructor
 import izumi.distage.model.definition.Module
 import pureconfig.{KebabCase, PascalCase}
-import zio.test.{testM, DefaultRunnableSpec, TestResult, ZSpec}
+import zio.test.{DefaultRunnableSpec, TestResult, ZSpec}
 import zio.{Has, RIO, Task, URLayer, ZIO, ZLayer}
 
 object TestLayer {
