@@ -4,12 +4,12 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.4"
-  val AKKA_VERSION = "2.6.11"
+  val AKKA_VERSION = "2.6.12"
   val AKKA_HTTP_VERSION = "10.2.1"
-  val ZIO_VERSION = "1.0.3"
+  val ZIO_VERSION = "1.0.4-2"
   val IZUMI_VERSION = "1.0.3"
-  val REFINED_VERSION = "0.9.20"
-  val CALIBAN_VERSION = "0.9.3"
+  val REFINED_VERSION = "0.9.21"
+  val CALIBAN_VERSION = "0.9.5"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -51,8 +51,8 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.9.0",
-    "io.prometheus" % "simpleclient_common" % "0.9.0"
+    "io.prometheus" % "simpleclient" % "0.10.0",
+    "io.prometheus" % "simpleclient_common" % "0.10.0"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
@@ -60,7 +60,7 @@ object Dependencies {
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.3.1"
+    "org.typelevel" %% "cats-core" % "2.4.2"
   )
 
   val kittensDeps = Seq(
@@ -84,14 +84,14 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.1.2"
+    "org.codehaus.janino" % "janino" % "3.1.3"
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.2.3",
-    "org.scalatest" %% "scalatest" % "3.2.3",
+    "org.scalactic" %% "scalactic" % "3.2.5",
+    "org.scalatest" %% "scalatest" % "3.2.5",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
-    "org.scalacheck" %% "scalacheck" % "1.15.2",
+    "org.scalacheck" %% "scalacheck" % "1.15.3",
     "org.scalamock" %% "scalamock" % "5.1.0"
   )
 
@@ -154,7 +154,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.6.0"
+    "com.lihaoyi" %% "pprint" % "0.6.1"
   )
 
   val distageDeps = Seq(
@@ -174,7 +174,7 @@ object Dependencies {
   ).map(_ % CALIBAN_VERSION)
 
   val sourcecodeDeps = Seq(
-    "com.lihaoyi" %% "sourcecode" % "0.2.1"
+    "com.lihaoyi" %% "sourcecode" % "0.2.3"
   )
 
   // TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98

@@ -1,16 +1,19 @@
 package dev.chopsticks.graphql
 
 import caliban.client.CalibanClientError.DecodingError
-import caliban.client.{SelectionBuilder, Value}
-import caliban.client.Value.ObjectValue
+import caliban.client.{__Value, SelectionBuilder}
+import caliban.client.__Value.__ObjectValue
 
 import scala.util.Try
 
 object GraphQlSerDes {
-  def deserialize[Origin, A](selection: SelectionBuilder[Origin, A], maybeData: Option[Value]) = {
+  def deserialize[Origin, A](
+    selection: SelectionBuilder[Origin, A],
+    maybeData: Option[__Value]
+  ): Either[DecodingError, A] = {
     for {
       objectValue <- maybeData match {
-        case Some(o: ObjectValue) => Right(o)
+        case Some(o: __ObjectValue) => Right(o)
         case _ => Left(DecodingError("Result is not an object"))
       }
       result <- Try(fromGraphQL(selection, objectValue))
@@ -22,7 +25,7 @@ object GraphQlSerDes {
     } yield result
   }
 
-  private def fromGraphQL[Origin, A](selection: SelectionBuilder[Origin, A], value: Value.ObjectValue) = {
+  private def fromGraphQL[Origin, A](selection: SelectionBuilder[Origin, A], value: __Value.__ObjectValue) = {
     selection match {
       case x: SelectionBuilder.Field[_, A] @unchecked => x.fromGraphQL(value)
       case x: SelectionBuilder.Mapping[_, Any, A] @unchecked => x.fromGraphQL(value)
