@@ -5,10 +5,6 @@ on:
       releaseVersion:
         description: 'Version to release (e.g. 2.4.0)'
         required: true
-      nextVersion:
-        description: 'Next version to set in the repository (e.g. 2.5.0-SNAPSHOT)'
-        required: true
-
 jobs:
   build:
     name: Release
@@ -36,4 +32,4 @@ jobs:
         env:
           FATAL_WARNINGS: "true"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: sbt "release release-version ${{ github.event.inputs.releaseVersion }} next-version ${{ github.event.inputs.nextVersion }} with-defaults"
+        run: sbt "release release-version ${{ github.event.inputs.releaseVersion }} with-defaults"
