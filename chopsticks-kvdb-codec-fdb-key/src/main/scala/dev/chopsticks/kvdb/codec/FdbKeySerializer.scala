@@ -86,12 +86,15 @@ object FdbKeySerializer {
       ctx.parameters.foldLeft(tupleOutput) { (tuple, p) => p.typeclass.serialize(tuple, p.dereference(value)) }
     }
 
-  // TODO Need a better serialization approach for coproducts that don't easily break data compatibility
-  /*def dispatch[A](ctx: SealedTrait[FdbKeySerializer, A]): SealedTraitFdbKeySerializer[A] = (o: Tuple, a: A) => {
-    ctx.dispatch(a) { sub: Subtype[Typeclass, A] =>
-      sub.typeclass.serialize(o.add(sub.index.toLong), sub.cast(a))
+  def dispatch[A: FdbKeyCoproductTag](ctx: SealedTrait[FdbKeySerializer, A]): SealedTraitFdbKeySerializer[A] =
+    (o: Tuple, a: A) => {
+      val tag = implicitly[FdbKeyCoproductTag[A]]
+      val tagValue = tag.valueToTag(a)
+      val tuple = tag.tagSerializer.serialize(o, tagValue)
+      ctx.dispatch(a) { sub: Subtype[Typeclass, A] =>
+        sub.typeclass.serialize(tuple, sub.cast(a))
+      }
     }
-  }*/
 
   //noinspection MatchToPartialFunction
   implicit def deriveOption[T](implicit encoder: FdbKeySerializer[T]): PredefinedFdbKeySerializer[Option[T]] = {

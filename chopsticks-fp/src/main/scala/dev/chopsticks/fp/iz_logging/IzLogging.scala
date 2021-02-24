@@ -40,9 +40,10 @@ object IzLogging {
     def loggerWithCtx(ctx: LogCtx): IzLogger
     def zioLogger: LogIO3[ZIO]
     def zioLoggerWithCtx(ctx: LogCtx): LogIO3[ZIO]
+    def logLevel: Log.Level
   }
 
-  final case class LiveService(logger: IzLogger, zioLogger: LogIO3[ZIO]) extends Service {
+  final case class LiveService(logger: IzLogger, zioLogger: LogIO3[ZIO], logLevel: Log.Level) extends Service {
     override def loggerWithCtx(ctx: LogCtx): IzLogger =
       logger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
     override def zioLoggerWithCtx(ctx: LogCtx): LogIO3[ZIO] =
@@ -95,7 +96,7 @@ object IzLogging {
 
     // configure slf4j to use LogStage router
     StaticLogRouter.instance.setup(logger.router)
-    LiveService(logger, zioLogger)
+    LiveService(logger, zioLogger, config.level)
   }
 
   def live(lbConfig: LbConfig): Layer[Nothing, IzLogging] = {
