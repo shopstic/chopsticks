@@ -1,10 +1,10 @@
 package dev.chopsticks.kvdb.codec
 
 import com.apple.foundationdb.tuple.Tuple
-import magnolia.{CaseClass, Magnolia}
+import magnolia.{CaseClass, Magnolia, SealedTrait}
 import shapeless.{HList, HNil, :: => :::}
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{implicitNotFound, nowarn}
 import scala.language.experimental.macros
 import scala.reflect.ClassTag
 
@@ -16,7 +16,7 @@ trait FdbKeyPrefixSerializer[T] {
   def serializePrefix(tupleOutput: Tuple, prefix: HList): (Tuple, HList)
 }
 
-object FdbKeyPrefixSerializer {
+object FdbKeyPrefixSerializer extends FdbKeyPrefixSerializerLowPriorityImplicits {
   type Typeclass[A] = FdbKeyPrefixSerializer[A]
 
   implicit def predefinedKeyPrefixSerializer[A](implicit
@@ -34,8 +34,13 @@ object FdbKeyPrefixSerializer {
       }
   }
 
-  implicit def sealedTraitKeyPrefixSerializer[A](implicit
-    serializer: SealedTraitFdbKeySerializer[A],
+  def apply[V](implicit f: FdbKeyPrefixSerializer[V]): FdbKeyPrefixSerializer[V] = f
+}
+
+trait FdbKeyPrefixSerializerLowPriorityImplicits {
+
+  def dispatch[A](@nowarn ctx: SealedTrait[FdbKeyPrefixSerializer, A])(implicit
+    serializer: FdbKeySerializer[A],
     ct: ClassTag[A]
   ): FdbKeyPrefixSerializer[A] = {
     (tupleOutput: Tuple, prefix: HList) =>
@@ -72,6 +77,4 @@ object FdbKeyPrefixSerializer {
     }
 
   implicit def derivePrefixSerializer[A]: FdbKeyPrefixSerializer[A] = macro Magnolia.gen[A]
-
-  def apply[V](implicit f: FdbKeyPrefixSerializer[V]): FdbKeyPrefixSerializer[V] = f
 }

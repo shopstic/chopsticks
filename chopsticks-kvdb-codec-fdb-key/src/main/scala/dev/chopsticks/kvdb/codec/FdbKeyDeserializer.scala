@@ -159,16 +159,30 @@ object FdbKeyDeserializer {
     ctx.constructMonadic { param => param.typeclass.deserialize(in) }
   }
 
-  def dispatch[A](ctx: SealedTrait[FdbKeyDeserializer, A]): FdbKeyDeserializer[A] = (in: FdbTupleReader) => {
-    val index = in.getBigInteger.intValueExact()
-    if (index < 0) {
-      Left(GenericKeyDeserializationException(s"Invalid index: $index"))
+  def dispatch[A](ctx: SealedTrait[FdbKeyDeserializer, A])(implicit tag: FdbKeyCoproductTag[A]): FdbKeyDeserializer[A] =
+    (in: FdbTupleReader) => {
+      for {
+        tagFromTuple <- tag.tagDeserializer.deserialize(in)
+        result <- {
+          var done = false
+          val subtypes = ctx.subtypes.iterator
+          var subtype: Subtype[FdbKeyDeserializer, A] = null
+
+          while (!done && subtypes.hasNext) {
+            subtype = subtypes.next()
+            val taggedValue = tag.typeNameToTag(subtype.typeName.short)
+            done = tagFromTuple == taggedValue
+          }
+          if (!done) {
+            val knownTags = ctx.subtypes.iterator.map(s => tag.typeNameToTag(s.typeName.short)).mkString(", ")
+            Left(GenericKeyDeserializationException(
+              s"Invalid tag: $tagFromTuple for type ${ctx.typeName}. All known tags: $knownTags"
+            ))
+          }
+          else {
+            subtype.typeclass.deserialize(in)
+          }
+        }
+      } yield result
     }
-    else if (index > ctx.subtypes.size - 1) {
-      Left(GenericKeyDeserializationException(s"Index out of bound: $index. All subtypes: ${ctx.subtypes}"))
-    }
-    else {
-      ctx.subtypes(index).typeclass.deserialize(in)
-    }
-  }
 }
