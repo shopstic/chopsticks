@@ -414,14 +414,13 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
         val foo: NonEmptyString = "foo"
         val key = TestKeyWithRefinedAlias(1234, foo)
         import eu.timepit.refined.shapeless.typeable._
-        implicit val dbKey = KeySerdes[TestKeyWithRefinedAlias]
+        implicit val dbKey = KeyPrefixSerializer[TestKeyWithRefinedAlias]
         KeySerdes.deserialize[TestKeyWithRefinedAlias](KeySerdes.serialize(key)) should equal(Right(key))
       }
     }
 
-    /*"sealed trait" should {
+    "sealed trait" should {
       "serdes" in {
-//        import fdb_key._
         val foo = KeyWithSealedTraitTest(SealedTraitTestFoo(1))
         val bar = KeyWithSealedTraitTest(SealedTraitTestBar(2))
         val baz = KeyWithSealedTraitTest(SealedTraitTestBaz(3))
@@ -440,7 +439,7 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
           Right(boo)
         )
       }
-    }*/
+    }
 
     "KeyPrefixEvidence" should {
       "be contravariant" in {

@@ -14,9 +14,9 @@ object FdbKeyCodecTestEntities {
   sealed abstract class ByteEnumTest(val value: Byte) extends ByteEnumEntry
 
   object ByteEnumTest extends ByteEnum[ByteEnumTest] {
-    case object One extends ByteEnumTest(1)
-    case object Two extends ByteEnumTest(2)
-    case object Three extends ByteEnumTest(3)
+    final case object One extends ByteEnumTest(1)
+    final case object Two extends ByteEnumTest(2)
+    final case object Three extends ByteEnumTest(3)
     val values = findValues
   }
 
@@ -25,9 +25,9 @@ object FdbKeyCodecTestEntities {
   sealed abstract class IntEnumTest(val value: Int) extends IntEnumEntry
 
   object IntEnumTest extends IntEnum[IntEnumTest] {
-    case object One extends IntEnumTest(1)
-    case object Two extends IntEnumTest(2)
-    case object Three extends IntEnumTest(3)
+    final case object One extends IntEnumTest(1)
+    final case object Two extends IntEnumTest(2)
+    final case object Three extends IntEnumTest(3)
     val values = findValues
   }
 
@@ -36,9 +36,9 @@ object FdbKeyCodecTestEntities {
   sealed abstract class EnumTest(val value: String) extends EnumEntry
 
   object EnumTest extends enumeratum.Enum[EnumTest] {
-    case object One extends EnumTest("one")
-    case object Two extends EnumTest("one")
-    case object Three extends EnumTest("one")
+    final case object One extends EnumTest("one")
+    final case object Two extends EnumTest("one")
+    final case object Three extends EnumTest("one")
     val values = findValues
   }
 
@@ -60,15 +60,20 @@ object FdbKeyCodecTestEntities {
   type NonEmptyStringAlias = Refined[String, NonEmpty]
   final case class TestKeyWithRefinedAlias(bar: PortNumber, foo: NonEmptyStringAlias)
 
-  /*sealed trait SealedTraitTest
+  sealed trait SealedTraitTest
   final case class SealedTraitTestFoo(foo: Int) extends SealedTraitTest
   final case class SealedTraitTestBar(bar: Int) extends SealedTraitTest
   final case class SealedTraitTestBaz(baz: Int) extends SealedTraitTest
   final case class SealedTraitTestBoo(boom: Int) extends SealedTraitTest
 
+  object SealedTraitTest {
+    implicit val tag = FdbKeyCoproductTag[SealedTraitTest, String](_.drop("SealedTraitTest".length))
+  }
+
   final case class KeyWithSealedTraitTest(param: SealedTraitTest)
+
   object KeyWithSealedTraitTest {
     import dev.chopsticks.kvdb.codec.fdb_key._
     implicit val dbKey = KeySerdes[KeyWithSealedTraitTest]
-  }*/
+  }
 }
