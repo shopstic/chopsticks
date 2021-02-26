@@ -1,5 +1,7 @@
 package dev.chopsticks.kvdb.codec
 
+import magnolia.{Subtype, TypeName}
+
 import scala.annotation.implicitNotFound
 
 @implicitNotFound(
@@ -8,12 +10,8 @@ import scala.annotation.implicitNotFound
 )
 trait FdbKeyCoproductTag[A] {
   type Tag
-
-  def tagSerializer: FdbKeySerializer[Tag]
-  def tagDeserializer: FdbKeyDeserializer[Tag]
-
-  def typeNameToTag(shortTypeName: String): Tag
-  def valueToTag(value: A): Tag
+  def subTypeToTag[F[_]](subType: Subtype[F, A]): Tag
+  def tagToSubType[F[_]](allSubTypes: Seq[Subtype[F, A]], tag: Tag): Option[Subtype[F, A]]
 }
 
 object FdbKeyCoproductTag {
@@ -21,20 +19,13 @@ object FdbKeyCoproductTag {
     type Tag = T
   }
 
-  def apply[A, T: FdbKeySerializer: FdbKeyDeserializer](simpleTypeToTag: String => T): FdbKeyCoproductTag.Aux[A, T] = {
+  def apply[A, T](typeNameToTag: TypeName => T): FdbKeyCoproductTag.Aux[A, T] = {
     new FdbKeyCoproductTag[A] {
       type Tag = T
-
-      def tagSerializer: FdbKeySerializer[Tag] = implicitly[FdbKeySerializer[T]]
-      def tagDeserializer: FdbKeyDeserializer[Tag] = implicitly[FdbKeyDeserializer[T]]
-
-      override def typeNameToTag(shortTypeName: String): Tag =
-        simpleTypeToTag(shortTypeName)
-
-      override def valueToTag(value: A): Tag =
-        typeNameToTag(value.getClass.getSimpleName)
-
+      override def subTypeToTag[F[_]](subType: Subtype[F, A]): Tag = typeNameToTag(subType.typeName)
+      override def tagToSubType[F[_]](allSubTypes: Seq[Subtype[F, A]], tag: Tag): Option[Subtype[F, A]] = {
+        allSubTypes.find(subType => subTypeToTag(subType) == tag)
+      }
     }
   }
-
 }

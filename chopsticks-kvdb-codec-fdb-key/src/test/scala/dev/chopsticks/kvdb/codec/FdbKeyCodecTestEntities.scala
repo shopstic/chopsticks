@@ -67,7 +67,7 @@ object FdbKeyCodecTestEntities {
   final case class SealedTraitTestBoo(boom: Int) extends SealedTraitTest
 
   object SealedTraitTest {
-    implicit val tag = FdbKeyCoproductTag[SealedTraitTest, String](_.drop("SealedTraitTest".length))
+    implicit val tag = FdbKeyCoproductTag[SealedTraitTest, String](_.short.drop("SealedTraitTest".length))
   }
 
   final case class KeyWithSealedTraitTest(param: SealedTraitTest)
