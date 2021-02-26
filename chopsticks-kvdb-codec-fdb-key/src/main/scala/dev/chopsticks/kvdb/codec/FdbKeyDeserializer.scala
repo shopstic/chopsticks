@@ -159,7 +159,10 @@ object FdbKeyDeserializer {
     ctx.constructMonadic { param => param.typeclass.deserialize(in) }
   }
 
-  def dispatch[A, Tag](ctx: SealedTrait[FdbKeyDeserializer, A])(implicit tag: FdbKeyCoproductTag.Aux[A, Tag], tagDeserializer: FdbKeyDeserializer[Tag]): FdbKeyDeserializer[A] =
+  def dispatch[A, Tag](ctx: SealedTrait[FdbKeyDeserializer, A])(implicit
+    tag: FdbKeyCoproductTag.Aux[A, Tag],
+    tagDeserializer: FdbKeyDeserializer[Tag]
+  ): FdbKeyDeserializer[A] =
     (in: FdbTupleReader) => {
       for {
         tagFromTuple <- tagDeserializer.deserialize(in)
