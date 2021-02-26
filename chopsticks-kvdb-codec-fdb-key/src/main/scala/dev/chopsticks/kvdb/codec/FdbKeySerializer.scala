@@ -86,7 +86,10 @@ object FdbKeySerializer {
       ctx.parameters.foldLeft(tupleOutput) { (tuple, p) => p.typeclass.serialize(tuple, p.dereference(value)) }
     }
 
-  def dispatch[A, Tag](ctx: SealedTrait[FdbKeySerializer, A])(implicit tag: FdbKeyCoproductTag.Aux[A, Tag], tagSerializer: FdbKeySerializer[Tag]): SealedTraitFdbKeySerializer[A] =
+  def dispatch[A, Tag](ctx: SealedTrait[FdbKeySerializer, A])(implicit
+    tag: FdbKeyCoproductTag.Aux[A, Tag],
+    tagSerializer: FdbKeySerializer[Tag]
+  ): SealedTraitFdbKeySerializer[A] =
     (tuple: Tuple, value: A) => {
       ctx.dispatch(value) { subType: Subtype[Typeclass, A] =>
         subType.typeclass.serialize(
