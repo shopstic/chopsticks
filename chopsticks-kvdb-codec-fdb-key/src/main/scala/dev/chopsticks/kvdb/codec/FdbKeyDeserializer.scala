@@ -159,28 +159,18 @@ object FdbKeyDeserializer {
     ctx.constructMonadic { param => param.typeclass.deserialize(in) }
   }
 
-  def dispatch[A](ctx: SealedTrait[FdbKeyDeserializer, A])(implicit tag: FdbKeyCoproductTag[A]): FdbKeyDeserializer[A] =
+  def dispatch[A, Tag](ctx: SealedTrait[FdbKeyDeserializer, A])(implicit tag: FdbKeyCoproductTag.Aux[A, Tag], tagDeserializer: FdbKeyDeserializer[Tag]): FdbKeyDeserializer[A] =
     (in: FdbTupleReader) => {
       for {
-        tagFromTuple <- tag.tagDeserializer.deserialize(in)
+        tagFromTuple <- tagDeserializer.deserialize(in)
         result <- {
-          var done = false
-          val subtypes = ctx.subtypes.iterator
-          var subtype: Subtype[FdbKeyDeserializer, A] = null
-
-          while (!done && subtypes.hasNext) {
-            subtype = subtypes.next()
-            val taggedValue = tag.typeNameToTag(subtype.typeName.short)
-            done = tagFromTuple == taggedValue
-          }
-          if (!done) {
-            val knownTags = ctx.subtypes.iterator.map(s => tag.typeNameToTag(s.typeName.short)).mkString(", ")
-            Left(GenericKeyDeserializationException(
-              s"Invalid tag: $tagFromTuple for type ${ctx.typeName}. All known tags: $knownTags"
-            ))
-          }
-          else {
-            subtype.typeclass.deserialize(in)
+          tag.tagToSubType(ctx.subtypes, tagFromTuple) match {
+            case Some(subType) =>
+              subType.typeclass.deserialize(in)
+            case None =>
+              Left(GenericKeyDeserializationException(
+                s"Cannot determine subType for ${ctx.typeName} from tag $tagFromTuple"
+              ))
           }
         }
       } yield result
