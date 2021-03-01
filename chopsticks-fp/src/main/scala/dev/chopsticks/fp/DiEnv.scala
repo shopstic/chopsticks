@@ -16,7 +16,7 @@ object DiEnv {
     override def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B] = zioDiEffect.flatMap(fa)(f)
 
     override def bracket[A, B](acquire: => Task[A])(release: A => Task[Unit])(use: A => Task[B]): Task[B] = {
-      zioDiEffect.bracket[A, B](acquire)(release)(use)
+      zioDiEffect.bracket[A, B](acquire.interruptible)(release)(use)
     }
 
     override def bracketCase[A, B](
