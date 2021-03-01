@@ -4,7 +4,7 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.4"
-  val AKKA_VERSION = "2.6.12"
+  val AKKA_VERSION = "2.6.13"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.4-2"
   val IZUMI_VERSION = "1.0.3"
@@ -56,7 +56,7 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "1.0.2-61-132a7f2f"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "1.1.1"
   )
 
   val catsCoreDeps = Seq(
@@ -68,7 +68,7 @@ object Dependencies {
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.14.0")
+    .map(p => "com.github.pureconfig" %% p % "0.14.1")
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
