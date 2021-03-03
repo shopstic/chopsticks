@@ -4,7 +4,7 @@ import scalapb.compiler.Version.scalapbVersion
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.4"
-  val AKKA_VERSION = "2.6.13"
+  val AKKA_VERSION = "2.6.10"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.4-2"
   val IZUMI_VERSION = "1.0.3"
@@ -33,18 +33,18 @@ object Dependencies {
 
   val zioCoreDeps = Seq(
     "dev.zio" %% "zio" % ZIO_VERSION
-  )
+  ).overrideIzumiReflect
 
   val zioDeps = zioCoreDeps ++ Seq(
     "dev.zio" %% "zio-streams" % ZIO_VERSION
-  )
+  ).overrideIzumiReflect
 
   val zioTestDeps = Seq(
     "dev.zio" %% "zio-test" % ZIO_VERSION,
     "dev.zio" %% "zio-test-sbt" % ZIO_VERSION,
     "dev.zio" %% "zio-test-magnolia" % ZIO_VERSION,
     "dev.zio" %% "zio-test-junit" % ZIO_VERSION
-  )
+  ).overrideIzumiReflect
 
   val squantsDeps = Seq(
     "org.typelevel" %% "squants" % "1.7.0"
@@ -69,6 +69,7 @@ object Dependencies {
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
     .map(p => "com.github.pureconfig" %% p % "0.14.1")
+    .excludeAkkaActor
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
@@ -163,22 +164,41 @@ object Dependencies {
     "io.7mind.izumi" %% "logstage-rendering-circe" % IZUMI_VERSION,
     "io.7mind.izumi" %% "distage-extension-logstage" % IZUMI_VERSION,
     "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
-  )
+  ).overrideIzumiReflect
 
   val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.9")
 
-  val calibanDeps = Seq(
-    "com.github.ghostdogpr" %% "caliban",
-    "com.github.ghostdogpr" %% "caliban-client",
-    "com.github.ghostdogpr" %% "caliban-akka-http"
-  ).map(_ % CALIBAN_VERSION)
+  val calibanDeps =
+    Seq(
+      "com.github.ghostdogpr" %% "caliban",
+      "com.github.ghostdogpr" %% "caliban-client",
+      "com.github.ghostdogpr" %% "caliban-akka-http"
+    )
+      .map(_ % CALIBAN_VERSION)
+      .overrideAkkaSerializationJackson
+      .overrideAkkaStreams
+      .overrideIzumiReflect
 
   val sourcecodeDeps = Seq(
     "com.lihaoyi" %% "sourcecode" % "0.2.3"
   )
 
-  // TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98
-  val overrideDeps = Seq(
-    "dev.zio" %% "izumi-reflect" % "1.0.0-M7"
-  )
+  implicit private class ModulesOps(modules: Seq[ModuleID]) {
+    // TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98
+    def overrideIzumiReflect: Seq[ModuleID] =
+      modules.map(_.exclude("dev.zio", "izumi-reflect_2.13")) ++
+        Seq("dev.zio" %% "izumi-reflect" % "1.0.0-M7")
+
+    def overrideAkkaSerializationJackson: Seq[ModuleID] =
+      modules.map(_.exclude("com.typesafe.akka", "akka-serialization-jackson_2.13")) ++
+        Seq("com.typesafe.akka" %% "akka-serialization-jackson" % AKKA_VERSION)
+
+    // todo remove this once this issue is resolved https://github.com/akka/akka/issues/30071
+    def overrideAkkaStreams: Seq[ModuleID] =
+      modules.map(_.exclude("com.typesafe.akka", "akka-stream_2.13")) ++ akkaStreamDeps
+
+    // todo remove this once this issue is resolved https://github.com/akka/akka/issues/30071
+    def excludeAkkaActor: Seq[ModuleID] =
+      modules.map(_.exclude("com.typesafe.akka", "akka-actor_2.13"))
+  }
 }
