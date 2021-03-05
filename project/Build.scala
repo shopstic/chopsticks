@@ -1,3 +1,4 @@
+import com.jsuereth.sbtpgp.PgpKeys
 import com.timushev.sbt.updates.UpdatesPlugin.autoImport._
 import com.typesafe.sbt.GitPlugin.autoImport.git
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
@@ -88,20 +89,47 @@ object Build {
     Seq(
       releaseVersionBump := sbtrelease.Version.Bump.Minor,
       releaseIgnoreUntrackedFiles := true,
+      autoAPIMappings := true,
+      publishMavenStyle := true,
       licenses += ("Apache-2.0", url("http://www.apache.org/licenses/")),
-      releaseProcess := Seq(
-        checkSnapshotDependencies,
-        inquireVersions,
-        runClean,
-        runTest,
-        setReleaseVersion,
-        commitReleaseVersion,
-        tagRelease,
-        releaseStepCommandAndRemaining("publish"),
-        setNextVersion,
-        commitNextVersion,
-        pushChanges
-      )
+      homepage := Some(url("https://github.com/shopstic/chopsticks")),
+      releasePublishArtifactsAction := PgpKeys.publishSigned.value,
+      pomIncludeRepository := { _ =>
+        false
+      },
+      scmInfo := Some(
+        ScmInfo(
+          url("https://github.com/shopstic/chopsticks"),
+          "scm:git:https://github.com/shopstic/chopsticks.git"
+        )
+      ),
+      releaseProcess := {
+        val publishSonatypeSteps: Seq[ReleaseStep] = {
+          if ((version in ThisBuild).value.endsWith("-SNAPSHOT")) Seq.empty
+          else Seq(
+            releaseStepCommandAndRemaining(
+              """set publishTo := xerial.sbt.Sonatype.autoImport.sonatypePublishToBundle.value"""
+            ),
+            releaseStepCommandAndRemaining("publishSigned"),
+            releaseStepCommandAndRemaining("sonatypeBundleRelease")
+          )
+        }
+        Seq[ReleaseStep](
+          checkSnapshotDependencies,
+          inquireVersions,
+          runClean,
+          runTest,
+          setReleaseVersion,
+          commitReleaseVersion,
+          tagRelease,
+          releaseStepCommandAndRemaining("publish")
+        ) ++ publishSonatypeSteps ++ Seq[ReleaseStep](
+          setNextVersion,
+          commitNextVersion,
+          pushChanges
+        )
+      }
     )
   }
+
 }
