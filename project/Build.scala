@@ -117,8 +117,8 @@ object Build {
         Seq[ReleaseStep](
           checkSnapshotDependencies,
           inquireVersions,
-          runClean,
-          runTest,
+//          runClean,
+//          runTest,
           setReleaseVersion,
           commitReleaseVersion,
           tagRelease,
