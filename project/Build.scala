@@ -109,10 +109,8 @@ object Build {
           if ((version in ThisBuild).value.endsWith("-SNAPSHOT")) Seq.empty
           else Seq(
             releaseStepCommandAndRemaining(
-              """set publishTo := xerial.sbt.Sonatype.autoImport.sonatypePublishToBundle.value"""
-            ),
-            releaseStepCommandAndRemaining("publishSigned"),
-            releaseStepCommandAndRemaining("sonatypeBundleRelease")
+              """;set publishTo := xerial.sbt.Sonatype.autoImport.sonatypePublishToBundle.value; publishSigned; sonatypeBundleRelease"""
+            )
           )
         }
         Seq[ReleaseStep](
