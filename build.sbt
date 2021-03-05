@@ -23,7 +23,7 @@ ThisBuild / resolvers ++= Seq(
 )
 ThisBuild / run / fork := true
 
-ThisBuild / githubOwner := "shopstic"
+ThisBuild / githubOwner := "pwliwanow"
 ThisBuild / githubRepository := "chopsticks"
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
