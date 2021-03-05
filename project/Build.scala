@@ -105,6 +105,7 @@ object Build {
       ),
       releaseProcess := {
         val publishSonatypeSteps: Seq[ReleaseStep] = {
+          println(s"Version in this build = ${(version in ThisBuild).value}")
           if ((version in ThisBuild).value.endsWith("-SNAPSHOT")) Seq.empty
           else Seq(
             releaseStepCommandAndRemaining(
