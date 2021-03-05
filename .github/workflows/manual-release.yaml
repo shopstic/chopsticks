@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: shopstic/jdk11-sbt-fdb-server:1.4.4
-    if: ${{ github.ref == 'refs/heads/master' && github.repository == 'shopstic/chopsticks' }}
+    if: ${{ github.ref == 'refs/heads/master' }}
     steps:
       - name: Install git
         run: apt-get install git -y
