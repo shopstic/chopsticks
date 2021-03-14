@@ -1,9 +1,11 @@
 import com.timushev.sbt.updates.UpdatesPlugin.autoImport._
 import com.typesafe.sbt.GitPlugin.autoImport.git
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
+import protocbridge.Target
 import wartremover.WartRemover.autoImport._
 import sbt.{Def, _}
 import sbt.Keys._
+import sbtprotoc.ProtocPlugin.autoImport.PB
 
 //noinspection TypeAnnotation
 object Build {
@@ -37,6 +39,15 @@ object Build {
 
   lazy val cq = taskKey[Unit]("Code quality")
   lazy val fmt = taskKey[Unit]("Code formatting")
+
+  def createScalapbSettings(withGrpc: Boolean): Def.Setting[Seq[Target]] = {
+    Compile / PB.targets += scalapb.gen(
+      flatPackage = true,
+      singleLineToProtoString = true,
+      lenses = false,
+      grpc = withGrpc
+    ) -> (Compile / sourceManaged).value
+  }
 
   def defineProject(projectName: String) = {
     Project(projectName, file(s"chopsticks-$projectName"))

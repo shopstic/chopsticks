@@ -148,6 +148,15 @@ lazy val metric = Build
   )
   .dependsOn(fp)
 
+lazy val zioGrpcCommon = Build
+  .defineProject("zio-grpc-common")
+  .settings(Build.createScalapbSettings(withGrpc = true))
+  .settings(
+    Compile / PB.targets += scalapb.zio_grpc.ZioCodeGenerator -> (sourceManaged in Compile).value,
+    libraryDependencies ++= scalapbRuntimeDeps ++ scalapbRuntimeGrpcDeps
+  )
+  .dependsOn(util)
+
 lazy val sample = Build
   .defineProject("sample")
   .enablePlugins(AkkaGrpcPlugin)
@@ -195,5 +204,6 @@ lazy val root = (project in file("."))
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
     metric,
+    zioGrpcCommon,
     sample
   )

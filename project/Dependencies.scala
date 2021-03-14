@@ -6,7 +6,7 @@ object Dependencies {
   val SCALA_VERSION = "2.13.4"
   val AKKA_VERSION = "2.6.10"
   val AKKA_HTTP_VERSION = "10.2.1"
-  val ZIO_VERSION = "1.0.4-2"
+  val ZIO_VERSION = "1.0.5"
   val IZUMI_VERSION = "1.0.3"
   val REFINED_VERSION = "0.9.21"
   val CALIBAN_VERSION = "0.9.5"
@@ -47,7 +47,7 @@ object Dependencies {
   ).overrideIzumiReflect
 
   val squantsDeps = Seq(
-    "org.typelevel" %% "squants" % "1.7.0"
+    "org.typelevel" %% "squants" % "1.7.4"
   )
 
   val prometheusClientDeps = Seq(
@@ -89,8 +89,8 @@ object Dependencies {
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.2.5",
-    "org.scalatest" %% "scalatest" % "3.2.5",
+    "org.scalactic" %% "scalactic" % "3.2.6",
+    "org.scalatest" %% "scalatest" % "3.2.6",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.15.3",
     "org.scalamock" %% "scalamock" % "5.1.0"
@@ -101,7 +101,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.15.2"
+    "org.rocksdb" % "rocksdbjni" % "6.15.5"
   )
 
   val lmdbDeps = Seq(
@@ -117,8 +117,15 @@ object Dependencies {
   )
 
   val scalapbRuntimeDeps = Seq(
-    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapbVersion,
-    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapbVersion % "protobuf"
+    ("com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion)
+      .exclude("io.grpc", "grpc-stub")
+      .exclude("io.grpc", "grpc-protobuf"),
+    "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+  )
+
+  val scalapbRuntimeGrpcDeps = Seq(
+    "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion,
+    "io.grpc" % "grpc-netty" % "1.36.0"
   )
 
   val enumeratumDeps = Seq(
@@ -155,7 +162,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.6.1"
+    "com.lihaoyi" %% "pprint" % "0.6.2"
   )
 
   val distageDeps = Seq(
