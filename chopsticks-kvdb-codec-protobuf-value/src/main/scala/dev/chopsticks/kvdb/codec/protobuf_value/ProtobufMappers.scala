@@ -137,5 +137,7 @@ object ProtobufMappers {
     if (uuid.nonEmpty) UUID.fromString(uuid) else UUID.randomUUID()
   })(_.toString)
 
+  implicit val uuidStringValueMapper: TypeMapper[StringValue, UUID] = combine[StringValue, String, UUID]
+
   implicit val dayOfWeekMapper: TypeMapper[Int, DayOfWeek] = TypeMapper(DayOfWeek.of)(_.getValue)
 }
