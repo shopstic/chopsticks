@@ -137,6 +137,15 @@ lazy val kvdbCodecBerkeleydbKey = Build
 
 lazy val kvdbCodecProtobufValue = Build
   .defineProject("kvdb-codec-protobuf-value")
+  .settings(
+    Test / PB.targets := Seq(
+      scalapb
+        .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Test / sourceManaged).value
+    ),
+    Test / scalacOptions ++= Seq(
+      s"-Wconf:src=${(Test / sourceManaged).value.getCanonicalPath}/.*&cat=unused-imports:s"
+    )
+  )
   .dependsOn(kvdbCore)
 
 lazy val metric = Build

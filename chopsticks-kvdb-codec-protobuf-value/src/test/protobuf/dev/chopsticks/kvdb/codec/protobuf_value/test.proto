@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+import "scalapb/scalapb.proto";
+
+package dev.chopsticks.kvdb.codec.protobuf_value.test_proto;
+
+option (scalapb.options) = {
+  no_default_values_in_constructor: true
+  import: "dev.chopsticks.kvdb.codec.protobuf_value.ProtobufMappers._"
+  preserve_unknown_fields: false
+};
+
+message Expr {
+  oneof sealed_value {
+    Literal lit = 1;
+    Add add = 2;
+    Mul mul = 3;
+  }
+}
+
+message Literal {
+  int32 value = 1;
+}
+
+message Add {
+  Expr left = 1;
+  Expr right = 2;
+}
+
+message Mul {
+  Expr left = 1;
+  Expr right = 2;
+}
+
+message Program {
+  repeated Expr exprs = 1;
+}
