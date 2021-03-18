@@ -1,15 +1,15 @@
 package dev.chopsticks.dstream
 
-import java.util.concurrent.atomic.AtomicLong
-
 import akka.NotUsed
 import akka.grpc.scaladsl.Metadata
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{BroadcastHub, Keep, Source}
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import zio.stm.{STM, TMap, TQueue}
+import dev.chopsticks.stream.FailIfEmptyFlow
 import zio._
 import zio.clock.Clock
+import zio.stm.{STM, TMap, TQueue}
 
+import java.util.concurrent.atomic.AtomicLong
 import scala.concurrent.duration.DurationInt
 import scala.jdk.DurationConverters.ScalaDurationOps
 
@@ -62,7 +62,8 @@ object DstreamState {
 
       def enqueueWorker(in: Source[Res, NotUsed], metadata: Metadata): UIO[Source[Req, NotUsed]] = {
         UIO.effectSuspendTotal {
-          val (inFuture, inSource) = in.watchTermination() { case (_, f) => f }.preMaterialize()
+          val (inFuture, inSource) =
+            in.watchTermination() { case (_, f) => f }.preMaterialize()
 
           attemptCounter.inc()
           workerGauge.inc()
@@ -73,7 +74,8 @@ object DstreamState {
               for {
                 dequeued <- assignmentQueue.poll
                 a <- dequeued.map(STM.succeed(_)).getOrElse(STM.retry)
-                workItem = WorkItem(a.assignment, Some(WorkResult(inSource, metadata, a.assignmentId)))
+                workItem =
+                  WorkItem(a.assignment, Some(WorkResult(inSource.via(FailIfEmptyFlow[Res]), metadata, a.assignmentId)))
                 _ <- workResultMap.put(a.assignmentId, workItem)
               } yield a.assignment
             }
