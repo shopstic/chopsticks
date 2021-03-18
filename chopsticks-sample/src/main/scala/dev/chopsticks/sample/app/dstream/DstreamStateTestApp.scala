@@ -1,18 +1,18 @@
 package dev.chopsticks.sample.app.dstream
 
 import akka.NotUsed
-import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.{Sink, Source}
 import com.typesafe.config.Config
-import dev.chopsticks.dstream.DstreamState.WorkResult
+import dev.chopsticks.dstream.DstreamClientApi.DstreamClientApiConfig
+import dev.chopsticks.dstream.DstreamClientRunner.DstreamClientConfig
+import dev.chopsticks.dstream.DstreamServerRunner.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
-import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
-import dev.chopsticks.dstream.{DstreamState, DstreamStateMetricsManager, Dstreams}
+import dev.chopsticks.dstream._
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.util.TaskUtils
+import dev.chopsticks.fp.util.LoggedRace
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.{
@@ -22,11 +22,11 @@ import dev.chopsticks.sample.app.dstream.proto.{
   Result
 }
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
+import eu.timepit.refined.auto._
+import eu.timepit.refined.types.numeric.PosInt
 import io.prometheus.client.CollectorRegistry
-import zio.{Runtime, Schedule, Task, UIO, ZIO, ZLayer, ZManaged}
+import zio.{Schedule, Task, UIO, ZIO, ZLayer, ZManaged}
 
-import java.util.concurrent.TimeoutException
-import scala.concurrent.Promise
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 
@@ -44,57 +44,87 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
         PromMetricRegistryFactory.live[DstreamStateMetric]("test"),
         DstreamStateMetricsManager.live,
         DstreamState.manage[Assignment, Result]("test"),
+        DstreamServerApi.live[Assignment, Result] { handle =>
+          ZIO
+            .access[AkkaEnv](_.get.actorSystem)
+            .map { implicit as =>
+              DstreamSampleAppPowerApiHandler(handle(_, _))
+            }
+        },
+        DstreamClientApi
+          .live[Assignment, Result](DstreamClientApiConfig(
+            serverHost = "localhost",
+            serverPort = 9999,
+            withTls = false
+          )) { settings =>
+            ZIO
+              .access[AkkaEnv](_.get.actorSystem)
+              .map { implicit as =>
+                DstreamSampleAppClient(settings)
+              }
+          }(_.work()),
+        DstreamServerRunner.live[Assignment, Assignment, Result, Result],
+        DstreamClientRunner.live[Assignment, Result](),
         AppLayer(app)
       ))
     }
   }
 
+  private lazy val parallelism: PosInt = 4
+
   private def runMaster = {
-    for {
-      zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
-      _ <- Source(1 to 100)
-        .initialDelay(10.seconds)
-        .map(Assignment(_))
-        .toZAkkaSource
-        .interruptibleMapAsyncUnordered(1) { assignment =>
-          Dstreams
-            .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
-              result
+    val managed = for {
+      dstreamServer <- ZManaged
+        .access[DstreamServerRunner[Assignment, Assignment, Result, Result]](_.get)
+      distributionFlow <- dstreamServer
+        .manage(
+          DstreamServerConfig(port = 9999, parallelism = parallelism, ordered = false),
+          ZIO.succeed(_)
+        ) {
+          (assignment, result) =>
+            for {
+              zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
+              last <- result
                 .source
                 .toZAkkaSource
                 .interruptibleRunWith(Sink.last)
-                .flatMap { last =>
-                  zlogger.info(
-                    s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
-                  )
-                }
-            }
+              _ <- zlogger.debug(
+                s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
+              )
+            } yield last
         }
+        .map(_._2)
+    } yield {
+      Source(1 to Int.MaxValue)
+//        .initialDelay(1.minute)
+        .map(Assignment(_))
+        .via(distributionFlow)
+        .toZAkkaSource
         .interruptibleRunIgnore()
-    } yield ()
+    }
+
+    managed.use(identity)
   }
 
-  private def runWorker(client: DstreamSampleAppClient) = {
+  private def runWorker = {
     for {
-      zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
-      _ <- zlogger.info("Worker start")
-      resultPromise <- UIO(Promise[Source[Result, NotUsed]]())
-      result <- client
-        .work(Source.futureSource(resultPromise.future).mapMaterializedValue(_ => NotUsed))
-        .toZAkkaSource
-        .interruptible
-        .viaBuilder(_.initialTimeout(1.second))
-        .interruptibleMapAsync(1) { assignment =>
+      dstreamClient <- ZIO.access[DstreamClientRunner[Assignment, Result]](_.get)
+      _ <- dstreamClient
+        .run(DstreamClientConfig(
+          parallelism = parallelism,
+          assignmentTimeout = 10.seconds,
+          retryInitialDelay = 100.millis,
+          retryBackoffFactor = 2.0,
+          retryMaxDelay = 1.second,
+          retryResetAfter = 5.seconds
+        )) { assignment =>
           UIO {
             Source(1 to 10)
               .map(v => Result(assignment.valueIn * 10 + v))
               .throttle(1, 1.second)
           }
-            .tap(s => UIO(resultPromise.success(s)))
-            .zipRight(Task.fromFuture(_ => resultPromise.future))
         }
-        .interruptibleRunIgnore()
-    } yield result
+    } yield ()
   }
 
   private def periodicallyLog = {
@@ -118,56 +148,10 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
 
   //noinspection TypeAnnotation
   def app = {
-    val managed = for {
-      akkaRuntime <- ZManaged.runtime[AkkaEnv]
-      akkaSvc = akkaRuntime.environment.get
-      dstreamState <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
-      _ <- Dstreams
-        .manageServer(DstreamServerConfig(port = 9999, idleTimeout = 30.seconds)) {
-          UIO {
-            implicit val rt: Runtime[AkkaEnv] = akkaRuntime
-            import akkaSvc.actorSystem
-
-            DstreamSampleAppPowerApiHandler {
-              (source, metadata) =>
-                Dstreams.handle[Assignment, Result](dstreamState, source, metadata)
-            }
-          }
-        }
-      client <- Dstreams
-        .manageClient {
-          UIO {
-            import akkaSvc.actorSystem
-
-            DstreamSampleAppClient(
-              GrpcClientSettings
-                .connectToServiceAt("localhost", 9999)
-                .withTls(false)
-            )
-          }
-        }
-    } yield {
-      for {
-        loggingFib <- periodicallyLog.fork
-        masterFiber <- runMaster
-          .fork
-        workersFiber <- runWorker(client)
-          .repeatWhile(_ => true)
-          .retryWhile {
-            case _: TimeoutException => true
-            case _ => false
-          }
-          .unit
-          .fork
-        _ <- TaskUtils
-          .raceFirst(Map(
-            "Master" -> masterFiber.join,
-            "Worker" -> workersFiber.join,
-            "Logging" -> loggingFib.join
-          ))
-      } yield ()
-    }
-
-    managed.use(identity)
+    LoggedRace()
+      .add("master", runMaster)
+      .add("worker", runWorker)
+      .add("logging", periodicallyLog)
+      .run()
   }
 }

@@ -8,11 +8,14 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
+import akka.util.Timeout
 import dev.chopsticks.dstream.DstreamState.WorkResult
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
+import eu.timepit.refined.types.string.NonEmptyString
+import eu.timepit.refined.auto._
 import io.grpc.{Status, StatusRuntimeException}
 import zio._
 import zio.clock.Clock
@@ -22,8 +25,18 @@ import scala.concurrent.{Future, Promise, TimeoutException}
 import scala.util.{Failure, Success}
 
 object Dstreams {
-  final case class DstreamServerConfig(port: Int, idleTimeout: Duration)
-  final case class DstreamClientConfig(serverHost: String, serverPort: Int, withTls: Boolean)
+  final case class DstreamServerConfig(
+    port: Int,
+    idleTimeout: Duration,
+    interface: NonEmptyString = "0.0.0.0",
+    shutdownTimeout: Timeout = 10.seconds
+  )
+  final case class DstreamClientConfig(
+    serverHost: String,
+    serverPort: Int,
+    withTls: Boolean,
+    assignmentTimeout: Timeout
+  )
   final case class DstreamWorkerConfig(nodeId: String, poolSize: Int)
 
   val WORKER_NODE_HEADER = "dstream-worker-node"
@@ -49,7 +62,7 @@ object Dstreams {
                 val settings = ServerSettings(actorSystem)
 
                 Http()
-                  .newServerAt(interface = "0.0.0.0", port = config.port)
+                  .newServerAt(interface = config.interface, port = config.port)
                   .withSettings(
                     settings
                       .withTimeouts(settings.timeouts.withIdleTimeout(config.idleTimeout))
@@ -60,8 +73,8 @@ object Dstreams {
           } yield binding
         } { binding =>
           Task
-            .fromFuture(_ => binding.terminate(10.seconds))
-            .log("Dstream server teardown")
+            .fromFuture(_ => binding.terminate(config.shutdownTimeout.duration))
+            .log("Dstream server shutdown")
             .orDie
         }
     } yield binding

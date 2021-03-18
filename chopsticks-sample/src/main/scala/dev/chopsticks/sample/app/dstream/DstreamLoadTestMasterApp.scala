@@ -83,12 +83,12 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
   private[sample] def manageServer = {
     for {
       appConfig <- ZManaged.access[AppConfig](_.get)
-      akkaRuntime <- ZManaged.runtime[AkkaEnv]
+      akkaRuntime <- ZManaged.runtime[AkkaEnv with MeasuredLogging]
       dstreamState <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
       binding <- Dstreams
         .manageServer(DstreamServerConfig(port = appConfig.port, idleTimeout = appConfig.idleTimeout)) {
           UIO {
-            implicit val rt: Runtime[AkkaEnv] = akkaRuntime
+            implicit val rt: Runtime[AkkaEnv with MeasuredLogging] = akkaRuntime
             implicit val as: ActorSystem = akkaRuntime.environment.get.actorSystem
 
             StreamMasterPowerApiHandler {

@@ -126,13 +126,13 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
 
   private def run = {
     val managed = for {
-      akkaRuntime <- ZManaged.runtime[AkkaEnv]
+      akkaRuntime <- ZManaged.runtime[AkkaEnv with MeasuredLogging]
       akkaSvc = akkaRuntime.environment.get
       dstreamState <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
       _ <- Dstreams
         .manageServer(DstreamServerConfig(port = 9999, idleTimeout = 30.seconds)) {
           UIO {
-            implicit val rt: Runtime[AkkaEnv] = akkaRuntime
+            implicit val rt: Runtime[AkkaEnv with MeasuredLogging] = akkaRuntime
             import akkaSvc.actorSystem
 
             DstreamSampleAppPowerApiHandler {
