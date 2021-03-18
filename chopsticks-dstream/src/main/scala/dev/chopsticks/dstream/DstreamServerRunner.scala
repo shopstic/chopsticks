@@ -37,7 +37,7 @@ object DstreamServerRunner {
   }
 
   def live[In: zio.Tag, Assignment: zio.Tag, Result: zio.Tag, Out: zio.Tag]: URLayer[
-    DstreamServerRequestHandler[Assignment, Result] with DstreamState[Assignment, Result] with AkkaEnv,
+    DstreamServerApi[Assignment, Result] with DstreamState[Assignment, Result] with AkkaEnv,
     DstreamServerRunner[In, Assignment, Result, Out]
   ] = {
     val manageable = ZManageable { (config: DstreamServerConfig) =>
@@ -45,7 +45,7 @@ object DstreamServerRunner {
         akkaSvc <- ZManaged.access[AkkaEnv](_.get)
         akkaRuntime <- ZManaged.runtime[AkkaEnv]
         stateSvc <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
-        handlerFactory <- ZManaged.access[DstreamServerRequestHandler[Assignment, Result]](_.get)
+        handlerFactory <- ZManaged.access[DstreamServerApi[Assignment, Result]](_.get)
         handler <- handlerFactory
           .create { (in: Source[Result, NotUsed], metadata: Metadata) =>
             import akkaSvc.{actorSystem, dispatcher}
