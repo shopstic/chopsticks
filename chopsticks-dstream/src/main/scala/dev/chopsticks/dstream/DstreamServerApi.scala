@@ -25,7 +25,7 @@ object DstreamServerApi {
     ])(implicit
       @nowarn("cat=unused") t1: zio.Tag[Assignment],
       @nowarn("cat=unused") t2: zio.Tag[Result]
-    ): URLayer[R, DstreamServerRequestHandler[Assignment, Result]] = {
+    ): URLayer[R, DstreamServerApi[Assignment, Result]] = {
       ZManaged
         .environment[R].map { env =>
           new Service[Assignment, Result] {
