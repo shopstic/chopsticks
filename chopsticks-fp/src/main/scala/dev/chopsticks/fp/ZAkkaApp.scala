@@ -1,15 +1,14 @@
 package dev.chopsticks.fp
 
-import akka.Done
-import akka.actor.CoordinatedShutdown
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.util.PlatformUtils
-import zio.{ExitCode, RIO, Task, UIO, ZEnv, ZLayer}
+import dev.chopsticks.fp.zio_ext._
+import zio.{ExitCode, FiberFailure, IO, RIO, Task, ZEnv, ZLayer}
 
-import scala.concurrent.Future
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.control.NonFatal
 
 object ZAkkaApp {
@@ -28,7 +27,7 @@ trait ZAkkaApp {
     hoconConfigLayer ++ (hoconConfigLayer >>> akkaEnvLayer) ++ (hoconConfigLayer >>> izLoggingLayer) ++ zEnvLayer
   }
 
-  final def main(args0: Array[String]): Unit = {
+  final def main(commandArgs: Array[String]): Unit = {
     val bootstrapPlatform = PlatformUtils.create(
       corePoolSize = 0,
       maxPoolSize = Runtime.getRuntime.availableProcessors(),
@@ -39,22 +38,9 @@ trait ZAkkaApp {
 
     val main = for {
       actorSystem <- AkkaEnv.actorSystem
-      shutdown = CoordinatedShutdown(actorSystem)
-      logger <- IzLogging.logger
-      appFib <- run(args0.toList)
+      appFib <- run(commandArgs.toList)
         .on(actorSystem.dispatcher)
         .fork
-      _ <- UIO {
-        shutdown.addTask("app-interruption", "interrupt app") { () =>
-          bootstrapRuntime.unsafeRunToFuture(appFib.interrupt.as(Done))
-        }
-        shutdown.addTask("before-actor-system-terminate", "close IzLogging router") { () =>
-          Future.successful {
-            logger.router.close()
-            Done
-          }
-        }
-      }
       exitCode <- appFib
         .join
         .raceFirst(
@@ -68,11 +54,31 @@ trait ZAkkaApp {
         )
     } yield exitCode
 
+    val isShuttingDown = new AtomicBoolean(false)
+
     try {
-      val exitCode = bootstrapRuntime.unsafeRun(main.provideLayer(runtimeLayer))
-      sys.exit(exitCode.code)
+      val exitCode = bootstrapRuntime.unsafeRun {
+        //noinspection SimplifyBuildUseInspection
+        for {
+          fiber <- main
+            .interruptAllChildrenPar
+            .provideLayer(runtimeLayer)
+            .fork
+          _ <- IO.effectTotal(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
+            override def run(): Unit = {
+              isShuttingDown.set(true)
+              val _ = bootstrapRuntime.unsafeRunSync(fiber.interrupt)
+            }
+          }))
+          result <- fiber.join
+          _ <- fiber.interrupt
+        } yield result.code
+      }
+
+      sys.exit(exitCode)
     }
     catch {
+      case e: FiberFailure if e.cause.interruptedOnly && isShuttingDown.get() =>
       case NonFatal(e) =>
         bootstrapRuntime.platform.reportFatal(e)
     }

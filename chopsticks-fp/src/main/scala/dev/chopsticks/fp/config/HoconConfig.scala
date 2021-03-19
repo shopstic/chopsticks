@@ -2,7 +2,7 @@ package dev.chopsticks.fp.config
 
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
 import pureconfig.{KebabCase, PascalCase}
-import zio.{Task, URIO, ZIO, ZLayer}
+import zio.{Has, Task, URIO, ZIO, ZLayer}
 
 import java.nio.file.Paths
 
@@ -12,6 +12,16 @@ object HoconConfig {
   }
 
   def get: URIO[HoconConfig, Config] = ZIO.access[HoconConfig](_.get.config)
+
+  def load: ZLayer[Any, Throwable, HoconConfig] = {
+    (for {
+      loaded <- Task(ConfigFactory.load())
+    } yield {
+      new Service {
+        override val config: Config = loaded
+      }
+    }).toLayer
+  }
 
   def live(appClass: Class[_]): ZLayer[Any, Throwable, HoconConfig] = {
     Task {

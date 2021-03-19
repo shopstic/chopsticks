@@ -3,6 +3,7 @@ package dev.chopsticks.fp.akka_env
 import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.typed.scaladsl.adapter._
 import akka.actor.{typed, ActorSystem, CoordinatedShutdown}
+import com.typesafe.config.ConfigFactory
 import dev.chopsticks.fp.config.HoconConfig
 import zio.{RLayer, Task, URIO, ZIO, ZLayer, ZManaged}
 
@@ -27,16 +28,18 @@ object AkkaEnv extends Serializable {
   def live(appName: String = "app"): RLayer[HoconConfig, AkkaEnv] = {
     val managed = for {
       hoconConfig <- HoconConfig.get.toManaged_
-      _ <- ZManaged.effect {
-        if (!hoconConfig.getBoolean("akka.coordinated-shutdown.run-by-jvm-shutdown-hook")) {
-          throw new IllegalArgumentException(
-            "'akka.coordinated-shutdown.run-by-jvm-shutdown-hook' is not set to 'on'. Check your HOCON application config."
-          )
-        }
-      }
+      // Shutting down of the ActorSystem should be via ZManaged release
+      // ZAkkaApp handles shutdown properly, hence we want to disable Akka's own
+      // shutdown hook here
+      overridenConfig = ConfigFactory
+        .parseString(
+          """
+          |akka.coordinated-shutdown.run-by-jvm-shutdown-hook = off""".stripMargin
+        )
+        .withFallback(hoconConfig)
       actorSystem <- ZManaged.make {
         Task {
-          val as = ActorSystem(appName, hoconConfig)
+          val as = ActorSystem(appName, overridenConfig)
           val cs = CoordinatedShutdown(as)
 
           as -> cs

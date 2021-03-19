@@ -1,19 +1,16 @@
 package dev.chopsticks.sample.app.dstream
 
-import akka.NotUsed
 import akka.stream.scaladsl.{Sink, Source}
-import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamClientApi.DstreamClientApiConfig
 import dev.chopsticks.dstream.DstreamClientRunner.DstreamClientConfig
 import dev.chopsticks.dstream.DstreamServerRunner.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream._
-import dev.chopsticks.fp.AppLayer.AppEnv
-import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
+import dev.chopsticks.fp.ZAkkaApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.util.LoggedRace
-import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.{
   Assignment,
@@ -25,49 +22,64 @@ import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import io.prometheus.client.CollectorRegistry
-import zio.{Schedule, Task, UIO, ZIO, ZLayer, ZManaged}
+import zio.{ExitCode, RIO, Schedule, UIO, ZIO, ZLayer, ZManaged}
 
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 
-object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
-  override def config(allConfig: Config): Task[NotUsed] = Task.unit.as(NotUsed)
+object DstreamStateTestApp extends ZAkkaApp {
 
-  override def liveEnv(
-    akkaAppDi: DiModule,
-    appConfig: NotUsed,
-    allConfig: Config
-  ): Task[DiEnv[AppEnv]] = {
-    Task {
-      LiveDiEnv(akkaAppDi ++ DiLayers(
-        ZLayer.succeed(CollectorRegistry.defaultRegistry),
-        PromMetricRegistryFactory.live[DstreamStateMetric]("test"),
-        DstreamStateMetricsManager.live,
-        DstreamState.manage[Assignment, Result]("test"),
-        DstreamServerApi.live[Assignment, Result] { handle =>
-          ZIO
-            .access[AkkaEnv](_.get.actorSystem)
-            .map { implicit as =>
-              DstreamSampleAppPowerApiHandler(handle(_, _))
-            }
-        },
-        DstreamClientApi
-          .live[Assignment, Result](DstreamClientApiConfig(
-            serverHost = "localhost",
-            serverPort = 9999,
-            withTls = false
-          )) { settings =>
-            ZIO
-              .access[AkkaEnv](_.get.actorSystem)
-              .map { implicit as =>
-                DstreamSampleAppClient(settings)
-              }
-          }(_.work()),
-        DstreamServerRunner.live[Assignment, Assignment, Result, Result],
-        DstreamClientRunner.live[Assignment, Result](),
-        AppLayer(app)
-      ))
+  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+    import zio.magic._
+
+    val promRegistry = ZLayer.succeed(CollectorRegistry.defaultRegistry)
+    val promRegistryFactory = PromMetricRegistryFactory.live[DstreamStateMetric]("test")
+    val dstreamStateMetricsManager = DstreamStateMetricsManager.live
+    val dstreamState = DstreamState.manage[Assignment, Result]("test").toLayer
+    val dstreamServerApi = DstreamServerApi.live[Assignment, Result] { handle =>
+      ZIO
+        .access[AkkaEnv](_.get.actorSystem)
+        .map { implicit as =>
+          DstreamSampleAppPowerApiHandler(handle(_, _))
+        }
     }
+    val dstreamClientApi = DstreamClientApi
+      .live[Assignment, Result](DstreamClientApiConfig(
+        serverHost = "localhost",
+        serverPort = 9999,
+        withTls = false
+      )) { settings =>
+        ZIO
+          .access[AkkaEnv](_.get.actorSystem)
+          .map { implicit as =>
+            DstreamSampleAppClient(settings)
+          }
+      }(_.work())
+
+    val dstreamServerRunner = DstreamServerRunner.live[Assignment, Assignment, Result, Result]
+    val dstreamClientRunner = DstreamClientRunner.live[Assignment, Result]()
+
+    app
+      .as(ExitCode(1))
+      .provideSomeMagicLayer[ZAkkaAppEnv](
+        promRegistry,
+        promRegistryFactory,
+        dstreamStateMetricsManager,
+        dstreamState,
+        dstreamServerApi,
+        dstreamClientApi,
+        dstreamServerRunner,
+        dstreamClientRunner
+      )
+  }
+
+  //noinspection TypeAnnotation
+  def app = {
+    LoggedRace()
+      .add("master", runMaster)
+      .add("worker", runWorker)
+      .add("logging", periodicallyLog)
+      .run()
   }
 
   private lazy val parallelism: PosInt = 4
@@ -144,14 +156,5 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
     } yield ()
 
     task.repeat(Schedule.fixed(1.second.toJava)).unit
-  }
-
-  //noinspection TypeAnnotation
-  def app = {
-    LoggedRace()
-      .add("master", runMaster)
-      .add("worker", runWorker)
-      .add("logging", periodicallyLog)
-      .run()
   }
 }
