@@ -9,7 +9,7 @@ import zio.{UIO, URIO, URLayer, ZManaged}
 import scala.annotation.nowarn
 import scala.concurrent.Future
 
-object DstreamServerApi {
+object DstreamServerHandlerFactory {
   trait Service[Assignment, Result] {
     def create(handle: (Source[Result, NotUsed], Metadata) => Source[Assignment, NotUsed])
       : UIO[HttpRequest => Future[HttpResponse]]
@@ -25,7 +25,7 @@ object DstreamServerApi {
     ])(implicit
       @nowarn("cat=unused") t1: zio.Tag[Assignment],
       @nowarn("cat=unused") t2: zio.Tag[Result]
-    ): URLayer[R, DstreamServerApi[Assignment, Result]] = {
+    ): URLayer[R, DstreamServerHandlerFactory[Assignment, Result]] = {
       ZManaged
         .environment[R].map { env =>
           new Service[Assignment, Result] {

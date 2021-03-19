@@ -48,7 +48,7 @@ object DstreamClientRunner {
   ) = {
     ZIO.foreachPar_(1 to config.parallelism) { workerId =>
       for {
-        zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
+        zlogger <- IzLogging.zioLogger
         createRequest <- ZIO.accessM[DstreamClientApi[Assignment, Result]](_.get.requestBuilder)
 
         runWorker = for {

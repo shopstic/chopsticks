@@ -3,7 +3,8 @@ package dev.chopsticks.sample.app.dstream
 import akka.stream.scaladsl.{Sink, Source}
 import dev.chopsticks.dstream.DstreamClientApi.DstreamClientApiConfig
 import dev.chopsticks.dstream.DstreamClientRunner.DstreamClientConfig
-import dev.chopsticks.dstream.DstreamServerRunner.DstreamServerConfig
+import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
+import dev.chopsticks.dstream.DstreamServerRunner.DstreamServerRunnerConfig
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream._
 import dev.chopsticks.fp.ZAkkaApp
@@ -11,6 +12,7 @@ import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.util.LoggedRace
+import dev.chopsticks.fp.zio_ext.ZManagedExtensions
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.{
   Assignment,
@@ -36,13 +38,14 @@ object DstreamStateTestApp extends ZAkkaApp {
     val promRegistryFactory = PromMetricRegistryFactory.live[DstreamStateMetric]("test")
     val dstreamStateMetricsManager = DstreamStateMetricsManager.live
     val dstreamState = DstreamState.manage[Assignment, Result]("test").toLayer
-    val dstreamServerApi = DstreamServerApi.live[Assignment, Result] { handle =>
+    val dstreamServerHandlerFactory = DstreamServerHandlerFactory.live[Assignment, Result] { handle =>
       ZIO
         .access[AkkaEnv](_.get.actorSystem)
         .map { implicit as =>
           DstreamSampleAppPowerApiHandler(handle(_, _))
         }
     }
+    val dstreamServerHandler = DstreamServerHandler.live[Assignment, Result]
     val dstreamClientApi = DstreamClientApi
       .live[Assignment, Result](DstreamClientApiConfig(
         serverHost = "localhost",
@@ -56,6 +59,7 @@ object DstreamStateTestApp extends ZAkkaApp {
           }
       }(_.work())
 
+    val dstreamServer = DstreamServer.live[Assignment, Result]
     val dstreamServerRunner = DstreamServerRunner.live[Assignment, Assignment, Result, Result]
     val dstreamClientRunner = DstreamClientRunner.live[Assignment, Result]()
 
@@ -66,8 +70,10 @@ object DstreamStateTestApp extends ZAkkaApp {
         promRegistryFactory,
         dstreamStateMetricsManager,
         dstreamState,
-        dstreamServerApi,
+        dstreamServerHandlerFactory,
+        dstreamServerHandler,
         dstreamClientApi,
+        dstreamServer,
         dstreamServerRunner,
         dstreamClientRunner
       )
@@ -86,36 +92,40 @@ object DstreamStateTestApp extends ZAkkaApp {
 
   private def runMaster = {
     val managed = for {
-      dstreamServer <- ZManaged
-        .access[DstreamServerRunner[Assignment, Assignment, Result, Result]](_.get)
-      distributionFlow <- dstreamServer
-        .manage(
-          DstreamServerConfig(port = 9999, parallelism = parallelism, ordered = false),
-          ZIO.succeed(_)
-        ) {
-          (assignment, result) =>
-            for {
-              zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
-              last <- result
-                .source
-                .toZAkkaSource
-                .interruptibleRunWith(Sink.last)
-              _ <- zlogger.debug(
-                s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
-              )
-            } yield last
-        }
-        .map(_._2)
-    } yield {
-      Source(1 to Int.MaxValue)
-//        .initialDelay(1.minute)
-        .map(Assignment(_))
-        .via(distributionFlow)
-        .toZAkkaSource
-        .interruptibleRunIgnore()
-    }
+      server <- ZManaged.access[DstreamServer[Assignment, Result]](_.get)
+      _ <- server.manage(DstreamServerConfig(port = 9999))
+        .logResult("Dstream server", _.localAddress.toString)
+    } yield ()
 
-    managed.use(identity)
+    managed.use { _ =>
+      for {
+        runner <- ZIO
+          .access[DstreamServerRunner[Assignment, Assignment, Result, Result]](_.get)
+        distributionFlow <- runner
+          .createFlow(
+            DstreamServerRunnerConfig(parallelism = parallelism, ordered = false),
+            ZIO.succeed(_)
+          ) {
+            (assignment, result) =>
+              for {
+                zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
+                last <- result
+                  .source
+                  .toZAkkaSource
+                  .interruptibleRunWith(Sink.last)
+                _ <- zlogger.debug(
+                  s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
+                )
+              } yield last
+          }
+        _ <- Source(1 to Int.MaxValue)
+          //        .initialDelay(1.minute)
+          .map(Assignment(_))
+          .via(distributionFlow)
+          .toZAkkaSource
+          .interruptibleRunIgnore()
+      } yield ()
+    }
   }
 
   private def runWorker = {
