@@ -121,7 +121,7 @@ object DstreamStateTestApp extends AkkaDiApp[NotUsed] {
           UIO {
             Source(1 to 10)
               .map(v => Result(assignment.valueIn * 10 + v))
-              .throttle(1, 1.second)
+//              .throttle(1, 1.second)
           }
         }
     } yield ()

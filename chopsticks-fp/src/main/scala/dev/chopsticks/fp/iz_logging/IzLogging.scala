@@ -1,6 +1,7 @@
 package dev.chopsticks.fp.iz_logging
 
 import com.typesafe.config.{Config => LbConfig}
+import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.util.config.PureconfigLoader
 import izumi.fundamentals.platform.time.IzTimeSafe
 import izumi.logstage.api.Log
@@ -49,6 +50,9 @@ object IzLogging {
     override def zioLoggerWithCtx(ctx: LogCtx): LogIO3[ZIO] =
       zioLogger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
   }
+
+  def logger: URIO[IzLogging, IzLogger] = ZIO.access[IzLogging](_.get.logger)
+  def zioLogger: URIO[IzLogging, LogIO3[ZIO]] = ZIO.access[IzLogging](_.get.zioLogger)
 
   def create(lbConfig: LbConfig): Service = {
     create(lbConfig, List.empty)
@@ -123,6 +127,18 @@ object IzLogging {
     }
 
     managed.toLayer
+  }
+
+  def live(
+    configNamespace: String = "iz-logging",
+    filters: Iterable[IzLoggingFilter] = List.empty
+  ): RLayer[HoconConfig, IzLogging] = {
+    val effect = for {
+      hoconConfig <- HoconConfig.get
+      service <- Task(create(hoconConfig, configNamespace, filters))
+    } yield service
+
+    effect.toLayer
   }
 }
 
