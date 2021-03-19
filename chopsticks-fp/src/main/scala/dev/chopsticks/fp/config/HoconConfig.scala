@@ -2,7 +2,7 @@ package dev.chopsticks.fp.config
 
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
 import pureconfig.{KebabCase, PascalCase}
-import zio.{Has, Task, URIO, ZIO, ZLayer}
+import zio.{Task, URIO, ZIO, ZLayer}
 
 import java.nio.file.Paths
 

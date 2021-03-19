@@ -8,5 +8,12 @@ import zio.test.environment._
 
 //noinspection TypeAnnotation
 object DstreamSpec extends DefaultRunnableSpec {
-  override def spec = ???
+  override def spec = suite("HelloWorldSpec")(
+    testM("should work end to end") {
+      for {
+        _ <- sayHello(1)
+        output <- TestConsole.output
+      } yield assert(output)(isNonEmpty)
+    }
+  )
 }

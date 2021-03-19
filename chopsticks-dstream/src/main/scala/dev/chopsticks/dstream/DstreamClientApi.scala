@@ -8,7 +8,7 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.string.NonEmptyString
-import zio.{UIO, URIO, URLayer, ZIO, ZLayer}
+import zio.{UIO, URIO, URLayer, ZIO}
 
 import scala.annotation.nowarn
 
@@ -51,7 +51,7 @@ object DstreamClientApi {
         }
       }
 
-      ZLayer.fromEffect(effect)
+      effect.toLayer
     }
   }
 
