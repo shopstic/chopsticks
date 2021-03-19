@@ -9,13 +9,13 @@ import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
 import logstage.Log
 import pureconfig.ConfigConvert
 import zio.magic._
-import zio.{ExitCode, Has, RIO, Schedule, ZIO, ZLayer}
+import zio.{ExitCode, Has, RIO, Schedule, UIO, ZIO, ZLayer}
 
 import java.time.LocalDateTime
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 
-object ZAkkaSampleApp extends ZAkkaApp {
+object ZAkkaMagicSampleApp extends ZAkkaApp {
   final case class AppConfig(foo: String, bar: Boolean, baz: FiniteDuration)
   object AppConfig {
     //noinspection TypeAnnotation
@@ -38,17 +38,15 @@ object ZAkkaSampleApp extends ZAkkaApp {
         })
       }
 
-    val izLoggingLayer = IzLogging.live(IzLoggingConfig(
-      coloredOutput = false,
-      level = Log.Level.Info,
-      jsonFileSink = None
-    ))
-
     ZLayer.fromMagic[ZAkkaAppEnv](
       zio.ZEnv.live,
       customHoconConfig,
-      AkkaEnv.live(),
-      izLoggingLayer
+      IzLogging.live(IzLoggingConfig(
+        coloredOutput = true,
+        level = Log.Level.Debug,
+        jsonFileSink = None
+      )),
+      AkkaEnv.live()
     )
   }
 
@@ -71,9 +69,17 @@ object ZAkkaSampleApp extends ZAkkaApp {
   }
 
   override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    app.as(ExitCode(0)).provideSomeMagicLayer[ZAkkaAppEnv](
-      TypedConfig.live[AppConfig](),
-      ZLayer.succeed(1L) ++ ZLayer.succeed(2L)
-    )
+    val typed = TypedConfig.live[AppConfig]()
+
+    app
+      .onInterrupt(UIO(println("app is interrupted, delaying...")) *> UIO(
+        println("ok gonna let go now...")
+      ).delay(2.seconds.toJava))
+      .as(ExitCode(0)).provideSomeMagicLayer[ZAkkaAppEnv](
+        typed, {
+          println("bug in zio-magic, this is evaluated multiple times")
+          ZLayer.succeed(2L)
+        }
+      )
   }
 }
