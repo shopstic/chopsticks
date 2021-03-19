@@ -46,7 +46,7 @@ lazy val testkit = Build
 lazy val fp = Build
   .defineProject("fp")
   .settings(
-    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ distageDeps ++ sourcecodeDeps
+    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ distageDeps ++ sourcecodeDeps ++ zioMagicDeps.map(_ % "test")
   )
   .dependsOn(util)
 
@@ -59,12 +59,14 @@ lazy val stream = Build
 
 lazy val dstream = Build
   .defineProject("dstream")
+  .enablePlugins(AkkaGrpcPlugin)
   .settings(
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= akkaGrpcRuntimeDeps,
+    libraryDependencies ++= akkaGrpcRuntimeDeps ++ (zioMagicDeps ++ zioTestDeps).map(_ % "test"),
+    akkaGrpcCodeGeneratorSettings += "server_power_apis",
     testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
   )
-  .dependsOn(metric, stream, testkit % "test->test")
+  .dependsOn(metric, stream)
 
 lazy val kvdbCore = Build
   .defineProject("kvdb-core")

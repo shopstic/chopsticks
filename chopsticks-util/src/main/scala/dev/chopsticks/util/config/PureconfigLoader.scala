@@ -6,12 +6,16 @@ import pureconfig.{ConfigReader, ConfigSource}
 import pureconfig.error.{CannotParse, CannotRead, ConfigReaderFailures, ConvertFailure, ThrowableFailure}
 import pureconfig.generic.ProductHint
 
+import scala.util.control.NoStackTrace
+
 object PureconfigLoader {
   implicit def hint[T]: ProductHint[T] = ProductHint[T](allowUnknownKeys = false)
 
   private def sanitizeReason(reason: String) = {
     reason.replace("\n", " ")
   }
+
+  final case class PureconfigLoadFailure(reason: String) extends IllegalArgumentException(reason) with NoStackTrace
 
   def load[Cfg: ConfigReader](config: Config, namespace: String): Either[String, Cfg] = {
     ConfigSource.fromConfig(config).at(namespace).load[Cfg] match {
@@ -45,7 +49,7 @@ object PureconfigLoader {
   def unsafeLoad[Cfg: ConfigReader](config: Config, namespace: String): Cfg = {
     load(config, namespace) match {
       case Right(cfg) => cfg
-      case Left(error) => throw new IllegalArgumentException("\n" + error)
+      case Left(error) => throw PureconfigLoadFailure("Failed converting HOCON config. Reasons:\n" + error)
     }
   }
 }

@@ -41,76 +41,75 @@ object DstreamClientRunner {
     case e if e.getClass.getName.contains("akka.http.impl.engine.http2.Http2StreamHandling") => true
   }
 
+  private[dstream] def runWorkers[Assignment: zio.Tag, Result: zio.Tag](
+    config: DstreamClientConfig,
+    makeSource: Assignment => Task[Source[Result, NotUsed]],
+    retryPolicy: PartialFunction[Throwable, Boolean] = DefaultRetryPolicy
+  ) = {
+    ZIO.foreachPar_(1 to config.parallelism) { workerId =>
+      for {
+        zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
+        createRequest <- ZIO.accessM[DstreamClientApi[Assignment, Result]](_.get.requestBuilder)
+
+        runWorker = for {
+          promise <- UIO(Promise[Source[Result, NotUsed]]())
+          result <- createRequest()
+            .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
+            .toZAkkaSource
+            .interruptible
+            .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
+            .interruptibleMapAsync(1) {
+              assignment =>
+                makeSource(assignment)
+                  .map(s => promise.success(s))
+                  .zipRight(Task.fromFuture(_ => promise.future))
+            }
+            .interruptibleRunIgnore()
+        } yield result
+
+        retrySchedule = Schedule
+          .identity[Throwable]
+          .whileOutput(e => retryPolicy.applyOrElse(e, (_: Any) => false))
+
+        backoffSchedule: Schedule[Any, Throwable, (Duration, Long)] = (Schedule
+          .exponential(config.retryInitialDelay.toJava) || Schedule.spaced(config.retryMaxDelay.toJava))
+          .resetAfter(config.retryResetAfter.toJava)
+
+        _ <- runWorker
+          .forever
+          .unit
+          .retry(
+            (retrySchedule && backoffSchedule)
+              .onDecision {
+                case Decision.Done((exception, _)) =>
+                  zlogger.error(s"$workerId will NOT retry $exception")
+                case Decision.Continue((exception, _), interval, _) =>
+                  zlogger.warn(
+                    s"$workerId will retry ${java.time.Duration.between(OffsetDateTime.now, interval) -> "duration"} ${exception.getMessage}"
+                  )
+              }
+          )
+      } yield ()
+    }
+  }
+
   def live[Assignment: zio.Tag, Result: zio.Tag](
     retryPolicy: PartialFunction[Throwable, Boolean] = DefaultRetryPolicy
   ): URLayer[AkkaEnv with MeasuredLogging with DstreamClientApi[Assignment, Result], DstreamClientRunner[
     Assignment,
     Result
   ]] = {
-    val runnable = ZRunnable
-      .apply { args: (DstreamClientConfig, Assignment => Task[Source[Result, NotUsed]]) =>
-        val (config, makeSource) = args
-
-        ZIO.foreachPar_(1 to config.parallelism) { workerId =>
-          for {
-            zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
-            createRequest <- ZIO.accessM[DstreamClientApi[Assignment, Result]](_.get.requestBuilder)
-
-            runWorker = for {
-              promise <- UIO(Promise[Source[Result, NotUsed]]())
-              result <- createRequest()
-                .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
-                .toZAkkaSource
-                .interruptible
-                .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
-                .interruptibleMapAsync(1) {
-                  assignment =>
-                    makeSource(assignment)
-                      .map(s => promise.success(s))
-                      .zipRight(Task.fromFuture(_ => promise.future))
-                }
-                .interruptibleRunIgnore()
-            } yield result
-
-            _ <- runWorker
-              .forever
-              .unit
-              .retry(
-                Schedule
-                  .identity[Throwable]
-                  .whileOutput(e => retryPolicy.applyOrElse(e, (_: Any) => false))
-                  .&&(
-                    (Schedule.exponential(config.retryInitialDelay.toJava) || Schedule.fixed(
-                      config.retryMaxDelay.toJava
-                    ))
-                      .resetAfter(config.retryResetAfter.toJava)
-                  )
-                  .onDecision((decision: Schedule.Decision[Any, Throwable, (Throwable, (Duration, Long))]) => {
-                    decision match {
-                      case Decision.Done((exception, _)) =>
-                        zlogger.error(s"$workerId will NOT retry $exception")
-                      case Decision.Continue((exception, _), interval, _) =>
-                        zlogger.warn(
-                          s"$workerId will retry ${java.time.Duration.between(OffsetDateTime.now, interval) -> "duration"} ${exception.getMessage}"
-                        )
-                    }
-                  })
-              )
-          } yield ()
+    ZRunnable(runWorkers[Assignment, Result] _)
+      .toLayer[Service[Assignment, Result]] { fn =>
+        new Service[Assignment, Result] {
+          override def run[R](config: DstreamClientConfig)(makeSource: Assignment => RIO[R, Source[Result, NotUsed]])
+            : RIO[R, Unit] = {
+            for {
+              env <- ZIO.environment[R]
+              ret <- fn(config, result => makeSource(result).provide(env), retryPolicy)
+            } yield ret
+          }
         }
       }
-
-    runnable.toLayer[Service[Assignment, Result]] { fn =>
-      val untupled = Function.untupled(fn)
-      new Service[Assignment, Result] {
-        override def run[R](config: DstreamClientConfig)(makeSource: Assignment => RIO[R, Source[Result, NotUsed]])
-          : RIO[R, Unit] = {
-          for {
-            env <- ZIO.environment[R]
-            ret <- untupled(config, result => makeSource(result).provide(env))
-          } yield ret
-        }
-      }
-    }
   }
 }

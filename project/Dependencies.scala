@@ -46,6 +46,10 @@ object Dependencies {
     "dev.zio" %% "zio-test-junit" % ZIO_VERSION
   ).overrideIzumiReflect
 
+  val zioMagicDeps = Seq(
+    "io.github.kitlangton" %% "zio-magic" % "0.1.12"
+  )
+
   val squantsDeps = Seq(
     "org.typelevel" %% "squants" % "1.7.4"
   )
