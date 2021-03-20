@@ -2,6 +2,7 @@ package dev.chopsticks.fp
 
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.util.implicits.SquantsImplicits._
+import logstage.Log
 import squants.time.Nanoseconds
 import zio._
 import zio.duration._
@@ -39,6 +40,12 @@ package object zio_ext {
       })
     }
 
+    def debugResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
+      ctx: LogCtx
+    ): ZIO[R with MeasuredLogging, E, A] = {
+      logResult(name, result, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
+    }
+
     def logResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
@@ -59,13 +66,19 @@ package object zio_ext {
               .get
               .loggerWithCtx(ctx)
               .withCustomContext("task" -> name, "elapsed" -> elapsed)
-              .info("interrupting..."))
+              .log(ctx.level)("interrupting..."))
         } yield ())
       }
     }
 
     def log(name: String, logTraceOnError: Boolean = true)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed", logTraceOnError)
+    }
+
+    def debug(name: String, logTraceOnError: Boolean = true)(implicit
+      ctx: LogCtx
+    ): ZIO[R with MeasuredLogging, E, A] = {
+      log(name, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
     def retryForever[R1 <: R](
@@ -106,17 +119,30 @@ package object zio_ext {
       } yield result
     }
 
+    def debugResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
+      ctx: LogCtx
+    ): ZManaged[R with MeasuredLogging, E, A] = {
+      logResult(name, result, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
+    }
+
     def log(name: String, logTraceOnError: Boolean = true)(implicit
       ctx: LogCtx
     ): ZManaged[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed", logTraceOnError)
     }
+
+    def debug(name: String, logTraceOnError: Boolean = true)(implicit
+      ctx: LogCtx
+    ): ZManaged[R with MeasuredLogging, E, A] = {
+      log(name, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
+    }
+
   }
 
   private def startMeasurement(name: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] = {
     for {
       time <- nanoTime
-      _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).withCustomContext("task" -> name).info("started"))
+      _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).withCustomContext("task" -> name).log(ctx.level)("started"))
     } yield time
   }
 
@@ -130,31 +156,33 @@ package object zio_ext {
     for {
       elapse <- nanoTime.map(endTime => endTime - startTimeNanos)
       elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
+      warnLevel = if (ctx.level.compareTo(Log.Level.Info) >= 0) Log.Level.Warn else ctx.level
+      errorLevel = if (ctx.level.compareTo(Log.Level.Info) >= 0) Log.Level.Error else ctx.level
       logger <-
         ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("task" -> name, "elapsed" -> elapsed))
       _ <- exit.toEither match {
         case Left(FiberFailure(cause)) if cause.interrupted =>
-          logger.warn(s"interrupted")
+          logger.log(warnLevel)(s"interrupted")
 
         case Left(exception @ FiberFailure(cause)) =>
           if (logTraceOnError) {
-            logger.error(s"failed $exception")
+            logger.log(errorLevel)(s"failed $exception")
           }
           else {
-            logger.error(s"failed ${cause.untraced -> "cause"}")
+            logger.log(errorLevel)(s"failed ${cause.untraced -> "cause"}")
           }
 
         case Left(exception) =>
           if (logTraceOnError) {
-            logger.error(s"failed $exception")
+            logger.log(errorLevel)(s"failed $exception")
           }
           else {
-            logger.error(s"failed ${exception.getMessage -> "message"}")
+            logger.log(errorLevel)(s"failed ${exception.getMessage -> "message"}")
           }
 
         case Right(r) =>
           val renderedResult = renderResult(r)
-          logger.info(s"${renderedResult -> "" -> null}")
+          logger.log(ctx.level)(s"${renderedResult -> "" -> null}")
       }
     } yield ()
   }

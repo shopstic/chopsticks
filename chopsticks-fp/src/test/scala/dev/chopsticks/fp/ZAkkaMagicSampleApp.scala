@@ -28,7 +28,7 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
   // Demo manually supplying runtimeLayer
   override def runtimeLayer: ZLayer[Any, Throwable, ZAkkaAppEnv] = {
     val customHoconConfig: ZLayer[Any, Throwable, Has[HoconConfig.Service]] =
-      HoconConfig.live(this.getClass).map { cfg =>
+      HoconConfig.live(Some(getClass)).map { cfg =>
         Has(new HoconConfig.Service {
           override val config: Config = ConfigFactory.parseString(
             """

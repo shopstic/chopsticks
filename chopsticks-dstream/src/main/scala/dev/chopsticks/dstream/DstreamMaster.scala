@@ -11,20 +11,20 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import zio.{RIO, Task, UIO, URIO, URLayer, ZIO}
 
-object DstreamServerRunner {
-  final case class DstreamServerRunnerConfig(
+object DstreamMaster {
+  final case class DstreamMasterConfig(
     parallelism: PosInt,
     ordered: Boolean
   )
 
   trait Service[In, Assignment, Result, Out] {
-    def createFlow[R1, R2](config: DstreamServerRunnerConfig, createAssignment: In => URIO[R1, Assignment])(
+    def createFlow[R1, R2](config: DstreamMasterConfig, createAssignment: In => URIO[R1, Assignment])(
       handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
     ): ZIO[R1 with R2, Nothing, Flow[In, Out, NotUsed]]
   }
 
   private[dstream] def createRunnerFlowFactory[In: zio.Tag, Assignment: zio.Tag, Result: zio.Tag, Out: zio.Tag](
-    config: DstreamServerRunnerConfig
+    config: DstreamMasterConfig
   ) = {
     for {
       akkaSvc <- ZIO.access[AkkaEnv](_.get)
@@ -80,13 +80,13 @@ object DstreamServerRunner {
   }
 
   def live[In: zio.Tag, Assignment: zio.Tag, Result: zio.Tag, Out: zio.Tag]
-    : URLayer[AkkaEnv with DstreamState[Assignment, Result], DstreamServerRunner[In, Assignment, Result, Out]] = {
+    : URLayer[AkkaEnv with DstreamState[Assignment, Result], DstreamMaster[In, Assignment, Result, Out]] = {
     val runnable = ZRunnable(createRunnerFlowFactory[In, Assignment, Result, Out] _)
 
     runnable.toLayer[Service[In, Assignment, Result, Out]] { fn =>
       new Service[In, Assignment, Result, Out] {
         override def createFlow[R1, R2](
-          config: DstreamServerRunnerConfig,
+          config: DstreamMasterConfig,
           createAssignment: In => URIO[R1, Assignment]
         )(
           handleResult: (In, WorkResult[Result]) => RIO[R2, Out]

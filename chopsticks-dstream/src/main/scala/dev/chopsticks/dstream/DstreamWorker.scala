@@ -1,6 +1,7 @@
 package dev.chopsticks.dstream
 
 import akka.NotUsed
+import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import dev.chopsticks.fp.ZRunnable
@@ -9,7 +10,9 @@ import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
+import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.numeric.PosInt
+import eu.timepit.refined.types.string.NonEmptyString
 import io.grpc.{Status, StatusRuntimeException}
 import zio.Schedule.Decision
 import zio.duration.Duration
@@ -21,8 +24,11 @@ import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.DurationConverters.ScalaDurationOps
 
-object DstreamClientRunner {
-  final case class DstreamClientConfig(
+object DstreamWorker {
+  final case class DstreamWorkerConfig(
+    serverHost: NonEmptyString,
+    serverPort: PortNumber,
+    serverTls: Boolean,
     parallelism: PosInt,
     assignmentTimeout: Timeout,
     retryInitialDelay: FiniteDuration,
@@ -32,7 +38,7 @@ object DstreamClientRunner {
   )
 
   trait Service[Assignment, Result] {
-    def run[R](config: DstreamClientConfig)(makeSource: Assignment => RIO[R, Source[Result, NotUsed]]): RIO[R, Unit]
+    def run[R](config: DstreamWorkerConfig)(makeSource: Assignment => RIO[R, Source[Result, NotUsed]]): RIO[R, Unit]
   }
 
   val DefaultRetryPolicy: PartialFunction[Throwable, Boolean] = {
@@ -42,14 +48,20 @@ object DstreamClientRunner {
   }
 
   private[dstream] def runWorkers[Assignment: zio.Tag, Result: zio.Tag](
-    config: DstreamClientConfig,
+    config: DstreamWorkerConfig,
     makeSource: Assignment => Task[Source[Result, NotUsed]],
     retryPolicy: PartialFunction[Throwable, Boolean] = DefaultRetryPolicy
   ) = {
     ZIO.foreachPar_(1 to config.parallelism) { workerId =>
       for {
         zlogger <- IzLogging.zioLogger
-        createRequest <- ZIO.accessM[DstreamClientApi[Assignment, Result]](_.get.requestBuilder)
+        settings <- AkkaEnv.actorSystem.map { implicit as =>
+          GrpcClientSettings
+            .connectToServiceAt(config.serverHost, config.serverPort)
+            .withBackend("akka-http")
+            .withTls(config.serverTls)
+        }
+        createRequest <- ZIO.accessM[DstreamClient[Assignment, Result]](_.get.requestBuilder(settings))
 
         runWorker = for {
           promise <- UIO(Promise[Source[Result, NotUsed]]())
@@ -95,14 +107,14 @@ object DstreamClientRunner {
 
   def live[Assignment: zio.Tag, Result: zio.Tag](
     retryPolicy: PartialFunction[Throwable, Boolean] = DefaultRetryPolicy
-  ): URLayer[AkkaEnv with MeasuredLogging with DstreamClientApi[Assignment, Result], DstreamClientRunner[
+  ): URLayer[AkkaEnv with MeasuredLogging with DstreamClient[Assignment, Result], DstreamWorker[
     Assignment,
     Result
   ]] = {
     ZRunnable(runWorkers[Assignment, Result] _)
       .toLayer[Service[Assignment, Result]] { fn =>
         new Service[Assignment, Result] {
-          override def run[R](config: DstreamClientConfig)(makeSource: Assignment => RIO[R, Source[Result, NotUsed]])
+          override def run[R](config: DstreamWorkerConfig)(makeSource: Assignment => RIO[R, Source[Result, NotUsed]])
             : RIO[R, Unit] = {
             for {
               env <- ZIO.environment[R]
