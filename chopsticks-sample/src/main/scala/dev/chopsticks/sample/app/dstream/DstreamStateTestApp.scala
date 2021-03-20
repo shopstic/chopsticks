@@ -1,11 +1,10 @@
 package dev.chopsticks.sample.app.dstream
 
 import akka.stream.scaladsl.{Sink, Source}
-import dev.chopsticks.dstream.DstreamClientApi.DstreamClientApiConfig
-import dev.chopsticks.dstream.DstreamClientRunner.DstreamClientConfig
+import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
-import dev.chopsticks.dstream.DstreamServerRunner.DstreamServerRunnerConfig
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
+import dev.chopsticks.dstream.DstreamWorker.DstreamWorkerConfig
 import dev.chopsticks.dstream._
 import dev.chopsticks.fp.ZAkkaApp
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
@@ -46,12 +45,8 @@ object DstreamStateTestApp extends ZAkkaApp {
         }
     }
     val dstreamServerHandler = DstreamServerHandler.live[Assignment, Result]
-    val dstreamClientApi = DstreamClientApi
-      .live[Assignment, Result](DstreamClientApiConfig(
-        serverHost = "localhost",
-        serverPort = 9999,
-        withTls = false
-      )) { settings =>
+    val dstreamClient = DstreamClient
+      .live[Assignment, Result] { settings =>
         ZIO
           .access[AkkaEnv](_.get.actorSystem)
           .map { implicit as =>
@@ -60,8 +55,8 @@ object DstreamStateTestApp extends ZAkkaApp {
       }(_.work())
 
     val dstreamServer = DstreamServer.live[Assignment, Result]
-    val dstreamServerRunner = DstreamServerRunner.live[Assignment, Assignment, Result, Result]
-    val dstreamClientRunner = DstreamClientRunner.live[Assignment, Result]()
+    val dstreamMaster = DstreamMaster.live[Assignment, Assignment, Result, Result]
+    val dstreamWorker = DstreamWorker.live[Assignment, Result]()
 
     app
       .as(ExitCode(1))
@@ -72,10 +67,10 @@ object DstreamStateTestApp extends ZAkkaApp {
         dstreamState,
         dstreamServerHandlerFactory,
         dstreamServerHandler,
-        dstreamClientApi,
+        dstreamClient,
         dstreamServer,
-        dstreamServerRunner,
-        dstreamClientRunner
+        dstreamMaster,
+        dstreamWorker
       )
   }
 
@@ -99,11 +94,11 @@ object DstreamStateTestApp extends ZAkkaApp {
 
     managed.use { _ =>
       for {
-        runner <- ZIO
-          .access[DstreamServerRunner[Assignment, Assignment, Result, Result]](_.get)
-        distributionFlow <- runner
+        master <- ZIO
+          .access[DstreamMaster[Assignment, Assignment, Result, Result]](_.get)
+        distributionFlow <- master
           .createFlow(
-            DstreamServerRunnerConfig(parallelism = parallelism, ordered = false),
+            DstreamMasterConfig(parallelism = parallelism, ordered = false),
             ZIO.succeed(_)
           ) {
             (assignment, result) =>
@@ -130,9 +125,12 @@ object DstreamStateTestApp extends ZAkkaApp {
 
   private def runWorker = {
     for {
-      dstreamClient <- ZIO.access[DstreamClientRunner[Assignment, Result]](_.get)
-      _ <- dstreamClient
-        .run(DstreamClientConfig(
+      worker <- ZIO.access[DstreamWorker[Assignment, Result]](_.get)
+      _ <- worker
+        .run(DstreamWorkerConfig(
+          serverHost = "localhost",
+          serverPort = 9999,
+          serverTls = false,
           parallelism = parallelism,
           assignmentTimeout = 10.seconds,
           retryInitialDelay = 100.millis,

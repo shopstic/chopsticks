@@ -20,7 +20,7 @@ trait ZAkkaApp {
 
   def runtimeLayer: ZLayer[Any, Throwable, ZAkkaAppEnv] = {
     val zEnvLayer = ZEnv.live
-    val hoconConfigLayer = HoconConfig.live(this.getClass)
+    val hoconConfigLayer = HoconConfig.live(Some(this.getClass))
     val akkaEnvLayer = AkkaEnv.live()
     val izLoggingLayer = IzLogging.live()
 
