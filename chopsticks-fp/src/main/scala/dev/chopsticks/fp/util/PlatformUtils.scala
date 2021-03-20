@@ -12,7 +12,7 @@ import java.util.concurrent.{
 import java.util.concurrent.atomic.AtomicInteger
 
 object PlatformUtils {
-  private final class NamedThreadFactory(name: String, daemon: Boolean) extends ThreadFactory {
+  final private class NamedThreadFactory(name: String, daemon: Boolean) extends ThreadFactory {
     private val parentGroup =
       Option(System.getSecurityManager).fold(Thread.currentThread().getThreadGroup)(_.getThreadGroup)
 

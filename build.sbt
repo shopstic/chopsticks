@@ -64,7 +64,7 @@ lazy val dstream = Build
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
     libraryDependencies ++= akkaGrpcRuntimeDeps ++ (zioMagicDeps ++ akkaTestDeps).map(_ % "test"),
     akkaGrpcCodeGeneratorSettings += "server_power_apis",
-    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+    testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
   )
   .dependsOn(metric, stream)
 
