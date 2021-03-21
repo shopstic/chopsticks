@@ -18,7 +18,7 @@ import eu.timepit.refined.types.string.NonEmptyString
 import io.grpc.{Status, StatusRuntimeException}
 import zio.Schedule.Decision
 import zio.duration.Duration
-import zio.{RIO, Schedule, Task, UIO, URLayer, ZIO, ZManaged}
+import zio.{Exit, RIO, Schedule, Task, UIO, URLayer, ZIO, ZManaged}
 
 import java.time.OffsetDateTime
 import java.util.concurrent.TimeoutException
@@ -78,23 +78,40 @@ object DstreamWorker {
             }
             createRequest <- ZIO.accessM[DstreamClient[Assignment, Result]](_.get.requestBuilder(settings))
 
-            runWorker = for {
-              _ <- UIO(metrics.attemptsTotal.inc())
-              promise <- UIO(Promise[Source[Result, NotUsed]]())
-              result <- createRequest(workerId)
-                .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
-                .toZAkkaSource
-                .interruptible
-                .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
-                .interruptibleMapAsync(1) {
-                  assignment =>
-                    makeSource(assignment)
-                      .map(s => promise.success(s))
-                      .zipRight(Task.fromFuture(_ => promise.future))
+            runWorker = ZIO.bracketExit {
+              UIO {
+                metrics.attemptsTotal.inc()
+                metrics.workerStatus.set(1)
+              }
+            } { (_, exit: Exit[Throwable, Unit]) =>
+              UIO {
+                metrics.workerStatus.set(0)
+
+                if (exit.succeeded) {
+                  metrics.successesTotal.inc()
                 }
-                .interruptibleRunIgnore()
-              _ <- UIO(metrics.successesTotal.inc())
-            } yield result
+                else {
+                  metrics.failuresTotal.inc()
+                }
+              }
+            } { _ =>
+              for {
+                promise <- UIO(Promise[Source[Result, NotUsed]]())
+                result <- createRequest(workerId)
+                  .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
+                  .toZAkkaSource
+                  .interruptible
+                  .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
+                  .interruptibleMapAsync(1) {
+                    assignment =>
+                      makeSource(assignment)
+                        .map(s => promise.success(s))
+                        .zipRight(Task.fromFuture(_ => promise.future))
+                  }
+                  .interruptibleRunIgnore()
+                _ <- UIO(metrics.successesTotal.inc())
+              } yield result
+            }
 
             retrySchedule = Schedule
               .identity[Throwable]
@@ -105,16 +122,10 @@ object DstreamWorker {
               .resetAfter(config.retryResetAfter.toJava)
 
             _ <- runWorker
-              .bracketExit { (_: Any, _: Any) =>
-                UIO(metrics.workerStatus.set(0))
-              } { _ =>
-                UIO(metrics.workerStatus.set(1))
-              }
               .forever
               .unit
               .retry(
                 (retrySchedule && backoffSchedule)
-                  .tapOutput(_ => UIO(metrics.failuresTotal.inc()))
                   .onDecision {
                     case Decision.Done((exception, _)) =>
                       zlogger.error(s"$workerId will NOT retry $exception")
