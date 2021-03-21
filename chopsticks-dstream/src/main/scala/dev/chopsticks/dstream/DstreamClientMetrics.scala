@@ -9,6 +9,7 @@ trait DstreamClientMetrics {
   def workerStatus: MetricGauge
   def attemptsTotal: MetricCounter
   def successesTotal: MetricCounter
+  def timeoutsTotal: MetricCounter
   def failuresTotal: MetricCounter
 }
 
@@ -54,6 +55,14 @@ object DstreamClientMetricsManager {
             LabelValues
               .of(Labels.workerId -> workerId)
               .and(Labels.outcome -> "success")
+          )
+
+        override val timeoutsTotal: MetricCounter =
+          registry.counterWithLabels(
+            DstreamClientMetrics.dstreamWorkerResultsTotal,
+            LabelValues
+              .of(Labels.workerId -> workerId)
+              .and(Labels.outcome -> "timeout")
           )
 
         override val failuresTotal: MetricCounter =
