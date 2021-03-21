@@ -17,7 +17,7 @@ object TypedConfig {
   def get[Cfg: zio.Tag]: URIO[TypedConfig[Cfg], Cfg] = ZIO.access[TypedConfig[Cfg]](_.get.config)
 
   def live[Cfg: ConfigReader: zio.Tag](configNamespace: String = "app")
-    : RLayer[IzLogging with HoconConfig with Has[Long], TypedConfig[Cfg]] = {
+    : RLayer[IzLogging with HoconConfig, TypedConfig[Cfg]] = {
     val effect = for {
       hoconConfig <- HoconConfig.get
       logger <- IzLogging.logger
