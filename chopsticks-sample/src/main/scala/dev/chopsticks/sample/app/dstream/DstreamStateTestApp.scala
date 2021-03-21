@@ -165,17 +165,17 @@ object DstreamStateTestApp extends ZAkkaApp {
           stateMetrics <- ZIO.accessM[DstreamStateMetricsManager](_.get.activeSet)
           clientMetrics <- ZIO.accessM[DstreamClientMetricsManager](_.get.activeSet)
         } yield {
-          import MetricLogger._
+          import MetricLogger.sum
 
           ListMap(
-            "state-workers" -> snapshot(stateMetrics.iterator.map(_.workerCount.get).sum),
-            "state-attempts" -> snapshot(stateMetrics.iterator.map(_.attemptsTotal.get).sum),
-            "state-queue" -> snapshot(stateMetrics.iterator.map(_.queueSize.get).sum),
-            "state-map" -> snapshot(stateMetrics.iterator.map(_.mapSize.get).sum),
-            "client-workers" -> snapshot(clientMetrics.iterator.map(_.workerStatus.get).sum),
-            "client-attempts" -> snapshot(clientMetrics.iterator.map(_.attemptsTotal.get).sum),
-            "client-successes" -> snapshot(clientMetrics.iterator.map(_.successesTotal.get).sum),
-            "client-failures" -> snapshot(clientMetrics.iterator.map(_.failuresTotal.get).sum)
+            "state-workers" -> sum(stateMetrics)(_.workerCount),
+            "state-attempts" -> sum(stateMetrics)(_.attemptsTotal),
+            "state-queue" -> sum(stateMetrics)(_.queueSize),
+            "state-map" -> sum(stateMetrics)(_.mapSize),
+            "client-workers" -> sum(clientMetrics)(_.workerStatus),
+            "client-attempts" -> sum(clientMetrics)(_.attemptsTotal),
+            "client-successes" -> sum(clientMetrics)(_.successesTotal),
+            "client-failures" -> sum(clientMetrics)(_.failuresTotal)
           )
         }
       }
