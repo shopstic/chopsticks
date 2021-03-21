@@ -43,9 +43,6 @@ object HoconConfig {
           ConfigFactory.empty()
       }
 
-      val defaultConfig =
-        ConfigFactory.load(ConfigParseOptions.defaults.setAllowMissing(false), ConfigResolveOptions.defaults)
-
       val loader = Thread.currentThread.getContextClassLoader
       val parseOptions = ConfigParseOptions.defaults.setAllowMissing(false).setClassLoader(loader)
       val defaultApplication = ConfigFactory.defaultApplication(parseOptions)
