@@ -1,5 +1,6 @@
 package dev.chopsticks.fp.config
 
+import com.typesafe.config.impl.ConfigImpl
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
 import pureconfig.{KebabCase, PascalCase}
 import zio.{Task, URIO, ZIO, ZLayer}
@@ -16,7 +17,7 @@ object HoconConfig {
   def live(appClass: Option[Class[_]] = None): ZLayer[Any, Throwable, HoconConfig] = {
     Task {
       if (scala.sys.props.get("config.file").nonEmpty) {
-        throw new IllegalArgumentException(
+        System.err.println(
           "System property 'config.file' was set, but should no longer be used " +
             "since it conflicts with Lightbend Config loader. Use 'config.entry' instead"
         )
@@ -26,7 +27,6 @@ object HoconConfig {
         case Some(customConfigFile) =>
           ConfigFactory
             .parseFile(Paths.get(customConfigFile).toFile, ConfigParseOptions.defaults().setAllowMissing(false))
-            .resolve(ConfigResolveOptions.defaults())
         case None =>
           ConfigFactory.empty()
       }
@@ -38,7 +38,6 @@ object HoconConfig {
 
           ConfigFactory
             .parseResources(appConfigName, ConfigParseOptions.defaults().setAllowMissing(false))
-            .resolve(ConfigResolveOptions.defaults())
 
         case None =>
           ConfigFactory.empty()
@@ -47,7 +46,22 @@ object HoconConfig {
       val defaultConfig =
         ConfigFactory.load(ConfigParseOptions.defaults.setAllowMissing(false), ConfigResolveOptions.defaults)
 
-      entryConfig.withFallback(appConfig).withFallback(defaultConfig)
+      val loader = Thread.currentThread.getContextClassLoader
+      val parseOptions = ConfigParseOptions.defaults.setAllowMissing(false).setClassLoader(loader)
+      val defaultApplication = ConfigFactory.defaultApplication(parseOptions)
+      val defaultOverrides = ConfigFactory.defaultOverrides(loader)
+      val defaultReference = ConfigImpl.defaultReferenceUnresolved(loader)
+
+      val combinedUnresolvedConfig = entryConfig
+        .withFallback(appConfig)
+        .withFallback(defaultOverrides)
+        .withFallback(defaultApplication)
+        .withFallback(defaultReference)
+
+      val combinedResolvedConfig = combinedUnresolvedConfig
+        .resolve(ConfigResolveOptions.defaults())
+
+      combinedResolvedConfig
     }
       .map(cfg =>
         new Service {
