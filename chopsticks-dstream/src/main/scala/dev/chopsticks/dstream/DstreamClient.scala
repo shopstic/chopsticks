@@ -12,13 +12,13 @@ import scala.annotation.nowarn
 object DstreamClient {
   trait Service[Assignment, Result] {
     def requestBuilder(settings: GrpcClientSettings)
-      : UIO[() => StreamResponseRequestBuilder[Source[Result, NotUsed], Assignment]]
+      : UIO[Int => StreamResponseRequestBuilder[Source[Result, NotUsed], Assignment]]
   }
 
   final class DstreamClientApiBuilder[Assignment, Result] {
     def apply[R, Client <: AkkaGrpcClient](
       makeClient: GrpcClientSettings => URIO[R, Client]
-    )(makeRequest: Client => StreamResponseRequestBuilder[Source[Result, NotUsed], Assignment])(implicit
+    )(makeRequest: (Client, Int) => StreamResponseRequestBuilder[Source[Result, NotUsed], Assignment])(implicit
       @nowarn("cat=unused") t1: zio.Tag[Assignment],
       @nowarn("cat=unused") t2: zio.Tag[Result]
     ): URLayer[AkkaEnv with R, DstreamClient[Assignment, Result]] = {
@@ -27,10 +27,10 @@ object DstreamClient {
       } yield {
         new Service[Assignment, Result] {
           override def requestBuilder(settings: GrpcClientSettings)
-            : UIO[() => StreamResponseRequestBuilder[Source[Result, NotUsed], Assignment]] = {
+            : UIO[Int => StreamResponseRequestBuilder[Source[Result, NotUsed], Assignment]] = {
             makeClient(settings)
               .provide(env)
-              .map(client => () => makeRequest(client))
+              .map(client => workerId => makeRequest(client, workerId))
           }
         }
       }

@@ -52,7 +52,9 @@ object DstreamStateTestApp extends ZAkkaApp {
           .map { implicit as =>
             DstreamSampleAppClient(settings)
           }
-      }(_.work())
+      } { (client, workerId) =>
+        client.work().addHeader("dstream-worker-id", workerId.toString)
+      }
 
     val dstreamServer = DstreamServer.live[Assignment, Result]
     val dstreamMaster = DstreamMaster.live[Assignment, Assignment, Result, Result]
