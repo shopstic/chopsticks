@@ -7,7 +7,7 @@ import akka.stream.testkit.{TestPublisher, TestSubscriber}
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamState.WorkResult
-import dev.chopsticks.dstream.DstreamWorker.DstreamWorkerConfig
+import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig}
 import dev.chopsticks.dstream.{DstreamMaster, DstreamServer, DstreamServerHandler, DstreamWorker}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
@@ -40,13 +40,15 @@ object DstreamTestUtils {
       TestSink.probe[T].preMaterialize()
     }
 
-  def setup[A: zio.Tag, R: zio.Tag](masterConfig: DstreamMasterConfig)
-    : ZLayer[DstreamWorker[A, R] with MeasuredLogging with AkkaEnv with DstreamMaster[
-      A,
-      A,
-      R,
-      A
-    ] with DstreamServerHandler[A, R] with DstreamServer[A, R], Throwable, Has[DstreamTestContext[A, R]]] = {
+  def setup[A: zio.Tag, R: zio.Tag](
+    masterConfig: DstreamMasterConfig,
+    clientBackend: AkkaGrpcBackend
+  ): ZLayer[DstreamWorker[A, R] with MeasuredLogging with AkkaEnv with DstreamMaster[
+    A,
+    A,
+    R,
+    A
+  ] with DstreamServerHandler[A, R] with DstreamServer[A, R], Throwable, Has[DstreamTestContext[A, R]]] = {
     val managed = for {
       server <- ZManaged.access[DstreamServer[A, R]](_.get)
       serverBinding <- server.manage(DstreamServerConfig(port = 0, interface = "localhost"))
@@ -93,6 +95,7 @@ object DstreamTestUtils {
               serverHost = "localhost",
               serverPort = PortNumber.unsafeFrom(serverBinding.localAddress.getPort),
               serverTls = false,
+              backend = clientBackend,
               parallelism = 1,
               assignmentTimeout = 10.seconds,
               retryInitialDelay = 100.millis,

@@ -62,7 +62,7 @@ lazy val dstream = Build
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= akkaGrpcRuntimeDeps ++ (zioMagicDeps ++ akkaTestDeps).map(_ % "test"),
+    libraryDependencies ++= akkaGrpcRuntimeDeps ++ enumeratumDeps ++ (zioMagicDeps ++ akkaTestDeps).map(_ % "test"),
     akkaGrpcCodeGeneratorSettings += "server_power_apis",
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
   )

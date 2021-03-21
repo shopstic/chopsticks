@@ -1,10 +1,11 @@
 package dev.chopsticks.sample.app.dstream
 
 import akka.stream.scaladsl.{Sink, Source}
+import dev.chopsticks.dstream.DstreamClientMetrics.DstreamClientMetric
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
-import dev.chopsticks.dstream.DstreamWorker.DstreamWorkerConfig
+import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig}
 import dev.chopsticks.dstream._
 import dev.chopsticks.fp.ZAkkaApp
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
@@ -12,6 +13,7 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.util.LoggedRace
 import dev.chopsticks.fp.zio_ext.ZManagedExtensions
+import dev.chopsticks.metric.log.MetricLogger
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.{
   Assignment,
@@ -23,10 +25,10 @@ import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import io.prometheus.client.CollectorRegistry
-import zio.{ExitCode, RIO, Schedule, UIO, ZIO, ZLayer, ZManaged}
+import zio.{ExitCode, RIO, UIO, ZIO, ZLayer, ZManaged}
 
+import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
-import scala.jdk.DurationConverters.ScalaDurationOps
 
 object DstreamStateTestApp extends ZAkkaApp {
 
@@ -34,8 +36,10 @@ object DstreamStateTestApp extends ZAkkaApp {
     import zio.magic._
 
     val promRegistry = ZLayer.succeed(CollectorRegistry.defaultRegistry)
-    val promRegistryFactory = PromMetricRegistryFactory.live[DstreamStateMetric]("test")
+    val stateMetricRegistryFactory = PromMetricRegistryFactory.live[DstreamStateMetric]("test")
+    val clientMetricRegistryFactory = PromMetricRegistryFactory.live[DstreamClientMetric]("test")
     val dstreamStateMetricsManager = DstreamStateMetricsManager.live
+    val dstreamClientMetricsManager = DstreamClientMetricsManager.live
     val dstreamState = DstreamState.manage[Assignment, Result]("test").toLayer
     val dstreamServerHandlerFactory = DstreamServerHandlerFactory.live[Assignment, Result] { handle =>
       ZIO
@@ -59,20 +63,24 @@ object DstreamStateTestApp extends ZAkkaApp {
     val dstreamServer = DstreamServer.live[Assignment, Result]
     val dstreamMaster = DstreamMaster.live[Assignment, Assignment, Result, Result]
     val dstreamWorker = DstreamWorker.live[Assignment, Result]()
+    val metricLogger = MetricLogger.live()
 
     app
       .as(ExitCode(1))
       .provideSomeMagicLayer[ZAkkaAppEnv](
         promRegistry,
-        promRegistryFactory,
+        stateMetricRegistryFactory,
+        clientMetricRegistryFactory,
         dstreamStateMetricsManager,
+        dstreamClientMetricsManager,
         dstreamState,
         dstreamServerHandlerFactory,
         dstreamServerHandler,
         dstreamClient,
         dstreamServer,
         dstreamMaster,
-        dstreamWorker
+        dstreamWorker,
+        metricLogger
       )
   }
 
@@ -81,11 +89,11 @@ object DstreamStateTestApp extends ZAkkaApp {
     LoggedRace()
       .add("master", runMaster)
       .add("worker", runWorker)
-      .add("logging", periodicallyLog)
+      .add("metrics", logMetrics)
       .run()
   }
 
-  private lazy val parallelism: PosInt = 4
+  private lazy val parallelism: PosInt = 1
 
   private def runMaster = {
     val managed = for {
@@ -133,6 +141,7 @@ object DstreamStateTestApp extends ZAkkaApp {
           serverHost = "localhost",
           serverPort = 9999,
           serverTls = false,
+          backend = AkkaGrpcBackend.Netty,
           parallelism = parallelism,
           assignmentTimeout = 10.seconds,
           retryInitialDelay = 100.millis,
@@ -143,28 +152,32 @@ object DstreamStateTestApp extends ZAkkaApp {
           UIO {
             Source(1 to 10)
               .map(v => Result(assignment.valueIn * 10 + v))
-//              .throttle(1, 1.second)
+              .throttle(1, 1.second)
           }
         }
     } yield ()
   }
 
-  private def periodicallyLog = {
-    val task = for {
-      zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
-      dstreamMetrics <- ZIO.accessM[DstreamStateMetricsManager](_.get.activeSet)
-      _ <- ZIO.effectSuspend {
-        zlogger
-          .withCustomContext(
-            "workers" -> dstreamMetrics.iterator.map(_.dstreamWorkers.get).sum.toString,
-            "attempts" -> dstreamMetrics.iterator.map(_.dstreamAttemptsTotal.get).sum.toString,
-            "queue" -> dstreamMetrics.iterator.map(_.dstreamQueueSize.get).sum.toString,
-            "map" -> dstreamMetrics.iterator.map(_.dstreamMapSize.get).sum.toString
-          )
-          .info("")
-      }
-    } yield ()
+  private def logMetrics = {
+    MetricLogger
+      .periodicallyCollect {
+        for {
+          stateMetrics <- ZIO.accessM[DstreamStateMetricsManager](_.get.activeSet)
+          clientMetrics <- ZIO.accessM[DstreamClientMetricsManager](_.get.activeSet)
+        } yield {
+          import MetricLogger._
 
-    task.repeat(Schedule.fixed(1.second.toJava)).unit
+          ListMap(
+            "state-workers" -> snapshot(stateMetrics.iterator.map(_.workerCount.get).sum),
+            "state-attempts" -> snapshot(stateMetrics.iterator.map(_.attemptsTotal.get).sum),
+            "state-queue" -> snapshot(stateMetrics.iterator.map(_.queueSize.get).sum),
+            "state-map" -> snapshot(stateMetrics.iterator.map(_.mapSize.get).sum),
+            "client-workers" -> snapshot(clientMetrics.iterator.map(_.workerStatus.get).sum),
+            "client-attempts" -> snapshot(clientMetrics.iterator.map(_.attemptsTotal.get).sum),
+            "client-successes" -> snapshot(clientMetrics.iterator.map(_.successesTotal.get).sum),
+            "client-failures" -> snapshot(clientMetrics.iterator.map(_.failuresTotal.get).sum)
+          )
+        }
+      }
   }
 }

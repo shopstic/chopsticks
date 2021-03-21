@@ -9,6 +9,8 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
+import enumeratum.EnumEntry
+import enumeratum.EnumEntry.Hyphencase
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.numeric.PosInt
@@ -16,7 +18,7 @@ import eu.timepit.refined.types.string.NonEmptyString
 import io.grpc.{Status, StatusRuntimeException}
 import zio.Schedule.Decision
 import zio.duration.Duration
-import zio.{RIO, Schedule, Task, UIO, URLayer, ZIO}
+import zio.{RIO, Schedule, Task, UIO, URLayer, ZIO, ZManaged}
 
 import java.time.OffsetDateTime
 import java.util.concurrent.TimeoutException
@@ -25,10 +27,21 @@ import scala.concurrent.duration.FiniteDuration
 import scala.jdk.DurationConverters.ScalaDurationOps
 
 object DstreamWorker {
+  sealed trait AkkaGrpcBackend extends EnumEntry with Hyphencase
+
+  object AkkaGrpcBackend extends enumeratum.Enum[AkkaGrpcBackend] {
+    //noinspection TypeAnnotation
+    val values = findValues
+
+    case object Netty extends AkkaGrpcBackend
+    case object AkkaHttp extends AkkaGrpcBackend
+  }
+
   final case class DstreamWorkerConfig(
     serverHost: NonEmptyString,
     serverPort: PortNumber,
     serverTls: Boolean,
+    backend: AkkaGrpcBackend,
     parallelism: PosInt,
     assignmentTimeout: Timeout,
     retryInitialDelay: FiniteDuration,
@@ -53,64 +66,75 @@ object DstreamWorker {
     retryPolicy: PartialFunction[Throwable, Boolean] = DefaultRetryPolicy
   ) = {
     ZIO.foreachPar_(1 to config.parallelism) { workerId =>
-      for {
-        zlogger <- IzLogging.zioLogger
-        settings <- AkkaEnv.actorSystem.map { implicit as =>
-          GrpcClientSettings
-            .connectToServiceAt(config.serverHost, config.serverPort)
-            .withBackend("akka-http")
-            .withTls(config.serverTls)
-        }
-        createRequest <- ZIO.accessM[DstreamClient[Assignment, Result]](_.get.requestBuilder(settings))
-
-        runWorker = for {
-          promise <- UIO(Promise[Source[Result, NotUsed]]())
-          result <- createRequest(workerId)
-            .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
-            .toZAkkaSource
-            .interruptible
-            .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
-            .interruptibleMapAsync(1) {
-              assignment =>
-                makeSource(assignment)
-                  .map(s => promise.success(s))
-                  .zipRight(Task.fromFuture(_ => promise.future))
+      ZManaged.accessManaged[DstreamClientMetricsManager](_.get.manage(workerId.toString))
+        .use { metrics =>
+          for {
+            zlogger <- IzLogging.zioLogger
+            settings <- AkkaEnv.actorSystem.map { implicit as =>
+              GrpcClientSettings
+                .connectToServiceAt(config.serverHost, config.serverPort)
+                .withBackend(config.backend.entryName)
+                .withTls(config.serverTls)
             }
-            .interruptibleRunIgnore()
-        } yield result
+            createRequest <- ZIO.accessM[DstreamClient[Assignment, Result]](_.get.requestBuilder(settings))
 
-        retrySchedule = Schedule
-          .identity[Throwable]
-          .whileOutput(e => retryPolicy.applyOrElse(e, (_: Any) => false))
+            runWorker = for {
+              _ <- UIO(metrics.attemptsTotal.inc())
+              promise <- UIO(Promise[Source[Result, NotUsed]]())
+              result <- createRequest(workerId)
+                .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
+                .toZAkkaSource
+                .interruptible
+                .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
+                .interruptibleMapAsync(1) {
+                  assignment =>
+                    makeSource(assignment)
+                      .map(s => promise.success(s))
+                      .zipRight(Task.fromFuture(_ => promise.future))
+                }
+                .interruptibleRunIgnore()
+              _ <- UIO(metrics.successesTotal.inc())
+            } yield result
 
-        backoffSchedule: Schedule[Any, Throwable, (Duration, Long)] = (Schedule
-          .exponential(config.retryInitialDelay.toJava) || Schedule.spaced(config.retryMaxDelay.toJava))
-          .resetAfter(config.retryResetAfter.toJava)
+            retrySchedule = Schedule
+              .identity[Throwable]
+              .whileOutput(e => retryPolicy.applyOrElse(e, (_: Any) => false))
 
-        _ <- runWorker
-          .forever
-          .unit
-          .retry(
-            (retrySchedule && backoffSchedule)
-              .onDecision {
-                case Decision.Done((exception, _)) =>
-                  zlogger.error(s"$workerId will NOT retry $exception")
-                case Decision.Continue((exception, _), interval, _) =>
-                  zlogger.warn(
-                    s"$workerId will retry ${java.time.Duration.between(OffsetDateTime.now, interval) -> "duration"} ${exception.getMessage}"
-                  )
+            backoffSchedule: Schedule[Any, Throwable, (Duration, Long)] = (Schedule
+              .exponential(config.retryInitialDelay.toJava) || Schedule.spaced(config.retryMaxDelay.toJava))
+              .resetAfter(config.retryResetAfter.toJava)
+
+            _ <- runWorker
+              .bracketExit { (_: Any, _: Any) =>
+                UIO(metrics.workerStatus.set(0))
+              } { _ =>
+                UIO(metrics.workerStatus.set(1))
               }
-          )
-      } yield ()
+              .forever
+              .unit
+              .retry(
+                (retrySchedule && backoffSchedule)
+                  .tapOutput(_ => UIO(metrics.failuresTotal.inc()))
+                  .onDecision {
+                    case Decision.Done((exception, _)) =>
+                      zlogger.error(s"$workerId will NOT retry $exception")
+                    case Decision.Continue((exception, _), interval, _) =>
+                      zlogger.debug(
+                        s"$workerId will retry ${java.time.Duration.between(OffsetDateTime.now, interval) -> "duration"} ${exception.getMessage}"
+                      )
+                  }
+              )
+          } yield ()
+        }
     }
   }
 
   def live[Assignment: zio.Tag, Result: zio.Tag](
     retryPolicy: PartialFunction[Throwable, Boolean] = DefaultRetryPolicy
-  ): URLayer[AkkaEnv with MeasuredLogging with DstreamClient[Assignment, Result], DstreamWorker[
-    Assignment,
-    Result
-  ]] = {
+  ): URLayer[
+    MeasuredLogging with AkkaEnv with DstreamClient[Assignment, Result] with DstreamClientMetricsManager,
+    DstreamWorker[Assignment, Result]
+  ] = {
     ZRunnable(runWorkers[Assignment, Result] _)
       .toLayer[Service[Assignment, Result]] { fn =>
         new Service[Assignment, Result] {

@@ -70,10 +70,10 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
       dstreamMetrics <- ZIO.accessM[DstreamStateMetricsManager](_.get.activeSet)
       metricsMap <- UIO {
         ListMap(
-          "workers" -> dstreamMetrics.iterator.map(_.dstreamWorkers.get).sum.toString,
-          "attempts" -> dstreamMetrics.iterator.map(_.dstreamAttemptsTotal.get).sum.toString,
-          "queue" -> dstreamMetrics.iterator.map(_.dstreamQueueSize.get).sum.toString,
-          "map" -> dstreamMetrics.iterator.map(_.dstreamMapSize.get).sum.toString
+          "workers" -> dstreamMetrics.iterator.map(_.workerCount.get).sum.toString,
+          "attempts" -> dstreamMetrics.iterator.map(_.attemptsTotal.get).sum.toString,
+          "queue" -> dstreamMetrics.iterator.map(_.queueSize.get).sum.toString,
+          "map" -> dstreamMetrics.iterator.map(_.mapSize.get).sum.toString
         )
       }
       formatted = metricsMap.iterator.map { case (k, v) => s"$k=$v" }.mkString(" ")

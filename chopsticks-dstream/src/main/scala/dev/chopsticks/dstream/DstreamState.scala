@@ -39,10 +39,10 @@ object DstreamState {
     for {
       akkaService <- ZManaged.access[AkkaEnv](_.get)
       metrics <- ZManaged.accessManaged[DstreamStateMetricsManager](_.get.manage(serviceId))
-      workerGauge = metrics.dstreamWorkers
-      attemptCounter = metrics.dstreamAttemptsTotal
-      queueSizeGauge = metrics.dstreamQueueSize
-      mapSizeGauge = metrics.dstreamMapSize
+      workerGauge = metrics.workerCount
+      attemptCounter = metrics.attemptsTotal
+      queueSizeGauge = metrics.queueSize
+      mapSizeGauge = metrics.mapSize
       assignmentCounter = new AtomicLong(0L)
       assignmentQueue <- TQueue.unbounded[AssignmentItem[Req]].commit.toManaged_
       workResultMap <- TMap.empty[Long, WorkItem[Req, Res]].commit.toManaged_
