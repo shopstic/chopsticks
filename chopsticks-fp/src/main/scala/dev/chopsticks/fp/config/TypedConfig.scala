@@ -3,9 +3,10 @@ package dev.chopsticks.fp.config
 import com.typesafe.config.{ConfigList, ConfigRenderOptions}
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.util.config.PureconfigLoader
+import dev.chopsticks.util.config.PureconfigLoader.PureconfigLoadFailure
 import japgolly.microlibs.utils.AsciiTable
 import pureconfig.ConfigReader
-import zio.{RLayer, Task, URIO, ZIO}
+import zio.{RLayer, Task, UIO, URIO, ZIO}
 
 import scala.jdk.CollectionConverters._
 
@@ -21,7 +22,7 @@ object TypedConfig {
     val effect = for {
       hoconConfig <- HoconConfig.get
       logger <- IzLogging.logger
-      typedConfig <- Task {
+      result <- Task.effectSuspend {
         val debugInfo = AsciiTable(
           List("Key", "Value", "Origin") ::
             hoconConfig
@@ -46,11 +47,18 @@ object TypedConfig {
 
         logger.info(s"Provided ${configNamespace -> "" -> null} config:\n${debugInfo -> "" -> null}")
 
-        PureconfigLoader.unsafeLoad[Cfg](hoconConfig, configNamespace)
+        ZIO
+          .fromEither(PureconfigLoader.load[Cfg](hoconConfig, configNamespace))
+          .mapError { error =>
+            PureconfigLoadFailure(
+              s"Failed converting HOCON config to ${zio.Tag[Cfg].closestClass.getName}. Reasons:\n" + error
+            )
+          }
+          .tapError(error => UIO(logger.error(s"${error.getMessage -> "" -> null}")))
       }
     } yield {
       new Service[Cfg] {
-        override val config: Cfg = typedConfig
+        override val config: Cfg = result
       }
     }
 
