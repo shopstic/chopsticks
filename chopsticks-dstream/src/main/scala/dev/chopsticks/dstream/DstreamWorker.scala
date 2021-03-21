@@ -2,7 +2,7 @@ package dev.chopsticks.dstream
 
 import akka.NotUsed
 import akka.grpc.GrpcClientSettings
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{Sink, Source}
 import akka.util.Timeout
 import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.akka_env.AkkaEnv
@@ -83,12 +83,17 @@ object DstreamWorker {
                 metrics.attemptsTotal.inc()
                 metrics.workerStatus.set(1)
               }
-            } { (_, exit: Exit[Throwable, Unit]) =>
+            } { (_, exit: Exit[Throwable, Option[Assignment]]) =>
               UIO {
                 metrics.workerStatus.set(0)
 
                 if (exit.succeeded) {
-                  metrics.successesTotal.inc()
+                  if (exit.exists(_.nonEmpty)) {
+                    metrics.successesTotal.inc()
+                  }
+                  else {
+                    metrics.timeoutsTotal.inc()
+                  }
                 }
                 else {
                   metrics.failuresTotal.inc()
@@ -105,11 +110,11 @@ object DstreamWorker {
                   .interruptibleMapAsync(1) {
                     assignment =>
                       makeSource(assignment)
-                        .map(s => promise.success(s))
+                        .tap(s => UIO(promise.success(s)))
                         .zipRight(Task.fromFuture(_ => promise.future))
+                        .as(assignment)
                   }
-                  .interruptibleRunIgnore()
-                _ <- UIO(metrics.successesTotal.inc())
+                  .interruptibleRunWith(Sink.lastOption)
               } yield result
             }
 
@@ -131,7 +136,7 @@ object DstreamWorker {
                       zlogger.error(s"$workerId will NOT retry $exception")
                     case Decision.Continue((exception, _), interval, _) =>
                       zlogger.debug(
-                        s"$workerId will retry ${java.time.Duration.between(OffsetDateTime.now, interval) -> "duration"} ${exception.getMessage}"
+                        s"$workerId will retry ${java.time.Duration.between(OffsetDateTime.now, interval) -> "duration"} ${exception.getMessage -> "exception"}"
                       )
                   }
               )
