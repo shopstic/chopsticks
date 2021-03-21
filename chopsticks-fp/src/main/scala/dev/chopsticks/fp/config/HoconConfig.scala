@@ -49,9 +49,9 @@ object HoconConfig {
       val defaultOverrides = ConfigFactory.defaultOverrides(loader)
       val defaultReference = ConfigImpl.defaultReferenceUnresolved(loader)
 
-      val combinedUnresolvedConfig = entryConfig
+      val combinedUnresolvedConfig = defaultOverrides
+        .withFallback(entryConfig)
         .withFallback(appConfig)
-        .withFallback(defaultOverrides)
         .withFallback(defaultApplication)
         .withFallback(defaultReference)
 
