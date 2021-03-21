@@ -17,8 +17,8 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.types.net.PortNumber
 import zio._
 import zio.test.TestAspect.PerTest
-import zio.test.environment.Live
-import zio.test.{Spec, TestAspectAtLeastR, TestFailure, TestResult, TestSuccess, TestTimeoutException}
+import zio.test.environment._
+import zio.test._
 
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
@@ -51,7 +51,7 @@ object DstreamTestUtils {
       server <- ZManaged.access[DstreamServer[A, R]](_.get)
       serverBinding <- server.manage(DstreamServerConfig(port = 0, interface = "localhost"))
       ctx <- ZManaged.makeInterruptible {
-        (for {
+        for {
           masterRequests <- ZQueue.unbounded[(A, WorkResult[R])]
           masterResponses <- ZQueue.unbounded[A]
           workerRequests <- ZQueue.unbounded[A]
@@ -118,7 +118,7 @@ object DstreamTestUtils {
           workerResponses = workerResponses,
           masterFiber = masterFib,
           workerFiber = workerFib
-        ))
+        )
       } { ctx =>
         ctx.workerFiber.interrupt *> ctx.masterFiber.interrupt
       }
@@ -158,9 +158,4 @@ object DstreamTestUtils {
       ZIO.fail(FailedTestResult(result))
     }
   }
-
-  def provideOneLayer[R0, R <: Has[_]: Tag, R1 <: Has[_], E, E1 >: E, A](layer: ZLayer[R0, E, R])(
-    spec: Spec[R with R1, E1, A]
-  ): Spec[R0 with R1, E1, A] =
-    spec.provideSomeLayer[R0 with R1](layer)
 }
