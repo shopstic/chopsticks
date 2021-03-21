@@ -5,7 +5,7 @@ import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.util.config.PureconfigLoader
 import japgolly.microlibs.utils.AsciiTable
 import pureconfig.ConfigReader
-import zio.{Has, RLayer, Task, URIO, ZIO}
+import zio.{RLayer, Task, URIO, ZIO}
 
 import scala.jdk.CollectionConverters._
 
