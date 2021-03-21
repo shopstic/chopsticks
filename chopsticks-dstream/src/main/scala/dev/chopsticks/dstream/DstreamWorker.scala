@@ -65,7 +65,7 @@ object DstreamWorker {
 
         runWorker = for {
           promise <- UIO(Promise[Source[Result, NotUsed]]())
-          result <- createRequest()
+          result <- createRequest(workerId)
             .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
             .toZAkkaSource
             .interruptible

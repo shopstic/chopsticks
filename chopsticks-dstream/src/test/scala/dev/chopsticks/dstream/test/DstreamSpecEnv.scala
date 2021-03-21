@@ -57,7 +57,9 @@ trait DstreamSpecEnv {
         .map { implicit as =>
           DstreamSampleAppClient(settings)
         }
-    }(_.work()).forTest
+    } { (client, _) =>
+      client.work()
+    }.forTest
 
   protected lazy val dstreamServerLayer = DstreamServer.live[Assignment, Result].forTest
   protected lazy val dstreamMasterLayer = DstreamMaster.live[Assignment, Assignment, Result, Assignment].forTest
