@@ -57,5 +57,5 @@ trait DstreamSpecEnv {
 
   protected lazy val dstreamServerLayer = DstreamServer.live[Assignment, Result].forTest
   protected lazy val dstreamMasterLayer = DstreamMaster.live[Assignment, Assignment, Result, Assignment].forTest
-  protected lazy val dstreamWorkerLayer = DstreamWorker.live[Assignment, Result]().forTest
+  protected lazy val dstreamWorkerLayer = DstreamWorker.live[Assignment, Result].forTest
 }

@@ -9,7 +9,8 @@ import dev.chopsticks.stream.FailIfEmptyFlow.UpstreamFinishWithoutEmittingAnyIte
 import dev.chopsticks.stream.ZAkkaFlow
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
-import zio.{RIO, Task, UIO, URIO, URLayer, ZIO}
+import zio.clock.Clock
+import zio.{RIO, Schedule, Task, UIO, URIO, URLayer, ZIO}
 
 object DstreamMaster {
   final case class DstreamMasterConfig(
@@ -18,10 +19,17 @@ object DstreamMaster {
   )
 
   trait Service[In, Assignment, Result, Out] {
-    def createFlow[R1, R2](config: DstreamMasterConfig, createAssignment: In => URIO[R1, Assignment])(
+    def createFlow[R1, R2, R3](config: DstreamMasterConfig, createAssignment: In => URIO[R1, Assignment])(
       handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
-    ): ZIO[R1 with R2, Nothing, Flow[In, Out, NotUsed]]
+    )(retrySchedule: Schedule[R3, Throwable, Any]): URIO[R1 with R2 with R3, Flow[In, Out, NotUsed]]
   }
+
+  private val defaultRetrySchedule = Schedule
+    .identity[Throwable]
+    .whileInput[Throwable] {
+      case UpstreamFinishWithoutEmittingAnyItemException => true
+      case _ => false
+    }
 
   private[dstream] def createRunnerFlowFactory[In: zio.Tag, Assignment: zio.Tag, Result: zio.Tag, Out: zio.Tag](
     config: DstreamMasterConfig
@@ -31,72 +39,86 @@ object DstreamMaster {
       stateSvc <- ZIO.access[DstreamState[Assignment, Result]](_.get)
 
       flowFactoryManagedFn =
-        ZRunnable { (createAssignment: In => UIO[Assignment], handleResult: (In, WorkResult[Result]) => Task[Out]) =>
-          val process = (context: In) => {
-            val task = for {
-              assignment <- createAssignment(context)
-              result <- {
-                ZIO.bracket(stateSvc.enqueueAssignment(assignment)) { assignmentId =>
-                  stateSvc
-                    .report(assignmentId)
-                    .flatMap {
-                      case None => ZIO.unit
-                      case Some(worker) =>
-                        UIO {
-                          import akkaSvc.actorSystem
-                          worker.source.runWith(Sink.cancelled)
-                        }.ignore
-                    }
-                    .orDie
-                } { assignmentId =>
-                  stateSvc
-                    .awaitForWorker(assignmentId)
-                    .flatMap(result => handleResult(context, result))
+        ZRunnable {
+          (
+            createAssignment: In => UIO[Assignment],
+            handleResult: (In, WorkResult[Result]) => Task[Out],
+            retrySchedule: Schedule[Any, Throwable, Any]
+          ) =>
+            val process = (context: In) => {
+              val task = for {
+                assignment <- createAssignment(context)
+                result <- {
+                  ZIO.bracket(stateSvc.enqueueAssignment(assignment)) { assignmentId =>
+                    stateSvc
+                      .report(assignmentId)
+                      .flatMap {
+                        case None => ZIO.unit
+                        case Some(worker) =>
+                          UIO {
+                            import akkaSvc.actorSystem
+                            worker.source.runWith(Sink.cancelled)
+                          }.ignore
+                      }
+                      .orDie
+                  } { assignmentId =>
+                    stateSvc
+                      .awaitForWorker(assignmentId)
+                      .flatMap(result => handleResult(context, result))
+                  }
                 }
+              } yield result
+
+//              val mandatoryRetryPolicy: PartialFunction[Throwable, Boolean] = {
+//                case UpstreamFinishWithoutEmittingAnyItemException => true
+//              }
+
+              task
+                .retry(
+                  defaultRetrySchedule || retrySchedule
+                )
+            }
+
+            val zflow =
+              if (config.ordered) {
+                ZAkkaFlow[In]
+                  .interruptibleMapAsync(config.parallelism)(process)
               }
-            } yield result
+              else {
+                ZAkkaFlow[In]
+                  .interruptibleMapAsyncUnordered(config.parallelism)(process)
+              }
 
-            task.retryWhile {
-              case UpstreamFinishWithoutEmittingAnyItemException => true
-              case _ => false
-            }
-          }
-
-          val zflow =
-            if (config.ordered) {
-              ZAkkaFlow[In]
-                .interruptibleMapAsync(config.parallelism)(process)
-            }
-            else {
-              ZAkkaFlow[In]
-                .interruptibleMapAsyncUnordered(config.parallelism)(process)
-            }
-
-          zflow.make
+            zflow.make
         }
 
       flowFactory <- flowFactoryManagedFn.toZIO
     } yield flowFactory
   }
 
-  def live[In: zio.Tag, Assignment: zio.Tag, Result: zio.Tag, Out: zio.Tag]
-    : URLayer[AkkaEnv with DstreamState[Assignment, Result], DstreamMaster[In, Assignment, Result, Out]] = {
+  def live[In: zio.Tag, Assignment: zio.Tag, Result: zio.Tag, Out: zio.Tag]: URLayer[
+    Clock with AkkaEnv with DstreamState[Assignment, Result],
+    DstreamMaster[In, Assignment, Result, Out]
+  ] = {
     val runnable = ZRunnable(createRunnerFlowFactory[In, Assignment, Result, Out] _)
 
     runnable.toLayer[Service[In, Assignment, Result, Out]] { fn =>
       new Service[In, Assignment, Result, Out] {
-        override def createFlow[R1, R2](
+        override def createFlow[R1, R2, R3](
           config: DstreamMasterConfig,
           createAssignment: In => URIO[R1, Assignment]
         )(
           handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
-        ): ZIO[R1 with R2, Nothing, Flow[In, Out, NotUsed]] = {
+        )(
+          retrySchedule: Schedule[R3, Throwable, Any]
+        ): URIO[R1 with R2 with R3, Flow[In, Out, NotUsed]] = {
           fn(config).flatMap { create =>
             for {
-              env <- ZIO.environment[R1 with R2]
+              env <- ZIO.environment[R1 with R2 with R3]
               flow <- create(
                 in => createAssignment(in).provide(env),
-                (in, workResult) => handleResult(in, workResult).provide(env)
+                (in, workResult) => handleResult(in, workResult).provide(env),
+                retrySchedule.provide(env)
               )
             } yield flow
           }
