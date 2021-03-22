@@ -42,8 +42,8 @@ ci_build() {
   sbt --client Test / compile
   sbt --client printWarnings
   sbt --client Test / printWarnings
-  sbt --client 'set ThisBuild / Test / fork := false'
-  sbt --client test
+#  sbt --client 'set ThisBuild / Test / fork := false'
+#  sbt --client test
 }
 
 ci_publish() {
@@ -64,7 +64,7 @@ ci_publish() {
   echo "Publish version is ${PUBLISH_VERSION}"
 
   sbt --client "set ThisBuild / version := \"${PUBLISH_VERSION}\""
-  sbt --client publish
+  sbt --client kvdb-rocksdb / publish
 }
 
 publish_fdb_jar() {
