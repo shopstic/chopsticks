@@ -13,7 +13,6 @@ import scalapb.GeneratedEnum
 
 import scala.annotation.{implicitNotFound, nowarn}
 import scala.language.experimental.macros
-import scala.reflect.ClassTag
 
 @implicitNotFound(
   msg =
@@ -58,26 +57,25 @@ object BerkeleydbKeySerializer {
   implicit val uuidBerkeleydbKeyEncoder: PredefinedBerkeleydbKeySerializer[UUID] =
     define((o, v) => o.writeLong(v.getMostSignificantBits).writeLong(v.getLeastSignificantBits))
 
-  implicit def protobufEnumBerkeleydbKeyEncoder[T <: GeneratedEnum: ClassTag]: PredefinedBerkeleydbKeySerializer[T] =
+  implicit def protobufEnumBerkeleydbKeyEncoder[T <: GeneratedEnum]: PredefinedBerkeleydbKeySerializer[T] =
     define((o, v) => intBerkeleydbKeyEncoder.serialize(o, v.value))
 
-  implicit def enumeratumByteEnumKeyEncoder[E <: ByteEnumEntry: ClassTag]: PredefinedBerkeleydbKeySerializer[E] =
+  implicit def enumeratumByteEnumKeyEncoder[E <: ByteEnumEntry]: PredefinedBerkeleydbKeySerializer[E] =
     define((o, v) => o.writeByte(v.value.toInt))
 
-  implicit def enumeratumShortEnumKeyEncoder[E <: ShortEnumEntry: ClassTag]: PredefinedBerkeleydbKeySerializer[E] =
+  implicit def enumeratumShortEnumKeyEncoder[E <: ShortEnumEntry]: PredefinedBerkeleydbKeySerializer[E] =
     define((o, v) => o.writeShort(v.value.toInt))
 
-  implicit def enumeratumIntEnumKeyEncoder[E <: IntEnumEntry: ClassTag]: PredefinedBerkeleydbKeySerializer[E] =
+  implicit def enumeratumIntEnumKeyEncoder[E <: IntEnumEntry]: PredefinedBerkeleydbKeySerializer[E] =
     define((o, v) => o.writeInt(v.value))
 
-  implicit def enumeratumEnumKeyEncoder[E <: EnumEntry: ClassTag]: PredefinedBerkeleydbKeySerializer[E] =
+  implicit def enumeratumEnumKeyEncoder[E <: EnumEntry]: PredefinedBerkeleydbKeySerializer[E] =
     define((o, v) => o.writeString(v.entryName))
 
   implicit def refinedBerkeleydbKeySerializer[F[_, _], A, B](implicit
     serializer: BerkeleydbKeySerializer[A],
     refType: RefType[F],
-    @nowarn validate: Validate[A, B],
-    ct: ClassTag[F[A, B]]
+    @nowarn validate: Validate[A, B]
   ): PredefinedBerkeleydbKeySerializer[F[A, B]] =
     define((tupleOutput: TupleOutput, value: F[A, B]) => serializer.serialize(tupleOutput, refType.unwrap(value)))
 
@@ -93,7 +91,7 @@ object BerkeleydbKeySerializer {
     }
   }
 
-  def define[T: ClassTag](ser: (TupleOutput, T) => TupleOutput): PredefinedBerkeleydbKeySerializer[T] =
+  def define[T](ser: (TupleOutput, T) => TupleOutput): PredefinedBerkeleydbKeySerializer[T] =
     (tupleOutput: TupleOutput, value: T) => ser(tupleOutput, value)
 
   def apply[V](implicit f: BerkeleydbKeySerializer[V]): BerkeleydbKeySerializer[V] = f

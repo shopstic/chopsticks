@@ -1,11 +1,16 @@
 package dev.chopsticks.dstream.test
 
-import dev.chopsticks.dstream.DstreamWorkerMetrics.DstreamWorkerMetric
-import dev.chopsticks.dstream.DstreamMasterMetrics.DstreamMasterMetric
-import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
+import dev.chopsticks.dstream.metric.DstreamWorkerMetrics.DstreamWorkerMetric
+import dev.chopsticks.dstream.metric.DstreamMasterMetrics.DstreamMasterMetric
+import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.test.DstreamTestUtils.ToTestZLayer
 import dev.chopsticks.dstream.test.proto.{Assignment, DstreamSampleAppClient, DstreamSampleAppPowerApiHandler, Result}
 import dev.chopsticks.dstream._
+import dev.chopsticks.dstream.metric.{
+  DstreamClientMetricsManager,
+  DstreamMasterMetricsManager,
+  DstreamStateMetricsManager
+}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.fp.iz_logging.IzLogging
@@ -16,9 +21,9 @@ import zio.{ZIO, ZLayer}
 
 //noinspection TypeAnnotation
 object DstreamSpecEnv {
-  protected lazy val hoconConfigLayer = HoconConfig.live(None).forTest
-  protected lazy val izLoggingLayer = IzLogging.live().forTest
-  protected lazy val akkaEnvLayer = AkkaEnv.live("test").forTest
+  lazy val hoconConfigLayer = HoconConfig.live(None).forTest
+  lazy val izLoggingLayer = IzLogging.live().forTest
+  lazy val akkaEnvLayer = AkkaEnv.live("test").forTest
 
   type SharedEnv = HoconConfig with IzLogging with AkkaEnv
 }

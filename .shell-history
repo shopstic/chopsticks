@@ -1,0 +1,46 @@
+env
+sbt --client compile
+which java
+which java
+env
+find / -name java
+cat ~/.profile
+which java
+sbt --client compile
+ls -la ~/.cache/coursier/
+ls -la ~/.cache/coursier/v1/
+sbt --client compile
+find / -name "protoc*"
+ls -la ~/.cache/protocbridge/
+ls -la ~/.cache/protocbridge/v1/
+ls -la ~/.cache/protocbridge/
+ls -la ~/.cache/protocbridge/v1/
+sbt --client compile
+sbt --client compile
+ps
+ps
+ps aux 
+export FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+env
+service foundationdb start
+env
+ps
+ps aux
+fdbcli
+ps aux
+sbt --client dstream / test
+sbt --client dstream / test
+ls -la ~/.sbt/
+find ~/.sbt/ -name "*bridge*"
+find ~/.sbt/ -name "*bridge*"
+find ~/.sbt/ -name "*bridge*"
+b
+sbt --client shutdown
+export FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+sbt --client dstream / test
+sbt --client test
+sbt --client kvdb-fdb / test
+sbt --client kvdb-fdb / test
+sbt --client kvdb-fdb / test
+sbt --client kvdb-fdb / test
+sbt --client reload

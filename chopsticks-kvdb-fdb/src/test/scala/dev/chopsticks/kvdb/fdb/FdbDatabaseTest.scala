@@ -28,7 +28,7 @@ object FdbDatabaseTest {
       database <- FdbDatabase.manage(
         dbMaterialization,
         FdbDatabase.FdbDatabaseConfig(
-          clusterFilePath = Some(sys.env("HOME") + "/.fdb/cluster.file"),
+          clusterFilePath = sys.env.get("FDB_CLUSTER_FILE").orElse(Some(sys.env("HOME") + "/.fdb/cluster.file")),
           rootDirectoryPath = UUID.randomUUID().toString,
           stopNetworkOnClose = false
         )

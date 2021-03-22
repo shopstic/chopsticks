@@ -1,8 +1,8 @@
-package dev.chopsticks.dstream
+package dev.chopsticks.dstream.metric
 
-import dev.chopsticks.metric.MetricConfigs.{CounterConfig, GaugeConfig, LabelNames, LabelValues, MetricLabel}
+import dev.chopsticks.metric.MetricConfigs._
 import dev.chopsticks.metric.MetricRegistry.MetricGroup
-import dev.chopsticks.metric.{MetricCounter, MetricGauge, MetricRegistry, MetricRegistryFactory, MetricServiceManager}
+import dev.chopsticks.metric._
 import zio.RLayer
 
 trait DstreamStateMetrics {

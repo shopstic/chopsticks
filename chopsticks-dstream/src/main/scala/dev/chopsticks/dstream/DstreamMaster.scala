@@ -3,6 +3,7 @@ package dev.chopsticks.dstream
 import akka.NotUsed
 import akka.stream.scaladsl.{Flow, Sink}
 import dev.chopsticks.dstream.DstreamState.WorkResult
+import dev.chopsticks.dstream.metric.DstreamMasterMetricsManager
 import dev.chopsticks.fp.ZManageable
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.stream.FailIfEmptyFlow.UpstreamFinishWithoutEmittingAnyItemException
@@ -33,7 +34,7 @@ object DstreamMaster {
       case _ => false
     }
 
-  private[dstream] def createRunnerFlowFactory[In: Tag, Assignment: Tag, Result: Tag, Out: Tag](
+  private[dstream] def createRunnerFlowFactory[In, Assignment: Tag, Result: Tag, Out](
     config: DstreamMasterConfig
   ) = {
     def createFlow(

@@ -16,7 +16,10 @@ object Build {
 
   val forkTests = sys.env.get("FORK_TESTS").forall(_ == "true")
 
-  val scalacLintingOptions = Seq(
+  val javacOptions = Seq("-encoding", "UTF-8")
+  val scalacOptions: Seq[String] = Seq(
+    "-encoding",
+    "utf-8",
     "-explaintypes", // Explain type errors in more detail.
     "-Xcheckinit", // Wrap field accessors to throw an exception on uninitialized access.
     "-Wdead-code", // Warn when dead code is identified.
@@ -24,18 +27,14 @@ object Build {
     "-Wnumeric-widen", // Warn when numerics are widened.
     "-Wvalue-discard", // Warn when non-Unit expression results are unused.
     "-Wunused:_", // Warn unused
+    "-Wmacros:after",
     "-Xlint:-byname-implicit,_", // Enable all linting options except lint-byname-implicit
-    "-Wconf:any:wv"
-  ) ++ scala.sys.env.get("FATAL_WARNINGS").map(_ => Seq("-Werror")).getOrElse(Seq.empty[String])
-
-  val javacOptions = Seq("-encoding", "UTF-8")
-  val scalacOptions = Seq(
-    "-encoding",
-    "utf-8"
-  ) ++ scala.sys.env
-    .get("SCALAC_OPTIMIZE")
-    .map(_.split(" ").toVector)
-    .getOrElse(Vector.empty[String]) ++ scalacLintingOptions
+    "-Wconf:any:wv",
+    "-Wconf:src=akka-grpc/.*:silent",
+    "-Wconf:src=src_managed/.*:silent",
+    "-Ypatmat-exhaust-depth",
+    "40"
+  )
 
   lazy val cq = taskKey[Unit]("Code quality")
   lazy val fmt = taskKey[Unit]("Code formatting")

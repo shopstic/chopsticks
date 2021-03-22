@@ -1,6 +1,5 @@
 package dev.chopsticks
 
-import dev.chopsticks.metric.MetricServiceManager
 import zio._
 
 package object dstream {
@@ -12,8 +11,4 @@ package object dstream {
   type DstreamServerHandler[Assignment, Result] = Has[DstreamServerHandler.Service[Assignment, Result]]
   type DstreamClient[Assignment, Result] = Has[DstreamClient.Service[Assignment, Result]]
   type DstreamStateFactory = Has[DstreamStateFactory.Service]
-
-  type DstreamStateMetricsManager = MetricServiceManager[String, DstreamStateMetrics]
-  type DstreamMasterMetricsManager = MetricServiceManager[String, DstreamMasterMetrics]
-  type DstreamWorkerMetricsManager = MetricServiceManager[String, DstreamWorkerMetrics]
 }

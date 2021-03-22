@@ -12,7 +12,7 @@ final class ZManageable1[A, R, E, V](fn: A => ZManaged[R, E, V]) {
       .toLayer
   }
 
-  def toManaged[S: zio.Tag]: ZManaged[R, E, A => ZManaged[Any, E, V]] = {
+  def toManaged[S]: ZManaged[R, E, A => ZManaged[Any, E, V]] = {
     ZManaged
       .access[R](env => {
         (arg: A) => fn(arg).provide(env)

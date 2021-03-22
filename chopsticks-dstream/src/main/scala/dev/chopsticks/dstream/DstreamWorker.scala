@@ -4,16 +4,13 @@ import akka.NotUsed
 import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.Timeout
+import dev.chopsticks.dstream.metric.DstreamWorkerMetricsManager
 import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
-import enumeratum.EnumEntry
-import enumeratum.EnumEntry.Hyphencase
 import eu.timepit.refined.auto._
-import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.numeric.PosInt
-import eu.timepit.refined.types.string.NonEmptyString
 import io.grpc.{Status, StatusRuntimeException}
 import zio.Schedule.Decision
 import zio.clock.Clock
@@ -27,21 +24,8 @@ import scala.concurrent.duration.FiniteDuration
 import scala.jdk.DurationConverters.ScalaDurationOps
 
 object DstreamWorker {
-  sealed trait AkkaGrpcBackend extends EnumEntry with Hyphencase
-
-  object AkkaGrpcBackend extends enumeratum.Enum[AkkaGrpcBackend] {
-    //noinspection TypeAnnotation
-    val values = findValues
-
-    case object Netty extends AkkaGrpcBackend
-    case object AkkaHttp extends AkkaGrpcBackend
-  }
-
   final case class DstreamWorkerConfig(
-    serverHost: NonEmptyString,
-    serverPort: PortNumber,
-    serverTls: Boolean,
-    backend: AkkaGrpcBackend,
+    clientSettings: GrpcClientSettings,
     parallelism: PosInt,
     assignmentTimeout: Timeout
   )
@@ -54,7 +38,9 @@ object DstreamWorker {
   )
 
   trait Service[Assignment, Result] {
-    def run[R1, R2](config: DstreamWorkerConfig)(makeSource: Assignment => RIO[R1, Source[Result, NotUsed]])(
+    def run[R1, R2](
+      config: DstreamWorkerConfig
+    )(makeSource: Assignment => RIO[R1, Source[Result, NotUsed]])(
       makeRetrySchedule: Int => Schedule[R2, Throwable, Any]
     ): RIO[R1 with R2, Unit]
   }
@@ -99,13 +85,7 @@ object DstreamWorker {
       ZManaged.accessManaged[DstreamWorkerMetricsManager](_.get.manage(workerId.toString))
         .use { metrics =>
           for {
-            settings <- AkkaEnv.actorSystem.map { implicit as =>
-              GrpcClientSettings
-                .connectToServiceAt(config.serverHost, config.serverPort)
-                .withBackend(config.backend.entryName)
-                .withTls(config.serverTls)
-            }
-            createRequest <- ZIO.accessM[DstreamClient[Assignment, Result]](_.get.requestBuilder(settings))
+            createRequest <- ZIO.accessM[DstreamClient[Assignment, Result]](_.get.requestBuilder(config.clientSettings))
 
             runWorker = ZIO.bracketExit {
               UIO {
@@ -163,7 +143,9 @@ object DstreamWorker {
     ZRunnable(runWorkers[Assignment, Result] _)
       .toLayer[Service[Assignment, Result]] { fn =>
         new Service[Assignment, Result] {
-          override def run[R1, R2](config: DstreamWorkerConfig)(makeSource: Assignment => RIO[
+          override def run[R1, R2](
+            config: DstreamWorkerConfig
+          )(makeSource: Assignment => RIO[
             R1,
             Source[Result, NotUsed]
           ])(makeRetrySchedule: Int => Schedule[R2, Throwable, Any]): RIO[R1 with R2, Unit] = {

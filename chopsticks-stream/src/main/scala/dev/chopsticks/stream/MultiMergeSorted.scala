@@ -5,10 +5,9 @@ import akka.stream.scaladsl.{GraphDSL, Source}
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 
 import scala.collection.immutable
-import scala.reflect.ClassTag
 
 object MultiMergeSorted {
-  def merge[T: ClassTag](sources: Seq[Source[T, Any]], untilLastSourceComplete: Boolean = false)(implicit
+  def merge[T](sources: Seq[Source[T, Any]], untilLastSourceComplete: Boolean = false)(implicit
     ordering: Ordering[T]
   ): Source[T, Any] = {
     Source.fromGraph(GraphDSL.create(new MultiMergeSorted[T](sources.size, ordering, untilLastSourceComplete)) {
@@ -22,7 +21,7 @@ object MultiMergeSorted {
   }
 }
 
-final class MultiMergeSorted[T: ClassTag] private (
+final class MultiMergeSorted[T] private (
   val inputsCount: Int,
   val ordering: Ordering[T],
   untilLastSourceComplete: Boolean

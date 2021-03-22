@@ -7,8 +7,6 @@ import akka.stream.scaladsl.Source
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import zio.{UIO, URIO, URLayer, ZIO}
 
-import scala.annotation.nowarn
-
 object DstreamClient {
   trait Service[Assignment, Result] {
     def requestBuilder(settings: GrpcClientSettings)
@@ -19,8 +17,8 @@ object DstreamClient {
     def apply[R, Client <: AkkaGrpcClient](
       makeClient: GrpcClientSettings => URIO[R, Client]
     )(makeRequest: (Client, Int) => StreamResponseRequestBuilder[Source[Result, NotUsed], Assignment])(implicit
-      @nowarn("cat=unused") t1: zio.Tag[Assignment],
-      @nowarn("cat=unused") t2: zio.Tag[Result]
+      t1: zio.Tag[Assignment],
+      t2: zio.Tag[Result]
     ): URLayer[AkkaEnv with R, DstreamClient[Assignment, Result]] = {
       val effect: ZIO[R with AkkaEnv, Nothing, Service[Assignment, Result]] = for {
         env <- ZIO.environment[R]

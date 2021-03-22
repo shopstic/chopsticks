@@ -6,7 +6,6 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.scaladsl.Source
 import zio.{UIO, URIO, URLayer, ZManaged}
 
-import scala.annotation.nowarn
 import scala.concurrent.Future
 
 object DstreamServerHandlerFactory {
@@ -23,8 +22,8 @@ object DstreamServerHandlerFactory {
       R,
       HttpRequest => Future[HttpResponse]
     ])(implicit
-      @nowarn("cat=unused") t1: zio.Tag[Assignment],
-      @nowarn("cat=unused") t2: zio.Tag[Result]
+      t1: zio.Tag[Assignment],
+      t2: zio.Tag[Result]
     ): URLayer[R, DstreamServerHandlerFactory[Assignment, Result]] = {
       ZManaged
         .environment[R].map { env =>

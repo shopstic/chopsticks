@@ -1,20 +1,20 @@
 package dev.chopsticks.dstream.test
 
 import akka.NotUsed
+import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import akka.stream.testkit.{TestPublisher, TestSubscriber}
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamState.WorkResult
-import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig, DstreamWorkerRetryConfig}
+import dev.chopsticks.dstream.DstreamWorker.{DstreamWorkerConfig, DstreamWorkerRetryConfig}
 import dev.chopsticks.dstream.{DstreamMaster, DstreamServer, DstreamServerHandler, DstreamWorker}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
-import eu.timepit.refined.types.net.PortNumber
 import zio._
 import zio.test.TestAspect.PerTest
 import zio.test.environment._
@@ -41,8 +41,7 @@ object DstreamTestUtils {
     }
 
   def setup[A: zio.Tag, R: zio.Tag](
-    masterConfig: DstreamMasterConfig,
-    clientBackend: AkkaGrpcBackend
+    masterConfig: DstreamMasterConfig
   ): ZLayer[DstreamWorker[A, R] with MeasuredLogging with AkkaEnv with DstreamMaster[
     A,
     A,
@@ -92,12 +91,14 @@ object DstreamTestUtils {
             .forkDaemon
 
           worker <- ZIO.access[DstreamWorker[A, R]](_.get)
+          clientSettings <- AkkaEnv.actorSystem.map { implicit as =>
+            GrpcClientSettings
+              .connectToServiceAt("localhost", serverBinding.localAddress.getPort)
+              .withTls(false)
+          }
           workerFib <- worker
             .run(DstreamWorkerConfig(
-              serverHost = "localhost",
-              serverPort = PortNumber.unsafeFrom(serverBinding.localAddress.getPort),
-              serverTls = false,
-              backend = clientBackend,
+              clientSettings = clientSettings,
               parallelism = 1,
               assignmentTimeout = 10.seconds
             )) { assignment =>

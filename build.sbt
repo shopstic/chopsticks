@@ -1,7 +1,7 @@
 import Dependencies._
 import sbt.Resolver
 
-Global / semanticdbEnabled := true
+//Global / semanticdbEnabled := true
 
 ThisBuild / organization := "dev.chopsticks"
 ThisBuild / scalaVersion := SCALA_VERSION
@@ -12,7 +12,7 @@ ThisBuild / Test / testOptions := Seq(Tests.Argument("-l", Build.ItTagName), Tes
 //ThisBuild / Build.ITest / testOptions := Seq(Tests.Argument("-n", Build.ItTagName), Tests.Cleanup(() => System.gc()))
 
 ThisBuild / Test / fork := Build.forkTests
-ThisBuild / Test / javaOptions += "-Xmx768m"
+ThisBuild / Test / javaOptions += "-Xmx1536m"
 //ThisBuild / Build.ITest / fork := Build.forkTests
 //ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
@@ -97,13 +97,6 @@ lazy val kvdbRocksdb = Build
     libraryDependencies ++= rocksdbDeps
   )
   .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
-
-lazy val kvdbRemote = Build
-  .defineProject("kvdb-remote")
-  .settings(
-    libraryDependencies ++= akkaHttpDeps ++ snappyDeps
-  )
-  .dependsOn(kvdbCore)
 
 lazy val kvdbFdb = Build
   .defineProject("kvdb-fdb")
@@ -197,8 +190,8 @@ lazy val root = (project in file("."))
   .settings(
     name := "chopsticks",
     publish / skip := true,
-    dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
-    Build.ossPublishSettings
+    dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
+//    Build.ossPublishSettings
   )
   .aggregate(
     util,

@@ -1,6 +1,69 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ci_build_in_shell() {
+  local GITHUB_REF=${GITHUB_REF:?"GITHUB_REF env variable is required"}
+  local GITHUB_SHA=${GITHUB_SHA:?"GITHUB_SHA env variable is required"}
+  local GITHUB_TOKEN=${GITHUB_TOKEN:?"GITHUB_TOKEN env variable is required"}
+  local GITHUB_WORKSPACE=${GITHUB_WORKSPACE:?"GITHUB_WORKSPACE env variable is required"}
+
+  cat <<EOF | docker run \
+    --workdir /repo \
+    -i \
+    --rm \
+    -e SBT_OPTS="-Xmx3g -Xss6m" \
+    -e "GITHUB_SHA=${GITHUB_SHA}" \
+    -e "GITHUB_TOKEN=${GITHUB_TOKEN}" \
+    -v "${GITHUB_WORKSPACE}:/repo" \
+    -v "${HOME}/.cache:/root/.cache" \
+    "${IMAGE_NAME}:${IMAGE_TAG}" \
+    bash -l
+
+set -euo pipefail
+
+export FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+service foundationdb start
+
+./cli.sh ci_build
+
+if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+  ./cli.sh ci_publish
+fi
+
+EOF
+
+}
+
+ci_build() {
+  sbt --client 'set ThisBuild / scalacOptions ++= Seq("-opt:l:inline", "-opt-inline-from:**", "-opt:l:method", "-Werror")'
+  sbt --client show ThisBuild / scalacOptions | tail -n4
+  sbt --client cq
+  sbt --client compile
+  sbt --client printWarnings
+  sbt --client test
+}
+
+ci_publish() {
+  local GITHUB_SHA=${GITHUB_SHA:?"GITHUB_SHA env variable is required"}
+
+  local CURRENT_VERSION
+  CURRENT_VERSION=$(sbt --client show version | grep SNAPSHOT | head -n1 | awk '{print $2}' | sed s/-SNAPSHOT//)
+
+  local TIMESTAMP
+  TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+
+  local SHORTENED_COMMIT_SHA
+  SHORTENED_COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c 1-7)
+
+  local PUBLISH_VERSION="${CURRENT_VERSION}-${TIMESTAMP}-${SHORTENED_COMMIT_SHA}"
+
+  echo "Current version is ${CURRENT_VERSION}"
+  echo "Publish version is ${PUBLISH_VERSION}"
+
+  sbt --client "set ThisBuild / version := \"${PUBLISH_VERSION}\""
+  sbt --client publish
+}
+
 publish_fdb_jar() {
   VERSION=${1:?"Version is required"}
   SHOPSTIC_BINTRAY_API_KEY=${SHOPSTIC_BINTRAY_API_KEY:?"SHOPSTIC_BINTRAY_API_KEY env variable is required"}

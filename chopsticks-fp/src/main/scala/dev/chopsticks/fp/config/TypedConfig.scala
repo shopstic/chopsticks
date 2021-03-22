@@ -4,6 +4,7 @@ import com.typesafe.config.{ConfigList, ConfigRenderOptions}
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.util.config.PureconfigLoader
 import dev.chopsticks.util.config.PureconfigLoader.PureconfigLoadFailure
+import izumi.logstage.api.Log
 import japgolly.microlibs.utils.AsciiTable
 import pureconfig.ConfigReader
 import zio.{RLayer, Task, UIO, URIO, ZIO}
@@ -17,8 +18,10 @@ object TypedConfig {
 
   def get[Cfg: zio.Tag]: URIO[TypedConfig[Cfg], Cfg] = ZIO.access[TypedConfig[Cfg]](_.get.config)
 
-  def live[Cfg: ConfigReader: zio.Tag](configNamespace: String = "app")
-    : RLayer[IzLogging with HoconConfig, TypedConfig[Cfg]] = {
+  def live[Cfg: ConfigReader: zio.Tag](
+    configNamespace: String = "app",
+    logLevel: Log.Level = Log.Level.Info
+  ): RLayer[IzLogging with HoconConfig, TypedConfig[Cfg]] = {
     val effect = for {
       hoconConfig <- HoconConfig.get
       logger <- IzLogging.logger
@@ -45,7 +48,7 @@ object TypedConfig {
               }
         )
 
-        logger.info(s"Provided ${configNamespace -> "" -> null} config:\n${debugInfo -> "" -> null}")
+        logger.log(logLevel)(s"Provided ${configNamespace -> "" -> null} config:\n${debugInfo -> "" -> null}")
 
         ZIO
           .fromEither(PureconfigLoader.load[Cfg](hoconConfig, configNamespace))

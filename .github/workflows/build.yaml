@@ -1,29 +1,77 @@
 name: Build
+
 on: [push, pull_request]
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    container:
-      image: shopstic/jdk11-sbt-fdb-server:1.4.4
+  build-env:
+    name: Build CI environment
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/cache@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - run: chmod +r ~/.docker/config.json
+
+      - name: Build and push shell Docker image
+        uses: shopstic/buildkit-action@1.0.1
+        with:
+          context: ${{ github.workspace }}/shell
+          image: shopstic/chopsticks-ci
+          tag: ${{ hashFiles('shell/*') }}
+          skipIfExists: true
+
+  build-apps:
+    name: Build libraries
+    needs: build-env
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache coursier
+        uses: actions/cache@v2
         with:
           path: |
-            /root/.cache/coursier
-            /root/.sbt
-          key: build-cache-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/*.scala') }}
-      - name: Setup FDB cluster file and start FDB
-        run: mkdir -p ~/.fdb && cp /etc/foundationdb/fdb.cluster ~/.fdb/cluster.file && service foundationdb start
+            ~/.cache
+          key: coursier-${{ hashFiles('build.sbt') }}
+          restore-keys: |
+            coursier-
+
+      - name: Cache sbt targets
+        uses: actions/cache@v2
+        with:
+          path: |
+            ./target
+            ./**/target
+          key: target-${{ github.sha }}
+          restore-keys: |
+            target-
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - run: chmod +r ~/.docker/config.json
+
       - name: Build
         env:
-          FATAL_WARNINGS: "true"
+          IMAGE_NAME: shopstic/chopsticks-ci
+          IMAGE_TAG: ${{ hashFiles('shell/*') }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: sbt clean compile test:compile cq test
-      - name: Publish
-        if: ${{ github.ref == 'refs/heads/master' && github.repository == 'shopstic/chopsticks' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: sbt publish
+        run: |-
+          echo "Restored cache stats ---------------------------------------------"
+          du -sh ~/.cache || true
+          find . -type d -name target | xargs -I{} du -sh {}
+          echo "------------------------------------------------------------------"
+
+          ./cli.sh ci_build_in_shell

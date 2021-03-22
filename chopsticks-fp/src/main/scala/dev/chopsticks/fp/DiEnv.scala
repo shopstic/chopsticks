@@ -68,7 +68,7 @@ object DiEnv {
   }
 }
 
-abstract class DiEnv[E <: Has[_]: Tag] {
+abstract class DiEnv[E <: Has[_]] {
   import DiEnv._
   def env: DiModule
   def build(dumpGraph: Boolean = false): TaskManaged[E]
