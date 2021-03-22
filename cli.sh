@@ -17,7 +17,7 @@ ci_build_in_shell() {
     -v "${GITHUB_WORKSPACE}:/repo" \
     -v "${HOME}/.cache:/root/.cache" \
     "${IMAGE_NAME}:${IMAGE_TAG}" \
-    bash -l
+    bash
 
 set -euo pipefail
 
