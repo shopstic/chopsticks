@@ -11,7 +11,7 @@ ci_build_in_shell() {
     --workdir /repo \
     -i \
     --rm \
-    -e SBT_OPTS="-Xmx3g -Xss6m" \
+    -e SBT_OPTS="-Xmx6g -Xss6m" \
     -e "GITHUB_SHA=${GITHUB_SHA}" \
     -e "GITHUB_TOKEN=${GITHUB_TOKEN}" \
     -v "${GITHUB_WORKSPACE}:/repo" \
@@ -35,11 +35,14 @@ EOF
 }
 
 ci_build() {
-  sbt --client 'set ThisBuild / scalacOptions ++= Seq("-opt:l:inline", "-opt-inline-from:**", "-opt:l:method", "-Werror")'
+  sbt --client 'set ThisBuild / scalacOptions ++= Seq("-Werror")' # Fatal warnings
   sbt --client show ThisBuild / scalacOptions | tail -n4
   sbt --client cq
   sbt --client compile
+  sbt --client Test / compile
   sbt --client printWarnings
+  sbt --client Test / printWarnings
+  sbt --client 'set ThisBuild / Test / fork := false'
   sbt --client test
 }
 
