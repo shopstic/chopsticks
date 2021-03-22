@@ -64,7 +64,7 @@ ci_publish() {
   echo "Publish version is ${PUBLISH_VERSION}"
 
   sbt --client "set ThisBuild / version := \"${PUBLISH_VERSION}\""
-  sbt --client kvdb-rocksdb / publish
+  sbt --client publish
 }
 
 publish_fdb_jar() {
