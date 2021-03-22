@@ -79,7 +79,7 @@ object LeaseSupervisorTest {
       db <- FdbDatabase.manage(
         materialization,
         FdbDatabase.FdbDatabaseConfig(
-          clusterFilePath = Some(sys.env("HOME") + "/.fdb/cluster.file"),
+          clusterFilePath = sys.env.get("FDB_CLUSTER_FILE").orElse(Some(sys.env("HOME") + "/.fdb/cluster.file")),
           rootDirectoryPath = UUID.randomUUID().toString,
           stopNetworkOnClose = false
         )
@@ -531,7 +531,7 @@ class LeaseSupervisorTest
   private def defaultConfig = {
     val fdbConfig = {
       val rootDirectoryPath = Random.alphanumeric.take(10).mkString("")
-      val clusterFilePath = Some(sys.env("HOME") + "/.fdb/cluster.file")
+      val clusterFilePath = sys.env.get("FDB_CLUSTER_FILE").orElse(Some(sys.env("HOME") + "/.fdb/cluster.file"))
       FdbDatabaseConfig(
         clusterFilePath = clusterFilePath,
         rootDirectoryPath = rootDirectoryPath,

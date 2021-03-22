@@ -1,4 +1,4 @@
-package dev.chopsticks.dstream
+package dev.chopsticks.dstream.metric
 
 import dev.chopsticks.metric.MetricConfigs.{CounterConfig, LabelNames, LabelValues, MetricLabel}
 import dev.chopsticks.metric.MetricRegistry.MetricGroup

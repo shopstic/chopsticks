@@ -3,12 +3,11 @@ package dev.chopsticks.dstream
 import akka.stream.scaladsl.{Keep, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
-import dev.chopsticks.dstream.DstreamWorker.AkkaGrpcBackend
 import dev.chopsticks.dstream.test.DstreamSpecEnv.SharedEnv
 import dev.chopsticks.dstream.test.proto.{Assignment, Result}
 import dev.chopsticks.dstream.test.{DstreamSpecEnv, DstreamTestContext, DstreamTestUtils}
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import zio.{Has, ZLayer}
+import eu.timepit.refined.auto._
 import zio.blocking.{effectBlocking, effectBlockingInterrupt}
 import zio.clock.Clock
 import zio.duration._
@@ -16,7 +15,6 @@ import zio.magic._
 import zio.test.Assertion._
 import zio.test._
 import zio.test.environment.{testEnvironment, TestEnvironment}
-import eu.timepit.refined.auto._
 
 //noinspection TypeAnnotation
 object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
@@ -60,59 +58,29 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
     } yield assert(masterOutputAssignment)(equalTo(assignment))
   }
 
-  private lazy val nettyBackendContextLayer = DstreamTestUtils.setup[Assignment, Result](
-    DstreamMasterConfig(serviceId = "test", parallelism = 1, ordered = true),
-    AkkaGrpcBackend.Netty
+  private lazy val contextLayer = DstreamTestUtils.setup[Assignment, Result](
+    DstreamMasterConfig(serviceId = "test", parallelism = 1, ordered = true)
   ).forTest
-
-  private lazy val akkaHttpBackendContextLayer = DstreamTestUtils.setup[Assignment, Result](
-    DstreamMasterConfig(serviceId = "test", parallelism = 1, ordered = true),
-    AkkaGrpcBackend.AkkaHttp
-  ).forTest
-
-  private def nettyBackendLayer =
-    ZLayer.fromSomeMagic[Environment with SharedEnv, Has[DstreamTestContext[Assignment, Result]]](
-      promRegistryLayer,
-      stateMetricRegistryFactoryLayer,
-      clientMetricRegistryFactoryLayer,
-      masterMetricRegistryFactoryLayer,
-      dstreamStateMetricsManagerLayer,
-      dstreamClientMetricsManagerLayer,
-      dstreamMasterMetricsManagerLayer,
-      dstreamStateLayer,
-      dstreamServerHandlerFactoryLayer,
-      dstreamServerHandlerLayer,
-      dstreamClientLayer,
-      dstreamServerLayer,
-      dstreamMasterLayer,
-      dstreamWorkerLayer,
-      nettyBackendContextLayer
-    )
-
-  private lazy val akkaHttpBackendLayer =
-    ZLayer.fromSomeMagic[Environment with SharedEnv, Has[DstreamTestContext[Assignment, Result]]](
-      promRegistryLayer,
-      stateMetricRegistryFactoryLayer,
-      clientMetricRegistryFactoryLayer,
-      masterMetricRegistryFactoryLayer,
-      dstreamStateMetricsManagerLayer,
-      dstreamClientMetricsManagerLayer,
-      dstreamMasterMetricsManagerLayer,
-      dstreamStateLayer,
-      dstreamServerHandlerFactoryLayer,
-      dstreamServerHandlerLayer,
-      dstreamClientLayer,
-      dstreamServerLayer,
-      dstreamMasterLayer,
-      dstreamWorkerLayer,
-      akkaHttpBackendContextLayer
-    )
 
   override def spec = suite("Dstream basic tests")(
-    testM("should work end to end with Netty backend")(basicTest)
-      .provideSomeMagicLayer[Environment with SharedEnv](nettyBackendLayer) @@ timeoutInterrupt(5.seconds),
-    testM("should work end to end with Akka HTTP backend")(basicTest)
-      .provideSomeMagicLayer[Environment with SharedEnv](akkaHttpBackendLayer) @@ timeoutInterrupt(5.seconds)
+    testM("should work end to end")(basicTest) @@ timeoutInterrupt(5.seconds)
   )
+    .provideSomeMagicLayer[Environment with SharedEnv](
+      promRegistryLayer,
+      stateMetricRegistryFactoryLayer,
+      clientMetricRegistryFactoryLayer,
+      masterMetricRegistryFactoryLayer,
+      dstreamStateMetricsManagerLayer,
+      dstreamClientMetricsManagerLayer,
+      dstreamMasterMetricsManagerLayer,
+      dstreamStateLayer,
+      dstreamServerHandlerFactoryLayer,
+      dstreamServerHandlerLayer,
+      dstreamClientLayer,
+      dstreamServerLayer,
+      dstreamMasterLayer,
+      dstreamWorkerLayer,
+      contextLayer
+    )
     .provideSomeLayerShared[Environment](sharedLayer)
 }

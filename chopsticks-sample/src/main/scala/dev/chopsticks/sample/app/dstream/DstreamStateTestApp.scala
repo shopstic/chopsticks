@@ -1,13 +1,20 @@
 package dev.chopsticks.sample.app.dstream
 
+import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.{Sink, Source}
-import dev.chopsticks.dstream.DstreamWorkerMetrics.DstreamWorkerMetric
+import dev.chopsticks.dstream.metric.DstreamWorkerMetrics.DstreamWorkerMetric
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
-import dev.chopsticks.dstream.DstreamMasterMetrics.DstreamMasterMetric
+import dev.chopsticks.dstream.metric.DstreamMasterMetrics.DstreamMasterMetric
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
-import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
-import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig, DstreamWorkerRetryConfig}
+import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
+import dev.chopsticks.dstream.DstreamWorker.{DstreamWorkerConfig, DstreamWorkerRetryConfig}
 import dev.chopsticks.dstream._
+import dev.chopsticks.dstream.metric.{
+  DstreamClientMetricsManager,
+  DstreamMasterMetricsManager,
+  DstreamStateMetricsManager,
+  DstreamWorkerMetricsManager
+}
 import dev.chopsticks.fp.ZAkkaApp
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
@@ -144,12 +151,15 @@ object DstreamStateTestApp extends ZAkkaApp {
   private def runWorker = {
     for {
       worker <- ZIO.access[DstreamWorker[Assignment, Result]](_.get)
+      clientSettings <- AkkaEnv.actorSystem.map { implicit as =>
+        GrpcClientSettings
+          .connectToServiceAt("localhost", 9999)
+          .withTls(false)
+          .withBackend("netty")
+      }
       _ <- worker
         .run(DstreamWorkerConfig(
-          serverHost = "localhost",
-          serverPort = 9999,
-          serverTls = false,
-          backend = AkkaGrpcBackend.Netty,
+          clientSettings = clientSettings,
           parallelism = parallelism,
           assignmentTimeout = 10.seconds
         )) { assignment =>

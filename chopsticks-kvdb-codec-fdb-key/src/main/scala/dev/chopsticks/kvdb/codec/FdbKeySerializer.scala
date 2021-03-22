@@ -52,19 +52,19 @@ object FdbKeySerializer {
   implicit val versionStampFdbKeyEncoder: PredefinedFdbKeySerializer[Versionstamp] =
     define((o, v) => o.add(v))
 
-  implicit def protobufEnumFdbKeyEncoder[T <: GeneratedEnum: ClassTag]: PredefinedFdbKeySerializer[T] =
+  implicit def protobufEnumFdbKeyEncoder[T <: GeneratedEnum]: PredefinedFdbKeySerializer[T] =
     define((o, v) => intFdbKeyEncoder.serialize(o, v.value))
 
-  implicit def enumeratumByteEnumKeyEncoder[E <: ByteEnumEntry: ClassTag]: PredefinedFdbKeySerializer[E] =
+  implicit def enumeratumByteEnumKeyEncoder[E <: ByteEnumEntry]: PredefinedFdbKeySerializer[E] =
     define((o: Tuple, t: E) => o.add(t.value.toLong))
 
-  implicit def enumeratumShortEnumKeyEncoder[E <: ShortEnumEntry: ClassTag]: PredefinedFdbKeySerializer[E] =
+  implicit def enumeratumShortEnumKeyEncoder[E <: ShortEnumEntry]: PredefinedFdbKeySerializer[E] =
     define((o: Tuple, t: E) => o.add(t.value.toLong))
 
-  implicit def enumeratumIntEnumKeyEncoder[E <: IntEnumEntry: ClassTag]: PredefinedFdbKeySerializer[E] =
+  implicit def enumeratumIntEnumKeyEncoder[E <: IntEnumEntry]: PredefinedFdbKeySerializer[E] =
     define((o: Tuple, t: E) => o.add(t.value.toLong))
 
-  implicit def enumeratumEnumKeyEncoder[E <: EnumEntry: ClassTag]: PredefinedFdbKeySerializer[E] =
+  implicit def enumeratumEnumKeyEncoder[E <: EnumEntry]: PredefinedFdbKeySerializer[E] =
     define((o: Tuple, t: E) => o.add(t.entryName))
 
   implicit def refinedFdbKeySerializer[F[_, _], T, P](implicit

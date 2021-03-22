@@ -11,6 +11,7 @@ import zio.{Schedule, UIO, ULayer, URIO, URLayer, ZIO, ZLayer, ZRef}
 
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicReference
+import scala.annotation.nowarn
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters._
@@ -31,6 +32,8 @@ object MetricLogger {
   }
 
   def snapshot(value: String): PeriodicSnapshot = PeriodicSnapshot(value)
+
+  @nowarn("cat=unused")
   def snapshot[A: Numeric](value: A): PeriodicSnapshot = PeriodicSnapshot(value.toString)
   def snapshot(value: AtomicReference[LocalDate]): PeriodicSnapshot = {
     val dt = value.get

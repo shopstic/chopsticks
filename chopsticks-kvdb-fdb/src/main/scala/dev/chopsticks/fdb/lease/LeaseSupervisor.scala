@@ -334,7 +334,7 @@ object LeaseSupervisor {
     managed.toLayer
   }
 
-  private def getAllLeases[A <: BCF[LeaseKey, Lease]: Tag, BCF[K, V] <: ColumnFamily[K, V]](
+  private def getAllLeases[A <: BCF[LeaseKey, Lease], BCF[K, V] <: ColumnFamily[K, V]](
     tx: ReadTransaction,
     fdb: FdbDatabase[BCF, _],
     leaseKeyspace: A,
@@ -359,7 +359,7 @@ object LeaseSupervisor {
       }
   }
 
-  private def set[A <: BCF[LeaseKey, Lease]: Tag, BCF[K, V] <: ColumnFamily[K, V]](
+  private def set[A <: BCF[LeaseKey, Lease], BCF[K, V] <: ColumnFamily[K, V]](
     tx: Transaction,
     lease: Lease,
     fdb: FdbDatabase[BCF, _],

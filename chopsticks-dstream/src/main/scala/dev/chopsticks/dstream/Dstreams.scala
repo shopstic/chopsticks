@@ -176,7 +176,7 @@ object Dstreams {
       .unit
   }
 
-  def handle[Req: Tag, Res: Tag](
+  def handle[Req, Res](
     stateService: DstreamState.Service[Req, Res],
     in: Source[Res, NotUsed],
     metadata: Metadata

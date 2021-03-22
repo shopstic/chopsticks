@@ -5,9 +5,10 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamState.WorkResult
-import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
+import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream._
+import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv

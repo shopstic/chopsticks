@@ -3,6 +3,7 @@ package dev.chopsticks.dstream
 import akka.NotUsed
 import akka.grpc.scaladsl.Metadata
 import akka.stream.scaladsl.Source
+import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.stream.FailIfEmptyFlow
 import zio._
@@ -34,7 +35,7 @@ object DstreamState {
     def report(assignmentId: AssignmentId): IO[InvalidAssignment, Option[WorkResult[Res]]]
   }
 
-  def manage[Req: Tag, Res: Tag](serviceId: String)
+  def manage[Req, Res](serviceId: String)
     : URManaged[AkkaEnv with Clock with DstreamStateMetricsManager, Service[Req, Res]] = {
     for {
       akkaService <- ZManaged.access[AkkaEnv](_.get)

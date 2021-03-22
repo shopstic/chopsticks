@@ -1,8 +1,9 @@
 package dev.chopsticks.sample.dstream
 
 import com.typesafe.config.{Config, ConfigValueFactory}
-import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
-import dev.chopsticks.dstream.{DstreamState, DstreamStateMetricsManager}
+import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
+import dev.chopsticks.dstream.DstreamState
+import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
 import dev.chopsticks.fp.DiLayers
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.load_test.{Assignment, Result}
