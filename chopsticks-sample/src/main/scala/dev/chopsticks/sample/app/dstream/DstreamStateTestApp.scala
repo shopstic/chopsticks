@@ -1,8 +1,9 @@
 package dev.chopsticks.sample.app.dstream
 
 import akka.stream.scaladsl.{Sink, Source}
-import dev.chopsticks.dstream.DstreamClientMetrics.DstreamClientMetric
+import dev.chopsticks.dstream.DstreamWorkerMetrics.DstreamWorkerMetric
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
+import dev.chopsticks.dstream.DstreamMasterMetrics.DstreamMasterMetric
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig, DstreamWorkerRetryConfig}
@@ -36,10 +37,15 @@ object DstreamStateTestApp extends ZAkkaApp {
     import zio.magic._
 
     val promRegistry = ZLayer.succeed(CollectorRegistry.defaultRegistry)
+
     val stateMetricRegistryFactory = PromMetricRegistryFactory.live[DstreamStateMetric]("test")
-    val clientMetricRegistryFactory = PromMetricRegistryFactory.live[DstreamClientMetric]("test")
+    val workerMetricRegistryFactory = PromMetricRegistryFactory.live[DstreamWorkerMetric]("test")
+    val masterMetricRegistryFactory = PromMetricRegistryFactory.live[DstreamMasterMetric]("test")
+
     val dstreamStateMetricsManager = DstreamStateMetricsManager.live
     val dstreamClientMetricsManager = DstreamClientMetricsManager.live
+    val dstreamMasterMetricsManager = DstreamMasterMetricsManager.live
+
     val dstreamState = DstreamState.manage[Assignment, Result]("test").toLayer
     val dstreamServerHandlerFactory = DstreamServerHandlerFactory.live[Assignment, Result] { handle =>
       ZIO
@@ -70,9 +76,11 @@ object DstreamStateTestApp extends ZAkkaApp {
       .provideSomeMagicLayer[ZAkkaAppEnv](
         promRegistry,
         stateMetricRegistryFactory,
-        clientMetricRegistryFactory,
+        workerMetricRegistryFactory,
+        masterMetricRegistryFactory,
         dstreamStateMetricsManager,
         dstreamClientMetricsManager,
+        dstreamMasterMetricsManager,
         dstreamState,
         dstreamServerHandlerFactory,
         dstreamServerHandler,
@@ -100,38 +108,36 @@ object DstreamStateTestApp extends ZAkkaApp {
       server <- ZManaged.access[DstreamServer[Assignment, Result]](_.get)
       _ <- server.manage(DstreamServerConfig(port = 9999))
         .logResult("Dstream server", _.localAddress.toString)
-    } yield ()
+      master <- ZManaged
+        .access[DstreamMaster[Assignment, Assignment, Result, Result]](_.get)
+      distributionFlow <- master
+        .manageFlow(
+          DstreamMasterConfig(serviceId = "test", parallelism = parallelism, ordered = false),
+          ZIO.succeed(_)
+        ) {
+          (assignment, result) =>
+            for {
+              zlogger <- IzLogging.zioLogger
+              last <- result
+                .source
+                .toZAkkaSource
+                .interruptibleRunWith(Sink.last)
+              _ <- zlogger.debug(
+                s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
+              )
+            } yield last
+        } {
+          Schedule.stop
+        }
+    } yield distributionFlow
 
-    managed.use { _ =>
-      for {
-        master <- ZIO
-          .access[DstreamMaster[Assignment, Assignment, Result, Result]](_.get)
-        distributionFlow <- master
-          .createFlow(
-            DstreamMasterConfig(parallelism = parallelism, ordered = false),
-            ZIO.succeed(_)
-          ) {
-            (assignment, result) =>
-              for {
-                zlogger <- ZIO.access[IzLogging](_.get.zioLogger)
-                last <- result
-                  .source
-                  .toZAkkaSource
-                  .interruptibleRunWith(Sink.last)
-                _ <- zlogger.debug(
-                  s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
-                )
-              } yield last
-          } {
-            Schedule.stop
-          }
-        _ <- Source(1 to Int.MaxValue)
-          //        .initialDelay(1.minute)
-          .map(Assignment(_))
-          .via(distributionFlow)
-          .toZAkkaSource
-          .interruptibleRunIgnore()
-      } yield ()
+    managed.use { distributionFlow =>
+      Source(1 to Int.MaxValue)
+        //        .initialDelay(1.minute)
+        .map(Assignment(_))
+        .via(distributionFlow)
+        .toZAkkaSource
+        .interruptibleRunIgnore()
     }
   }
 
@@ -172,19 +178,27 @@ object DstreamStateTestApp extends ZAkkaApp {
       .periodicallyCollect {
         for {
           stateMetrics <- ZIO.accessM[DstreamStateMetricsManager](_.get.activeSet)
-          clientMetrics <- ZIO.accessM[DstreamClientMetricsManager](_.get.activeSet)
+          masterMetrics <- ZIO.accessM[DstreamMasterMetricsManager](_.get.activeSet)
+          workerMetrics <- ZIO.accessM[DstreamWorkerMetricsManager](_.get.activeSet)
         } yield {
           import MetricLogger.sum
 
           ListMap(
+            // State
             "state-workers" -> sum(stateMetrics)(_.workerCount),
-            "state-attempts" -> sum(stateMetrics)(_.attemptsTotal),
+            "state-attempts" -> sum(stateMetrics)(_.offersTotal),
             "state-queue" -> sum(stateMetrics)(_.queueSize),
             "state-map" -> sum(stateMetrics)(_.mapSize),
-            "client-workers" -> sum(clientMetrics)(_.workerStatus),
-            "client-attempts" -> sum(clientMetrics)(_.attemptsTotal),
-            "client-successes" -> sum(clientMetrics)(_.successesTotal),
-            "client-failures" -> sum(clientMetrics)(_.failuresTotal)
+            // Master
+            "master-assignments" -> sum(masterMetrics)(_.assignmentsTotal),
+            "master-attempts" -> sum(masterMetrics)(_.attemptsTotal),
+            "master-successes" -> sum(masterMetrics)(_.successesTotal),
+            "master-failures" -> sum(masterMetrics)(_.failuresTotal),
+            // Worker
+            "worker-workers" -> sum(workerMetrics)(_.workerStatus),
+            "worker-attempts" -> sum(workerMetrics)(_.attemptsTotal),
+            "worker-successes" -> sum(workerMetrics)(_.successesTotal),
+            "worker-failures" -> sum(workerMetrics)(_.failuresTotal)
           )
         }
       }

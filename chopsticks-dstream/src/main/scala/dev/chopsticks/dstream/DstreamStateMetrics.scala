@@ -7,7 +7,7 @@ import zio.RLayer
 
 trait DstreamStateMetrics {
   def workerCount: MetricGauge
-  def attemptsTotal: MetricCounter
+  def offersTotal: MetricCounter
   def queueSize: MetricGauge
   def mapSize: MetricGauge
 }
@@ -22,7 +22,7 @@ object DstreamStateMetrics {
   sealed trait DstreamStateMetric extends MetricGroup
 
   final case object dstreamStateWorkerCount extends GaugeConfig(LabelNames of serviceId) with DstreamStateMetric
-  final case object dstreamStateAttemptsTotal extends CounterConfig(LabelNames of serviceId) with DstreamStateMetric
+  final case object dstreamStateOffersTotal extends CounterConfig(LabelNames of serviceId) with DstreamStateMetric
   final case object dstreamStateQueueSize extends GaugeConfig(LabelNames of serviceId) with DstreamStateMetric
   final case object dstreamStateMapSize extends GaugeConfig(LabelNames of serviceId) with DstreamStateMetric
 }
@@ -37,8 +37,8 @@ object DstreamStateMetricsManager {
       new DstreamStateMetrics {
         override val workerCount: MetricGauge =
           registry.gaugeWithLabels(DstreamStateMetrics.dstreamStateWorkerCount, labels)
-        override val attemptsTotal: MetricCounter =
-          registry.counterWithLabels(DstreamStateMetrics.dstreamStateAttemptsTotal, labels)
+        override val offersTotal: MetricCounter =
+          registry.counterWithLabels(DstreamStateMetrics.dstreamStateOffersTotal, labels)
         override val queueSize: MetricGauge =
           registry.gaugeWithLabels(DstreamStateMetrics.dstreamStateQueueSize, labels)
         override val mapSize: MetricGauge =

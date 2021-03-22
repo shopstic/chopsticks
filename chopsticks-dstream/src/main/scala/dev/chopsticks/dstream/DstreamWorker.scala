@@ -96,7 +96,7 @@ object DstreamWorker {
     retryScheduleFactory: Int => Schedule[Any, Throwable, Any]
   ) = {
     ZIO.foreachPar_(1 to config.parallelism) { workerId =>
-      ZManaged.accessManaged[DstreamClientMetricsManager](_.get.manage(workerId.toString))
+      ZManaged.accessManaged[DstreamWorkerMetricsManager](_.get.manage(workerId.toString))
         .use { metrics =>
           for {
             settings <- AkkaEnv.actorSystem.map { implicit as =>
@@ -157,7 +157,7 @@ object DstreamWorker {
   }
 
   def live[Assignment: zio.Tag, Result: zio.Tag]: URLayer[
-    IzLogging with AkkaEnv with Clock with DstreamClient[Assignment, Result] with DstreamClientMetricsManager,
+    IzLogging with AkkaEnv with Clock with DstreamClient[Assignment, Result] with DstreamWorkerMetricsManager,
     DstreamWorker[Assignment, Result]
   ] = {
     ZRunnable(runWorkers[Assignment, Result] _)

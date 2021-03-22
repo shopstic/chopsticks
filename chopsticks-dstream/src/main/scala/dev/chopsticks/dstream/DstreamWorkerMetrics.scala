@@ -5,7 +5,7 @@ import dev.chopsticks.metric.MetricRegistry.MetricGroup
 import dev.chopsticks.metric.{MetricCounter, MetricGauge, MetricRegistry, MetricRegistryFactory, MetricServiceManager}
 import zio.RLayer
 
-trait DstreamClientMetrics {
+trait DstreamWorkerMetrics {
   def workerStatus: MetricGauge
   def attemptsTotal: MetricCounter
   def successesTotal: MetricCounter
@@ -13,7 +13,7 @@ trait DstreamClientMetrics {
   def failuresTotal: MetricCounter
 }
 
-object DstreamClientMetrics {
+object DstreamWorkerMetrics {
   object Labels {
     final object workerId extends MetricLabel
     final object outcome extends MetricLabel
@@ -21,37 +21,37 @@ object DstreamClientMetrics {
 
   import Labels._
 
-  sealed trait DstreamClientMetric extends MetricGroup
+  sealed trait DstreamWorkerMetric extends MetricGroup
 
-  final case object dstreamWorkerStatus extends GaugeConfig(LabelNames of workerId) with DstreamClientMetric
-  final case object dstreamWorkerAttemptsTotal extends CounterConfig(LabelNames of workerId) with DstreamClientMetric
+  final case object dstreamWorkerStatus extends GaugeConfig(LabelNames of workerId) with DstreamWorkerMetric
+  final case object dstreamWorkerAttemptsTotal extends CounterConfig(LabelNames of workerId) with DstreamWorkerMetric
   final case object dstreamWorkerResultsTotal
       extends CounterConfig(LabelNames of workerId and outcome)
-      with DstreamClientMetric
+      with DstreamWorkerMetric
 }
 
 object DstreamClientMetricsManager {
-  import DstreamClientMetrics._
+  import DstreamWorkerMetrics._
 
-  def live: RLayer[MetricRegistryFactory[DstreamClientMetric], DstreamClientMetricsManager] = {
-    MetricServiceManager.live((registry: MetricRegistry.Service[DstreamClientMetric], workerId: String) => {
-      new DstreamClientMetrics {
+  def live: RLayer[MetricRegistryFactory[DstreamWorkerMetric], DstreamWorkerMetricsManager] = {
+    MetricServiceManager.live((registry: MetricRegistry.Service[DstreamWorkerMetric], workerId: String) => {
+      new DstreamWorkerMetrics {
         override val workerStatus: MetricGauge =
           registry.gaugeWithLabels(
-            DstreamClientMetrics.dstreamWorkerStatus,
+            DstreamWorkerMetrics.dstreamWorkerStatus,
             LabelValues.of(Labels.workerId -> workerId)
           )
 
         override val attemptsTotal: MetricCounter =
           registry.counterWithLabels(
-            DstreamClientMetrics.dstreamWorkerAttemptsTotal,
+            DstreamWorkerMetrics.dstreamWorkerAttemptsTotal,
             LabelValues
               .of(Labels.workerId -> workerId)
           )
 
         override val successesTotal: MetricCounter =
           registry.counterWithLabels(
-            DstreamClientMetrics.dstreamWorkerResultsTotal,
+            DstreamWorkerMetrics.dstreamWorkerResultsTotal,
             LabelValues
               .of(Labels.workerId -> workerId)
               .and(Labels.outcome -> "success")
@@ -59,7 +59,7 @@ object DstreamClientMetricsManager {
 
         override val timeoutsTotal: MetricCounter =
           registry.counterWithLabels(
-            DstreamClientMetrics.dstreamWorkerResultsTotal,
+            DstreamWorkerMetrics.dstreamWorkerResultsTotal,
             LabelValues
               .of(Labels.workerId -> workerId)
               .and(Labels.outcome -> "timeout")
@@ -67,7 +67,7 @@ object DstreamClientMetricsManager {
 
         override val failuresTotal: MetricCounter =
           registry.counterWithLabels(
-            DstreamClientMetrics.dstreamWorkerResultsTotal,
+            DstreamWorkerMetrics.dstreamWorkerResultsTotal,
             LabelValues
               .of(Labels.workerId -> workerId)
               .and(Labels.outcome -> "failure")

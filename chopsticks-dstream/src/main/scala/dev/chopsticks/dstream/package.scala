@@ -12,6 +12,8 @@ package object dstream {
   type DstreamServerHandler[Assignment, Result] = Has[DstreamServerHandler.Service[Assignment, Result]]
   type DstreamClient[Assignment, Result] = Has[DstreamClient.Service[Assignment, Result]]
   type DstreamStateFactory = Has[DstreamStateFactory.Service]
+
   type DstreamStateMetricsManager = MetricServiceManager[String, DstreamStateMetrics]
-  type DstreamClientMetricsManager = MetricServiceManager[String, DstreamClientMetrics]
+  type DstreamMasterMetricsManager = MetricServiceManager[String, DstreamMasterMetrics]
+  type DstreamWorkerMetricsManager = MetricServiceManager[String, DstreamWorkerMetrics]
 }

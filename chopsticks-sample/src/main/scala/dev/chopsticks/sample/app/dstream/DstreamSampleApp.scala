@@ -71,7 +71,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
       metricsMap <- UIO {
         ListMap(
           "workers" -> dstreamMetrics.iterator.map(_.workerCount.get).sum.toString,
-          "attempts" -> dstreamMetrics.iterator.map(_.attemptsTotal.get).sum.toString,
+          "attempts" -> dstreamMetrics.iterator.map(_.offersTotal.get).sum.toString,
           "queue" -> dstreamMetrics.iterator.map(_.queueSize.get).sum.toString,
           "map" -> dstreamMetrics.iterator.map(_.mapSize.get).sum.toString
         )

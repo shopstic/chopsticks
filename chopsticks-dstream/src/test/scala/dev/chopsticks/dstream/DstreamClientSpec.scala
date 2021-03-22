@@ -61,12 +61,12 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
   }
 
   private lazy val nettyBackendContextLayer = DstreamTestUtils.setup[Assignment, Result](
-    DstreamMasterConfig(parallelism = 1, ordered = true),
+    DstreamMasterConfig(serviceId = "test", parallelism = 1, ordered = true),
     AkkaGrpcBackend.Netty
   ).forTest
 
   private lazy val akkaHttpBackendContextLayer = DstreamTestUtils.setup[Assignment, Result](
-    DstreamMasterConfig(parallelism = 1, ordered = true),
+    DstreamMasterConfig(serviceId = "test", parallelism = 1, ordered = true),
     AkkaGrpcBackend.AkkaHttp
   ).forTest
 
@@ -75,8 +75,10 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
       promRegistryLayer,
       stateMetricRegistryFactoryLayer,
       clientMetricRegistryFactoryLayer,
+      masterMetricRegistryFactoryLayer,
       dstreamStateMetricsManagerLayer,
       dstreamClientMetricsManagerLayer,
+      dstreamMasterMetricsManagerLayer,
       dstreamStateLayer,
       dstreamServerHandlerFactoryLayer,
       dstreamServerHandlerLayer,
@@ -92,8 +94,10 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
       promRegistryLayer,
       stateMetricRegistryFactoryLayer,
       clientMetricRegistryFactoryLayer,
+      masterMetricRegistryFactoryLayer,
       dstreamStateMetricsManagerLayer,
       dstreamClientMetricsManagerLayer,
+      dstreamMasterMetricsManagerLayer,
       dstreamStateLayer,
       dstreamServerHandlerFactoryLayer,
       dstreamServerHandlerLayer,
