@@ -42,8 +42,8 @@ ci_build() {
   sbt --client Test / compile
   sbt --client printWarnings
   sbt --client Test / printWarnings
-#  sbt --client 'set ThisBuild / Test / fork := false'
-#  sbt --client test
+  sbt --client 'set ThisBuild / Test / fork := false'
+  sbt --client test
 }
 
 ci_publish() {
