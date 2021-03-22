@@ -26,7 +26,7 @@ service foundationdb start
 
 ./cli.sh ci_build
 
-if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
   ./cli.sh ci_publish
 fi
 
@@ -35,7 +35,7 @@ EOF
 }
 
 ci_build() {
-  sbt --client 'set ThisBuild / scalacOptions ++= Seq("-Werror")' # Fatal warnings
+  sbt --client 'set ThisBuild / scalacOptions ++= Seq("-Werror")'
   sbt --client show ThisBuild / scalacOptions | tail -n4
   sbt --client cq
   sbt --client compile
