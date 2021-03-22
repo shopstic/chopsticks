@@ -7,7 +7,7 @@ import akka.stream.testkit.{TestPublisher, TestSubscriber}
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamState.WorkResult
-import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig}
+import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig, DstreamWorkerRetryConfig}
 import dev.chopsticks.dstream.{DstreamMaster, DstreamServer, DstreamServerHandler, DstreamWorker}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
@@ -69,6 +69,8 @@ object DstreamTestUtils {
                   _ <- masterRequests.offer(assignment -> result)
                   ret <- masterResponses.take
                 } yield ret
+            } {
+              Schedule.stop
             }
 
           masterSourceProbe <- createSourceProbe[A]()
@@ -97,16 +99,23 @@ object DstreamTestUtils {
               serverTls = false,
               backend = clientBackend,
               parallelism = 1,
-              assignmentTimeout = 10.seconds,
-              retryInitialDelay = 100.millis,
-              retryBackoffFactor = 2.0,
-              retryMaxDelay = 1.second,
-              retryResetAfter = 5.seconds
+              assignmentTimeout = 10.seconds
             )) { assignment =>
               for {
                 _ <- workerRequests.offer(assignment)
                 ret <- workerResponses.take
               } yield ret
+            } {
+              DstreamWorker
+                .createRetrySchedule(
+                  _,
+                  DstreamWorkerRetryConfig(
+                    retryInitialDelay = 100.millis,
+                    retryBackoffFactor = 2.0,
+                    retryMaxDelay = 1.second,
+                    retryResetAfter = 5.seconds
+                  )
+                )
             }
             .debug("worker")
             .forkDaemon

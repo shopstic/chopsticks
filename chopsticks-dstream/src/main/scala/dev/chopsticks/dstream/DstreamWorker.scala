@@ -7,7 +7,6 @@ import akka.util.Timeout
 import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import enumeratum.EnumEntry
 import enumeratum.EnumEntry.Hyphencase
@@ -17,6 +16,7 @@ import eu.timepit.refined.types.numeric.PosInt
 import eu.timepit.refined.types.string.NonEmptyString
 import io.grpc.{Status, StatusRuntimeException}
 import zio.Schedule.Decision
+import zio.clock.Clock
 import zio.duration.Duration
 import zio.{Exit, RIO, Schedule, Task, UIO, URLayer, ZIO, ZManaged}
 
@@ -43,7 +43,10 @@ object DstreamWorker {
     serverTls: Boolean,
     backend: AkkaGrpcBackend,
     parallelism: PosInt,
-    assignmentTimeout: Timeout,
+    assignmentTimeout: Timeout
+  )
+
+  final case class DstreamWorkerRetryConfig(
     retryInitialDelay: FiniteDuration,
     retryBackoffFactor: Double,
     retryMaxDelay: FiniteDuration,
@@ -51,25 +54,51 @@ object DstreamWorker {
   )
 
   trait Service[Assignment, Result] {
-    def run[R](config: DstreamWorkerConfig)(makeSource: Assignment => RIO[R, Source[Result, NotUsed]]): RIO[R, Unit]
+    def run[R1, R2](config: DstreamWorkerConfig)(makeSource: Assignment => RIO[R1, Source[Result, NotUsed]])(
+      makeRetrySchedule: Int => Schedule[R2, Throwable, Any]
+    ): RIO[R1 with R2, Unit]
   }
 
-  val DefaultRetryPolicy: PartialFunction[Throwable, Boolean] = {
+  val defaultRetryPolicy: PartialFunction[Throwable, Boolean] = {
     case _: TimeoutException => true
     case e: StatusRuntimeException => e.getStatus.getCode == Status.Code.UNAVAILABLE
     case e if e.getClass.getName.contains("akka.http.impl.engine.http2.Http2StreamHandling") => true
   }
 
+  def createRetrySchedule(
+    workerId: Int,
+    config: DstreamWorkerRetryConfig,
+    retryPolicy: PartialFunction[Throwable, Boolean] = defaultRetryPolicy
+  ): Schedule[IzLogging, Throwable, Unit] = {
+    val retrySchedule = Schedule
+      .identity[Throwable]
+      .whileOutput(e => retryPolicy.applyOrElse(e, (_: Any) => false))
+
+    val backoffSchedule: Schedule[Any, Throwable, (Duration, Long)] = Schedule
+      .exponential(config.retryInitialDelay.toJava)
+      .resetAfter(config.retryResetAfter.toJava) || Schedule.spaced(config.retryMaxDelay.toJava)
+
+    (retrySchedule && backoffSchedule)
+      .onDecision {
+        case Decision.Done((exception, _)) =>
+          IzLogging.logger.map(_.error(s"$workerId will NOT retry $exception"))
+        case Decision.Continue((exception, _), interval, _) =>
+          IzLogging.logger.map(_.debug(
+            s"$workerId will retry ${java.time.Duration.between(OffsetDateTime.now, interval) -> "duration"} ${exception.getMessage -> "exception"}"
+          ))
+      }
+      .unit
+  }
+
   private[dstream] def runWorkers[Assignment: zio.Tag, Result: zio.Tag](
     config: DstreamWorkerConfig,
     makeSource: Assignment => Task[Source[Result, NotUsed]],
-    retryPolicy: PartialFunction[Throwable, Boolean] = DefaultRetryPolicy
+    retryScheduleFactory: Int => Schedule[Any, Throwable, Any]
   ) = {
     ZIO.foreachPar_(1 to config.parallelism) { workerId =>
       ZManaged.accessManaged[DstreamClientMetricsManager](_.get.manage(workerId.toString))
         .use { metrics =>
           for {
-            zlogger <- IzLogging.zioLogger
             settings <- AkkaEnv.actorSystem.map { implicit as =>
               GrpcClientSettings
                 .connectToServiceAt(config.serverHost, config.serverPort)
@@ -118,47 +147,35 @@ object DstreamWorker {
               } yield result
             }
 
-            retrySchedule = Schedule
-              .identity[Throwable]
-              .whileOutput(e => retryPolicy.applyOrElse(e, (_: Any) => false))
-
-            backoffSchedule: Schedule[Any, Throwable, (Duration, Long)] = (Schedule
-              .exponential(config.retryInitialDelay.toJava) || Schedule.spaced(config.retryMaxDelay.toJava))
-              .resetAfter(config.retryResetAfter.toJava)
-
             _ <- runWorker
               .forever
               .unit
-              .retry(
-                (retrySchedule && backoffSchedule)
-                  .onDecision {
-                    case Decision.Done((exception, _)) =>
-                      zlogger.error(s"$workerId will NOT retry $exception")
-                    case Decision.Continue((exception, _), interval, _) =>
-                      zlogger.debug(
-                        s"$workerId will retry ${java.time.Duration.between(OffsetDateTime.now, interval) -> "duration"} ${exception.getMessage -> "exception"}"
-                      )
-                  }
-              )
+              .retry(retryScheduleFactory(workerId))
           } yield ()
         }
     }
   }
 
-  def live[Assignment: zio.Tag, Result: zio.Tag](
-    retryPolicy: PartialFunction[Throwable, Boolean] = DefaultRetryPolicy
-  ): URLayer[
-    MeasuredLogging with AkkaEnv with DstreamClient[Assignment, Result] with DstreamClientMetricsManager,
+  def live[Assignment: zio.Tag, Result: zio.Tag]: URLayer[
+    IzLogging with AkkaEnv with Clock with DstreamClient[Assignment, Result] with DstreamClientMetricsManager,
     DstreamWorker[Assignment, Result]
   ] = {
     ZRunnable(runWorkers[Assignment, Result] _)
       .toLayer[Service[Assignment, Result]] { fn =>
         new Service[Assignment, Result] {
-          override def run[R](config: DstreamWorkerConfig)(makeSource: Assignment => RIO[R, Source[Result, NotUsed]])
-            : RIO[R, Unit] = {
+          override def run[R1, R2](config: DstreamWorkerConfig)(makeSource: Assignment => RIO[
+            R1,
+            Source[Result, NotUsed]
+          ])(makeRetrySchedule: Int => Schedule[R2, Throwable, Any]): RIO[R1 with R2, Unit] = {
             for {
-              env <- ZIO.environment[R]
-              ret <- fn(config, result => makeSource(result).provide(env), retryPolicy)
+              env <- ZIO.environment[R1 with R2]
+              ret <- fn(
+                config,
+                result => makeSource(result).provide(env),
+                workerId => {
+                  makeRetrySchedule(workerId).provide(env)
+                }
+              )
             } yield ret
           }
         }

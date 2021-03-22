@@ -5,7 +5,7 @@ import dev.chopsticks.dstream.DstreamClientMetrics.DstreamClientMetric
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
-import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig}
+import dev.chopsticks.dstream.DstreamWorker.{AkkaGrpcBackend, DstreamWorkerConfig, DstreamWorkerRetryConfig}
 import dev.chopsticks.dstream._
 import dev.chopsticks.fp.ZAkkaApp
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
@@ -25,7 +25,7 @@ import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import io.prometheus.client.CollectorRegistry
-import zio.{ExitCode, RIO, UIO, ZIO, ZLayer, ZManaged}
+import zio.{ExitCode, RIO, Schedule, UIO, ZIO, ZLayer, ZManaged}
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
@@ -62,7 +62,7 @@ object DstreamStateTestApp extends ZAkkaApp {
 
     val dstreamServer = DstreamServer.live[Assignment, Result]
     val dstreamMaster = DstreamMaster.live[Assignment, Assignment, Result, Result]
-    val dstreamWorker = DstreamWorker.live[Assignment, Result]()
+    val dstreamWorker = DstreamWorker.live[Assignment, Result]
     val metricLogger = MetricLogger.live()
 
     app
@@ -122,6 +122,8 @@ object DstreamStateTestApp extends ZAkkaApp {
                   s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
                 )
               } yield last
+          } {
+            Schedule.stop
           }
         _ <- Source(1 to Int.MaxValue)
           //        .initialDelay(1.minute)
@@ -143,17 +145,24 @@ object DstreamStateTestApp extends ZAkkaApp {
           serverTls = false,
           backend = AkkaGrpcBackend.Netty,
           parallelism = parallelism,
-          assignmentTimeout = 10.seconds,
-          retryInitialDelay = 100.millis,
-          retryBackoffFactor = 2.0,
-          retryMaxDelay = 1.second,
-          retryResetAfter = 5.seconds
+          assignmentTimeout = 10.seconds
         )) { assignment =>
           UIO {
             Source(1 to 10)
               .map(v => Result(assignment.valueIn * 10 + v))
               .throttle(1, 1.second)
           }
+        } {
+          DstreamWorker
+            .createRetrySchedule(
+              _,
+              DstreamWorkerRetryConfig(
+                retryInitialDelay = 100.millis,
+                retryBackoffFactor = 2.0,
+                retryMaxDelay = 1.second,
+                retryResetAfter = 5.seconds
+              )
+            )
         }
     } yield ()
   }
