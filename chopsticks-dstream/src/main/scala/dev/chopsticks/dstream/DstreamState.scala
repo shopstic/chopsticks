@@ -40,7 +40,7 @@ object DstreamState {
       akkaService <- ZManaged.access[AkkaEnv](_.get)
       metrics <- ZManaged.accessManaged[DstreamStateMetricsManager](_.get.manage(serviceId))
       workerGauge = metrics.workerCount
-      attemptCounter = metrics.attemptsTotal
+      offersCounter = metrics.offersTotal
       queueSizeGauge = metrics.queueSize
       mapSizeGauge = metrics.mapSize
       assignmentCounter = new AtomicLong(0L)
@@ -65,7 +65,7 @@ object DstreamState {
           val (inFuture, inSource) =
             in.watchTermination() { case (_, f) => f }.preMaterialize()
 
-          attemptCounter.inc()
+          offersCounter.inc()
           workerGauge.inc()
           inFuture.onComplete(_ => workerGauge.dec())
 

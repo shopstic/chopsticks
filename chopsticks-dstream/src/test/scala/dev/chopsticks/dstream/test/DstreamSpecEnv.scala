@@ -1,6 +1,7 @@
 package dev.chopsticks.dstream.test
 
-import dev.chopsticks.dstream.DstreamClientMetrics.DstreamClientMetric
+import dev.chopsticks.dstream.DstreamWorkerMetrics.DstreamWorkerMetric
+import dev.chopsticks.dstream.DstreamMasterMetrics.DstreamMasterMetric
 import dev.chopsticks.dstream.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.test.DstreamTestUtils.ToTestZLayer
 import dev.chopsticks.dstream.test.proto.{Assignment, DstreamSampleAppClient, DstreamSampleAppPowerApiHandler, Result}
@@ -32,9 +33,14 @@ trait DstreamSpecEnv {
   protected lazy val stateMetricRegistryFactoryLayer =
     PromMetricRegistryFactory.live[DstreamStateMetric]("test").forTest
   protected lazy val clientMetricRegistryFactoryLayer =
-    PromMetricRegistryFactory.live[DstreamClientMetric]("test").forTest
+    PromMetricRegistryFactory.live[DstreamWorkerMetric]("test").forTest
+  protected lazy val masterMetricRegistryFactoryLayer =
+    PromMetricRegistryFactory.live[DstreamMasterMetric]("test").forTest
+
   protected lazy val dstreamStateMetricsManagerLayer = DstreamStateMetricsManager.live.forTest
   protected lazy val dstreamClientMetricsManagerLayer = DstreamClientMetricsManager.live.forTest
+  protected lazy val dstreamMasterMetricsManagerLayer = DstreamMasterMetricsManager.live.forTest
+
   protected lazy val dstreamStateLayer = DstreamState.manage[Assignment, Result]("test").toLayer.forTest
   protected lazy val dstreamServerHandlerFactoryLayer = DstreamServerHandlerFactory.live[Assignment, Result] { handle =>
     ZIO

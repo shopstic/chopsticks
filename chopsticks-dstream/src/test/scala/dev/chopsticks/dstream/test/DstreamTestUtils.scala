@@ -52,26 +52,26 @@ object DstreamTestUtils {
     val managed = for {
       server <- ZManaged.access[DstreamServer[A, R]](_.get)
       serverBinding <- server.manage(DstreamServerConfig(port = 0, interface = "localhost"))
+      master <- ZManaged.access[DstreamMaster[A, A, R, A]](_.get)
+      masterRequests <- ZQueue.unbounded[(A, WorkResult[R])].toManaged_
+      masterResponses <- ZQueue.unbounded[A].toManaged_
+      distributionFlow <- master.manageFlow(
+        masterConfig,
+        ZIO.succeed(_)
+      ) {
+        (assignment, result) =>
+          for {
+            _ <- masterRequests.offer(assignment -> result)
+            ret <- masterResponses.take
+          } yield ret
+      } {
+        Schedule.stop
+      }
+
       ctx <- ZManaged.makeInterruptible {
         for {
-          masterRequests <- ZQueue.unbounded[(A, WorkResult[R])]
-          masterResponses <- ZQueue.unbounded[A]
           workerRequests <- ZQueue.unbounded[A]
           workerResponses <- ZQueue.unbounded[Source[R, NotUsed]]
-          master <- ZIO.access[DstreamMaster[A, A, R, A]](_.get)
-          distributionFlow <- master
-            .createFlow(
-              masterConfig,
-              ZIO.succeed(_)
-            ) {
-              (assignment, result) =>
-                for {
-                  _ <- masterRequests.offer(assignment -> result)
-                  ret <- masterResponses.take
-                } yield ret
-            } {
-              Schedule.stop
-            }
 
           masterSourceProbe <- createSourceProbe[A]()
           (masterAssignments, masterAssignmentSource) = masterSourceProbe
