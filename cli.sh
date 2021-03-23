@@ -7,40 +7,49 @@ export ARTIFACT_ORG="dev.chopsticks"
 
 export LOCAL_PUBLISH_PATH="${HOME}/.ivy2/local/${ARTIFACT_ORG}"
 
-ci_build_in_shell() {
-  local GITHUB_REF=${GITHUB_REF:?"GITHUB_REF env variable is required"}
+ci_run_in_shell() {
   local GITHUB_SHA=${GITHUB_SHA:?"GITHUB_SHA env variable is required"}
+  local GITHUB_REF=${GITHUB_REF:?"GITHUB_REF env variable is required"}
   local GITHUB_TOKEN=${GITHUB_TOKEN:?"GITHUB_TOKEN env variable is required"}
   local GITHUB_WORKSPACE=${GITHUB_WORKSPACE:?"GITHUB_WORKSPACE env variable is required"}
+  local IMAGE_NAME=${IMAGE_NAME:?"IMAGE_NAME env variable is required"}
+  local IMAGE_TAG=${IMAGE_TAG:?"IMAGE_TAG env variable is required"}
 
-  cat <<EOF | docker run \
+  docker run \
     --workdir /repo \
     -i \
     --rm \
-    -e SBT_OPTS="-Xmx6g -Xss6m" \
     -e "GITHUB_SHA=${GITHUB_SHA}" \
     -e "GITHUB_TOKEN=${GITHUB_TOKEN}" \
+    -e "GITHUB_REF=${GITHUB_REF}" \
     -v "${GITHUB_WORKSPACE}:/repo" \
     -v "${HOME}/.cache:/root/.cache" \
     "${IMAGE_NAME}:${IMAGE_TAG}" \
-    bash
-
-set -euo pipefail
-
-export FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
-service foundationdb start
-./cli.sh build
-service foundationdb stop
-
-if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
-  PUBLISH_VERSION=$(./cli.sh get_publish_version)
-  ./cli.sh publish_local "${PUBLISH_VERSION}"
-  sbt --client shutdown # To reduce occupied memory for subsequent processes
-  ./cli.sh publish_remote "${PUBLISH_VERSION}"
-fi
-
-EOF
+    bash -c "./cli.sh ci_run"
 }
+
+ci_run() {
+  local GITHUB_REF=${GITHUB_REF:?"GITHUB_REF env variable is required"}
+
+  export FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+  service foundationdb start
+
+  export SBT_OPTS="-Xmx6g -Xss6m"
+  ./cli.sh build
+  service foundationdb stop
+
+  if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
+    local PUBLISH_VERSION
+    PUBLISH_VERSION=$(./cli.sh get_publish_version)
+
+    ./cli.sh publish_local "${PUBLISH_VERSION}"
+
+    sbt --client shutdown # To reduce occupied memory for subsequent processes
+
+    ./cli.sh publish_remote "${PUBLISH_VERSION}"
+  fi
+}
+
 
 build() {
   sbt --client 'set ThisBuild / scalacOptions ++= Seq("-Werror")'
