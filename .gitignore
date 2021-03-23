@@ -6,3 +6,4 @@ target/
 /.metals
 /out
 metals.sbt
+/.shell-history

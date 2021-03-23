@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export GITHUB_ORG="shopstic"
+export GITHUB_PROJECT_NAME="chopsticks"
+export ARTIFACT_ORG="dev.chopsticks"
+
+export LOCAL_PUBLISH_PATH="${HOME}/.ivy2/local/${ARTIFACT_ORG}"
+
 ci_build_in_shell() {
   local GITHUB_REF=${GITHUB_REF:?"GITHUB_REF env variable is required"}
   local GITHUB_SHA=${GITHUB_SHA:?"GITHUB_SHA env variable is required"}
@@ -23,18 +29,20 @@ set -euo pipefail
 
 export FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
 service foundationdb start
-
-./cli.sh ci_build
+./cli.sh build
+service foundationdb stop
 
 if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
-  ./cli.sh ci_publish
+  PUBLISH_VERSION=$(./cli.sh get_publish_version)
+  ./cli.sh publish_local "${PUBLISH_VERSION}"
+  sbt --client shutdown # To reduce occupied memory for subsequent processes
+  ./cli.sh publish_remote "${PUBLISH_VERSION}"
 fi
 
 EOF
-
 }
 
-ci_build() {
+build() {
   sbt --client 'set ThisBuild / scalacOptions ++= Seq("-Werror")'
   sbt --client show ThisBuild / scalacOptions | tail -n4
   sbt --client cq
@@ -46,25 +54,98 @@ ci_build() {
   sbt --client test
 }
 
-ci_publish() {
+get_publish_version() {
   local GITHUB_SHA=${GITHUB_SHA:?"GITHUB_SHA env variable is required"}
 
   local CURRENT_VERSION
-  CURRENT_VERSION=$(sbt --client show version | grep SNAPSHOT | head -n1 | awk '{print $2}' | sed s/-SNAPSHOT//)
+  CURRENT_VERSION=$(sbt --client show version | grep "\[info\]" | tail -n1 | awk '{print $2}')
 
-  local TIMESTAMP
-  TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+  if [[ "${CURRENT_VERSION}" == *"-SNAPSHOT" ]]; then
+    CURRENT_VERSION=${CURRENT_VERSION/-SNAPSHOT/}
 
-  local SHORTENED_COMMIT_SHA
-  SHORTENED_COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c 1-7)
+    local TIMESTAMP
+    TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
 
-  local PUBLISH_VERSION="${CURRENT_VERSION}-${TIMESTAMP}-${SHORTENED_COMMIT_SHA}"
+    local SHORTENED_COMMIT_SHA
+    SHORTENED_COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c 1-7)
 
-  echo "Current version is ${CURRENT_VERSION}"
-  echo "Publish version is ${PUBLISH_VERSION}"
+    echo "${CURRENT_VERSION}-${TIMESTAMP}-${SHORTENED_COMMIT_SHA}"
+  else
+    echo "${CURRENT_VERSION}"
+  fi
+}
+
+publish_local() {
+  local PUBLISH_VERSION=${1:?"Publish version is required"}
+
+  echo "Publishing to local with version ${PUBLISH_VERSION}"
 
   sbt --client "set ThisBuild / version := \"${PUBLISH_VERSION}\""
-  sbt --client publish
+  sbt --client publishLocal
+}
+
+publish_remote() {
+  local PUBLISH_VERSION=${1:?"Publish version is required"}
+
+  echo "Publishing to remote with version ${PUBLISH_VERSION}"
+
+  local DEPLOY_CMD_TEMPLATE
+  DEPLOY_CMD_TEMPLATE=$(
+    cat <<EOF
+set -euo pipefail
+echo "Publishing %MODULE%"
+mvn deploy:deploy-file \
+	-DpomFile=${LOCAL_PUBLISH_PATH}/%MODULE%/${PUBLISH_VERSION}/poms/%MODULE%.pom \
+ 	-Dfile=${LOCAL_PUBLISH_PATH}/%MODULE%/${PUBLISH_VERSION}/jars/%MODULE%.jar \
+ 	-Dsources=${LOCAL_PUBLISH_PATH}/%MODULE%/${PUBLISH_VERSION}/srcs/%MODULE%-sources.jar \
+  	-DrepositoryId=github \
+  	-Durl=https://maven.pkg.github.com/${GITHUB_ORG}/${GITHUB_PROJECT_NAME}
+EOF
+  )
+
+  # shellcheck disable=SC2038
+ find "${LOCAL_PUBLISH_PATH}" -mindepth 1 -maxdepth 1 -type d |
+    xargs -I{} basename {} |
+    parallel -j12 --progress --halt=now,fail=1 --retries=2 -I"%MODULE%" "${DEPLOY_CMD_TEMPLATE}"
+}
+
+unpublish_debug_packages() {
+  local GITHUB_ACTOR=${GITHUB_ACTOR:?"GITHUB_ACTOR env variable is required"}
+  local GITHUB_TOKEN=${GITHUB_TOKEN:?"GITHUB_TOKEN env variable is required"}
+
+  cat << EOF > ~/.netrc
+machine api.github.com
+login ${GITHUB_ACTOR}
+password ${GITHUB_TOKEN}
+EOF
+
+  chmod 0400 ~/.netrc
+
+  local GITHUB_PACKAGE_CLEANUP_CMD
+  GITHUB_PACKAGE_CLEANUP_CMD=$(cat <<EOF
+set -euo pipefail
+PACKAGE_NAME="${ARTIFACT_ORG}.%MODULE%"
+
+DELETE_PACKAGE_VERSION_CMD=\$(cat <<EOC
+set -euo pipefail
+echo "Deleting package \${PACKAGE_NAME} at version %VERSION%"
+curl -snf -X DELETE -H "Accept: application/vnd.github.v3+json" \
+  https://api.github.com/orgs/${GITHUB_ORG}/packages/maven/\${PACKAGE_NAME}/versions/%VERSION%
+EOC
+)
+
+echo "Fetching all versions for \${PACKAGE_NAME}"
+curl -snf -H "Accept: application/vnd.github.v3+json" \
+  "https://api.github.com/orgs/${GITHUB_ORG}/packages/maven/\${PACKAGE_NAME}/versions" |
+  jq -r '.[] | select(.name | contains("debug")) | .id' |
+  parallel -j12 --halt=now,fail=1 -I"%VERSION%" "\${DELETE_PACKAGE_VERSION_CMD}"
+EOF
+)
+
+  # shellcheck disable=SC2038
+ find "${LOCAL_PUBLISH_PATH}" -mindepth 1 -maxdepth 1 -type d |
+    xargs -I{} basename {} |
+    parallel -j12 --halt=now,fail=1 -I"%MODULE%" "${GITHUB_PACKAGE_CLEANUP_CMD}"
 }
 
 publish_fdb_jar() {
@@ -83,7 +164,7 @@ publish_fdb_jar() {
   wget -O - https://github.com/apple/foundationdb/archive/6.2.19.tar.gz | tar -xz --strip-components=1 -C ./fdb
   jar cf "fdb-java-${VERSION}-sources.jar" -C ./fdb/bindings/java/src/main .
 
-  cat << EOF > "fdb-java-${VERSION}.pom"
+  cat <<EOF >"fdb-java-${VERSION}.pom"
 <project xmlns="http://maven.apache.org/POM/4.0.0"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
@@ -127,7 +208,7 @@ EOF
 
   FILES=("fdb-java-${VERSION}.jar" "fdb-java-${VERSION}-javadoc.jar" "fdb-java-${VERSION}-sources.jar" "fdb-java-${VERSION}.pom")
 
-  for FILE in "${FILES[@]}" ; do
+  for FILE in "${FILES[@]}"; do
     echo ""
     echo "Uploading ${FILE}..."
     curl \
@@ -149,7 +230,7 @@ loc() {
 }
 
 sbt_shell() {
-  if ! ls ./project/target/active.json > /dev/null 2>&1; then
+  if ! ls ./project/target/active.json >/dev/null 2>&1; then
     sbt -Dsbt.semanticdb=true
   else
     sbt --client
@@ -157,10 +238,9 @@ sbt_shell() {
 }
 
 sbt_shutdown() {
-  if ls ./project/target/active.json > /dev/null 2>&1; then
+  if ls ./project/target/active.json >/dev/null 2>&1; then
     sbt --client shutdown
   fi
 }
-
 
 "$@"

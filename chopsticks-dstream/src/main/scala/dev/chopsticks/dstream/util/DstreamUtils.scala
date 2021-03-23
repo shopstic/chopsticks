@@ -15,7 +15,7 @@ import scala.util.Try
 object DstreamUtils {
   def grpcClientSettingsConfigReader: URIO[AkkaEnv, ConfigReader[GrpcClientSettings]] =
     AkkaEnv.actorSystem.map { implicit as =>
-      pureconfig.ConfigReader.configConfigReader.emap { config =>
+      ConfigReader.configConfigReader.emap { config =>
         Try {
           GrpcClientSettings
             .fromConfig(
@@ -39,7 +39,7 @@ object DstreamUtils {
       .toManaged_
       .flatMap { implicit settingsConfigReader: ConfigReader[GrpcClientSettings] =>
         //noinspection TypeAnnotation
-        implicit lazy val configReader = {
+        implicit val configReader = {
           import dev.chopsticks.util.config.PureconfigConverters._
           ConfigReader[DstreamWorkerConfig]
         }
