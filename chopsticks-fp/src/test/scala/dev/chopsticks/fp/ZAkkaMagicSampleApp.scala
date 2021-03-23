@@ -12,6 +12,7 @@ import zio.magic._
 import zio.{ExitCode, Has, RIO, Schedule, UIO, ZIO, ZLayer}
 
 import java.time.LocalDateTime
+import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 
@@ -38,7 +39,8 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
         })
       }
 
-    ZLayer.fromMagic[ZAkkaAppEnv](
+    @nowarn("cat=unused")
+    val layer = ZLayer.fromMagic[ZAkkaAppEnv](
       zio.ZEnv.live,
       customHoconConfig,
       IzLogging.live(IzLoggingConfig(
@@ -48,6 +50,8 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
       )),
       AkkaEnv.live()
     )
+
+    layer
   }
 
   //noinspection TypeAnnotation
@@ -75,7 +79,8 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
       .onInterrupt(UIO(println("app is interrupted, delaying...")) *> UIO(
         println("ok gonna let go now...")
       ).delay(2.seconds.toJava))
-      .as(ExitCode(0)).provideSomeMagicLayer[ZAkkaAppEnv](
+      .as(ExitCode(0))
+      .injectSome[ZAkkaAppEnv](
         typed, {
           println("bug in zio-magic, this is evaluated multiple times")
           ZLayer.succeed(2L)

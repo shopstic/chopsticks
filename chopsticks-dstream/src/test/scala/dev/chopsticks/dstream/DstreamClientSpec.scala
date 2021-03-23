@@ -65,7 +65,7 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
   override def spec = suite("Dstream basic tests")(
     testM("should work end to end")(basicTest) @@ timeoutInterrupt(5.seconds)
   )
-    .provideSomeMagicLayer[Environment with SharedEnv](
+    .injectSome[Environment with SharedEnv](
       promRegistryLayer,
       stateMetricRegistryFactoryLayer,
       clientMetricRegistryFactoryLayer,
