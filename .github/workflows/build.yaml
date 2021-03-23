@@ -65,8 +65,8 @@ jobs:
 
       - name: Build
         env:
-          IMAGE_NAME: shopstic/chopsticks-ci
-          IMAGE_TAG: ${{ hashFiles('shell/*') }}
+          SHELL_IMAGE_NAME: shopstic/chopsticks-ci
+          SHELL_IMAGE_TAG: ${{ hashFiles('shell/*') }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |-
           echo "Restored cache stats ---------------------------------------------"
