@@ -10,6 +10,8 @@ import zio.magic._
 import zio.test.Assertion._
 import zio.test.{DefaultRunnableSpec, _}
 
+import scala.annotation.nowarn
+
 //noinspection TypeAnnotation
 object DstreamUtilsSpec extends DefaultRunnableSpec {
   import dev.chopsticks.dstream.test.DstreamTestUtils.ToTestZLayer
@@ -18,6 +20,7 @@ object DstreamUtilsSpec extends DefaultRunnableSpec {
 
   lazy val typedConfigLayer = DstreamUtils.liveWorkerTypedConfig(logLevel = Log.Level.Debug).forTest
 
+  @nowarn("cat=unused")
   override def spec = suite("DstreamUtils")(
     testM("liveWorkerTypedConfig") {
       for {
@@ -29,7 +32,7 @@ object DstreamUtilsSpec extends DefaultRunnableSpec {
         assert(settings.connectionAttempts)(equalTo(None))
       }
     }
-      .provideSomeMagicLayer[Environment](
+      .injectSome[Environment](
         hoconConfigLayer,
         DstreamSpecEnv.izLoggingLayer,
         DstreamSpecEnv.akkaEnvLayer,

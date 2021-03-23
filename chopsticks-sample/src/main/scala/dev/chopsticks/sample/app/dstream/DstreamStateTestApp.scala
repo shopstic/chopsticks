@@ -80,7 +80,7 @@ object DstreamStateTestApp extends ZAkkaApp {
 
     app
       .as(ExitCode(1))
-      .provideSomeMagicLayer[ZAkkaAppEnv](
+      .injectSome[ZAkkaAppEnv](
         promRegistry,
         stateMetricRegistryFactory,
         workerMetricRegistryFactory,
@@ -108,7 +108,7 @@ object DstreamStateTestApp extends ZAkkaApp {
       .run()
   }
 
-  private lazy val parallelism: PosInt = 1
+  private lazy val parallelism: PosInt = 4
 
   private def runMaster = {
     val managed = for {
@@ -166,7 +166,7 @@ object DstreamStateTestApp extends ZAkkaApp {
           UIO {
             Source(1 to 10)
               .map(v => Result(assignment.valueIn * 10 + v))
-              .throttle(1, 1.second)
+//              .throttle(1, 1.second)
           }
         } {
           DstreamWorker

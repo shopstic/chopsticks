@@ -19,6 +19,8 @@ import io.prometheus.client.CollectorRegistry
 import zio.magic._
 import zio.{ZIO, ZLayer}
 
+import scala.annotation.nowarn
+
 //noinspection TypeAnnotation
 object DstreamSpecEnv {
   lazy val hoconConfigLayer = HoconConfig.live(None).forTest
@@ -32,6 +34,7 @@ object DstreamSpecEnv {
 trait DstreamSpecEnv {
   import DstreamSpecEnv._
 
+  @nowarn("cat=unused")
   protected lazy val sharedLayer = ZLayer.fromMagic[SharedEnv](hoconConfigLayer, izLoggingLayer, akkaEnvLayer)
 
   protected lazy val promRegistryLayer = ZLayer.succeed(CollectorRegistry.defaultRegistry).forTest
