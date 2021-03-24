@@ -12,7 +12,6 @@ import zio.magic._
 import zio.{ExitCode, Has, RIO, Schedule, UIO, ZIO, ZLayer}
 
 import java.time.LocalDateTime
-import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters.ScalaDurationOps
 
@@ -39,7 +38,6 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
         })
       }
 
-    @nowarn("cat=unused")
     val layer = ZLayer.fromMagic[ZAkkaAppEnv](
       zio.ZEnv.live,
       customHoconConfig,
