@@ -34,6 +34,7 @@ object Build {
     "-Wconf:src=src_managed/.*:silent",
     "-Ypatmat-exhaust-depth",
     "40"
+//    "-Ymacro-debug-lite"
   )
 
   lazy val cq = taskKey[Unit]("Code quality")
