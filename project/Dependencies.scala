@@ -47,7 +47,7 @@ object Dependencies {
   ).overrideIzumiReflect
 
   val zioMagicDeps = Seq(
-    "io.github.kitlangton" %% "zio-magic" % "0.2.0"
+    "io.github.kitlangton" %% "zio-magic" % "0.2.2"
   )
 
   val squantsDeps = Seq(
