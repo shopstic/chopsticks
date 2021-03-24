@@ -39,7 +39,6 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
         })
       }
 
-    @nowarn("cat=unused")
     val layer = ZLayer.fromMagic[ZAkkaAppEnv](
       zio.ZEnv.live,
       customHoconConfig,
