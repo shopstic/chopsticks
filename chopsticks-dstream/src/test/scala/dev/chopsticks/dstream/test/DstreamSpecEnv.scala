@@ -34,6 +34,7 @@ object DstreamSpecEnv {
 trait DstreamSpecEnv {
   import DstreamSpecEnv._
 
+  @nowarn("cat=unused")
   protected lazy val sharedLayer = ZLayer.fromMagic[SharedEnv](hoconConfigLayer, izLoggingLayer, akkaEnvLayer)
 
   protected lazy val promRegistryLayer = ZLayer.succeed(CollectorRegistry.defaultRegistry).forTest

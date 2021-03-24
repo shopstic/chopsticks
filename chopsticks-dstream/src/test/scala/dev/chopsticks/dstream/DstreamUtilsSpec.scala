@@ -20,6 +20,7 @@ object DstreamUtilsSpec extends DefaultRunnableSpec {
 
   lazy val typedConfigLayer = DstreamUtils.liveWorkerTypedConfig(logLevel = Log.Level.Debug).forTest
 
+  @nowarn("cat=unused")
   override def spec = suite("DstreamUtils")(
     testM("liveWorkerTypedConfig") {
       for {
