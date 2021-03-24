@@ -162,6 +162,7 @@ object FdbDatabase {
   final case class FdbDatabaseConfig(
     clusterFilePath: Option[String],
     rootDirectoryPath: String,
+    datacenterId: Option[String] = None,
     stopNetworkOnClose: Boolean = true,
     initialConnectionTimeout: Timeout = Timeout(2.seconds),
     clientOptions: KvdbClientOptions = KvdbClientOptions()
@@ -223,7 +224,9 @@ object FdbDatabase {
           val m = classOf[FDB].getDeclaredMethod("selectAPIVersion", Integer.TYPE, java.lang.Boolean.TYPE)
           m.setAccessible(true)
           val fdb = m.invoke(null, 620, false).asInstanceOf[FDB]
-          config.clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path, executor))
+          val db = config.clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path, executor))
+          config.datacenterId.foreach(dcid => db.options().setDatacenterId(dcid))
+          db
         }.orDie)
           .log("Open FDB database")
       } { db =>
