@@ -1,5 +1,4 @@
 import sbt._
-import scalapb.compiler.Version.scalapbVersion
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
