@@ -1,31 +1,29 @@
 package dev.chopsticks.fp
 
-import java.nio.file.Paths
-import java.util.concurrent.atomic.AtomicBoolean
-
 import akka.Done
 import akka.actor.CoordinatedShutdown.JvmExitReason
 import akka.actor.{ActorSystem, CoordinatedShutdown}
-import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
+import com.typesafe.config.Config
 import dev.chopsticks.fp.AkkaDiApp.AkkaDiAppContext
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.DiModule
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.fp.iz_logging.IzLogging
+import distage.ModuleDef
+import izumi.distage.model.definition
 import pureconfig.{KebabCase, PascalCase}
 import zio.Cause.Die
 import zio._
-import zio.internal.tracing.TracingConfig
-
-import scala.util.Try
-import scala.util.control.NonFatal
-import distage.ModuleDef
-import izumi.distage.model.definition
 import zio.blocking.Blocking
 import zio.clock.Clock
+import zio.internal.tracing.TracingConfig
 import zio.random.Random
 
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.concurrent.Future
+import scala.util.Try
+import scala.util.control.NonFatal
 
 object AkkaDiApp {
   type Env = Clock with zio.console.Console with zio.system.System with Random with Blocking with AkkaEnv
@@ -98,25 +96,7 @@ trait AkkaDiApp[Cfg] {
   lazy val appName: String = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replace("$", "")))
 
   def unsafeLoadUntypedConfig: Config = {
-    val appName = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replace("$", "")))
-    val appConfigName = this.getClass.getPackage.getName.replace(".", "/") + "/" + appName
-
-    val customAppConfig = scala.sys.props.get("config.file") match {
-      case Some(customConfigFile) =>
-        ConfigFactory
-          .parseFile(Paths.get(customConfigFile).toFile, ConfigParseOptions.defaults().setAllowMissing(false))
-          .resolve(ConfigResolveOptions.defaults())
-      case None =>
-        ConfigFactory.empty()
-    }
-
-    val config = customAppConfig.withFallback(
-      ConfigFactory.load(
-        appConfigName,
-        ConfigParseOptions.defaults.setAllowMissing(false),
-        ConfigResolveOptions.defaults
-      )
-    )
+    val config = HoconConfig.unsafeResolveConfig(Some(this.getClass))
 
     if (!config.getBoolean("akka.coordinated-shutdown.run-by-jvm-shutdown-hook")) {
       throw new IllegalArgumentException(
