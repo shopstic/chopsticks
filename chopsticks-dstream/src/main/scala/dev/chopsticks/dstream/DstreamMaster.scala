@@ -24,10 +24,10 @@ object DstreamMaster {
   trait Service[In, Assignment, Result, Out] {
     def manageFlow[R1, R2, R3](config: DstreamMasterConfig, createAssignment: In => URIO[R1, Assignment])(
       handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
-    )(retrySchedule: Schedule[R3, Throwable, Any]): URManaged[R1 with R2 with R3, Flow[In, Out, NotUsed]]
+    )(withAttempt: Task[Out] => RIO[R3, Out]): URManaged[R1 with R2 with R3, Flow[In, Out, NotUsed]]
   }
 
-  private val defaultRetrySchedule = Schedule
+  val defaultRetrySchedule: Schedule[Any, Throwable, Throwable] = Schedule
     .identity[Throwable]
     .whileInput[Throwable] {
       case UpstreamFinishWithoutEmittingAnyItemException => true
@@ -40,11 +40,12 @@ object DstreamMaster {
     def createFlow(
       createAssignment: In => UIO[Assignment],
       handleResult: (In, WorkResult[Result]) => Task[Out],
-      retrySchedule: Schedule[Any, Throwable, Any]
+      withAttempt: Task[Out] => Task[Out]
     ) = {
       for {
         metrics <- ZManaged.accessManaged[DstreamMasterMetricsManager](_.get.manage(config.serviceId.value))
         stateSvc <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
+        akkaEnv <- ZManaged.environment[AkkaEnv]
         process = (context: In) => {
           val attempt = ZIO
             .bracketExit {
@@ -83,9 +84,7 @@ object DstreamMaster {
               } yield result
             }
 
-          UIO(metrics.assignmentsTotal.inc()) *> attempt.retry(
-            defaultRetrySchedule || retrySchedule
-          )
+          UIO(metrics.assignmentsTotal.inc()) *> withAttempt(attempt.provide(akkaEnv))
         }
 
         zflow =
@@ -121,7 +120,7 @@ object DstreamMaster {
         )(
           handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
         )(
-          retrySchedule: Schedule[R3, Throwable, Any]
+          withAttempt: Task[Out] => RIO[R3, Out]
         ): URManaged[R1 with R2 with R3, Flow[In, Out, NotUsed]] = {
           fn(config).flatMap { create =>
             for {
@@ -129,7 +128,7 @@ object DstreamMaster {
               flow <- create(
                 in => createAssignment(in).provide(env),
                 (in, workResult) => handleResult(in, workResult).provide(env),
-                retrySchedule.provide(env)
+                task => withAttempt(task).provide(env)
               )
             } yield flow
           }
