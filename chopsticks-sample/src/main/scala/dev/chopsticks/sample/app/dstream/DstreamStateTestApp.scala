@@ -133,7 +133,7 @@ object DstreamStateTestApp extends ZAkkaApp {
                 s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
               )
             } yield last
-        }(identity)
+        }((_, task) => task)
     } yield distributionFlow
 
     managed.use { distributionFlow =>

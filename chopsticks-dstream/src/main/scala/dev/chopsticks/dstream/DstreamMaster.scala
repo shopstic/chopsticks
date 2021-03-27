@@ -24,7 +24,7 @@ object DstreamMaster {
   trait Service[In, Assignment, Result, Out] {
     def manageFlow[R1, R2, R3](config: DstreamMasterConfig, createAssignment: In => URIO[R1, Assignment])(
       handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
-    )(withAttempt: Task[Out] => RIO[R3, Out]): URManaged[R1 with R2 with R3, Flow[In, Out, NotUsed]]
+    )(withAttempt: (In, Task[Out]) => RIO[R3, Out]): URManaged[R1 with R2 with R3, Flow[In, Out, NotUsed]]
   }
 
   val defaultRetrySchedule: Schedule[Any, Throwable, Throwable] = Schedule
@@ -40,7 +40,7 @@ object DstreamMaster {
     def createFlow(
       createAssignment: In => UIO[Assignment],
       handleResult: (In, WorkResult[Result]) => Task[Out],
-      withAttempt: Task[Out] => Task[Out]
+      withAttempt: (In, Task[Out]) => Task[Out]
     ) = {
       for {
         metrics <- ZManaged.accessManaged[DstreamMasterMetricsManager](_.get.manage(config.serviceId.value))
@@ -84,7 +84,7 @@ object DstreamMaster {
               } yield result
             }
 
-          UIO(metrics.assignmentsTotal.inc()) *> withAttempt(attempt.provide(akkaEnv))
+          UIO(metrics.assignmentsTotal.inc()) *> withAttempt(context, attempt.provide(akkaEnv))
         }
 
         zflow =
@@ -120,7 +120,7 @@ object DstreamMaster {
         )(
           handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
         )(
-          withAttempt: Task[Out] => RIO[R3, Out]
+          withAttempt: (In, Task[Out]) => RIO[R3, Out]
         ): URManaged[R1 with R2 with R3, Flow[In, Out, NotUsed]] = {
           fn(config).flatMap { create =>
             for {
@@ -128,7 +128,7 @@ object DstreamMaster {
               flow <- create(
                 in => createAssignment(in).provide(env),
                 (in, workResult) => handleResult(in, workResult).provide(env),
-                task => withAttempt(task).provide(env)
+                (in, task) => withAttempt(in, task).provide(env)
               )
             } yield flow
           }
