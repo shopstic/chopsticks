@@ -63,9 +63,7 @@ object DstreamTestUtils {
             _ <- masterRequests.offer(assignment -> result)
             ret <- masterResponses.take
           } yield ret
-      } {
-        Schedule.stop
-      }
+      }(identity)
 
       ctx <- ZManaged.makeInterruptible {
         for {

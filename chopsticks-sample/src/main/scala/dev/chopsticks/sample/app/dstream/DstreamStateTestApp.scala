@@ -33,7 +33,7 @@ import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import io.prometheus.client.CollectorRegistry
-import zio.{ExitCode, RIO, Schedule, UIO, ZIO, ZLayer, ZManaged}
+import zio.{ExitCode, RIO, UIO, ZIO, ZLayer, ZManaged}
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
@@ -133,9 +133,7 @@ object DstreamStateTestApp extends ZAkkaApp {
                 s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
               )
             } yield last
-        } {
-          Schedule.stop
-        }
+        }(identity)
     } yield distributionFlow
 
     managed.use { distributionFlow =>
