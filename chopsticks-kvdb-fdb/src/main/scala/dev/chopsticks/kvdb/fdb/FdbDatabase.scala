@@ -1,10 +1,5 @@
 package dev.chopsticks.kvdb.fdb
 
-import java.nio.{ByteBuffer, ByteOrder}
-import java.time.Instant
-import java.util
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import akka.NotUsed
 import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Source}
@@ -38,10 +33,16 @@ import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.types.numeric.PosInt
 import pureconfig.ConfigConvert
 import zio._
-import zio.blocking.{blocking, Blocking}
+import zio.blocking.{effectBlocking, Blocking}
 import zio.clock.Clock
 import zio.duration.Duration
 
+import java.nio.file.{Files, Paths}
+import java.nio.{ByteBuffer, ByteOrder}
+import java.time.Instant
+import java.util
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
@@ -209,7 +210,7 @@ object FdbDatabase {
 
   def fromConfig(
     config: FdbDatabaseConfig
-  ): ZManaged[Blocking with MeasuredLogging with KvdbIoThreadPool, Nothing, Database] = {
+  ): RManaged[Blocking with MeasuredLogging with KvdbIoThreadPool, Database] = {
     for {
       ioThreadPool <- ZManaged.access[KvdbIoThreadPool](_.get)
       ec = ioThreadPool.executor.asEC
@@ -217,27 +218,39 @@ object FdbDatabase {
         override def reportFailure(cause: Throwable): Unit = ec.reportFailure(cause)
         override def execute(command: Runnable): Unit = ec.execute(command)
       }
+      clusterFilePath <- config.clusterFilePath match {
+        case Some(path) =>
+          ZManaged.make {
+            effectBlocking {
+              Files.writeString(Files.createTempFile("fdb-connection", ".fdb"), Files.readString(Paths.get(path)))
+            }
+          } { path =>
+            effectBlocking(Files.delete(path)).orDie
+          }
+            .map(Option(_))
+        case _ =>
+          ZManaged.succeed(None)
+      }
       db <- Managed.make {
-        blocking(Task {
+        effectBlocking {
           // TODO: this will no longer be needed once this PR makes it into a public release:
           // https://github.com/apple/foundationdb/pull/2635
           val m = classOf[FDB].getDeclaredMethod("selectAPIVersion", Integer.TYPE, java.lang.Boolean.TYPE)
           m.setAccessible(true)
           val fdb = m.invoke(null, 620, false).asInstanceOf[FDB]
-          val db = config.clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path, executor))
+          val db = clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path.toString, executor))
           config.datacenterId.foreach(dcid => db.options().setDatacenterId(dcid))
           db
-        }.orDie)
+        }.orDie
           .log("Open FDB database")
       } { db =>
-        blocking {
-          Task {
-            db.close()
-            if (config.stopNetworkOnClose) {
-              FDB.instance().stopNetwork()
-            }
-          }.orDie
-        }.log("Close FDB database")
+        effectBlocking {
+          db.close()
+          if (config.stopNetworkOnClose) {
+            FDB.instance().stopNetwork()
+          }
+        }
+          .orDie.log("Close FDB database")
       }
     } yield db
   }
