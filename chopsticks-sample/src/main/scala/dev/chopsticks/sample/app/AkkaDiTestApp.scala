@@ -5,6 +5,7 @@ import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers, ZService}
 import org.slf4j.LoggerFactory
 import zio._
@@ -56,11 +57,13 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
 
   //noinspection TypeAnnotation
   def app = {
-    val managed = ZManaged.make(UIO("whatever")) { _ =>
-      UIO(println("Test long release...")) *> ZIO.unit.delay(java.time.Duration.ofSeconds(5)) *> UIO(
-        println("Long release completed")
-      )
-    }
+    val managed = ZManaged
+      .make(UIO("whatever")) { _ =>
+        UIO(println("Test long release...")) *> ZIO.unit.delay(java.time.Duration.ofSeconds(5)) *> UIO(
+          println("Long release completed")
+        )
+      }
+      .logResult("test zmanaged", identity)
 
     val effect = for {
       bar <- ZIO.access[Bar](_.get)
