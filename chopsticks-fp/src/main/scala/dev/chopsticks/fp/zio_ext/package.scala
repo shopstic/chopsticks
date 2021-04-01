@@ -49,7 +49,7 @@ package object zio_ext {
     def logResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
-      ZIO.bracketExit(startMeasurement(name))((startTime: Long, exit: Exit[E, A]) =>
+      ZIO.bracketExit(startMeasurement(name, "started"))((startTime: Long, exit: Exit[E, A]) =>
         logElapsedTime(
           name = name,
           startTimeNanos = startTime,
@@ -106,17 +106,27 @@ package object zio_ext {
       ctx: LogCtx
     ): ZManaged[R with MeasuredLogging, E, A] = {
       for {
-        startTime <- ZManaged.fromEffect(startMeasurement(name))
-        result <- managed.onExit(exit =>
-          logElapsedTime(
-            name = name,
-            startTimeNanos = startTime,
-            exit = exit,
-            renderResult = result,
-            logTraceOnError = logTraceOnError
-          )
-        )
-      } yield result
+        startTimeRef <- Ref.make[Long](0).toManaged_
+        value <- managed
+          .flatMap { value =>
+            for {
+              startTime <- ZManaged.fromEffect(startMeasurement(name, result(value)))
+              _ <- startTimeRef.set(startTime).toManaged_
+            } yield value
+          }
+          .onExit { exit =>
+            for {
+              startTime <- startTimeRef.get
+              _ <- logElapsedTime(
+                name = name,
+                startTimeNanos = startTime,
+                exit = exit,
+                renderResult = (_: A) => "completed",
+                logTraceOnError = logTraceOnError
+              )
+            } yield ()
+          }
+      } yield value
     }
 
     def debugResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
@@ -128,7 +138,7 @@ package object zio_ext {
     def log(name: String, logTraceOnError: Boolean = true)(implicit
       ctx: LogCtx
     ): ZManaged[R with MeasuredLogging, E, A] = {
-      logResult(name, _ => "completed", logTraceOnError)
+      logResult(name, _ => "started", logTraceOnError)
     }
 
     def debug(name: String, logTraceOnError: Boolean = true)(implicit
@@ -139,10 +149,10 @@ package object zio_ext {
 
   }
 
-  private def startMeasurement(name: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] = {
+  private def startMeasurement(name: String, message: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] = {
     for {
       time <- nanoTime
-      _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).withCustomContext("task" -> name).log(ctx.level)("started"))
+      _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).withCustomContext("task" -> name).log(ctx.level)(message))
     } yield time
   }
 
