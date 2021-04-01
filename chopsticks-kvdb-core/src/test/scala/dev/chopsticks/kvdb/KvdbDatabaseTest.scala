@@ -23,7 +23,7 @@ import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.{Assertion, Inside, Succeeded}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.{RIO, Task, UIO, ZManaged}
+import zio.{RIO, Task, ZManaged}
 
 import scala.collection.immutable
 import scala.concurrent.duration._
