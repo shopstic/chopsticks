@@ -88,7 +88,7 @@ class BerkeleydbKeyCodecTest extends AnyWordSpecLike with Assertions with Matche
     }
 
     "treat nested tuple the same with flattened version" in {
-      val nested: FlattenedKey = (123, true, 500L, LocalDate.of(2018, 1, 2), "foo bar1", 99.887d)
+      val nested: FlattenedKey = (123, true, 500L, LocalDate.of(2018, 1, 2), "foo bar", 99.887d)
       val flattened: NestedKey = (123, ((true, (500L, LocalDate.of(2018, 1, 2)), "foo bar"), 99.887d))
 
       assert(KeySerdes.isEqual(KeySerdes.serialize(nested), KeySerdes.serialize(flattened)))
