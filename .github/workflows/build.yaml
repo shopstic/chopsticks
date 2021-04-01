@@ -10,6 +10,8 @@ jobs:
   build-env:
     name: Build CI environment
     runs-on: ubuntu-20.04
+    outputs:
+      image: ${{ steps.buildkit.outputs.image }}:${{ steps.buildkit.outputs.tag }}
     steps:
       - uses: actions/checkout@v2
 
@@ -22,7 +24,8 @@ jobs:
       - run: chmod +r ~/.docker/config.json
 
       - name: Build and push shell Docker image
-        uses: shopstic/buildkit-action@1.0.1
+        id: buildkit
+        uses: shopstic/buildkit-action@1.0.4
         with:
           context: ${{ github.workspace }}/shell
           image: shopstic/chopsticks-ci
@@ -65,8 +68,7 @@ jobs:
 
       - name: Build
         env:
-          SHELL_IMAGE_NAME: shopstic/chopsticks-ci
-          SHELL_IMAGE_TAG: ${{ hashFiles('shell/*') }}
+          SHELL_IMAGE: ${{ needs.build-env.outputs.image }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |-
           echo "Restored cache stats ---------------------------------------------"
