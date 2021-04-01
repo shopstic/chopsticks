@@ -114,7 +114,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
     } yield result
   }
 
-  protected def runWorker(client: DstreamSampleAppClient, id: Int) = {
+  protected def runWorker(client: DstreamSampleServiceClient, id: Int) = {
     Dstreams
       .work(client.work().addHeader(Dstreams.WORKER_ID_HEADER, id.toString)) { assignment =>
         UIO {
@@ -136,7 +136,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
             implicit val rt: Runtime[AkkaEnv with MeasuredLogging] = akkaRuntime
             import akkaSvc.actorSystem
 
-            DstreamSampleAppPowerApiHandler {
+            DstreamSampleServicePowerApiHandler {
               (source, metadata) =>
                 Dstreams.handle[Assignment, Result](dstreamState, source, metadata)
             }
@@ -147,7 +147,7 @@ object DstreamSampleApp extends AkkaDiApp[Unit] {
           UIO {
             import akkaSvc.actorSystem
 
-            DstreamSampleAppClient(
+            DstreamSampleServiceClient(
               GrpcClientSettings
                 .connectToServiceAt("localhost", 9999)
                 .withTls(false)
