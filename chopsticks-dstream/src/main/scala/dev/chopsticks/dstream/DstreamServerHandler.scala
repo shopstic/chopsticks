@@ -1,10 +1,13 @@
 package dev.chopsticks.dstream
 
 import akka.NotUsed
+import akka.grpc.scaladsl.{ServerReflection, ServiceHandler}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Source}
+import dev.chopsticks.dstream.DstreamServerHandlerFactory.DstreamServerPartialHandler
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import grpc.health.v1.{Health, HealthHandler}
 import zio.{UIO, URLayer, ZIO, ZLayer}
 
 import scala.concurrent.Future
@@ -31,32 +34,42 @@ object DstreamServerHandler {
     } yield {
       new Service[Assignment, Result] {
         override def create: UIO[HttpRequest => Future[HttpResponse]] = {
-          handlerFactory.create { (in, metadata) =>
-            import akkaSvc.{actorSystem, dispatcher}
+          handlerFactory
+            .create { (in, metadata) =>
+              import akkaSvc.{actorSystem, dispatcher}
 
-            val (ks, resultSource) = in
-              .viaMat(KillSwitches.single)(Keep.right)
-              .preMaterialize()
+              val (ks, resultSource) = in
+                .viaMat(KillSwitches.single)(Keep.right)
+                .preMaterialize()
 
-            val assignmentFutureSource = akkaRuntime.unsafeRunToFuture(stateSvc.enqueueWorker(resultSource, metadata))
+              val assignmentFutureSource = akkaRuntime.unsafeRunToFuture(stateSvc.enqueueWorker(resultSource, metadata))
 
-            Source
-              .futureSource(assignmentFutureSource)
-              .watchTermination() {
-                case (_, f) =>
-                  f
-                    .transformWith { result =>
-                      assignmentFutureSource
-                        .cancel()
-                        .map(exit => result.flatMap(_ => exit.toEither.toTry))
-                    }
-                    .onComplete {
-                      case Success(_) => ks.shutdown()
-                      case Failure(ex) => ks.abort(ex)
-                    }
-                  NotUsed
-              }
-          }
+              Source
+                .futureSource(assignmentFutureSource)
+                .watchTermination() {
+                  case (_, f) =>
+                    f
+                      .transformWith { result =>
+                        assignmentFutureSource
+                          .cancel()
+                          .map(exit => result.flatMap(_ => exit.toEither.toTry))
+                      }
+                      .onComplete {
+                        case Success(_) => ks.shutdown()
+                        case Failure(ex) => ks.abort(ex)
+                      }
+                    NotUsed
+                }
+            }
+            .map { case DstreamServerPartialHandler(handler, serviceDescription) =>
+              import akkaSvc.actorSystem
+
+              ServiceHandler.concatOrNotFound(
+                handler,
+                HealthHandler.partial(new DstreamHealthImpl),
+                ServerReflection.partial(List(serviceDescription, Health))
+              )
+            }
         }
       }
     }

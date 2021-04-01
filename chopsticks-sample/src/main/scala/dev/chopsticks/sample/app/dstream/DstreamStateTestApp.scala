@@ -6,6 +6,7 @@ import dev.chopsticks.dstream.metric.DstreamWorkerMetrics.DstreamWorkerMetric
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.metric.DstreamMasterMetrics.DstreamMasterMetric
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
+import dev.chopsticks.dstream.DstreamServerHandlerFactory.DstreamServerPartialHandler
 import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.DstreamWorker.{DstreamWorkerConfig, DstreamWorkerRetryConfig}
 import dev.chopsticks.dstream._
@@ -25,8 +26,9 @@ import dev.chopsticks.metric.log.MetricLogger
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.{
   Assignment,
-  DstreamSampleAppClient,
-  DstreamSampleAppPowerApiHandler,
+  DstreamSampleService,
+  DstreamSampleServiceClient,
+  DstreamSampleServicePowerApiHandler,
   Result
 }
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
@@ -58,7 +60,10 @@ object DstreamStateTestApp extends ZAkkaApp {
       ZIO
         .access[AkkaEnv](_.get.actorSystem)
         .map { implicit as =>
-          DstreamSampleAppPowerApiHandler(handle(_, _))
+          DstreamServerPartialHandler(
+            DstreamSampleServicePowerApiHandler.partial(handle(_, _)),
+            DstreamSampleService
+          )
         }
     }
     val dstreamServerHandler = DstreamServerHandler.live[Assignment, Result]
@@ -67,7 +72,7 @@ object DstreamStateTestApp extends ZAkkaApp {
         ZIO
           .access[AkkaEnv](_.get.actorSystem)
           .map { implicit as =>
-            DstreamSampleAppClient(settings)
+            DstreamSampleServiceClient(settings)
           }
       } { (client, workerId) =>
         client.work().addHeader("dstream-worker-id", workerId.toString)

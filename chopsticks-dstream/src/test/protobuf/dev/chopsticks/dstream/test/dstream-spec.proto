@@ -10,7 +10,7 @@ option (scalapb.options) = {
   preserve_unknown_fields: false
 };
 
-service DstreamSampleApp {
+service DstreamSampleService {
   rpc Work (stream Result) returns (stream Assignment) {
   }
 }

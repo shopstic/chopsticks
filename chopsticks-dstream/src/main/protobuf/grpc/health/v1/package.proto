@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+import "scalapb/scalapb.proto";
+
+package grpc.health.v1;
+
+option (scalapb.options) = {
+  no_default_values_in_constructor: true,
+  scope: PACKAGE
+  flat_package: true
+  preserve_unknown_fields: false
+};

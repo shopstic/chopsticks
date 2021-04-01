@@ -1,10 +1,17 @@
 package dev.chopsticks.dstream.test
 
+import dev.chopsticks.dstream.DstreamServerHandlerFactory.DstreamServerPartialHandler
 import dev.chopsticks.dstream.metric.DstreamWorkerMetrics.DstreamWorkerMetric
 import dev.chopsticks.dstream.metric.DstreamMasterMetrics.DstreamMasterMetric
 import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.test.DstreamTestUtils.ToTestZLayer
-import dev.chopsticks.dstream.test.proto.{Assignment, DstreamSampleAppClient, DstreamSampleAppPowerApiHandler, Result}
+import dev.chopsticks.dstream.test.proto.{
+  Assignment,
+  DstreamSampleService,
+  DstreamSampleServiceClient,
+  DstreamSampleServicePowerApiHandler,
+  Result
+}
 import dev.chopsticks.dstream._
 import dev.chopsticks.dstream.metric.{
   DstreamClientMetricsManager,
@@ -51,7 +58,10 @@ trait DstreamSpecEnv {
     ZIO
       .access[AkkaEnv](_.get.actorSystem)
       .map { implicit as =>
-        DstreamSampleAppPowerApiHandler(handle(_, _))
+        DstreamServerPartialHandler(
+          DstreamSampleServicePowerApiHandler.partial(handle(_, _)),
+          DstreamSampleService
+        )
       }
   }.forTest
   protected lazy val dstreamServerHandlerLayer = DstreamServerHandler.live[Assignment, Result].forTest
@@ -60,7 +70,7 @@ trait DstreamSpecEnv {
       ZIO
         .access[AkkaEnv](_.get.actorSystem)
         .map { implicit as =>
-          DstreamSampleAppClient(settings)
+          DstreamSampleServiceClient(settings)
         }
     } { (client, _) =>
       client.work()
