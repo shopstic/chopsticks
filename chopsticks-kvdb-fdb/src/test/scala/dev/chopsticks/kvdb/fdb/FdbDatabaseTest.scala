@@ -25,11 +25,14 @@ object FdbDatabaseTest {
 
   val managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool with IzLogging, Throwable, TestDatabase.Db] = {
     for {
+      logger <- IzLogging.zioLogger.toManaged_
+      rootDirectoryPath <- ZManaged.succeed(UUID.randomUUID().toString)
+      _ <- logger.info(s"Using $rootDirectoryPath").toManaged_
       database <- FdbDatabase.manage(
         dbMaterialization,
         FdbDatabase.FdbDatabaseConfig(
           clusterFilePath = sys.env.get("FDB_CLUSTER_FILE").orElse(Some(sys.env("HOME") + "/.fdb/cluster.file")),
-          rootDirectoryPath = UUID.randomUUID().toString,
+          rootDirectoryPath = rootDirectoryPath,
           stopNetworkOnClose = false
         )
       )
