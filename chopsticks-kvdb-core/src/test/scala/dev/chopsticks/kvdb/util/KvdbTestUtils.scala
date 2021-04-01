@@ -26,7 +26,7 @@ object KvdbTestUtils {
   ): (Db => RIO[R, Assertion]) => Future[Assertion] = {
     (testCode: Db => RIO[R, Assertion]) =>
       managed
-        .use(testCode(_))
+        .use(testCode(_).interruptAllChildrenPar)
         .provideLayer(layer)
         .unsafeRunToFuture
   }
