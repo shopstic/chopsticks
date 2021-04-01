@@ -20,10 +20,10 @@ import dev.chopsticks.kvdb.util.KvdbTestUtils.populateColumn
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.stream.ZAkkaGraph.UninterruptibleGraphOps
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
-import org.scalatest.{Assertion, Inside}
+import org.scalatest.{Assertion, Inside, Succeeded}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.{RIO, Task, ZManaged}
+import zio.{RIO, Task, UIO, ZManaged}
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -31,6 +31,8 @@ import scala.language.implicitConversions
 import eu.timepit.refined.auto._
 import izumi.logstage.api.Log.Level
 import squants.information.InformationConversions._
+
+import scala.concurrent.Future
 
 object KvdbDatabaseTest extends Matchers with Inside {
   private def flattenFlow[T] = Flow[Array[T]].mapConcat { b =>
@@ -1230,40 +1232,46 @@ abstract private[kvdb] class KvdbDatabaseTest
   }
 
   "transactionTask" should {
-    "maintain atomicity" in withDb { db =>
-      for {
-        _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
-        _ <- db.putTask(defaultCf, "pppp1", "pppp1")
-        _ <- db.putTask(lookupCf, "bbbb1", "bbbb1")
-        _ <- db.putTask(defaultCf, "pppp2", "pppp2")
-        _ <- db.putTask(defaultCf, "pppp3", "pppp3")
-        _ <- db.putTask(defaultCf, "zzzz3", "zzzz3")
-        _ <- db.transactionTask(
-          db.transactionBuilder()
-            .delete(defaultCf, "aaaa1")
-            .put(lookupCf, "dddd1", "dddd1")
-            .delete(lookupCf, "bbbb1")
-            .put(defaultCf, "cccc1", "cccc1")
-            .deleteRange(defaultCf, "pppp1", "pppp4", false)
-            .result
-        )
-        allDefault <- collectPairs(db.iterateSource(defaultCf, $$(_.first, _.last)))
-        allLookup <- collectPairs(db.iterateSource(lookupCf, $$(_.first, _.last)))
-      } yield {
-        assertPairs(
-          allDefault,
-          Vector(
-            ("cccc1", "cccc1"),
-            ("zzzz3", "zzzz3")
-          )
-        )
-        assertPairs(
-          allLookup,
-          Vector(
-            ("dddd1", "dddd1")
-          )
-        )
-      }
+    "maintain atomicity" in {
+      Future
+        .sequence((1 to 12).map { _ =>
+          withDb { db =>
+            for {
+              _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
+              _ <- db.putTask(defaultCf, "pppp1", "pppp1")
+              _ <- db.putTask(lookupCf, "bbbb1", "bbbb1")
+              _ <- db.putTask(defaultCf, "pppp2", "pppp2")
+              _ <- db.putTask(defaultCf, "pppp3", "pppp3")
+              _ <- db.putTask(defaultCf, "zzzz3", "zzzz3")
+              _ <- db.transactionTask(
+                db.transactionBuilder()
+                  .delete(defaultCf, "aaaa1")
+                  .put(lookupCf, "dddd1", "dddd1")
+                  .delete(lookupCf, "bbbb1")
+                  .put(defaultCf, "cccc1", "cccc1")
+                  .deleteRange(defaultCf, "pppp1", "pppp4", inclusive = false)
+                  .result
+              )
+              allDefault <- collectPairs(db.iterateSource(defaultCf, $$(_.first, _.last)))
+              allLookup <- collectPairs(db.iterateSource(lookupCf, $$(_.first, _.last)))
+            } yield {
+              assertPairs(
+                allDefault,
+                Vector(
+                  ("cccc1", "cccc1"),
+                  ("zzzz3", "zzzz3")
+                )
+              )
+              assertPairs(
+                allLookup,
+                Vector(
+                  ("dddd1", "dddd1")
+                )
+              )
+            }
+          }
+        })
+        .map(_ => Succeeded)
     }
 
     "support deleteRange" in withDb { db =>

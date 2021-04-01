@@ -165,7 +165,7 @@ object FdbDatabase {
     rootDirectoryPath: String,
     datacenterId: Option[String] = None,
     stopNetworkOnClose: Boolean = true,
-    initialConnectionTimeout: Timeout = Timeout(2.seconds),
+    initialConnectionTimeout: Timeout = Timeout(5.seconds),
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
@@ -715,6 +715,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   override def estimateCount[Col <: CF](column: Col): Task[Long] = ???
 
   override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
+    println(s"iterateSource ============================= ${range.toProtoString}")
     Source
       .lazyFutureSource { () =>
         val initialTx = dbContext.db.createTransaction()
