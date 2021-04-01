@@ -13,8 +13,7 @@ ci_run_in_shell() {
   local GITHUB_ACTOR=${GITHUB_ACTOR:?"GITHUB_ACTOR env variable is required"}
   local GITHUB_TOKEN=${GITHUB_TOKEN:?"GITHUB_TOKEN env variable is required"}
   local GITHUB_WORKSPACE=${GITHUB_WORKSPACE:?"GITHUB_WORKSPACE env variable is required"}
-  local SHELL_IMAGE_NAME=${SHELL_IMAGE_NAME:?"SHELL_IMAGE_NAME env variable is required"}
-  local SHELL_IMAGE_TAG=${SHELL_IMAGE_TAG:?"SHELL_IMAGE_TAG env variable is required"}
+  local SHELL_IMAGE=${SHELL_IMAGE:?"SHELL_IMAGE env variable is required"}
 
   docker run \
     --workdir /repo \
@@ -26,7 +25,7 @@ ci_run_in_shell() {
     -e "GITHUB_REF=${GITHUB_REF}" \
     -v "${GITHUB_WORKSPACE}:/repo" \
     -v "${HOME}/.cache:/root/.cache" \
-    "${SHELL_IMAGE_NAME}:${SHELL_IMAGE_TAG}" \
+    "${SHELL_IMAGE}" \
     bash -c "./cli.sh ci_run"
 }
 
