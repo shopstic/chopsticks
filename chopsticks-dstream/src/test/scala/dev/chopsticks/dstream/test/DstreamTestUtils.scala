@@ -99,7 +99,7 @@ object DstreamTestUtils {
               clientSettings = clientSettings,
               parallelism = 1,
               assignmentTimeout = 10.seconds
-            )) { assignment =>
+            )) { (_, assignment) =>
               for {
                 _ <- workerRequests.offer(assignment)
                 ret <- workerResponses.take

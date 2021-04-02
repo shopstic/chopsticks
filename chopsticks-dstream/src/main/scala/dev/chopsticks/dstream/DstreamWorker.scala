@@ -24,6 +24,8 @@ import scala.concurrent.duration.FiniteDuration
 import scala.jdk.DurationConverters.ScalaDurationOps
 
 object DstreamWorker {
+  type WorkerId = Int
+
   final case class DstreamWorkerConfig(
     clientSettings: GrpcClientSettings,
     parallelism: PosInt,
@@ -40,7 +42,7 @@ object DstreamWorker {
   trait Service[Assignment, Result] {
     def run[R1, R2](
       config: DstreamWorkerConfig
-    )(makeSource: Assignment => RIO[R1, Source[Result, NotUsed]])(
+    )(makeSource: (WorkerId, Assignment) => RIO[R1, Source[Result, NotUsed]])(
       makeRetrySchedule: Int => Schedule[R2, Throwable, Any]
     ): RIO[R1 with R2, Unit]
   }
@@ -78,8 +80,8 @@ object DstreamWorker {
 
   private[dstream] def runWorkers[Assignment: zio.Tag, Result: zio.Tag](
     config: DstreamWorkerConfig,
-    makeSource: Assignment => Task[Source[Result, NotUsed]],
-    retryScheduleFactory: Int => Schedule[Any, Throwable, Any]
+    makeSource: (WorkerId, Assignment) => Task[Source[Result, NotUsed]],
+    retryScheduleFactory: WorkerId => Schedule[Any, Throwable, Any]
   ) = {
     ZIO.foreachPar_(1 to config.parallelism) { workerId =>
       ZManaged.accessManaged[DstreamWorkerMetricsManager](_.get.manage(workerId.toString))
@@ -118,7 +120,7 @@ object DstreamWorker {
                   .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
                   .interruptibleMapAsync(1) {
                     assignment =>
-                      makeSource(assignment)
+                      makeSource(workerId, assignment)
                         .tap(s => UIO(promise.success(s)))
                         .zipRight(Task.fromFuture(_ => promise.future))
                         .as(assignment)
@@ -145,15 +147,15 @@ object DstreamWorker {
         new Service[Assignment, Result] {
           override def run[R1, R2](
             config: DstreamWorkerConfig
-          )(makeSource: Assignment => RIO[
+          )(makeSource: (WorkerId, Assignment) => RIO[
             R1,
             Source[Result, NotUsed]
-          ])(makeRetrySchedule: Int => Schedule[R2, Throwable, Any]): RIO[R1 with R2, Unit] = {
+          ])(makeRetrySchedule: WorkerId => Schedule[R2, Throwable, Any]): RIO[R1 with R2, Unit] = {
             for {
               env <- ZIO.environment[R1 with R2]
               ret <- fn(
                 config,
-                result => makeSource(result).provide(env),
+                (workerId, result) => makeSource(workerId, result).provide(env),
                 workerId => {
                   makeRetrySchedule(workerId).provide(env)
                 }
