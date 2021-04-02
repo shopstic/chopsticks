@@ -165,7 +165,7 @@ object DstreamStateTestApp extends ZAkkaApp {
           clientSettings = clientSettings,
           parallelism = parallelism,
           assignmentTimeout = 10.seconds
-        )) { assignment =>
+        )) { (_, assignment) =>
           UIO {
             Source(1 to 10)
               .map(v => Result(assignment.valueIn * 10 + v))
