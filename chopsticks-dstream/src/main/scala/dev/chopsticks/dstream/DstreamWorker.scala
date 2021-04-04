@@ -98,16 +98,27 @@ object DstreamWorker {
               UIO {
                 metrics.workerStatus.set(0)
 
-                if (exit.succeeded) {
-                  if (exit.exists(_.nonEmpty)) {
-                    metrics.successesTotal.inc()
-                  }
-                  else {
-                    metrics.timeoutsTotal.inc()
-                  }
-                }
-                else {
-                  metrics.failuresTotal.inc()
+                exit match {
+                  case Exit.Success(maybeAssignment) =>
+                    if (maybeAssignment.nonEmpty) {
+                      metrics.successesTotal.inc()
+                    }
+                    else {
+                      metrics.timeoutsTotal.inc()
+                    }
+
+                  case Exit.Failure(cause) =>
+                    if (
+                      cause.failures.exists {
+                        case _: TimeoutException => true
+                        case _ => false
+                      }
+                    ) {
+                      metrics.timeoutsTotal.inc()
+                    }
+                    else {
+                      metrics.failuresTotal.inc()
+                    }
                 }
               }
             } { _ =>
