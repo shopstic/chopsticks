@@ -143,7 +143,7 @@ object DstreamStateTestApp extends ZAkkaApp {
 
     managed.use { distributionFlow =>
       Source(1 to Int.MaxValue)
-        //        .initialDelay(1.minute)
+        .initialDelay(1.minute)
         .map(Assignment(_))
         .via(distributionFlow)
         .toZAkkaSource
