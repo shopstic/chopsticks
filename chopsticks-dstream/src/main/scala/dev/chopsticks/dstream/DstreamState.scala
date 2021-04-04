@@ -2,16 +2,19 @@ package dev.chopsticks.dstream
 
 import akka.NotUsed
 import akka.grpc.scaladsl.Metadata
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.Sink.{fromGraph, shape}
+import akka.stream.{ActorAttributes, Attributes, Graph, SinkShape, StreamSubscriptionTimeoutTerminationMode}
+import akka.stream.scaladsl.{Keep, Sink, Source}
 import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.stream.FailIfEmptyFlow
+import org.reactivestreams.Publisher
 import zio._
 import zio.clock.Clock
 import zio.stm.{STM, TMap, TQueue}
 
 import java.util.concurrent.atomic.AtomicLong
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{Duration, DurationInt}
 import scala.jdk.DurationConverters.ScalaDurationOps
 
 object DstreamState {
@@ -33,6 +36,21 @@ object DstreamState {
     def awaitForWorker(assignmentId: AssignmentId): UIO[WorkResult[Res]]
     def enqueueAssignment(assignment: Req): UIO[AssignmentId]
     def report(assignmentId: AssignmentId): IO[InvalidAssignment, Option[WorkResult[Res]]]
+  }
+
+  private lazy val FanoutPublisherSinkCtor =
+    Class.forName("akka.stream.impl.FanoutPublisherSink").getDeclaredConstructors.head
+
+  private def publisherSinkWithNoSubscriptionTimeout[T]: Sink[T, Publisher[T]] = {
+    fromGraph(
+      FanoutPublisherSinkCtor.newInstance(
+        Attributes.name("fanoutPublisherSink") and ActorAttributes.streamSubscriptionTimeout(
+          Duration.Zero,
+          StreamSubscriptionTimeoutTerminationMode.noop
+        ),
+        shape("FanoutPublisherSink")
+      ).asInstanceOf[Graph[SinkShape[T], Publisher[T]]]
+    )
   }
 
   def manage[Req, Res](serviceId: String)
@@ -63,8 +81,11 @@ object DstreamState {
 
       def enqueueWorker(in: Source[Res, NotUsed], metadata: Metadata): UIO[Source[Req, NotUsed]] = {
         UIO.effectSuspendTotal {
-          val (inFuture, inSource) =
-            in.watchTermination() { case (_, f) => f }.preMaterialize()
+          val (inFuture, inPublisher) = in
+            .watchTermination() { case (_, f) => f }
+            .toMat(publisherSinkWithNoSubscriptionTimeout)(Keep.both)
+            .run()
+          val inSource = Source.fromPublisher(inPublisher)
 
           offersCounter.inc()
           workerGauge.inc()
