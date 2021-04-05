@@ -52,6 +52,7 @@ object IzLogging {
   }
 
   def logger: URIO[IzLogging, IzLogger] = ZIO.access[IzLogging](_.get.logger)
+  def loggerWithContext(ctx: LogCtx): URIO[IzLogging, IzLogger] = ZIO.access[IzLogging](_.get.loggerWithCtx(ctx))
   def zioLogger: URIO[IzLogging, LogIO3[ZIO]] = ZIO.access[IzLogging](_.get.zioLogger)
 
   def create(lbConfig: LbConfig): Service = {
