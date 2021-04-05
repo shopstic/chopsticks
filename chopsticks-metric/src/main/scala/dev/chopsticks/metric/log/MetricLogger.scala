@@ -116,8 +116,7 @@ object MetricLogger {
   ): URLayer[Clock with IzLogging, MetricLogger] = {
     def run(collect: UIO[ListMap[String, PeriodicValue]], logCtx: LogCtx) = {
       for {
-        logService <- ZIO.access[IzLogging](_.get)
-        logger = logService.loggerWithCtx(logCtx)
+        logger <- IzLogging.loggerWithContext(logCtx)
         priorSnapRef <- ZRef.make(ListMap.empty[String, PeriodicValue])
         collectAndAccumulate = {
           for {

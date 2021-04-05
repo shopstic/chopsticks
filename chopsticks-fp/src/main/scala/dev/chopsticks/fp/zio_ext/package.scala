@@ -166,13 +166,12 @@ package object zio_ext {
     for {
       elapse <- nanoTime.map(endTime => endTime - startTimeNanos)
       elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
-      warnLevel = if (ctx.level.compareTo(Log.Level.Info) >= 0) Log.Level.Warn else ctx.level
       errorLevel = if (ctx.level.compareTo(Log.Level.Info) >= 0) Log.Level.Error else ctx.level
       logger <-
         ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("task" -> name, "elapsed" -> elapsed))
       _ <- exit.toEither match {
         case Left(FiberFailure(cause)) if cause.interrupted =>
-          logger.log(warnLevel)(s"interrupted")
+          logger.log(ctx.level)(s"interrupted")
 
         case Left(exception @ FiberFailure(cause)) =>
           if (logTraceOnError) {
