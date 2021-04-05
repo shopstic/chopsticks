@@ -54,7 +54,7 @@ object Build {
         name := s"chopsticks-$projectName",
         version := {
           val useSnapshotVersion = sys.env.get("CHOPSTICKS_USE_SNAPSHOT_VERSION").map(_.toLowerCase).contains("true")
-          val buildVersion = (version in ThisBuild).value
+          val buildVersion = (ThisBuild / version).value
           if (useSnapshotVersion || !buildVersion.endsWith("-SNAPSHOT")) buildVersion
           else {
             val shortGitSha = sys.env.get("GITHUB_SHA").orElse(git.gitHeadCommit.value).get.take(8)

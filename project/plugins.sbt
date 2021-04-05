@@ -8,7 +8,7 @@ addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.1")
 addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "1.1.1")
 libraryDependencies ++= Seq(
   "com.thesamet.scalapb" %% "compilerplugin" % "0.10.11",
-  "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-codegen" % "0.4.4"
+  "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-codegen" % "0.5.0"
 )
 addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "1.0.0")
 addSbtPlugin("com.github.sbt" % "sbt-release" % "1.0.15")

@@ -8,7 +8,7 @@ RUN \
 
 FROM openjdk:11.0.10-buster as sbt
 
-ENV SBT_VERSION "1.4.9"
+ENV SBT_VERSION "1.5.0"
 ENV SCALA_VERSION=2.13.5
 
 ENV PATH="$PATH:/sbt/bin"

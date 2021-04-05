@@ -156,7 +156,7 @@ lazy val zioGrpcCommon = Build
   .defineProject("zio-grpc-common")
   .settings(Build.createScalapbSettings(withGrpc = true))
   .settings(
-    Compile / PB.targets += scalapb.zio_grpc.ZioCodeGenerator -> (sourceManaged in Compile).value,
+    Compile / PB.targets += scalapb.zio_grpc.ZioCodeGenerator -> (Compile / sourceManaged).value,
     libraryDependencies ++= scalapbRuntimeDeps ++ scalapbRuntimeGrpcDeps
   )
   .dependsOn(util)
