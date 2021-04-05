@@ -35,7 +35,7 @@ ci_run() {
   export FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
   service foundationdb start
 
-  export SBT_OPTS="-XX:+UseG1GC -Xms6g -Xmx6g -Xss6m"
+  export SBT_OPTS="-server -XX:+UseG1GC -Xms6g -Xmx6g -Xss6m"
   ./cli.sh build
   service foundationdb stop
 
