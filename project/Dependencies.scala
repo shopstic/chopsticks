@@ -6,8 +6,8 @@ object Dependencies {
   val AKKA_VERSION = "2.6.10"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.5"
-  val IZUMI_VERSION = "1.0.4"
-  val REFINED_VERSION = "0.9.21"
+  val IZUMI_VERSION = "1.0.5"
+  val REFINED_VERSION = "0.9.23"
   val CALIBAN_VERSION = "0.9.5"
 
   val akkaSlf4jDeps = Seq(
@@ -46,7 +46,7 @@ object Dependencies {
   ).overrideIzumiReflect
 
   val zioMagicDeps = Seq(
-    "io.github.kitlangton" %% "zio-magic" % "0.2.2"
+    "io.github.kitlangton" %% "zio-magic" % "0.2.3"
   )
 
   val squantsDeps = Seq(
@@ -63,7 +63,7 @@ object Dependencies {
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.4.2"
+    "org.typelevel" %% "cats-core" % "2.5.0"
   )
 
   val kittensDeps = Seq(
@@ -82,7 +82,7 @@ object Dependencies {
   )
 
   val loggingDeps = Seq(
-    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.3",
     "io.7mind.izumi" %% "logstage-adapter-slf4j" % IZUMI_VERSION,
     "org.slf4j" % "jul-to-slf4j" % "1.7.30"
   )
@@ -92,8 +92,8 @@ object Dependencies {
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.2.6",
-    "org.scalatest" %% "scalatest" % "3.2.6",
+    "org.scalactic" %% "scalactic" % "3.2.7",
+    "org.scalatest" %% "scalatest" % "3.2.7",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.15.3",
     "org.scalamock" %% "scalamock" % "5.1.0"
@@ -104,7 +104,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.15.5"
+    "org.rocksdb" % "rocksdbjni" % "6.16.4"
   )
 
   val lmdbDeps = Seq(
@@ -165,7 +165,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.6.2"
+    "com.lihaoyi" %% "pprint" % "0.6.4"
   )
 
   val distageDeps = Seq(
@@ -190,7 +190,7 @@ object Dependencies {
       .overrideIzumiReflect
 
   val sourcecodeDeps = Seq(
-    "com.lihaoyi" %% "sourcecode" % "0.2.4"
+    "com.lihaoyi" %% "sourcecode" % "0.2.5"
   )
 
   implicit private class ModulesOps(modules: Seq[ModuleID]) {
