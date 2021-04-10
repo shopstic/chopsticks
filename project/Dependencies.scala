@@ -194,10 +194,10 @@ object Dependencies {
   )
 
   implicit private class ModulesOps(modules: Seq[ModuleID]) {
-    // TODO Remove this once this issue is resolved https://github.com/zio/izumi-reflect/issues/98
+    // TODO Remove this method once ZIO uses izumi-reflect 1.1.0 (probably from ZIO >= 1.0.6)
     def overrideIzumiReflect: Seq[ModuleID] =
       modules.map(_.exclude("dev.zio", "izumi-reflect_2.13")) ++
-        Seq("dev.zio" %% "izumi-reflect" % "1.0.0-M7")
+        Seq("dev.zio" %% "izumi-reflect" % "1.1.0")
 
     def overrideAkkaSerializationJackson: Seq[ModuleID] =
       modules.map(_.exclude("com.typesafe.akka", "akka-serialization-jackson_2.13")) ++
