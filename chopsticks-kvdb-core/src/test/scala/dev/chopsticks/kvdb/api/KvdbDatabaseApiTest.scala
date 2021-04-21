@@ -20,8 +20,7 @@ abstract class KvdbDatabaseApiTest
 //  protected def anotherCf: AnotherCf1
 
   private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
-    typesafeConfig,
-    "iz-logging"
+    typesafeConfig
   )))
   private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)

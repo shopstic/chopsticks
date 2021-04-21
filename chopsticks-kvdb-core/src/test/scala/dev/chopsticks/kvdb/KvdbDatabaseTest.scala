@@ -127,8 +127,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   private val izLoggingConfig = IzLoggingConfig(level = Level.Info, noColor = false, jsonFileSink = None)
 
   private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
-    typesafeConfig,
-    "iz-logging"
+    typesafeConfig
   )))
 
   private lazy val runtimeLayer =

@@ -37,8 +37,7 @@ final class ZAkkaStreamsTest
   private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Assertion] = {
     val testClock = zio.ZEnv.live >>> (zio.test.environment.Live.default ++ Annotations.live) >>> TestClock.default
     val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live ++ (IzLoggingRouter.live >>> IzLogging.live(
-      typesafeConfig,
-      "iz-logging"
+      typesafeConfig
     ))
     val rt = AkkaDiApp.createRuntime(env)
     rt.unsafeRunToFuture(run)
