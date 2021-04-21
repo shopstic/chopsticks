@@ -31,6 +31,7 @@ object DstreamUtilsSpec extends DefaultRunnableSpec {
     }
       .injectSome[Environment](
         hoconConfigLayer,
+        DstreamSpecEnv.izLoggingRouterLayer,
         DstreamSpecEnv.izLoggingLayer,
         DstreamSpecEnv.akkaEnvLayer,
         typedConfigLayer

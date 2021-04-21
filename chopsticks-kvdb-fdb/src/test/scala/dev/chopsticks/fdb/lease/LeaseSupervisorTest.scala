@@ -2,7 +2,6 @@ package dev.chopsticks.fdb.lease
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-
 import akka.Done
 import akka.actor.CoordinatedShutdown
 import akka.stream.scaladsl.Sink
@@ -12,7 +11,7 @@ import dev.chopsticks.fdb.lease.LeaseSupervisorTest.LeaseSupervisorTestDatabase.
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.LiveDiEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
@@ -143,7 +142,10 @@ class LeaseSupervisorTest
     with AkkaTestKitAutoShutDown {
   import LeaseSupervisorTest._
 
-  private val runtime = AkkaDiApp.createRuntime(AkkaEnv.live(system) ++ IzLogging.live(typesafeConfig))
+  private val runtime = AkkaDiApp.createRuntime(AkkaEnv.live(system) ++ (IzLoggingRouter.live >>> IzLogging.live(
+    typesafeConfig,
+    "iz-logging"
+  )))
   private val akkaAppDi = AkkaDiApp.Env.createModule(system)
   private val shutdown = CoordinatedShutdown(system)
 
@@ -560,7 +562,8 @@ class LeaseSupervisorTest
     val runEnvIo: UIO[DiEnv[AppEnv]] = UIO {
       LiveDiEnv(
         DiLayers(
-          IzLogging.live(IzLoggingConfig(Log.Level.Warn, coloredOutput = true, None)),
+          IzLoggingRouter.live,
+          IzLogging.live(IzLoggingConfig(Log.Level.Warn, noColor = false, None)),
           ZLayer.succeed(config),
           LeaseAcquirer.live,
           KvdbIoThreadPool.live(keepAliveTimeMs = 5000),

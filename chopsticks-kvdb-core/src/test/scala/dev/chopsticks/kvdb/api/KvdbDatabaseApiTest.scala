@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.api
 
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.fp.AkkaDiApp
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
@@ -19,7 +19,10 @@ abstract class KvdbDatabaseApiTest
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ IzLogging.live(typesafeConfig))
+  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
+    typesafeConfig,
+    "iz-logging"
+  )))
   private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
   private lazy val withCf = KvdbTestUtils.createTestRunner(

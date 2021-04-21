@@ -4,7 +4,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.{HoconConfig, TypedConfig}
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
 import logstage.Log
 import pureconfig.ConfigConvert
@@ -41,8 +41,9 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
     val layer = ZLayer.fromMagic[ZAkkaAppEnv](
       zio.ZEnv.live,
       customHoconConfig,
+      IzLoggingRouter.live,
       IzLogging.live(IzLoggingConfig(
-        coloredOutput = true,
+        noColor = false,
         level = Log.Level.Debug,
         jsonFileSink = None
       )),
