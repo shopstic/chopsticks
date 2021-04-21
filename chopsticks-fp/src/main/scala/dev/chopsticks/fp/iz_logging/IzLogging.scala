@@ -6,7 +6,6 @@ import dev.chopsticks.util.config.PureconfigLoader
 import izumi.fundamentals.platform.time.IzTimeSafe
 import izumi.logstage.api.Log
 import izumi.logstage.api.Log.{CustomContext, Level}
-import izumi.logstage.api.logger.LogSink
 import izumi.logstage.api.rendering.RenderingPolicy
 import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
 import izumi.logstage.api.rendering.logunits.Styler.TrimType
@@ -164,25 +163,4 @@ object IzLogTemplates {
       new MessageExtractor()
     )
   )
-}
-
-trait IzLoggingFilter {
-  def exclude(logEntry: Log.Entry): Boolean
-}
-
-object IzLoggingSinks {
-  final class IzFilteringSink(filters: Iterable[IzLoggingFilter], underlying: LogSink) extends LogSink {
-    override def flush(e: Log.Entry): Unit = {
-      if (filters.exists(f => f.exclude(e))) ()
-      else underlying.flush(e)
-    }
-
-    override def close(): Unit = underlying.close()
-  }
-
-  object IzFilteringSink {
-    def apply(filters: Iterable[IzLoggingFilter], underlying: LogSink): IzFilteringSink = {
-      new IzFilteringSink(filters, underlying)
-    }
-  }
 }
