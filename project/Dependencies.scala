@@ -5,7 +5,7 @@ object Dependencies {
   val SCALA_VERSION = "2.13.5"
   val AKKA_VERSION = "2.6.10"
   val AKKA_HTTP_VERSION = "10.2.1"
-  val ZIO_VERSION = "1.0.5"
+  val ZIO_VERSION = "1.0.6"
   val IZUMI_VERSION = "1.0.5"
   val REFINED_VERSION = "0.9.23"
   val CALIBAN_VERSION = "0.9.5"
@@ -32,21 +32,21 @@ object Dependencies {
 
   val zioCoreDeps = Seq(
     "dev.zio" %% "zio" % ZIO_VERSION
-  ).overrideIzumiReflect
+  )
 
   val zioDeps = zioCoreDeps ++ Seq(
     "dev.zio" %% "zio-streams" % ZIO_VERSION
-  ).overrideIzumiReflect
+  )
 
   val zioTestDeps = Seq(
     "dev.zio" %% "zio-test" % ZIO_VERSION,
     "dev.zio" %% "zio-test-sbt" % ZIO_VERSION,
     "dev.zio" %% "zio-test-magnolia" % ZIO_VERSION,
     "dev.zio" %% "zio-test-junit" % ZIO_VERSION
-  ).overrideIzumiReflect
+  )
 
   val zioMagicDeps = Seq(
-    "io.github.kitlangton" %% "zio-magic" % "0.2.3"
+    "io.github.kitlangton" %% "zio-magic" % "0.2.5"
   )
 
   val squantsDeps = Seq(
@@ -63,15 +63,15 @@ object Dependencies {
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.5.0"
+    "org.typelevel" %% "cats-core" % "2.6.0"
   )
 
   val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "2.2.1"
+    "org.typelevel" %% "kittens" % "2.2.2"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.14.1")
+    .map(p => "com.github.pureconfig" %% p % "0.15.0")
     .excludeAkkaActor
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
@@ -92,8 +92,8 @@ object Dependencies {
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.2.7",
-    "org.scalatest" %% "scalatest" % "3.2.7",
+    "org.scalactic" %% "scalactic" % "3.2.8",
+    "org.scalatest" %% "scalatest" % "3.2.8",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
     "org.scalacheck" %% "scalacheck" % "1.15.3",
     "org.scalamock" %% "scalamock" % "5.1.0"
@@ -116,7 +116,7 @@ object Dependencies {
   )
 
   val shapelessDeps = Seq(
-    "com.chuusai" %% "shapeless" % "2.3.3"
+    "com.chuusai" %% "shapeless" % "2.3.4"
   )
 
   val scalapbRuntimeDeps = Seq(
@@ -174,7 +174,7 @@ object Dependencies {
     "io.7mind.izumi" %% "logstage-rendering-circe" % IZUMI_VERSION,
     "io.7mind.izumi" %% "distage-extension-logstage" % IZUMI_VERSION,
     "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
-  ).overrideIzumiReflect
+  )
 
   val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.9")
 
@@ -187,18 +187,12 @@ object Dependencies {
       .map(_ % CALIBAN_VERSION)
       .overrideAkkaSerializationJackson
       .overrideAkkaStreams
-      .overrideIzumiReflect
 
   val sourcecodeDeps = Seq(
-    "com.lihaoyi" %% "sourcecode" % "0.2.5"
+    "com.lihaoyi" %% "sourcecode" % "0.2.6"
   )
 
   implicit private class ModulesOps(modules: Seq[ModuleID]) {
-    // TODO Remove this method once ZIO uses izumi-reflect 1.1.0 (probably from ZIO >= 1.0.6)
-    def overrideIzumiReflect: Seq[ModuleID] =
-      modules.map(_.exclude("dev.zio", "izumi-reflect_2.13")) ++
-        Seq("dev.zio" %% "izumi-reflect" % "1.1.0")
-
     def overrideAkkaSerializationJackson: Seq[ModuleID] =
       modules.map(_.exclude("com.typesafe.akka", "akka-serialization-jackson_2.13")) ++
         Seq("com.typesafe.akka" %% "akka-serialization-jackson" % AKKA_VERSION)
