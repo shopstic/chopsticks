@@ -7,7 +7,7 @@ import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.BaseCf
 import org.scalatest.Assertion
 import zio.blocking.{blocking, Blocking}
-import zio.{RIO, Task, ULayer, ZManaged}
+import zio.{RIO, Task, TaskLayer, ZManaged}
 
 import scala.concurrent.Future
 
@@ -20,7 +20,7 @@ object KvdbTestUtils {
 
   def createTestRunner[R <: AkkaDiApp.Env, Db](
     managed: ZManaged[R, Throwable, Db],
-    layer: ULayer[R]
+    layer: TaskLayer[R]
   )(implicit
     rt: zio.Runtime[Any]
   ): (Db => RIO[R, Assertion]) => Future[Assertion] = {

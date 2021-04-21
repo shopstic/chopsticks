@@ -20,7 +20,7 @@ import dev.chopsticks.dstream.metric.{
 }
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.HoconConfig
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import io.prometheus.client.CollectorRegistry
 import zio.magic._
@@ -29,6 +29,7 @@ import zio.{ZIO, ZLayer}
 //noinspection TypeAnnotation
 object DstreamSpecEnv {
   lazy val hoconConfigLayer = HoconConfig.live(None).forTest
+  lazy val izLoggingRouterLayer = IzLoggingRouter.live.forTest
   lazy val izLoggingLayer = IzLogging.live().forTest
   lazy val akkaEnvLayer = AkkaEnv.live("test").forTest
 
@@ -39,7 +40,12 @@ object DstreamSpecEnv {
 trait DstreamSpecEnv {
   import DstreamSpecEnv._
 
-  protected lazy val sharedLayer = ZLayer.fromMagic[SharedEnv](hoconConfigLayer, izLoggingLayer, akkaEnvLayer)
+  protected lazy val sharedLayer = ZLayer.fromMagic[SharedEnv](
+    hoconConfigLayer,
+    izLoggingRouterLayer,
+    izLoggingLayer,
+    akkaEnvLayer
+  )
 
   protected lazy val promRegistryLayer = ZLayer.succeed(CollectorRegistry.defaultRegistry).forTest
   protected lazy val stateMetricRegistryFactoryLayer =

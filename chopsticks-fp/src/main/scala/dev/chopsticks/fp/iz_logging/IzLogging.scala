@@ -1,6 +1,6 @@
 package dev.chopsticks.fp.iz_logging
 
-import com.typesafe.config.{Config => LbConfig}
+import com.typesafe.config.Config
 import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.util.config.PureconfigLoader
 import izumi.fundamentals.platform.time.IzTimeSafe
@@ -26,7 +26,7 @@ object IzLogging {
     rotationMaxFileBytes: Int
   )
 
-  final case class IzLoggingConfig(level: Level, coloredOutput: Boolean, jsonFileSink: Option[JsonFileSinkConfig])
+  final case class IzLoggingConfig(level: Level, noColor: Boolean, jsonFileSink: Option[JsonFileSinkConfig])
 
   object IzLoggingConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
@@ -55,27 +55,11 @@ object IzLogging {
   def loggerWithContext(ctx: LogCtx): URIO[IzLogging, IzLogger] = ZIO.access[IzLogging](_.get.loggerWithCtx(ctx))
   def zioLogger: URIO[IzLogging, LogIO3[ZIO]] = ZIO.access[IzLogging](_.get.zioLogger)
 
-  def create(lbConfig: LbConfig): Service = {
-    create(lbConfig, List.empty)
-  }
-
-  def create(lbConfig: LbConfig, filters: Iterable[IzLoggingFilter]): Service = {
-    create(lbConfig, "iz-logging", filters)
-  }
-
-  def create(lbConfig: LbConfig, namespace: String, filters: Iterable[IzLoggingFilter]): Service = {
-    create(PureconfigLoader.unsafeLoad[IzLoggingConfig](lbConfig, namespace), filters)
-  }
-
-  def create(config: IzLoggingConfig): Service = {
-    create(config, List.empty)
-  }
-
-  def create(config: IzLoggingConfig, filters: Iterable[IzLoggingFilter]): Service = {
+  def unsafeCreate(config: IzLoggingConfig, routerFactory: IzLoggingRouter.Service): LiveService = {
     val consoleSink = {
       val renderingPolicy =
-        if (config.coloredOutput) RenderingPolicy.coloringPolicy(Some(IzLogTemplates.consoleLayout))
-        else RenderingPolicy.simplePolicy(Some(IzLogTemplates.consoleLayout))
+        if (config.noColor) RenderingPolicy.simplePolicy(Some(IzLogTemplates.consoleLayout))
+        else RenderingPolicy.coloringPolicy(Some(IzLogTemplates.consoleLayout))
       ConsoleSink(renderingPolicy)
     }
 
@@ -93,8 +77,9 @@ object IzLogging {
       new QueueingSink(jsonFileSink)
     }
 
-    val sinks = (consoleSink :: maybeFileSink.toList).map(sink => IzLoggingSinks.IzFilteringSink(filters, sink))
-    val logger = IzLogger(config.level, sinks)(IzLoggingCustomRenderers.LoggerTypeCtxKey -> "iz")
+    val sinks = consoleSink :: maybeFileSink.toList
+    val logger =
+      IzLogger(routerFactory.create(config.level, sinks))(IzLoggingCustomRenderers.LoggerTypeCtxKey -> "iz")
     val zioLogger = LogZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
 
     maybeFileSink.foreach(_.start())
@@ -104,25 +89,23 @@ object IzLogging {
     LiveService(logger, zioLogger, config.level)
   }
 
-  def live(lbConfig: LbConfig): Layer[Nothing, IzLogging] = {
-    live(lbConfig, List.empty)
+  def unsafeLoadConfig(hoconConfig: Config, configNamespace: String = "iz-logging"): IzLoggingConfig = {
+    PureconfigLoader.unsafeLoad[IzLoggingConfig](hoconConfig, configNamespace)
   }
 
-  def live(lbConfig: LbConfig, filters: Iterable[IzLoggingFilter]): Layer[Nothing, IzLogging] = {
-    live(lbConfig, "iz-logging", filters)
+  def create(config: IzLoggingConfig): RIO[IzLoggingRouter, LiveService] = {
+    ZIO
+      .access[IzLoggingRouter](_.get)
+      .flatMap { routerFactory =>
+        Task {
+          unsafeCreate(config, routerFactory)
+        }
+      }
   }
 
-  def live(lbConfig: LbConfig, namespace: String, filters: Iterable[IzLoggingFilter]): Layer[Nothing, IzLogging] = {
-    live(PureconfigLoader.unsafeLoad[IzLoggingConfig](lbConfig, namespace), filters)
-  }
-
-  def live(config: IzLoggingConfig): Layer[Nothing, IzLogging] = {
-    live(config, List.empty)
-  }
-
-  def live(config: IzLoggingConfig, filters: Iterable[IzLoggingFilter]): ULayer[IzLogging] = {
+  def live(config: IzLoggingConfig): ZLayer[IzLoggingRouter, Throwable, IzLogging] = {
     val managed = ZManaged.make {
-      UIO(create(config, filters))
+      create(config)
     } { service =>
       UIO(service.logger.router.close())
     }
@@ -131,15 +114,24 @@ object IzLogging {
   }
 
   def live(
-    configNamespace: String = "iz-logging",
-    filters: Iterable[IzLoggingFilter] = List.empty
-  ): RLayer[HoconConfig, IzLogging] = {
+    hoconConfig: Config,
+    configNamespace: String
+  ): RLayer[IzLoggingRouter, IzLogging] = {
     val effect = for {
-      hoconConfig <- HoconConfig.get
-      service <- Task(create(hoconConfig, configNamespace, filters))
+      config <- Task(unsafeLoadConfig(hoconConfig, configNamespace))
+      service <- create(config)
     } yield service
 
     effect.toLayer
+  }
+
+  def live(configNamespace: String = "iz-logging"): ZLayer[HoconConfig with IzLoggingRouter, Throwable, IzLogging] = {
+    val managed = for {
+      hoconConfig <- HoconConfig.get.toManaged_
+      service <- live(hoconConfig, configNamespace).build
+    } yield service
+
+    ZLayer.fromManagedMany(managed)
   }
 }
 

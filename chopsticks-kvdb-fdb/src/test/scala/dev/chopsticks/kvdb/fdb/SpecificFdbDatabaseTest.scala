@@ -1,9 +1,8 @@
 package dev.chopsticks.kvdb.fdb
 
 import java.util.concurrent.atomic.AtomicLong
-
 import akka.testkit.ImplicitSender
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
 import dev.chopsticks.fp.AkkaDiApp
 import dev.chopsticks.kvdb.KvdbDatabaseTest
@@ -29,10 +28,14 @@ final class SpecificFdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private val izLoggingConfig = IzLoggingConfig(level = Level.Info, coloredOutput = true, jsonFileSink = None)
+  private val izLoggingConfig = IzLoggingConfig(level = Level.Info, noColor = false, jsonFileSink = None)
 
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ IzLogging.live(typesafeConfig))
-  private lazy val runtimeLayer = (IzLogging.live(izLoggingConfig) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live()
+  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
+    typesafeConfig,
+    "iz-logging"
+  )))
+  private lazy val runtimeLayer =
+    ((IzLoggingRouter.live >>> IzLogging.live(izLoggingConfig)) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(FdbDatabaseTest.managedDb, runtimeLayer)(runtime)
 
   "conditionalTransactionTask" should {

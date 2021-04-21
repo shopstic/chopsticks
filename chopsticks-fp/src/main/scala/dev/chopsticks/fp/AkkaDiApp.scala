@@ -12,6 +12,7 @@ import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.fp.iz_logging.IzLogging
 import distage.ModuleDef
 import izumi.distage.model.definition
+import izumi.logstage.api.routing.ConfigurableLogRouter
 import pureconfig.{KebabCase, PascalCase}
 import zio.Cause.Die
 import zio._
@@ -91,7 +92,10 @@ trait AkkaDiApp[Cfg] {
 
   protected def createActorSystem(appName: String, config: Config): ActorSystem = ActorSystem(appName, config)
 
-  protected def createIzLogging(config: Config): IzLogging.Service = IzLogging.create(config)
+  protected def createIzLogging(config: Config): IzLogging.Service = {
+    val izLoggingConfig = IzLogging.unsafeLoadConfig(config)
+    IzLogging.unsafeCreate(izLoggingConfig, ConfigurableLogRouter(_, _))
+  }
 
   lazy val appName: String = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replace("$", "")))
 

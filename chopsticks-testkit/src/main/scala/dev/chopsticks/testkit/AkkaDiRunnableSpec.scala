@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import com.typesafe.config.{Config, ConfigFactory}
 import dev.chopsticks.fp.{AkkaDiApp, DiLayers}
 import dev.chopsticks.fp.DiEnv.LiveDiEnv
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import izumi.distage.constructors.HasConstructor
 import izumi.distage.model.definition.Module
 import pureconfig.{KebabCase, PascalCase}
@@ -45,7 +45,8 @@ abstract class AkkaDiRunnableSpec extends DefaultRunnableSpec {
       extraModule <- testEnv(config)
       liveModule = AkkaDiApp.Env.createModule(createActorSystem(config))
       baseModule = DiLayers(
-        IzLogging.live(config),
+        IzLoggingRouter.live,
+        IzLogging.live(config, "iz-logging"),
         TestLayer(assertion),
         ZIO.environment[Has[Task[TestResult]]]
       )

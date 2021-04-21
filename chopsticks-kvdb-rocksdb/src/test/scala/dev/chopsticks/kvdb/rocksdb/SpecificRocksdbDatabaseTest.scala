@@ -1,7 +1,7 @@
 package dev.chopsticks.kvdb.rocksdb
 
 import akka.testkit.ImplicitSender
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.fp.AkkaDiApp
 import dev.chopsticks.kvdb.KvdbDatabaseTest
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
@@ -25,7 +25,10 @@ final class SpecificRocksdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ IzLogging.live(typesafeConfig))
+  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
+    typesafeConfig,
+    "iz-logging"
+  )))
   private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(RocksdbDatabaseTest.managedDb, runtimeLayer)(runtime)
 

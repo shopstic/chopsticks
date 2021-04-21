@@ -1,5 +1,5 @@
 package dev.chopsticks.fp
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
 import logstage.Log
 import zio.{ExitCode, Schedule, UIO, URIO, ZIO}
@@ -18,11 +18,13 @@ object ZioAppTest extends zio.App {
 
     task
       .as(ExitCode(0))
-      .provideSomeLayer[zio.ZEnv](IzLogging.live(IzLoggingConfig(
-        coloredOutput = true,
-        level = Log.Level.Debug,
-        jsonFileSink = None
-      )))
+      .provideSomeLayer[zio.ZEnv](
+        IzLoggingRouter.live >>> IzLogging.live(IzLoggingConfig(
+          noColor = false,
+          level = Log.Level.Debug,
+          jsonFileSink = None
+        ))
+      )
       .catchAll(e => UIO(e.printStackTrace()).as(ExitCode(1)))
   }
 }
