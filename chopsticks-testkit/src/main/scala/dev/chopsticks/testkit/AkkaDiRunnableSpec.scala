@@ -46,7 +46,7 @@ abstract class AkkaDiRunnableSpec extends DefaultRunnableSpec {
       liveModule = AkkaDiApp.Env.createModule(createActorSystem(config))
       baseModule = DiLayers(
         IzLoggingRouter.live,
-        IzLogging.live(config, "iz-logging"),
+        IzLogging.live(config),
         TestLayer(assertion),
         ZIO.environment[Has[Task[TestResult]]]
       )

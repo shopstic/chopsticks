@@ -143,8 +143,7 @@ class LeaseSupervisorTest
   import LeaseSupervisorTest._
 
   private val runtime = AkkaDiApp.createRuntime(AkkaEnv.live(system) ++ (IzLoggingRouter.live >>> IzLogging.live(
-    typesafeConfig,
-    "iz-logging"
+    typesafeConfig
   )))
   private val akkaAppDi = AkkaDiApp.Env.createModule(system)
   private val shutdown = CoordinatedShutdown(system)

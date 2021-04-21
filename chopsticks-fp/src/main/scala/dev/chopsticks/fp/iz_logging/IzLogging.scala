@@ -113,22 +113,19 @@ object IzLogging {
     managed.toLayer
   }
 
-  def live(
-    hoconConfig: Config,
-    configNamespace: String
-  ): RLayer[IzLoggingRouter, IzLogging] = {
+  def live(hoconConfig: Config): RLayer[IzLoggingRouter, IzLogging] = {
     val effect = for {
-      config <- Task(unsafeLoadConfig(hoconConfig, configNamespace))
+      config <- Task(unsafeLoadConfig(hoconConfig))
       service <- create(config)
     } yield service
 
     effect.toLayer
   }
 
-  def live(configNamespace: String = "iz-logging"): ZLayer[HoconConfig with IzLoggingRouter, Throwable, IzLogging] = {
+  def live(): ZLayer[HoconConfig with IzLoggingRouter, Throwable, IzLogging] = {
     val managed = for {
       hoconConfig <- HoconConfig.get.toManaged_
-      service <- live(hoconConfig, configNamespace).build
+      service <- live(hoconConfig).build
     } yield service
 
     ZLayer.fromManagedMany(managed)

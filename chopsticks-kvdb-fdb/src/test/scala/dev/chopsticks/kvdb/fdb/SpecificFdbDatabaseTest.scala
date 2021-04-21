@@ -31,8 +31,7 @@ final class SpecificFdbDatabaseTest
   private val izLoggingConfig = IzLoggingConfig(level = Level.Info, noColor = false, jsonFileSink = None)
 
   private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
-    typesafeConfig,
-    "iz-logging"
+    typesafeConfig
   )))
   private lazy val runtimeLayer =
     ((IzLoggingRouter.live >>> IzLogging.live(izLoggingConfig)) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live()
