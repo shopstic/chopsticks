@@ -14,6 +14,7 @@ import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import shapeless.Typeable
 
 import scala.annotation.implicitNotFound
+import scala.collection.immutable.ArraySeq
 import scala.language.experimental.macros
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
@@ -56,6 +57,8 @@ object FdbKeyDeserializer {
   implicit val floatFdbKeyDecoder: FdbKeyDeserializer[Float] = createTry(_.getFloat)
   implicit val booleanFdbKeyDecoder: FdbKeyDeserializer[Boolean] = createTry(_.getBoolean)
 
+  implicit val byteArraySeqFdbKeyDecoder: FdbKeyDeserializer[ArraySeq[Byte]] =
+    createTry(t => ArraySeq.unsafeWrapArray(t.getBytes))
   implicit val ldFdbKeyDecoder: FdbKeyDeserializer[LocalDate] = createTry { t =>
     val epochDay = t.getLong
     LocalDate.ofEpochDay(epochDay)
