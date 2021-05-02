@@ -80,10 +80,8 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
       ).delay(2.seconds.toJava))
       .as(ExitCode(0))
       .injectSome[ZAkkaAppEnv](
-        typed, {
-          println("bug in zio-magic, this is evaluated multiple times")
-          ZLayer.succeed(2L)
-        }
+        typed,
+        ZLayer.succeed(2L)
       )
   }
 }
