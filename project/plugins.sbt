@@ -1,10 +1,10 @@
 resolvers += Resolver.bintrayRepo("akka", "snapshots")
 
-addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.5.1")
+addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.5.3")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.4.2")
 addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.4.13")
 
-addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.1")
+addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.3")
 addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "1.1.1")
 libraryDependencies ++= Seq(
   "com.thesamet.scalapb" %% "compilerplugin" % "0.10.11",
