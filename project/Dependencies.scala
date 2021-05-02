@@ -46,7 +46,7 @@ object Dependencies {
   )
 
   val zioMagicDeps = Seq(
-    "io.github.kitlangton" %% "zio-magic" % "0.3.0"
+    "io.github.kitlangton" %% "zio-magic" % "0.2.6"
   )
 
   val squantsDeps = Seq(
