@@ -29,7 +29,7 @@ object DstreamUtilsSpec extends DefaultRunnableSpec {
         assert(settings.connectionAttempts)(equalTo(None))
       }
     }
-      .injectSome[Environment](
+      .inject(
         hoconConfigLayer,
         DstreamSpecEnv.izLoggingRouterLayer,
         DstreamSpecEnv.izLoggingLayer,
