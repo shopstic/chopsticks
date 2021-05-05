@@ -2,15 +2,12 @@ package dev.chopsticks.util.config
 
 import com.typesafe.config.Config
 import japgolly.microlibs.utils.AsciiTable
+import pureconfig.error._
 import pureconfig.{ConfigReader, ConfigSource}
-import pureconfig.error.{CannotParse, CannotRead, ConfigReaderFailures, ConvertFailure, ThrowableFailure}
-import pureconfig.generic.ProductHint
 
 import scala.util.control.NoStackTrace
 
 object PureconfigLoader {
-  implicit def hint[T]: ProductHint[T] = ProductHint[T](allowUnknownKeys = false)
-
   private def sanitizeReason(reason: String) = {
     reason.replace("\n", " ")
   }
