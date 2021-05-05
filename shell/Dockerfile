@@ -1,5 +1,5 @@
 FROM shopstic/bin-dumb-init:1.2.2 as bin-dumb-init
-FROM shopstic/bin-jq:1.6.0 as bin-jq
+FROM shopstic/bin-jq:1.6 as bin-jq
 FROM shopstic/curl-tar-unzip:1.0.1 as sbt
 
 ENV SBT_VERSION "1.5.1"
