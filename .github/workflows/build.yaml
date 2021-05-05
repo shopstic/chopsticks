@@ -36,6 +36,13 @@ jobs:
     name: Build libraries
     needs: build-env
     runs-on: ubuntu-20.04
+    services:
+      fdb:
+        image: foundationdb/foundationdb:6.2.30
+        env:
+          FDB_NETWORKING_MODE: host
+        options: --network=host
+
     steps:
       - uses: actions/checkout@v2
 
