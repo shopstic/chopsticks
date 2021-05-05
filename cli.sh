@@ -19,6 +19,7 @@ ci_run_in_shell() {
     --workdir /repo \
     -i \
     --rm \
+    --network=host \
     -e "GITHUB_SHA=${GITHUB_SHA}" \
     -e "GITHUB_ACTOR=${GITHUB_ACTOR}" \
     -e "GITHUB_TOKEN=${GITHUB_TOKEN}" \
