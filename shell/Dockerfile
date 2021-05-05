@@ -27,7 +27,7 @@ ENV PATH="$PATH:/mvn/bin"
 
 RUN \
   mkdir /mvn && \
-  curl -L https://mirror.jframeworks.com/apache/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz | \
+  curl -L https://mirrors.ocf.berkeley.edu/apache/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz | \
     tar -xz --strip-components 1 -C /mvn
 RUN \
   mvn deploy:help
