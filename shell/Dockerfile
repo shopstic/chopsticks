@@ -58,7 +58,7 @@ RUN \
   useradd --home-dir /home/runner --create-home --uid "${RUNNER_UID}" \
   --gid "${RUNNER_GID}" --shell /bin/bash --skel /dev/null runner
 
-COPY --from=maven /home/runner/.m2 /home/runner/.m2
+COPY --from=maven /root/.m2 /home/runner/.m2
 COPY ./settings.xml /home/runner/.m2/settings.xml
 COPY ./.profile /home/runner/.profile
 
