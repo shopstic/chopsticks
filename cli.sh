@@ -33,8 +33,8 @@ ci_run_in_shell() {
 ci_run() {
   local GITHUB_REF=${GITHUB_REF:?"GITHUB_REF env variable is required"}
 
-  mkdir -p /etc/foundationdb/
-  export FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+  mkdir -p "${HOME}/.fdb"
+  export FDB_CLUSTER_FILE="${HOME}/.fdb/cluster.file"
   echo "docker:docker@127.0.0.1:4500" > "${FDB_CLUSTER_FILE}"
 
   export SBT_OPTS="-server -XX:+UseG1GC -Xms6g -Xmx6g -Xss6m"
