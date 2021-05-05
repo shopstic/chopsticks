@@ -95,4 +95,4 @@ jobs:
 
           mkdir -p ~/.sbt ~/.cache
 
-          ./cli.sh ci_run_in_shell
+          # ./cli.sh ci_run_in_shell
