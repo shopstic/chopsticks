@@ -36,6 +36,7 @@ ci_run() {
   mkdir -p "${HOME}/.fdb"
   export FDB_CLUSTER_FILE="${HOME}/.fdb/cluster.file"
   echo "docker:docker@127.0.0.1:4500" > "${FDB_CLUSTER_FILE}"
+  fdbcli -C "${FDB_CLUSTER_FILE}" --exec "configure new single memory"
 
   export SBT_OPTS="-server -XX:+UseG1GC -Xms6g -Xmx6g -Xss6m"
   ./cli.sh build
