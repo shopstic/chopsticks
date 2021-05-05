@@ -44,7 +44,6 @@ COPY --from=bin-dumb-init / /
 COPY --from=bin-jq / /
 COPY --from=sbt /sbt /sbt
 COPY --from=maven /mvn /mvn
-COPY --from=maven /root/.m2 /root/.m2
 COPY --from=fdb /usr/bin/fdb-clients.deb /usr/bin/fdb-clients.deb
 
 RUN \
@@ -59,11 +58,13 @@ RUN \
   useradd --home-dir /home/runner --create-home --uid "${RUNNER_UID}" \
   --gid "${RUNNER_GID}" --shell /bin/bash --skel /dev/null runner
 
-COPY ./.profile /home/runner/.profile
+COPY --from=maven /home/runner/.m2 /home/runner/.m2
 COPY ./settings.xml /home/runner/.m2/settings.xml
+COPY ./.profile /home/runner/.profile
 
 RUN \
-  chown "${RUNNER_UID}:${RUNNER_GID}" /home/runner/.profile
+  chown "${RUNNER_UID}:${RUNNER_GID}" /home/runner/.profile && \
+  chown -R "${RUNNER_UID}:${RUNNER_GID}" /home/runner/.m2
 
 USER "${RUNNER_UID}:${RUNNER_GID}"
 
