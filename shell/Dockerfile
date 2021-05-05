@@ -21,7 +21,7 @@ RUN \
 
 FROM openjdk:11.0.10-buster as maven
 
-ENV MAVEN_VERSION "3.6.3"
+ENV MAVEN_VERSION "3.8.1"
 
 ENV PATH="$PATH:/mvn/bin"
 
