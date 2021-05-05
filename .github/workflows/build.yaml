@@ -88,11 +88,11 @@ jobs:
           SHELL_IMAGE: ${{ needs.build-env.outputs.image }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |-
+          mkdir -p ~/.sbt ~/.cache
+
           echo "Restored cache stats ---------------------------------------------"
           du -sh ~/.cache || true
           find . -type d -name target | xargs -I{} du -sh {}
           echo "------------------------------------------------------------------"
 
-          mkdir -p ~/.sbt ~/.cache
-
-          # ./cli.sh ci_run_in_shell
+          ./cli.sh ci_run_in_shell
