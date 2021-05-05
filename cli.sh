@@ -24,7 +24,8 @@ ci_run_in_shell() {
     -e "GITHUB_TOKEN=${GITHUB_TOKEN}" \
     -e "GITHUB_REF=${GITHUB_REF}" \
     -v "${GITHUB_WORKSPACE}:/repo" \
-    -v "${HOME}/.cache:/root/.cache" \
+    -v "${HOME}/.cache:/home/runner/.cache" \
+    -v "${HOME}/.sbt:/home/runner/.sbt" \
     "${SHELL_IMAGE}" \
     bash -c "./cli.sh ci_run"
 }

@@ -1,17 +1,8 @@
-FROM shopstic/curl-tar-unzip:1.0.1 as dumb-init
+FROM shopstic/bin-dumb-init:1.2.2 as bin-dumb-init
+FROM shopstic/bin-jq:1.6.0 as bin-jq
+FROM shopstic/curl-tar-unzip:1.0.1 as sbt
 
-ENV DUMB_INIT_VERSION "1.2.2"
-
-RUN \
-  curl -Lo /usr/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_amd64 && \
-  chmod +x /usr/bin/dumb-init
-
-FROM openjdk:11.0.10-buster as sbt
-
-ENV SBT_VERSION "1.5.0"
-ENV SCALA_VERSION=2.13.5
-
-ENV PATH="$PATH:/sbt/bin"
+ENV SBT_VERSION "1.5.1"
 
 RUN \
   mkdir /sbt && \
@@ -20,17 +11,9 @@ RUN \
   unzip sbt.zip && rm -Rf sbt.zip && rm -Rf sbt/lib && mv /sbt/sbt/* /sbt/ && rm -Rf sbt && \
   chmod a+x /sbt/bin/sbt
 
-RUN \
-  mkdir ~/temp && \
-  cd ~/temp && \
-  mkdir -p ./src/main/scala && \
-  touch ./src/main/scala/temp.scala && \
-  sbt "set scalaVersion := \"${SCALA_VERSION}\"" compile && \
-  rm -Rf ~/temp
-
 FROM shopstic/curl-tar-unzip:1.0.1 as fdb
 
-ENV FDB_VERSION "6.2.29"
+ENV FDB_VERSION "6.2.30"
 
 RUN \
   curl -Lko /usr/bin/fdb-clients.deb https://www.foundationdb.org/downloads/${FDB_VERSION}/ubuntu/installers/foundationdb-clients_${FDB_VERSION}-1_amd64.deb && \
@@ -49,14 +32,6 @@ RUN \
 RUN \
   mvn deploy:help
 
-FROM shopstic/curl-tar-unzip:1.0.1 as jq
-
-ENV JQ_VERSION "1.6"
-
-RUN \
-  curl -Lo /usr/bin/jq https://github.com/stedolan/jq/releases/download/jq-${JQ_VERSION}/jq-linux64 && \
-  chmod +x /usr/bin/jq
-
 FROM openjdk:11.0.10-buster
 
 RUN \
@@ -66,14 +41,13 @@ RUN \
 
 ENV PATH="$PATH:/sbt/bin:/mvn/bin"
 
-COPY --from=dumb-init /usr/bin/dumb-init /usr/bin/dumb-init
+COPY --from=bin-dumb-init / /
+COPY --from=bin-jq / /
 COPY --from=sbt /sbt /sbt
-COPY --from=sbt /root/.sbt /root/.sbt
 COPY --from=maven /mvn /mvn
 COPY --from=maven /root/.m2 /root/.m2
 COPY --from=fdb /usr/bin/fdb-clients.deb /usr/bin/fdb-clients.deb
 COPY --from=fdb /usr/bin/fdb-server.deb /usr/bin/fdb-server.deb
-COPY --from=jq /usr/bin/jq /usr/bin/jq
 
 RUN \
   apt-get install /usr/bin/fdb-clients.deb -y && \
@@ -81,11 +55,24 @@ RUN \
   rm -f /usr/bin/fdb-clients.deb && \
   rm -f /usr/bin/fdb-server.deb
 
-COPY ./.profile /root/.profile
-COPY ./settings.xml /root/.m2/settings.xml
+ARG RUNNER_UID=1001
+ARG RUNNER_GID=121
 
 RUN \
-  echo "" >> /root/.profile && \
-  echo "export PATH=\"$PATH\"" >> /root/.profile
+  (groupadd --gid "${RUNNER_GID}" runner || true) && \
+  useradd --home-dir /home/runner --create-home --uid "${RUNNER_UID}" \
+  --gid "${RUNNER_GID}" --shell /bin/bash --skel /dev/null runner
+
+COPY ./.profile /home/runner/.profile
+COPY ./settings.xml /home/runner/.m2/settings.xml
+
+RUN \
+  chown "${RUNNER_UID}:${RUNNER_GID}" /home/runner/.profile
+
+USER "${RUNNER_UID}:${RUNNER_GID}"
+
+RUN \
+  echo "" >> /home/runner/.profile && \
+  echo "export PATH=\"$PATH\"" >> /home/runner/.profile
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
