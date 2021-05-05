@@ -25,7 +25,7 @@ jobs:
 
       - name: Build and push shell Docker image
         id: buildkit
-        uses: shopstic/buildkit-action@1.0.4
+        uses: shopstic/buildkit-action@1.0.12
         with:
           context: ${{ github.workspace }}/shell
           image: shopstic/chopsticks-ci
