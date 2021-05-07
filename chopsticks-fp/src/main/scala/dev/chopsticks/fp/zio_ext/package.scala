@@ -71,7 +71,10 @@ package object zio_ext {
           _ = logger.log(ctx.level)(s"waiting for completion")
         } yield ()
         measurementHandleInterruption(name, startTime) {
-          io.zipParLeft(logTask.repeat(Schedule.fixed(interval)).delay(interval))
+          for {
+            fib <- logTask.repeat(Schedule.fixed(interval)).delay(interval).fork
+            result <- io.onExit(_ => fib.interrupt)
+          } yield result
         }
       }
     }
