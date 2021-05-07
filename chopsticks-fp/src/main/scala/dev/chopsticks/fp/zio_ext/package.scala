@@ -9,7 +9,7 @@ import zio.duration._
 import zio.clock.Clock
 
 import scala.concurrent.Future
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.implicitConversions
 
 package object zio_ext {
@@ -49,30 +49,31 @@ package object zio_ext {
     def logResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
-      ZIO.bracketExit(startMeasurement(name, "started"))((startTime: Long, exit: Exit[E, A]) =>
-        logElapsedTime(
-          name = name,
-          startTimeNanos = startTime,
-          exit = exit,
-          renderResult = result,
-          logTraceOnError = logTraceOnError
-        )
-      ) { startTime =>
-        io.onInterrupt(for {
-          elapse <- nanoTime.map(endTime => endTime - startTime)
-          elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
-          _ <-
-            ZIO.access[IzLogging](_
-              .get
-              .loggerWithCtx(ctx)
-              .withCustomContext("task" -> name, "elapsed" -> elapsed)
-              .log(ctx.level)("interrupting..."))
-        } yield ())
+      bracketStartMeasurement(name, result, logTraceOnError) { startTime =>
+        measurementHandleInterruption(name, startTime)(io)
       }
     }
 
     def log(name: String, logTraceOnError: Boolean = true)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed", logTraceOnError)
+    }
+
+    def logPeriodically(name: String, interval: FiniteDuration, logTraceOnError: Boolean = true)(implicit
+      ctx: LogCtx
+    ): ZIO[R with MeasuredLogging, E, A] = {
+      val renderResult: A => String = _ => "completed"
+      bracketStartMeasurement(name, renderResult, logTraceOnError) { startTime =>
+        val logTask = for {
+          elapse <- nanoTime.map(endTime => endTime - startTime)
+          elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
+          logger <-
+            ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("task" -> name, "elapsed" -> elapsed))
+          _ = logger.log(ctx.level)(s"waiting for completion")
+        } yield ()
+        measurementHandleInterruption(name, startTime) {
+          io.zipParLeft(logTask.repeat(Schedule.fixed(interval)).delay(interval))
+        }
+      }
     }
 
     def debug(name: String, logTraceOnError: Boolean = true)(implicit
@@ -98,6 +99,35 @@ package object zio_ext {
         .retry(retryPolicy)
         .repeat(repeatSchedule.unit)
         .orDieWith(_ => new IllegalStateException("Can't happen with infinite retries"))
+    }
+
+    private def bracketStartMeasurement(name: String, renderResult: A => String, logTraceOnError: Boolean) = {
+      ZIO.bracketExit(startMeasurement(name, "started"))((startTime: Long, exit: Exit[E, A]) =>
+        logElapsedTime(
+          name = name,
+          startTimeNanos = startTime,
+          exit = exit,
+          renderResult = renderResult,
+          logTraceOnError = logTraceOnError
+        )
+      )
+    }
+
+    private def measurementHandleInterruption[R1, E2, A2](name: String, startTime: Long)(io: ZIO[R1, E2, A2])(implicit
+      ctx: LogCtx
+    ) = {
+      io.onInterrupt {
+        for {
+          elapse <- nanoTime.map(endTime => endTime - startTime)
+          elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
+          _ <-
+            ZIO.access[IzLogging](_
+              .get
+              .loggerWithCtx(ctx)
+              .withCustomContext("task" -> name, "elapsed" -> elapsed)
+              .log(ctx.level)("interrupting..."))
+        } yield ()
+      }
     }
   }
 
