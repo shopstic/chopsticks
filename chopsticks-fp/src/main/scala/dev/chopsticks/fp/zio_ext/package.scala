@@ -68,7 +68,7 @@ package object zio_ext {
           elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
           logger <-
             ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("task" -> name, "elapsed" -> elapsed))
-          _ = logger.log(ctx.level)(s"waiting for completion")
+          _ <- logger.log(ctx.level)(s"waiting for completion")
         } yield ()
         measurementHandleInterruption(name, startTime) {
           for {
