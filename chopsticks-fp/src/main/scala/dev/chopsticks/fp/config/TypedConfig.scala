@@ -7,7 +7,7 @@ import dev.chopsticks.util.config.PureconfigLoader.PureconfigLoadFailure
 import izumi.logstage.api.Log
 import japgolly.microlibs.utils.AsciiTable
 import pureconfig.ConfigReader
-import zio.{RLayer, Task, UIO, URIO, ZIO}
+import zio.{RLayer, Task, URIO, ZIO}
 
 import scala.jdk.CollectionConverters._
 
@@ -57,7 +57,6 @@ object TypedConfig {
               s"Failed converting HOCON config to ${zio.Tag[Cfg].closestClass.getName}. Reasons:\n" + error
             )
           }
-          .tapError(error => UIO(logger.error(s"${error.getMessage -> "" -> null}")))
       }
     } yield {
       new Service[Cfg] {
