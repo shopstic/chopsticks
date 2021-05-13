@@ -159,7 +159,7 @@ abstract private[kvdb] class KvdbDatabaseTest
       } yield {
         inside(pair) {
           case Some((k, v)) =>
-            println(s"Got: k=${printable(k)} v=${printable(v)}")
+//            println(s"Got: k=${printable(k)} v=${printable(v)}")
             byteArrayToString(k) should equal(key)
             byteArrayToString(v) should equal(value)
         }
