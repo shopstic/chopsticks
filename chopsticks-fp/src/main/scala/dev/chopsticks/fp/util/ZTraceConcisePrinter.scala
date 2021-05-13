@@ -21,7 +21,9 @@ object ZTraceConcisePrinter {
   private def printElements(trace: List[ZTraceElement], prefix: String): List[String] = {
     trace.headOption match {
       case Some(head) =>
-        (Iterator.single(head :: Nil) ++ trace.sliding(2))
+        val tail = if (trace.tail.nonEmpty) trace.sliding(2) else Iterator.empty
+
+        (Iterator.single(head :: Nil) ++ tail)
           .foldLeft(List.newBuilder[String]) { (buf, pair) =>
             pair match {
               case prior :: next :: Nil =>
