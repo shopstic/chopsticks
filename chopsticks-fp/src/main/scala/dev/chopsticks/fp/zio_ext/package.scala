@@ -40,13 +40,13 @@ package object zio_ext {
       })
     }
 
-    def debugResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
+    def debugResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
       logResult(name, result, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
-    def logResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
+    def logResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
       bracketStartMeasurement(name, result, logTraceOnError) { startTime =>
@@ -54,11 +54,11 @@ package object zio_ext {
       }
     }
 
-    def log(name: String, logTraceOnError: Boolean = true)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
+    def log(name: String, logTraceOnError: Boolean = false)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "completed", logTraceOnError)
     }
 
-    def logPeriodically(name: String, interval: FiniteDuration, logTraceOnError: Boolean = true)(implicit
+    def logPeriodically(name: String, interval: FiniteDuration, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
       val renderResult: A => String = _ => "completed"
@@ -79,7 +79,7 @@ package object zio_ext {
       }
     }
 
-    def debug(name: String, logTraceOnError: Boolean = true)(implicit
+    def debug(name: String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
       log(name, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
@@ -135,7 +135,7 @@ package object zio_ext {
   }
 
   implicit final class ZManagedExtensions[R >: Nothing, E <: Any, A](managed: ZManaged[R, E, A]) {
-    def logResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
+    def logResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZManaged[R with MeasuredLogging, E, A] = {
       for {
@@ -162,19 +162,19 @@ package object zio_ext {
       } yield value
     }
 
-    def debugResult(name: String, result: A => String, logTraceOnError: Boolean = true)(implicit
+    def debugResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZManaged[R with MeasuredLogging, E, A] = {
       logResult(name, result, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
-    def log(name: String, logTraceOnError: Boolean = true)(implicit
+    def log(name: String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZManaged[R with MeasuredLogging, E, A] = {
       logResult(name, _ => "started", logTraceOnError)
     }
 
-    def debug(name: String, logTraceOnError: Boolean = true)(implicit
+    def debug(name: String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZManaged[R with MeasuredLogging, E, A] = {
       log(name, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
