@@ -4,7 +4,7 @@ import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
-import dev.chopsticks.fp.util.PlatformUtils
+import dev.chopsticks.fp.util.{PlatformUtils, ZTraceConcisePrinter}
 import dev.chopsticks.fp.zio_ext._
 import zio.console.Console
 import zio.{ExitCode, FiberFailure, Has, IO, RIO, Task, UIO, ZEnv, ZLayer}
@@ -68,7 +68,9 @@ trait ZAkkaApp {
             .catchAllTrace { case (e, maybeTrace) =>
               UIO {
                 e.printStackTrace()
-                maybeTrace.foreach(t => System.err.println(t.prettyPrint))
+                maybeTrace.foreach { t =>
+                  System.err.println("\n" + ZTraceConcisePrinter.prettyPrint(t))
+                }
               }.as(ExitCode(1))
             }
             .fork

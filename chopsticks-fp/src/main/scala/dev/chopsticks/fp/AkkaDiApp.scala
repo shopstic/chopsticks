@@ -10,6 +10,7 @@ import dev.chopsticks.fp.DiEnv.DiModule
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.util.ZTraceConcisePrinter
 import distage.ModuleDef
 import izumi.distage.model.definition
 import izumi.logstage.api.routing.ConfigurableLogRouter
@@ -150,6 +151,14 @@ trait AkkaDiApp[Cfg] {
       runEnv <- buildEnv
       appFib <- runEnv
         .run(ZIO.accessM[AppEnv](_.get), args.headOption.contains("--dump-di-graph"))
+        .catchAllTrace { case (e, maybeTrace) =>
+          UIO {
+            e.printStackTrace()
+            maybeTrace.foreach { t =>
+              System.err.println("\n" + ZTraceConcisePrinter.prettyPrint(t))
+            }
+          }.as(1)
+        }
         .fork
       _ <- UIO {
         shutdown.addTask("app-interruption", "interrupt app") { () =>
