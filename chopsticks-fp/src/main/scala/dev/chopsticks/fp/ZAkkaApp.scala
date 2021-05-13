@@ -6,7 +6,8 @@ import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.fp.util.PlatformUtils
 import dev.chopsticks.fp.zio_ext._
-import zio.{ExitCode, FiberFailure, IO, RIO, Task, ZEnv, ZLayer}
+import zio.console.Console
+import zio.{ExitCode, FiberFailure, Has, IO, RIO, Task, UIO, ZEnv, ZLayer}
 
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.control.NonFatal
@@ -25,7 +26,7 @@ trait ZAkkaApp {
     val izLoggingRouterLayer = IzLoggingRouter.live
     val izLoggingLayer = IzLogging.live()
 
-    hoconConfigLayer ++ (hoconConfigLayer >>> akkaEnvLayer) ++ ((hoconConfigLayer ++ izLoggingRouterLayer) >>> izLoggingLayer) ++ zEnvLayer
+    (hoconConfigLayer >+> (akkaEnvLayer ++ izLoggingRouterLayer) >+> izLoggingLayer) ++ zEnvLayer
   }
 
   final def main(commandArgs: Array[String]): Unit = {
@@ -35,7 +36,7 @@ trait ZAkkaApp {
       keepAliveTimeMs = 5000,
       threadPoolName = "zio-app-bootstrap"
     )
-    val bootstrapRuntime = zio.Runtime((), bootstrapPlatform)
+    val bootstrapRuntime = zio.Runtime[Console](Has(Console.Service.live), bootstrapPlatform)
 
     val main = for {
       actorSystem <- AkkaEnv.actorSystem
@@ -64,6 +65,12 @@ trait ZAkkaApp {
           fiber <- main
             .interruptAllChildrenPar
             .provideLayer(runtimeLayer)
+            .catchAllTrace { case (e, maybeTrace) =>
+              UIO {
+                e.printStackTrace()
+                maybeTrace.foreach(t => System.err.println(t.prettyPrint))
+              }.as(ExitCode(1))
+            }
             .fork
           _ <- IO.effectTotal(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
             override def run(): Unit = {
