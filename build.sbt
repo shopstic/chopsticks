@@ -18,7 +18,8 @@ ThisBuild / Test / javaOptions += "-Xmx1536m"
 
 ThisBuild / resolvers ++= Seq(
   Resolver.bintrayRepo("akka", "snapshots"),
-  Resolver.bintrayRepo("shopstic", "maven")
+  Resolver.bintrayRepo("shopstic", "maven"),
+  "Akka Snapshots" at "https://repo.akka.io/snapshots/"
 //  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 )
 ThisBuild / run / fork := true
