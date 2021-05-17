@@ -77,7 +77,7 @@ object KvdbDatabaseApi {
 
 final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
   val db: KvdbDatabase[BCF, _],
-  options: KvdbApiClientOptions
+  val options: KvdbApiClientOptions
 )(implicit
   rt: zio.Runtime[AkkaEnv]
 ) {
@@ -90,7 +90,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
     val newOptions = modifier(options)
 
     new KvdbDatabaseApi[BCF](
-      db.withOptions(options.patchClientOptions),
+      db.withOptions(newOptions.patchClientOptions),
       newOptions
     )
   }

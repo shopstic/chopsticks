@@ -32,9 +32,9 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V] private[kvdb] (
-  db: KvdbDatabase[BCF, _],
-  cf: CF,
-  options: KvdbApiClientOptions
+  val db: KvdbDatabase[BCF, _],
+  val cf: CF,
+  val options: KvdbApiClientOptions
 )(implicit
   rt: zio.Runtime[AkkaEnv]
 ) {

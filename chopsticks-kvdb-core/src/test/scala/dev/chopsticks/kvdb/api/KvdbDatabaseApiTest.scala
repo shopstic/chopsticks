@@ -8,7 +8,7 @@ import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.ZManaged
+import zio.{Task, ZManaged}
 
 abstract class KvdbDatabaseApiTest
     extends AkkaTestKit
@@ -35,6 +35,28 @@ abstract class KvdbDatabaseApiTest
 //        .map(_ => assert(true))
 //    }
 //  }
+
+  "withOptions" should {
+    "update options of the underlying db clientOptions" in withDb { db =>
+      Task {
+        import scala.concurrent.duration._
+        val newDb = db.withOptions(_.copy(watchTimeout = 123.seconds))
+        newDb.options.watchTimeout shouldBe 123.seconds
+        newDb.db.clientOptions.watchTimeout shouldBe 123.seconds
+      }
+    }
+  }
+
+  "KvdbColumnFamilyApi withOptions" should {
+    "update options of the underlying db clientOptions" in withDb { db =>
+      Task {
+        import scala.concurrent.duration._
+        val api = db.columnFamily(dbMat.plain).withOptions(_.copy(watchTimeout = 123.seconds))
+        api.options.watchTimeout shouldBe 123.seconds
+        api.db.clientOptions.watchTimeout shouldBe 123.seconds
+      }
+    }
+  }
 
   "columnFamily" when {
     "getTask" should {
