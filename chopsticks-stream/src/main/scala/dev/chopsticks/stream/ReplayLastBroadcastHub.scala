@@ -3,7 +3,7 @@ package dev.chopsticks.stream
 
 import akka.NotUsed
 import akka.stream.{Attributes, Inlet, Outlet, SinkShape, SourceShape, StreamDetachedException}
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.stage.{
   AsyncCallback,
   GraphStage,
@@ -19,7 +19,7 @@ import scala.concurrent.{ExecutionContextExecutor, Future, Promise}
 import scala.util.{Failure, Success, Try}
 
 object ReplayLastBroadcastHub {
-  def apply[T](bufferSize: Int): ReplayLastBroadcastHub[T] = new ReplayLastBroadcastHub(bufferSize)
+  def apply[T](bufferSize: Int): Sink[T, Source[T, NotUsed]] = Sink.fromGraph(new ReplayLastBroadcastHub[T](bufferSize))
 }
 
 final class ReplayLastBroadcastHub[T] private (bufferSize: Int)
