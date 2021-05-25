@@ -5,7 +5,7 @@ object Dependencies {
   val SCALA_VERSION = "2.13.5"
   val AKKA_VERSION = "2.6.14+34-2dde4b6b"
   val AKKA_HTTP_VERSION = "10.2.1"
-  val ZIO_VERSION = "1.0.7"
+  val ZIO_VERSION = "1.0.8"
   val IZUMI_VERSION = "1.0.6"
   val REFINED_VERSION = "0.9.25"
   val CALIBAN_VERSION = "0.10.1"
@@ -193,7 +193,7 @@ object Dependencies {
       .overrideAkkaStreams
 
   val sourcecodeDeps = Seq(
-    "com.lihaoyi" %% "sourcecode" % "0.2.6"
+    "com.lihaoyi" %% "sourcecode" % "0.2.7"
   )
 
   implicit private class ModulesOps(modules: Seq[ModuleID]) {
