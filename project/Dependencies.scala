@@ -6,9 +6,9 @@ object Dependencies {
   val AKKA_VERSION = "2.6.14+34-2dde4b6b"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.7"
-  val IZUMI_VERSION = "1.0.5"
-  val REFINED_VERSION = "0.9.24"
-  val CALIBAN_VERSION = "0.9.5"
+  val IZUMI_VERSION = "1.0.6"
+  val REFINED_VERSION = "0.9.25"
+  val CALIBAN_VERSION = "0.10.1"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -39,7 +39,7 @@ object Dependencies {
   )
 
   lazy val zioInteropReactivestreamsDeps = Seq(
-    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.4"
+    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.5"
   )
 
   val zioTestDeps = Seq(
@@ -67,11 +67,11 @@ object Dependencies {
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.6.0"
+    "org.typelevel" %% "cats-core" % "2.6.1"
   )
 
   val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "2.2.2"
+    "org.typelevel" %% "kittens" % "2.3.2"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
@@ -92,14 +92,14 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.1.3"
+    "org.codehaus.janino" % "janino" % "3.1.4"
   )
 
   val scalatestDeps = Seq(
-    "org.scalactic" %% "scalactic" % "3.2.8",
-    "org.scalatest" %% "scalatest" % "3.2.8",
+    "org.scalactic" %% "scalactic" % "3.2.9",
+    "org.scalatest" %% "scalatest" % "3.2.9",
     "org.scalatestplus" %% "scalatestplus-scalacheck" % "3.1.0.0-RC2",
-    "org.scalacheck" %% "scalacheck" % "1.15.3",
+    "org.scalacheck" %% "scalacheck" % "1.15.4",
     "org.scalamock" %% "scalamock" % "5.1.0"
   )
 
@@ -120,7 +120,7 @@ object Dependencies {
   )
 
   val shapelessDeps = Seq(
-    "com.chuusai" %% "shapeless" % "2.3.4"
+    "com.chuusai" %% "shapeless" % "2.3.7"
   )
 
   val scalapbRuntimeDeps = Seq(
@@ -169,7 +169,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.6.5"
+    "com.lihaoyi" %% "pprint" % "0.6.6"
   )
 
   val distageDeps = Seq(

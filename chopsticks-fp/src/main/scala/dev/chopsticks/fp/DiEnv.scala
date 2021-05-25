@@ -13,6 +13,12 @@ object DiEnv {
   private val zioDiEffect = implicitly[QuasiIO[Task]]
 
   object InterruptiableZioDiEffect extends QuasiIO[Task] {
+
+    override def maybeSuspendEither[A](eff: => Either[Throwable, A]): Task[A] = zioDiEffect.maybeSuspendEither(eff)
+
+    override def redeem[A, B](action: => Task[A])(failure: Throwable => Task[B], success: A => Task[B]): Task[B] =
+      zioDiEffect.redeem(action)(failure, success)
+
     override def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B] = zioDiEffect.flatMap(fa)(f)
 
     override def bracket[A, B](acquire: => Task[A])(release: A => Task[Unit])(use: A => Task[B]): Task[B] = {

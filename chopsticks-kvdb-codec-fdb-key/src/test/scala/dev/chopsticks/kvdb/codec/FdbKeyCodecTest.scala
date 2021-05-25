@@ -413,7 +413,6 @@ class FdbKeyCodecTest extends AnyWordSpecLike with Assertions with Matchers with
         import fdb_key._
         val foo: NonEmptyString = "foo"
         val key = TestKeyWithRefinedAlias(1234, foo)
-        import eu.timepit.refined.shapeless.typeable._
         implicit val dbKey = KeyPrefixSerializer[TestKeyWithRefinedAlias]
         KeySerdes.deserialize[TestKeyWithRefinedAlias](KeySerdes.serialize(key)) should equal(Right(key))
       }
