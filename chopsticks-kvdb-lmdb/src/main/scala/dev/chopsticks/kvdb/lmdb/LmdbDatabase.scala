@@ -4,8 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteBuffer.allocateDirect
 import java.util.concurrent.atomic.{AtomicBoolean, LongAdder}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-
-import akka.NotUsed
+import akka.{Done, NotUsed}
 import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Sink, Source}
 import cats.syntax.show._
@@ -33,7 +32,7 @@ import zio.clock.Clock
 import zio.internal.Executor
 import zio.{Schedule, Task, ZIO, ZManaged}
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
 import scala.util.control.{ControlThrowable, NonFatal}
 
@@ -585,7 +584,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
     } yield count)
   }
 
-  override def watchKeySource[Col <: CF](column: Col, key: Array[Byte]): Source[Option[Array[Byte]], NotUsed] = ???
+  override def watchKeySource[Col <: CF](column: Col, key: Array[Byte]): Source[Option[Array[Byte]], Future[Done]] = ???
 
   override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source

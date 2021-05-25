@@ -1,11 +1,13 @@
 package dev.chopsticks.sample.app
 
-import akka.stream.scaladsl.Sink
+import akka.stream.KillSwitches
+import akka.stream.scaladsl.{Keep, Sink}
 import com.apple.foundationdb.tuple.Versionstamp
 import com.typesafe.config.Config
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
-import dev.chopsticks.fp.zio_ext._
+import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.util.LoggedRace
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.ValueSerdes
@@ -14,7 +16,7 @@ import dev.chopsticks.kvdb.fdb.FdbMaterialization.{KeyspaceWithVersionstampKey, 
 import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.sample.kvdb.SampleDb.TestValueWithVersionstamp
 import dev.chopsticks.sample.kvdb.{SampleDb, SampleDbEnv}
-import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
+import dev.chopsticks.stream.ZAkkaGraph.InterruptibleGraphOps
 import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigReader
 import zio._
@@ -62,28 +64,54 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
       changeCounter = new LongAdder()
       lastAtomic = new AtomicReference(Option.empty[TestValueWithVersionstamp])
       dbApi <- KvdbDatabaseApi(db)
-      _ <- dbApi
-        .columnFamily(sampleDb.versionstampValueTest)
-        .watchKeySource("foo")
-        .toZAkkaSource
-        .interruptibleRunWith(Sink.foreach { v =>
-          lastAtomic.set(v)
-          watchCounter.increment()
-        })
-        .log("Watch stream")
-        .fork
-
-      fib <- ZIO.effectSuspend {
-        changeCounter.increment()
-        dbApi.columnFamily(sampleDb.versionstampValueTest).putTask(
-          "foo",
-          TestValueWithVersionstamp(Versionstamp.incomplete())
+      actorSystem <- AkkaEnv.actorSystem
+      _ <- LoggedRace()
+        .add(
+          "logging",
+          Task
+            .effectSuspend {
+              UIO(
+                println(s"watch=${watchCounter.longValue()} change=${changeCounter.longValue()} last=${lastAtomic.get}")
+              )
+            }
+            .repeat(Schedule.fixed(1.second.asJava))
+            .unit
         )
-      }.repeat(Schedule.forever).fork
-
-      _ <- Task.effectSuspend {
-        UIO(println(s"watch=${watchCounter.longValue()} change=${changeCounter.longValue()} last=${lastAtomic.get}"))
-      }.repeat(Schedule.fixed(1.second)) raceFirst fib.join
+        .add(
+          "watch",
+          dbApi
+            .columnFamily(sampleDb.versionstampValueTest)
+            .watchKeySource("foo")
+            .viaMat(KillSwitches.single)(Keep.both)
+            .toMat(Sink.foreach { v =>
+              lastAtomic.set(v)
+              watchCounter.increment()
+            }) { case ((f1, ks), f2) =>
+              import actorSystem.dispatcher
+              ks -> f1.flatMap(_ => f2)
+            }
+            .interruptibleRun()
+            .unit
+            .onInterrupt(UIO(println("GONNA HANG ON FOR A WHILE")).delay(java.time.Duration.ofSeconds(5)))
+        )
+        .add(
+          "update",
+          ZIO
+            .effectSuspend {
+              changeCounter.increment()
+              dbApi.columnFamily(sampleDb.versionstampValueTest).putTask(
+                "foo",
+                TestValueWithVersionstamp(Versionstamp.incomplete())
+              )
+            }
+            .repeat(Schedule.forever)
+            .unit
+        )
+        .add(
+          "interruptor",
+          ZIO.unit.delay(5.seconds.asJava)
+        )
+        .run()
     } yield ()
   }
 

@@ -1,9 +1,9 @@
 package dev.chopsticks.kvdb.fdb
 
-import akka.NotUsed
 import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Source}
 import akka.util.Timeout
+import akka.{Done, NotUsed}
 import cats.syntax.either._
 import cats.syntax.show._
 import com.apple.foundationdb._
@@ -31,24 +31,26 @@ import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util.{KvdbCloseSignal, KvdbIoThreadPool}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.types.numeric.PosInt
+import org.reactivestreams.Publisher
 import pureconfig.ConfigConvert
 import zio._
 import zio.blocking.{effectBlocking, Blocking}
 import zio.clock.Clock
 import zio.duration.Duration
+import zio.interop.reactivestreams.Adapters.{createSubscription, demandUnfoldSink}
 
 import java.nio.file.{Files, Paths}
 import java.nio.{ByteBuffer, ByteOrder}
 import java.time.Instant
 import java.util
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
-import scala.util.{Failure, Success}
+import scala.util.Failure
 
 object FdbDatabase {
   final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](
@@ -276,12 +278,12 @@ object FdbDatabase {
                 withVersionstampValueSet = materialization.keyspacesWithVersionstampValue.map(_.keyspace)
               )
             }
-        } {
-          _.close()
+        } { db =>
+          db.close()
             .log("Close FDB context")
             .orDie
         }
-      db <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv with Clock].map { implicit rt =>
+      db <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv with MeasuredLogging].map { implicit rt =>
         new FdbDatabase(materialization, config.clientOptions, ctx)
       })
     } yield db
@@ -306,7 +308,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
   val dbContext: FdbContext[BCF]
-)(implicit rt: zio.Runtime[AkkaEnv with Clock])
+)(implicit rt: zio.Runtime[AkkaEnv with MeasuredLogging])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
@@ -413,6 +415,102 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   override def watchKeySource[Col <: CF](
     column: Col,
     key: Array[Byte]
+  ): Source[Option[Array[Byte]], Future[Done]] = {
+    val prefixedKey = dbContext.prefixKey(column, key)
+
+    val watchTimeout = zio.duration.Duration.fromScala(clientOptions.watchTimeout)
+    val watchMinLatency = clientOptions.watchMinLatency
+    val watchMinLatencyNanos = watchMinLatency.toNanos
+
+    Source
+      .lazySource(() => {
+        val zStream = zio.stream.Stream
+          .repeatEffect {
+            TaskUtils
+              .fromCancellableCompletableFuture(
+                dbContext.db.runAsync { tx =>
+                  tx.get(prefixedKey).thenApply { value =>
+                    val maybeValue = Option(value)
+                    val watchCompletableFuture = tx.watch(prefixedKey)
+                    (watchCompletableFuture, maybeValue)
+                  }
+                }: CompletableFuture[(CompletableFuture[Void], Option[Array[Byte]])]
+              )
+          }
+          .flatMap { case (future, maybeValue) =>
+            val watchTask = TaskUtils
+              .fromCancellableCompletableFuture(future)
+//              .log("watch task")
+              .unit
+
+            val watchTaskWithTimeout = watchTimeout match {
+              case Duration.Infinity => watchTask
+              case d => watchTask.timeoutTo(())(identity)(d)
+            }
+
+            val watchTaskWithRecovery = watchTaskWithTimeout
+              .catchSome {
+                case e: FDBException if e.getCode == 1009 => // Request for future version
+                  ZIO.unit
+                case e: FDBException =>
+                  logger.warn(s"[watchKeySource][fdbErrorCode=${e.getCode}] ${e.getMessage}")
+                  ZIO.unit
+              }
+              .timed
+              .flatMap { case (elapsed, _) =>
+                val elapsedNanos = elapsed.toNanos
+                ZIO
+                  .unit
+                  .delay(java.time.Duration.ofNanos(watchMinLatencyNanos - elapsedNanos))
+                  .when(elapsedNanos < watchMinLatencyNanos)
+              }
+              .as(Left(()))
+
+            zio
+              .stream
+              .Stream(Right(maybeValue))
+              .merge(zio.stream.Stream.fromEffect(
+                watchTaskWithRecovery
+              ))
+          }
+          .collect { case Right(maybeValue) => maybeValue }
+          .changes
+
+        val promise = scala.concurrent.Promise[Done]()
+        val publisher: Publisher[Option[Array[Byte]]] = subscriber => {
+          if (subscriber == null) {
+            throw new NullPointerException("Subscriber must not be null.")
+          }
+          else {
+            rt.unsafeRunAsync_(
+              for {
+                demand <- Queue.unbounded[Long]
+                _ <- UIO(subscriber.onSubscribe(createSubscription(subscriber, demand, rt)))
+                _ <- zStream
+                  .run(demandUnfoldSink(subscriber, demand))
+                  .catchAll(e => UIO(subscriber.onError(e)))
+                  .onExit { exit: Exit[Throwable, Unit] =>
+                    exit.foldM(
+                      cause => UIO(promise.failure(cause.squash)),
+                      _ => UIO(promise.success(Done))
+                    )
+                  }
+                  .forkDaemon
+              } yield ()
+            )
+          }
+        }
+
+        Source
+          .fromPublisher(publisher)
+          .mapMaterializedValue(_ => promise.future)
+      })
+      .mapMaterializedValue(future => future.flatten)
+  }
+
+  /*override def watchKeySource[Col <: CF](
+    column: Col,
+    key: Array[Byte]
   ): Source[Option[Array[Byte]], NotUsed] = {
     val prefixedKey = dbContext.prefixKey(column, key)
 
@@ -510,14 +608,14 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
           }
         }
       })
-  }
+  }*/
 
   override def getTask[Col <: CF](
     column: Col,
     constraints: KvdbKeyConstraintList
   ): Task[Option[(Array[Byte], Array[Byte])]] = {
     TaskUtils
-      .fromCancellableCompletableFuture {
+      .fromCancellableCompletableFuture(
         dbContext.db.readAsync { tx =>
           doGet(tx, column, constraints.constraints).thenApply { //noinspection MatchToPartialFunction
             result =>
@@ -528,7 +626,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
               }
           }
         }
-      }
+      )
   }
 
   private[chopsticks] def doGetRangeFuture[Col <: CF](
@@ -595,12 +693,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
         )
       case Right(limit) =>
         TaskUtils
-          .fromCancellableCompletableFuture {
+          .fromCancellableCompletableFuture(
             dbContext.db
               .readAsync { tx =>
                 doGetRangeFuture(tx, column, range.from, range.to, limit)
               }
-          }
+          )
     }
   }
 
@@ -609,7 +707,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     requests: Seq[KvdbKeyConstraintList]
   ): Task[Seq[Option[KvdbPair]]] = {
     TaskUtils
-      .fromCancellableCompletableFuture {
+      .fromCancellableCompletableFuture(
         dbContext.db
           .readAsync { tx =>
             val futures = requests.map { req =>
@@ -627,7 +725,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
               .allOf(futures: _*)
               .thenApply(_ => futures.map(_.join()))
           }
-      }
+      )
   }
 
   override def batchGetRangeTask[Col <: CF](column: Col, ranges: Seq[KvdbKeyRange]): Task[List[List[KvdbPair]]] = {
@@ -638,7 +736,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     }
     else {
       TaskUtils
-        .fromCancellableCompletableFuture {
+        .fromCancellableCompletableFuture(
           dbContext.db
             .readAsync { tx =>
               val futures = ranges.view.map { range =>
@@ -649,15 +747,16 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                 .allOf(futures: _*)
                 .thenApply(_ => futures.map(_.join()))
             }
-        }
+        )
     }
   }
 
-  override def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit] = {
+  override def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): RIO[MeasuredLogging, Unit] = {
     val prefixedKey = dbContext.prefixKey(column, key)
 
     TaskUtils
-      .fromCancellableCompletableFuture {
+      .fromUninterruptibleCompletableFuture(
+        s"putTask column=${column.id}",
         dbContext.db
           .runAsync { tx =>
             if (clientOptions.disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
@@ -682,33 +781,35 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
             COMPLETED_FUTURE
           }
-      }
+      )
   }
 
-  override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit] = {
+  override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[MeasuredLogging, Unit] = {
     val prefixedKey = dbContext.prefixKey(column, key)
 
     TaskUtils
-      .fromCancellableCompletableFuture {
+      .fromUninterruptibleCompletableFuture(
+        s"deleteTask column=${column.id}",
         dbContext.db
           .runAsync { tx =>
             tx.clear(prefixedKey)
             COMPLETED_FUTURE
           }
-      }
+      )
   }
 
-  override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long] = {
+  override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[MeasuredLogging, Long] = {
     val prefixedKey = dbContext.prefixKey(column, prefix)
 
     TaskUtils
-      .fromCancellableCompletableFuture {
+      .fromUninterruptibleCompletableFuture(
+        s"deletePrefixTask column=${column.id}",
         dbContext.db
           .runAsync { tx =>
             tx.clear(com.apple.foundationdb.Range.startsWith(prefixedKey))
             COMPLETED_FUTURE
           }
-      }
+      )
       .as(0L)
   }
 
@@ -792,9 +893,10 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
   override def transactionTask(
     actions: Seq[TransactionWrite]
-  ): Task[Unit] = {
+  ): RIO[MeasuredLogging, Unit] = {
     TaskUtils
-      .fromCancellableCompletableFuture {
+      .fromUninterruptibleCompletableFuture(
+        "transactionTask",
         dbContext.db
           .runAsync { tx =>
             tx.options().setReadYourWritesDisable()
@@ -836,16 +938,17 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
             COMPLETED_FUTURE
           }
-      }
+      )
   }
 
   override def conditionalTransactionTask(
     reads: List[TransactionGet],
     condition: List[Option[(Array[Byte], Array[Byte])]] => Boolean,
     actions: Seq[TransactionWrite]
-  ): Task[Unit] = {
+  ): RIO[MeasuredLogging, Unit] = {
     TaskUtils
-      .fromCancellableCompletableFuture {
+      .fromUninterruptibleCompletableFuture(
+        "conditionalTransactionTask",
         dbContext.db
           .runAsync { tx =>
             val readFutures = for (read <- reads) yield {
@@ -908,7 +1011,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
             future
           }
-      }
+      )
   }
 
   override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed] = {
@@ -1009,16 +1112,17 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  override def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {
+  override def dropColumnFamily[Col <: CF](column: Col): RIO[MeasuredLogging, Unit] = {
     TaskUtils
-      .fromCancellableCompletableFuture {
+      .fromUninterruptibleCompletableFuture(
+        "dropColumnFamily",
         dbContext.db
           .runAsync { tx =>
             val prefix = dbContext.columnPrefix(column)
             tx.clear(com.apple.foundationdb.Range.startsWith(prefix))
             COMPLETED_FUTURE
           }
-      }
+      )
   }
 
 }

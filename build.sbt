@@ -102,7 +102,7 @@ lazy val kvdbRocksdb = Build
 lazy val kvdbFdb = Build
   .defineProject("kvdb-fdb")
   .settings(
-    libraryDependencies ++= fdbDeps
+    libraryDependencies ++= fdbDeps ++ zioInteropReactivestreamsDeps
   )
   .dependsOn(
     kvdbCore % "compile->compile;test->test",

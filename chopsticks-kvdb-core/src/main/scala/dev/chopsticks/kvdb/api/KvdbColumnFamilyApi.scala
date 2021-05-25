@@ -1,8 +1,7 @@
 package dev.chopsticks.kvdb.api
 
 import java.time.Instant
-
-import akka.NotUsed
+import akka.{Done, NotUsed}
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
 import dev.chopsticks.fp.ZService
@@ -24,7 +23,7 @@ import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbWriteTransactionBuil
 import dev.chopsticks.stream.AkkaStreamUtils
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
-import zio.{Task, ZIO}
+import zio.{RIO, Task, ZIO}
 
 import scala.collection.immutable.Queue
 import scala.collection.mutable
@@ -36,7 +35,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   val cf: CF,
   val options: KvdbApiClientOptions
 )(implicit
-  rt: zio.Runtime[AkkaEnv]
+  rt: zio.Runtime[AkkaEnv with MeasuredLogging]
 ) {
   private val akkaEnv = ZService.get[AkkaEnv.Service](rt.environment)
   import akkaEnv._
@@ -234,7 +233,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
   }
 
-  def watchKeySource(key: K): Source[Option[V], NotUsed] = {
+  def watchKeySource(key: K): Source[Option[V], Future[Done]] = {
     db.watchKeySource(cf, cf.serializeKey(key))
       .mapAsync(options.serdesParallelism) { value =>
         Future {
@@ -283,17 +282,17 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     valueSource(_.first, _.last)
   }
 
-  def putTask(key: K, value: V): Task[Unit] = {
+  def putTask(key: K, value: V): RIO[MeasuredLogging, Unit] = {
     val (k, v) = cf.serialize(key, value)
     db.putTask(cf, k, v)
   }
 
-  def putValueTask(value: V)(implicit kt: KeyTransformer[V, K]): Task[Unit] = {
+  def putValueTask(value: V)(implicit kt: KeyTransformer[V, K]): RIO[MeasuredLogging, Unit] = {
     val (k, v) = cf.serialize(kt.transform(value), value)
     db.putTask(cf, k, v)
   }
 
-  def deleteTask(key: K): Task[Unit] = {
+  def deleteTask(key: K): RIO[MeasuredLogging, Unit] = {
     db.deleteTask(cf, cf.serializeKey(key))
   }
 
@@ -493,7 +492,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
-  def drop(): Task[Unit] = {
+  def drop(): RIO[MeasuredLogging, Unit] = {
     db.dropColumnFamily(cf)
   }
 }

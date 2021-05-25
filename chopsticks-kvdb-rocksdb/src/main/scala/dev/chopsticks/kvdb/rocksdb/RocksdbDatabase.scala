@@ -1,8 +1,7 @@
 package dev.chopsticks.kvdb.rocksdb
 
 import java.nio.charset.StandardCharsets.UTF_8
-
-import akka.NotUsed
+import akka.{Done, NotUsed}
 import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Sink, Source}
 import cats.syntax.show._
@@ -33,6 +32,7 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.{Task, ZIO, ZManaged}
 
+import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 object RocksdbDatabase extends StrictLogging {
@@ -516,7 +516,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
     }
   }
 
-  override def watchKeySource[Col <: CF](column: Col, key: Array[Byte]): Source[Option[Array[Byte]], NotUsed] = ???
+  override def watchKeySource[Col <: CF](column: Col, key: Array[Byte]): Source[Option[Array[Byte]], Future[Done]] = ???
 
   override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source

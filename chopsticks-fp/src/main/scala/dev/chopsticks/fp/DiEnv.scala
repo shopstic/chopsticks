@@ -53,9 +53,10 @@ object DiEnv {
     override def run(app: RIO[E, Unit], dumpGraph: Boolean = false): Task[Int] = {
       build(dumpGraph)
         .use { env =>
-          app.provide(env)
-            .interruptAllChildrenPar
+          app
+            .provide(env)
             .as(0)
+            .interruptAllChildrenPar
         }
         .catchSome {
           case e: ProvisioningException =>

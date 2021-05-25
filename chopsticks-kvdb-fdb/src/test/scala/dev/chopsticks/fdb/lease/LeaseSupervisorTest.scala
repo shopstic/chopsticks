@@ -93,7 +93,7 @@ object LeaseSupervisorTest {
   }
 
   private[lease] val liveApi: ZLayer[
-    AkkaEnv with Has[LeaseSupervisorTestDatabase.Db],
+    AkkaEnv with MeasuredLogging with Has[LeaseSupervisorTestDatabase.Db],
     Nothing,
     Has[KvdbDatabaseApi[LeaseSupervisorTestDatabase.BaseCf]]
   ] = {
@@ -463,13 +463,13 @@ class LeaseSupervisorTest
 
   trait LeaseAcquirer {
     def getAllLeases(): Task[Seq[Lease]]
-    def forceAcquire(partitionNumber: Int): Task[Lease] = forceAcquire(partitionNumber, identity)
-    def forceAcquire(partitionNumber: Int, customizeLease: Lease => Lease): Task[Lease]
-    def setLease(newLease: Lease): Task[Lease]
+    def forceAcquire(partitionNumber: Int): RIO[MeasuredLogging, Lease] = forceAcquire(partitionNumber, identity)
+    def forceAcquire(partitionNumber: Int, customizeLease: Lease => Lease): RIO[MeasuredLogging, Lease]
+    def setLease(newLease: Lease): RIO[MeasuredLogging, Lease]
   }
 
   object LeaseAcquirer {
-    def live: URLayer[Clock with Has[KvdbDatabaseApi[LeaseSupervisorTestDbCf]], Has[LeaseAcquirer]] = {
+    def live: URLayer[MeasuredLogging with Has[KvdbDatabaseApi[LeaseSupervisorTestDbCf]], Has[LeaseAcquirer]] = {
       val managed =
         for {
           dbApi <- ZManaged.access[Has[KvdbDatabaseApi[LeaseSupervisorTestDbCf]]](_.get)
@@ -484,7 +484,10 @@ class LeaseSupervisorTest
               }
           }
 
-          override def forceAcquire(partitionNumber: Int, customizeLease: Lease => Lease): Task[Lease] = {
+          override def forceAcquire(
+            partitionNumber: Int,
+            customizeLease: Lease => Lease
+          ): RIO[MeasuredLogging, Lease] = {
             for {
               now <- clock.currentDateTime.map(_.toInstant)
               lease <- {

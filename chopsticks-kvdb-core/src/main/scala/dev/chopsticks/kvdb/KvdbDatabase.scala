@@ -1,9 +1,9 @@
 package dev.chopsticks.kvdb
 
 import java.util.concurrent.TimeUnit
-
-import akka.NotUsed
+import akka.{Done, NotUsed}
 import akka.stream.scaladsl.Source
+import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
@@ -18,8 +18,9 @@ import eu.timepit.refined.numeric.Greater
 import pureconfig.ConfigConvert
 import squants.information.Information
 import squants.information.InformationConversions._
-import zio.Task
+import zio.{RIO, Task}
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object KvdbDatabase {
@@ -106,27 +107,27 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def estimateCount[Col <: CF](column: Col): Task[Long]
 
-  def watchKeySource[Col <: CF](column: Col, key: Array[Byte]): Source[Option[Array[Byte]], NotUsed]
+  def watchKeySource[Col <: CF](column: Col, key: Array[Byte]): Source[Option[Array[Byte]], Future[Done]]
 
   def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed]
 
-  def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): Task[Unit]
+  def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): RIO[MeasuredLogging, Unit]
 
-  def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit]
+  def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[MeasuredLogging, Unit]
 
-  def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long]
+  def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[MeasuredLogging, Long]
 
-  def transactionTask(actions: Seq[TransactionWrite]): Task[Unit]
+  def transactionTask(actions: Seq[TransactionWrite]): RIO[MeasuredLogging, Unit]
 
   def conditionalTransactionTask(
     reads: List[TransactionGet],
     condition: List[Option[KvdbPair]] => Boolean,
     actions: Seq[TransactionWrite]
-  ): Task[Unit]
+  ): RIO[MeasuredLogging, Unit]
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed]
 
   def concurrentTailSource[Col <: CF](column: Col, ranges: List[KvdbKeyRange]): Source[KvdbIndexedTailBatch, NotUsed]
 
-  def dropColumnFamily[Col <: CF](column: Col): Task[Unit]
+  def dropColumnFamily[Col <: CF](column: Col): RIO[MeasuredLogging, Unit]
 }

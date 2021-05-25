@@ -2,6 +2,7 @@ package dev.chopsticks.kvdb.util
 
 import better.files.File
 import dev.chopsticks.fp.AkkaDiApp
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.BaseCf
@@ -18,7 +19,7 @@ object KvdbTestUtils {
     } { f => blocking(Task(f.delete())).orDie }
   }
 
-  def createTestRunner[R <: AkkaDiApp.Env, Db](
+  def createTestRunner[R <: AkkaDiApp.Env with IzLogging, Db](
     managed: ZManaged[R, Throwable, Db],
     layer: TaskLayer[R]
   )(implicit
@@ -35,7 +36,7 @@ object KvdbTestUtils {
     db: TestDatabase.Db,
     column: CF,
     pairs: Seq[(K, V)]
-  ): Task[Unit] = {
+  ): RIO[MeasuredLogging, Unit] = {
     val batch = pairs
       .foldLeft(db.transactionBuilder()) {
         case (tx, (k, v)) =>

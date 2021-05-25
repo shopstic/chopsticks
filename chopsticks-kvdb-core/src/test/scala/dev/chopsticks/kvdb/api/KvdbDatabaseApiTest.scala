@@ -15,14 +15,15 @@ abstract class KvdbDatabaseApiTest
     with AsyncWordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-  protected def managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool, Throwable, DbApi]
+  protected def managedDb: ZManaged[AkkaDiApp.Env with IzLogging with KvdbIoThreadPool, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
+  private lazy val loggingLayer = (IzLoggingRouter.live >>> IzLogging.live(
     typesafeConfig
-  )))
-  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live()
+  ))
+  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ loggingLayer)
+  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live() ++ loggingLayer
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
   private lazy val withCf = KvdbTestUtils.createTestRunner(
     managedDb.map(_.columnFamily(dbMat.plain)),

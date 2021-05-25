@@ -25,10 +25,11 @@ final class SpecificRocksdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
+  private lazy val loggingLayer = (IzLoggingRouter.live >>> IzLogging.live(
     typesafeConfig
-  )))
-  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live()
+  ))
+  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ loggingLayer)
+  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live() ++ loggingLayer
   private lazy val withDb = KvdbTestUtils.createTestRunner(RocksdbDatabaseTest.managedDb, runtimeLayer)(runtime)
 
   "conditionalTransactionTask" should {

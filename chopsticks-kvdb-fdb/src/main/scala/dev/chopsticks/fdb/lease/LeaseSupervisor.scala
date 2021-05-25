@@ -3,7 +3,6 @@ package dev.chopsticks.fdb.lease
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
-
 import akka.NotUsed
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Keep, Source}
@@ -21,7 +20,7 @@ import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedExcept
 import eu.timepit.refined.types.all.{NonNegInt, PosInt}
 import izumi.reflect.{Tag, TagKK}
 import zio.clock.Clock
-import zio.{Has, Promise, Ref, Task, UIO, URLayer, ZIO, ZManaged}
+import zio.{Has, Promise, RIO, Ref, Task, UIO, URLayer, ZIO, ZManaged}
 
 import scala.collection.immutable.ArraySeq
 import scala.concurrent.duration._
@@ -74,7 +73,7 @@ object LeaseSupervisor {
     def activeLeases: UIO[Seq[LeaseSession]]
     def partitionCount: PosInt
     def ownPartitions: Set[Int]
-    def transact(lease: Lease, actions: Seq[TransactionWrite]): Task[Seq[TransactionWrite]]
+    def transact(lease: Lease, actions: Seq[TransactionWrite]): RIO[MeasuredLogging, Seq[TransactionWrite]]
   }
 
   sealed private[chopsticks] trait LeaseSupervisorCommand

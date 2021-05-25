@@ -1,7 +1,6 @@
 package dev.chopsticks.kvdb.api
 
 import java.util.concurrent.TimeUnit
-
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
 import dev.chopsticks.fp.akka_env.AkkaEnv
@@ -20,7 +19,7 @@ import eu.timepit.refined.types.numeric.PosInt
 import io.scalaland.chimney.Patcher
 import squants.information.Information
 import squants.information.InformationConversions._
-import zio.{Task, ZIO}
+import zio.{RIO, Task, URIO, ZIO}
 
 import scala.concurrent.duration._
 import io.scalaland.chimney.dsl._
@@ -70,16 +69,17 @@ object KvdbDatabaseApi {
 
   def apply[BCF[A, B] <: ColumnFamily[A, B]](
     db: KvdbDatabase[BCF, _]
-  ): ZIO[AkkaEnv, Nothing, KvdbDatabaseApi[BCF]] = ZIO.runtime[AkkaEnv].map { implicit rt =>
-    new KvdbDatabaseApi[BCF](db, KvdbApiClientOptions.default.patchUsing(db.clientOptions))
-  }
+  ): URIO[AkkaEnv with MeasuredLogging, KvdbDatabaseApi[BCF]] =
+    ZIO.runtime[AkkaEnv with MeasuredLogging].map { implicit rt =>
+      new KvdbDatabaseApi[BCF](db, KvdbApiClientOptions.default.patchUsing(db.clientOptions))
+    }
 }
 
 final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
   val db: KvdbDatabase[BCF, _],
   val options: KvdbApiClientOptions
 )(implicit
-  rt: zio.Runtime[AkkaEnv]
+  rt: zio.Runtime[AkkaEnv with MeasuredLogging]
 ) {
   private val akkaEnv = rt.environment.get[AkkaEnv.Service]
   import akkaEnv._
@@ -140,11 +140,11 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
   def statsTask: Task[Map[(String, Map[String, String]), Double]] = db.statsTask
 
   @deprecated("Use transact(...) instead", since = "2.13")
-  def transactionTask(actions: Seq[TransactionWrite]): Task[Seq[TransactionWrite]] = {
+  def transactionTask(actions: Seq[TransactionWrite]): RIO[MeasuredLogging, Seq[TransactionWrite]] = {
     transact(actions)
   }
 
-  def transact(actions: Seq[TransactionWrite]): Task[Seq[TransactionWrite]] = {
+  def transact(actions: Seq[TransactionWrite]): RIO[MeasuredLogging, Seq[TransactionWrite]] = {
     db.transactionTask(actions)
       .as(actions)
   }
@@ -153,7 +153,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
     reads: List[TransactionGet],
     condition: List[Option[KvdbPair]] => Boolean,
     actions: Seq[TransactionWrite]
-  ): Task[Seq[TransactionWrite]] = {
+  ): RIO[MeasuredLogging, Seq[TransactionWrite]] = {
     db.conditionalTransactionTask(reads, condition, actions)
       .as(actions)
   }
