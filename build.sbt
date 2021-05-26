@@ -113,7 +113,7 @@ lazy val kvdbFdb = Build
 lazy val graphql = Build
   .defineProject("graphql")
   .settings(
-    libraryDependencies ++= sttpBackendDeps ++ calibanDeps
+    libraryDependencies ++= calibanDeps
   )
   .dependsOn(fp, stream)
 

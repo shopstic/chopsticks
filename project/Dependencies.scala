@@ -50,7 +50,7 @@ object Dependencies {
   )
 
   val zioMagicDeps = Seq(
-    "io.github.kitlangton" %% "zio-magic" % "0.2.6"
+    "io.github.kitlangton" %% "zio-magic" % "0.3.2"
   )
 
   val squantsDeps = Seq(
@@ -63,7 +63,7 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "1.1.1"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.0.0"
   )
 
   val catsCoreDeps = Seq(
@@ -132,7 +132,7 @@ object Dependencies {
 
   val scalapbRuntimeGrpcDeps = Seq(
     "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion,
-    "io.grpc" % "grpc-netty" % "1.36.0"
+    "io.grpc" % "grpc-netty" % scalapb.compiler.Version.grpcJavaVersion
   )
 
   val enumeratumDeps = Seq(
@@ -179,8 +179,6 @@ object Dependencies {
     "io.7mind.izumi" %% "distage-extension-logstage" % IZUMI_VERSION,
     "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
   )
-
-  val sttpBackendDeps = Seq("com.softwaremill.sttp.client" %% "akka-http-backend" % "2.2.9")
 
   val calibanDeps =
     Seq(
