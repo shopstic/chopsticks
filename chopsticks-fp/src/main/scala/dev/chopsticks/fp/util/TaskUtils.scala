@@ -89,20 +89,10 @@ object TaskUtils {
       }
     }
 
+  @deprecated("Use LoggedRace(...) instead", "3.2.0")
   def raceFirst(tasks: Iterable[(String, Task[Unit])])(implicit logCtx: LogCtx): RIO[MeasuredLogging, Unit] = {
-    val list = tasks.map {
-      case (name, task) =>
-        task.log(name)
-    }.toList
-
-    list match {
-      case head :: tail :: Nil =>
-        head.raceFirst(tail)
-      case head :: tail =>
-        head.run.raceAll(tail.map(_.run)).flatMap(ZIO.done(_)).refailWithTrace
-      case Nil =>
-        Task.unit
-    }
+    LoggedRace(tasks)
+      .run()
   }
 
   private def succeedNowTask[A](value: A): Task[A] = Task.succeed(value)

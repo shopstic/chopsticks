@@ -1,12 +1,13 @@
 package dev.chopsticks.fp.util
 
+import dev.chopsticks.fp.iz_logging.LogCtx
 import dev.chopsticks.fp.zio_ext.{MeasuredLogging, ZIOExtensions}
 import zio.{RIO, Task, ZIO}
 
 import scala.collection.immutable.Queue
 
 final class LoggedRace[-R] private (queue: Queue[R with MeasuredLogging => Task[Unit]]) {
-  def add[R1 <: R](name: String, task: RIO[R1, Unit]): LoggedRace[R1] = {
+  def add[R1 <: R](name: String, task: RIO[R1, Unit])(implicit logCtx: LogCtx): LoggedRace[R1] = {
     new LoggedRace[R1](queue.enqueue((env: R1 with MeasuredLogging) => task.log(name).provide(env)))
   }
 
@@ -25,12 +26,13 @@ final class LoggedRace[-R] private (queue: Queue[R with MeasuredLogging => Task[
             Task.unit
         }
       }
+      .interruptAllChildrenPar
   }
 }
 
 object LoggedRace {
   def apply() = new LoggedRace[Any](Queue.empty)
-  def apply[R](seq: Iterable[(String, RIO[R, Unit])]): LoggedRace[R] = {
+  def apply[R](seq: Iterable[(String, RIO[R, Unit])])(implicit logCtx: LogCtx): LoggedRace[R] = {
     seq
       .foldLeft(new LoggedRace[R](Queue.empty)) { case (race, (name, task)) =>
         race.add(name, task)
