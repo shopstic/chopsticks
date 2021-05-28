@@ -49,7 +49,7 @@ package object zio_ext {
     def logResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
-      bracketStartMeasurement(name, result, logTraceOnError) { startTime =>
+      bracketStartMeasurement(name, result, logTraceOnError)(ctx) { startTime =>
         measurementHandleInterruption(name, startTime)(io)
       }
     }
@@ -62,13 +62,15 @@ package object zio_ext {
       ctx: LogCtx
     ): ZIO[R with MeasuredLogging, E, A] = {
       val renderResult: A => String = _ => "completed"
-      bracketStartMeasurement(name, renderResult, logTraceOnError) { startTime =>
+      bracketStartMeasurement(name, renderResult, logTraceOnError)(ctx) { startTime =>
         val logTask = for {
           elapse <- nanoTime.map(endTime => endTime - startTime)
           elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
-          logger <-
-            ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("task" -> name, "elapsed" -> elapsed))
-          _ <- logger.log(ctx.level)(s"waiting for completion")
+          _ <- IzLogging.loggerWithContext(ctx).map {
+            _
+              .withCustomContext("task" -> name, "elapsed" -> elapsed)
+              .log(ctx.level)(s"waiting for completion")
+          }
         } yield ()
         measurementHandleInterruption(name, startTime) {
           for {
@@ -104,7 +106,9 @@ package object zio_ext {
         .orDieWith(_ => new IllegalStateException("Can't happen with infinite retries"))
     }
 
-    private def bracketStartMeasurement(name: String, renderResult: A => String, logTraceOnError: Boolean) = {
+    private def bracketStartMeasurement(name: String, renderResult: A => String, logTraceOnError: Boolean)(implicit
+      ctx: LogCtx
+    ) = {
       ZIO.bracketExit(startMeasurement(name, "started"))((startTime: Long, exit: Exit[E, A]) =>
         logElapsedTime(
           name = name,
@@ -123,12 +127,11 @@ package object zio_ext {
         for {
           elapse <- nanoTime.map(endTime => endTime - startTime)
           elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
-          _ <-
-            ZIO.access[IzLogging](_
-              .get
-              .loggerWithCtx(ctx)
+          _ <- IzLogging.loggerWithContext(ctx).map {
+            _
               .withCustomContext("task" -> name, "elapsed" -> elapsed)
-              .log(ctx.level)("interrupting..."))
+              .log(ctx.level)("interrupting...")
+          }
         } yield ()
       }
     }
@@ -185,7 +188,7 @@ package object zio_ext {
   private def startMeasurement(name: String, message: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] = {
     for {
       time <- nanoTime
-      _ <- ZIO.access[IzLogging](_.get.loggerWithCtx(ctx).withCustomContext("task" -> name).log(ctx.level)(message))
+      _ <- IzLogging.loggerWithContext(ctx).map(_.withCustomContext("task" -> name).log(ctx.level)(message))
     } yield time
   }
 
@@ -200,31 +203,32 @@ package object zio_ext {
       elapse <- nanoTime.map(endTime => endTime - startTimeNanos)
       elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
       errorLevel = if (ctx.level.compareTo(Log.Level.Info) >= 0) Log.Level.Error else ctx.level
-      logger <-
-        ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx).withCustomContext("task" -> name, "elapsed" -> elapsed))
-      _ <- exit.toEither match {
-        case Left(FiberFailure(cause)) if cause.interrupted =>
-          logger.log(ctx.level)(s"interrupted")
+      logger <- IzLogging.loggerWithContext(ctx).map(_.withCustomContext("task" -> name, "elapsed" -> elapsed))
+      _ <- UIO {
+        exit.toEither match {
+          case Left(FiberFailure(cause)) if cause.interrupted =>
+            logger.log(ctx.level)(s"interrupted")
 
-        case Left(exception @ FiberFailure(cause)) =>
-          if (logTraceOnError) {
-            logger.log(errorLevel)(s"failed $exception")
-          }
-          else {
-            logger.log(errorLevel)(s"failed ${cause.untraced -> "cause"}")
-          }
+          case Left(exception @ FiberFailure(cause)) =>
+            if (logTraceOnError) {
+              logger.log(errorLevel)(s"failed $exception")
+            }
+            else {
+              logger.log(errorLevel)(s"failed ${cause.untraced -> "cause"}")
+            }
 
-        case Left(exception) =>
-          if (logTraceOnError) {
-            logger.log(errorLevel)(s"failed $exception")
-          }
-          else {
-            logger.log(errorLevel)(s"failed ${exception.getMessage -> "message"}")
-          }
+          case Left(exception) =>
+            if (logTraceOnError) {
+              logger.log(errorLevel)(s"failed $exception")
+            }
+            else {
+              logger.log(errorLevel)(s"failed ${exception.getMessage -> "message"}")
+            }
 
-        case Right(r) =>
-          val renderedResult = renderResult(r)
-          logger.log(ctx.level)(s"${renderedResult -> "" -> null}")
+          case Right(r) =>
+            val renderedResult = renderResult(r)
+            logger.log(ctx.level)(s"${renderedResult -> "" -> null}")
+        }
       }
     } yield ()
   }
