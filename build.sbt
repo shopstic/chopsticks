@@ -191,7 +191,8 @@ lazy val root = (project in file("."))
   .settings(
     name := "chopsticks",
     publish / skip := true,
-    dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
+    dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
+    Build.ossPublishSettings
   )
   .aggregate(
     util,

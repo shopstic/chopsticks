@@ -1,3 +1,4 @@
+import com.jsuereth.sbtpgp.PgpKeys
 import com.timushev.sbt.updates.UpdatesPlugin.autoImport._
 import com.typesafe.sbt.GitPlugin.autoImport.git
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
@@ -6,6 +7,7 @@ import wartremover.WartRemover.autoImport._
 import sbt.{Def, _}
 import sbt.Keys._
 import sbtprotoc.ProtocPlugin.autoImport.PB
+import xerial.sbt.Sonatype.autoImport._
 
 //noinspection TypeAnnotation
 object Build {
@@ -86,8 +88,6 @@ object Build {
         wartremoverExcluded += baseDirectory.value / "target" / "scala-2.13" / "akka-grpc",
         dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
         libraryDependencies ++= Dependencies.scalatestDeps,
-        Compile / doc / sources := Seq.empty,
-        Compile / packageDoc / publishArtifact := false,
         ossPublishSettings
       )
   }
@@ -98,20 +98,73 @@ object Build {
     Seq(
       releaseVersionBump := sbtrelease.Version.Bump.Minor,
       releaseIgnoreUntrackedFiles := true,
+      autoAPIMappings := true,
+      publishMavenStyle := true,
       licenses += ("Apache-2.0", url("http://www.apache.org/licenses/")),
-      releaseProcess := Seq(
-        checkSnapshotDependencies,
-        inquireVersions,
-        runClean,
-        runTest,
-        setReleaseVersion,
-        commitReleaseVersion,
-        tagRelease,
-        releaseStepCommandAndRemaining("publish"),
-        setNextVersion,
-        commitNextVersion,
-        pushChanges
-      )
+      homepage := Some(url("https://github.com/shopstic/chopsticks")),
+      releasePublishArtifactsAction := PgpKeys.publishSigned.value,
+      pomIncludeRepository := { _ =>
+        false
+      },
+      scmInfo := Some(
+        ScmInfo(
+          url("https://github.com/shopstic/chopsticks"),
+          "scm:git:https://github.com/shopstic/chopsticks.git"
+        )
+      ),
+      publishTo := {
+        if (sys.env.get("PUBLISH_TO_SONATYPE").exists(_.toBoolean)) sonatypePublishToBundle.value
+        else sbtghpackages.GitHubPackagesKeys.githubPublishTo.value
+      },
+      sonatypeProfileName := "dev.chopsticks",
+      sonatypeRepository := "https://s01.oss.sonatype.org/service/local",
+      sonatypeCredentialHost := "s01.oss.sonatype.org",
+      developers := List(
+        Developer(
+          id = "nktpro",
+          name = "Jacky Nguyen",
+          email = "nktpro@gmail.com",
+          url = new URL("https://github.com/nktpro/")
+        ),
+        Developer(
+          id = "pwliwanow",
+          name = "Pawel Iwanow",
+          email = "pwliwanow@gmail.com",
+          url = new URL("https://github.com/pwliwanow/")
+        )
+      ),
+      releaseProcess := {
+        Seq[ReleaseStep](
+          checkSnapshotDependencies,
+//          ReleaseStep(
+//            action = st => {
+//              setupGpg()
+//              st
+//            }
+//          ),
+          inquireVersions,
+          // publishing locally so that the pgp password prompt is displayed early
+          // in the process
+          releaseStepCommandAndRemaining("+publishLocalSigned"),
+          runClean,
+//          runTest,
+          setReleaseVersion,
+          commitReleaseVersion,
+          tagRelease,
+          releaseStepCommandAndRemaining("+publishSigned"),
+          releaseStepCommand("sonatypeBundleRelease"),
+          setNextVersion,
+          commitNextVersion,
+          pushChanges
+        )
+      }
     )
   }
+
+  def setupGpg(): Unit = {
+    import scala.sys.process._
+    val secret = sys.env("PGP_SECRET")
+    val _ = (s"echo $secret" #| "base64 --decode" #| "gpg --batch --import").!!
+  }
+
 }
