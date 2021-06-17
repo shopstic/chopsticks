@@ -5,8 +5,9 @@ import eu.timepit.refined.types.string.NonEmptyString
 import org.scalatest.Assertions
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
-import pureconfig.ConfigConvert
+import pureconfig.{CamelCase, ConfigConvert}
 import eu.timepit.refined.auto._
+import org.scalatestplus.scalacheck.Checkers
 
 object PureconfigConvertersTest {
   final case class StringValueClass(foo: String) extends AnyVal
@@ -14,7 +15,7 @@ object PureconfigConvertersTest {
   final case class MoreThanOneFieldCaseClass(foo: NonEmptyString, bar: Boolean)
 }
 
-final class PureconfigConvertersTest extends AnyWordSpecLike with Assertions with Matchers {
+final class PureconfigConvertersTest extends AnyWordSpecLike with Assertions with Matchers with Checkers {
   import PureconfigConvertersTest._
 
   "deriveFlat" should {
@@ -50,4 +51,13 @@ final class PureconfigConvertersTest extends AnyWordSpecLike with Assertions wit
           |""".stripMargin)
     }
   }
+
+  "PureconfigFastCamelCaseNamingConvention" should {
+    "tokenize words in the same way as PureConfig's CamelCase tokenizer" in {
+      import org.scalacheck.Arbitrary._
+      import org.scalacheck.Prop._
+      check((s: String) => CamelCase.toTokens(s).toList == PureconfigFastCamelCaseNamingConvention.toTokens(s).toList)
+    }
+  }
+
 }

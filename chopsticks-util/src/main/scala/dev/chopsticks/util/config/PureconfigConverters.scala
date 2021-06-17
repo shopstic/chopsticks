@@ -2,7 +2,6 @@ package dev.chopsticks.util.config
 
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDate, LocalDateTime, LocalTime, Duration => JavaDuration}
-
 import akka.actor.ActorPath
 import akka.util.{ByteString, Timeout}
 import com.typesafe.config.ConfigValue
@@ -12,7 +11,7 @@ import pureconfig.ConfigReader.Result
 import pureconfig.ConvertHelpers.catchReadError
 import pureconfig.error.{CannotConvert, ConfigReaderFailures, ConvertFailure}
 import pureconfig.generic.{ExportMacros, ProductHint}
-import pureconfig.{ConfigConvert, ConfigCursor, ConfigReader, ConfigWriter, Exported}
+import pureconfig.{ConfigConvert, ConfigCursor, ConfigFieldMapping, ConfigReader, ConfigWriter, Exported, KebabCase}
 import shapeless.ops.hlist.IsHCons
 import shapeless.{Generic, HList, HNil}
 import squants.information.Information
@@ -59,7 +58,10 @@ object PureconfigConverters {
     v => Duration.fromNanos(v.getNano.toLong).toString
   )
 
-  implicit def hint[T]: ProductHint[T] = ProductHint[T](allowUnknownKeys = false)
+  implicit def hint[T]: ProductHint[T] = ProductHint[T](
+    fieldMapping = ConfigFieldMapping(PureconfigFastCamelCaseNamingConvention, KebabCase),
+    allowUnknownKeys = false
+  )
 
   //    implicit val informationConfigConvert: ConfigConvert[Information] = viaNonEmptyStringTry[Information](v => Information(v), _.toString)
 
