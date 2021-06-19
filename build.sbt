@@ -16,12 +16,6 @@ ThisBuild / Test / javaOptions += "-Xmx1536m"
 //ThisBuild / Build.ITest / fork := Build.forkTests
 //ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
-ThisBuild / resolvers ++= Seq(
-  Resolver.bintrayRepo("akka", "snapshots"),
-  Resolver.bintrayRepo("shopstic", "maven"),
-  "Akka Snapshots" at "https://repo.akka.io/snapshots/"
-//  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
-)
 ThisBuild / run / fork := true
 
 ThisBuild / githubOwner := "shopstic"
