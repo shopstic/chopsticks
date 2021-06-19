@@ -167,6 +167,7 @@ object FdbDatabase {
     rootDirectoryPath: String,
     datacenterId: Option[String] = None,
     stopNetworkOnClose: Boolean = true,
+    apiVersion: Int = 620,
     initialConnectionTimeout: Timeout = Timeout(5.seconds),
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
@@ -235,11 +236,9 @@ object FdbDatabase {
       }
       db <- Managed.make {
         effectBlocking {
-          // TODO: this will no longer be needed once this PR makes it into a public release:
-          // https://github.com/apple/foundationdb/pull/2635
-          val m = classOf[FDB].getDeclaredMethod("selectAPIVersion", Integer.TYPE, java.lang.Boolean.TYPE)
-          m.setAccessible(true)
-          val fdb = m.invoke(null, 620, false).asInstanceOf[FDB]
+          val fdb = FDB.selectAPIVersion(config.apiVersion)
+          fdb.disableShutdownHook()
+
           val db = clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path.toString, executor))
           config.datacenterId.foreach(dcid => db.options().setDatacenterId(dcid))
           db
