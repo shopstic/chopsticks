@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-20.04
     services:
       fdb:
-        image: foundationdb/foundationdb:6.2.30
+        image: foundationdb/foundationdb:6.3.15
         env:
           FDB_NETWORKING_MODE: host
         ports:
@@ -64,9 +64,9 @@ jobs:
           path: |
             ./target
             ./**/target
-          key: target-1.5.1-${{ github.sha }}
+          key: target-1.5.4-${{ github.sha }}
           restore-keys: |
-            target-1.5.1
+            target-1.5.4
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v1
