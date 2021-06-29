@@ -16,7 +16,7 @@ import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
 import dev.chopsticks.kvdb.codec.protobuf_value._
 import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.kvdb.fdb.FdbMaterialization.{KeyspaceWithVersionstampKey, KeyspaceWithVersionstampValue}
-import dev.chopsticks.kvdb.util.KvdbIoThreadPool
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.sample.kvdb.SampleDb.{TestKeyWithVersionstamp, TestValueWithVersionstamp}
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
@@ -77,7 +77,10 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
     PureconfigLoader.unsafeLoad[FdbTestSampleAppConfig](allConfig, "app")
   }
 
-  def app: ZIO[AkkaEnv with IzLogging with MeasuredLogging with Has[SampleDb.Db], Throwable, Unit] = for {
+  def app: RIO[
+    AkkaEnv with IzLogging with MeasuredLogging with Has[SampleDb.Db] with KvdbSerdesThreadPool,
+    Unit
+  ] = for {
     db <- ZService[SampleDb.Db]
     dbApi <- KvdbDatabaseApi(db)
     _ <- dbApi

@@ -4,8 +4,6 @@ import java.time.Instant
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
-import dev.chopsticks.fp.ZService
-import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
@@ -19,12 +17,14 @@ import dev.chopsticks.kvdb.codec.{KeyConstraints, KeySerdes, KeyTransformer}
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbPair, KvdbTailBatch, KvdbValueBatch}
+import dev.chopsticks.kvdb.util.KvdbSerdesThreadPool
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbWriteTransactionBuilder}
 import dev.chopsticks.stream.AkkaStreamUtils
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import zio.{RIO, Task, ZIO}
 
+import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.concurrent.Future
@@ -35,10 +35,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   val cf: CF,
   val options: KvdbApiClientOptions
 )(implicit
-  rt: zio.Runtime[AkkaEnv with MeasuredLogging]
+  rt: zio.Runtime[MeasuredLogging with KvdbSerdesThreadPool]
 ) {
-  private val akkaEnv = ZService.get[AkkaEnv.Service](rt.environment)
-  import akkaEnv._
+  private val serdesThreadPool = rt.environment.get[KvdbSerdesThreadPool.Service]
 
   implicit private val keySerdes: KeySerdes[K] = cf.keySerdes
 
@@ -54,18 +53,21 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   def getTask(constraints: ConstraintsBuilder[K]): Task[Option[(K, V)]] = {
-    db.getTask(cf, KeyConstraints.build(constraints))
-      .map(_.map(cf.unsafeDeserialize))
+    db
+      .getTask(cf, KeyConstraints.build(constraints))
+      .flatMap(r => Task(r.map(cf.unsafeDeserialize)).lock(serdesThreadPool.executor))
   }
 
   def getKeyTask(constraints: ConstraintsBuilder[K]): Task[Option[K]] = {
-    db.getTask(cf, KeyConstraints.build(constraints))
-      .map(_.map(p => cf.unsafeDeserializeKey(p._1)))
+    db
+      .getTask(cf, KeyConstraints.build(constraints))
+      .flatMap(r => Task(r.map(p => cf.unsafeDeserializeKey(p._1))).lock(serdesThreadPool.executor))
   }
 
   def getValueTask(constraints: ConstraintsBuilder[K]): Task[Option[V]] = {
-    db.getTask(cf, KeyConstraints.build(constraints))
-      .map(_.map(p => cf.unsafeDeserializeValue(p._2)))
+    db
+      .getTask(cf, KeyConstraints.build(constraints))
+      .flatMap(r => Task(r.map(p => cf.unsafeDeserializeValue(p._2))).lock(serdesThreadPool.executor))
   }
 
   def rawGetRangeTask(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K], limit: PosInt): Task[List[KvdbPair]] = {
@@ -74,17 +76,17 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def getRangeTask(from: ConstraintsBuilder[K], to: ConstraintsBuilder[K], limit: PosInt): Task[List[(K, V)]] = {
     rawGetRangeTask(from, to, limit)
-      .map(_.map(cf.unsafeDeserialize))
+      .flatMap(xs => Task(xs.map(cf.unsafeDeserialize)).lock(serdesThreadPool.executor))
   }
 
   def batchGetTask(constraints: ConstraintsSeqBuilder[K]): Task[Seq[Option[(K, V)]]] = {
     db.batchGetTask(cf, constraints(KeyConstraints.seed[K]).map(KeyConstraints.toList[K]))
-      .map(_.map(_.map(cf.unsafeDeserialize)))
+      .flatMap(xs => Task(xs.map(_.map(cf.unsafeDeserialize))).lock(serdesThreadPool.executor))
   }
 
   def batchGetByKeysTask(keys: Seq[K]): Task[Seq[Option[(K, V)]]] = {
     db.batchGetTask(cf, keys.map(k => KeyConstraints.toList(KeyConstraints.seed[K].is(k))))
-      .map(_.map(_.map(cf.unsafeDeserialize)))
+      .flatMap(r => Task(r.map(_.map(cf.unsafeDeserialize))).lock(serdesThreadPool.executor))
   }
 
   def rawBatchGetRangeTask(ranges: ConstraintsRangesWithLimitBuilder[K]): Task[Seq[List[KvdbPair]]] = {
@@ -99,14 +101,14 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     rawBatchGetRangeTask(ranges)
       .flatMap { groups =>
         ZIO.foreachPar(groups) { g =>
-          Task(g.map(cf.unsafeDeserialize))
+          Task(g.map(cf.unsafeDeserialize)).lock(serdesThreadPool.executor)
         }
       }
   }
 
   def batchGetFlow[O](
     constraintsMapper: O => ConstraintsBuilder[K],
-    useCache: Boolean = false
+    useUnboundedCache: Boolean = false
   ): Flow[O, (O, Option[V]), NotUsed] = {
     val maxBatchSize = options.batchWriteMaxBatchSize
     val groupWithin = options.batchWriteBatchingGroupWithin
@@ -140,12 +142,12 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
     flow
       .via(AkkaStreamUtils.statefulMapOptionFlow(() => {
-        val cache = mutable.Map.empty[KvdbKeyConstraintList, Option[V]]
+        val cache = TrieMap.empty[KvdbKeyConstraintList, Option[V]]
 
         {
           case (keyBatch: Seq[O], requests: Seq[KvdbKeyConstraintList]) =>
             val future =
-              if (useCache) {
+              if (useUnboundedCache) {
                 val maybeValues = new Array[Option[V]](requests.size)
                 val uncachedIndicesBuilder = mutable.ArrayBuilder.make[Int]
                 val uncachedGetsBuilder = mutable.ArrayBuilder.make[KvdbKeyConstraintList]
@@ -171,21 +173,26 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
                   val uncachedIndices = uncachedIndicesBuilder.result()
 
                   db.batchGetTask(cf, uncachedRequests.toList)
-                    .map { pairs =>
-                      for ((maybePair, index) <- pairs.zipWithIndex) {
-                        val maybeValue = maybePair.map(p => cf.unsafeDeserializeValue(p._2))
-                        maybeValues(uncachedIndices(index)) = maybeValue
-                        cache.update(uncachedRequests(index), maybeValue)
-                      }
-
-                      keyBatch.zip(maybeValues)
+                    .flatMap { pairs =>
+                      Task {
+                        for ((maybePair, index) <- pairs.zipWithIndex) {
+                          val maybeValue = maybePair.map(p => cf.unsafeDeserializeValue(p._2))
+                          maybeValues(uncachedIndices(index)) = maybeValue
+                          cache.update(uncachedRequests(index), maybeValue)
+                        }
+                        keyBatch.zip(maybeValues)
+                      }.lock(serdesThreadPool.executor)
                     }
                     .unsafeRunToFuture
                 }
               }
               else {
                 db.batchGetTask(cf, requests)
-                  .map { maybePairs => keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2)))) }
+                  .flatMap { maybePairs =>
+                    Task {
+                      keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2))))
+                    }.lock(serdesThreadPool.executor)
+                  }
                   .unsafeRunToFuture
               }
 
@@ -229,7 +236,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserialize).to(List)
-        }
+        }(serdesThreadPool.executionContext)
       }
   }
 
@@ -238,7 +245,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(options.serdesParallelism) { value =>
         Future {
           value.map(cf.unsafeDeserializeValue)
-        }
+        }(serdesThreadPool.executionContext)
       }
   }
 
@@ -266,7 +273,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserializeValue).to(List)
-        }
+        }(serdesThreadPool.executionContext)
       }
   }
 
@@ -283,17 +290,24 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   }
 
   def putTask(key: K, value: V): RIO[MeasuredLogging, Unit] = {
-    val (k, v) = cf.serialize(key, value)
-    db.putTask(cf, k, v)
+    for {
+      (k, v) <- Task(cf.serialize(key, value)).lock(serdesThreadPool.executor)
+      _ <- db.putTask(cf, k, v)
+    } yield ()
   }
 
   def putValueTask(value: V)(implicit kt: KeyTransformer[V, K]): RIO[MeasuredLogging, Unit] = {
-    val (k, v) = cf.serialize(kt.transform(value), value)
-    db.putTask(cf, k, v)
+    for {
+      (k, v) <- Task(cf.serialize(kt.transform(value), value)).lock(serdesThreadPool.executor)
+      _ <- db.putTask(cf, k, v)
+    } yield ()
   }
 
   def deleteTask(key: K): RIO[MeasuredLogging, Unit] = {
-    db.deleteTask(cf, cf.serializeKey(key))
+    for {
+      k <- Task(cf.serializeKey(key)).lock(serdesThreadPool.executor)
+      _ <- db.deleteTask(cf, k)
+    } yield ()
   }
 
   def transformValueToPairFlow(implicit kt: KeyTransformer[V, K]): Flow[V, (K, V), NotUsed] = {
@@ -319,7 +333,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           buildTransaction(batch)
-        }
+        }(serdesThreadPool.executionContext)
       }
       .mapAsync(1) {
         case (writes, passthrough) =>
@@ -375,7 +389,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(options.serdesParallelism) { b =>
         Future {
           b.view.map(cf.unsafeDeserializeValue).to(List)
-        }
+        }(serdesThreadPool.executionContext)
       }
       .mapConcat(identity)
   }
@@ -410,7 +424,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           batch.view.map(cf.unsafeDeserialize).to(List)
-        }
+        }(serdesThreadPool.executionContext)
       }
   }
 
@@ -437,7 +451,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         case Right(batch) =>
           Future {
             batch.view.map(p => Either.right(cf.unsafeDeserialize(p))).to(List)
-          }
+          }(serdesThreadPool.executionContext)
       }
       .mapConcat(identity)
   }
@@ -472,7 +486,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
           Future {
             val r = Either.right[Instant, List[(K, V)]](batch.view.map(cf.unsafeDeserialize).to(List))
             (index, r)
-          }
+          }(serdesThreadPool.executionContext)
       }
   }
 
@@ -487,7 +501,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         case Right(batch) =>
           Future {
             batch.view.map(p => Either.right(cf.unsafeDeserializeValue(p._2))).to(List)
-          }
+          }(serdesThreadPool.executionContext)
       }
       .mapConcat(identity)
   }

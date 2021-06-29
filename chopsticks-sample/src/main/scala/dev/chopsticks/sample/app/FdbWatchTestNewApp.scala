@@ -4,7 +4,7 @@ import dev.chopsticks.fp.ZAkkaApp
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.kvdb.fdb.FdbDatabase
-import dev.chopsticks.kvdb.util.KvdbIoThreadPool
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import zio._
 
 object FdbWatchTestNewApp extends ZAkkaApp {
@@ -24,7 +24,8 @@ object FdbWatchTestNewApp extends ZAkkaApp {
       .injectSome[ZAkkaAppEnv](
         TypedConfig.live[FdbWatchTestAppConfig](),
         dbLayer,
-        KvdbIoThreadPool.live()
+        KvdbIoThreadPool.live(),
+        KvdbSerdesThreadPool.live()
       )
       .as(ExitCode(0))
   }
