@@ -24,6 +24,7 @@ import zio.{RIO, Task, URIO, ZIO}
 import scala.concurrent.duration._
 import io.scalaland.chimney.dsl._
 import dev.chopsticks.fp.zio_ext._
+import dev.chopsticks.kvdb.util.KvdbSerdesThreadPool
 
 import scala.concurrent.Future
 
@@ -69,8 +70,8 @@ object KvdbDatabaseApi {
 
   def apply[BCF[A, B] <: ColumnFamily[A, B]](
     db: KvdbDatabase[BCF, _]
-  ): URIO[AkkaEnv with MeasuredLogging, KvdbDatabaseApi[BCF]] =
-    ZIO.runtime[AkkaEnv with MeasuredLogging].map { implicit rt =>
+  ): URIO[AkkaEnv with MeasuredLogging with KvdbSerdesThreadPool, KvdbDatabaseApi[BCF]] =
+    ZIO.runtime[AkkaEnv with MeasuredLogging with KvdbSerdesThreadPool].map { implicit rt =>
       new KvdbDatabaseApi[BCF](db, KvdbApiClientOptions.default.patchUsing(db.clientOptions))
     }
 }
@@ -79,7 +80,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
   val db: KvdbDatabase[BCF, _],
   val options: KvdbApiClientOptions
 )(implicit
-  rt: zio.Runtime[AkkaEnv with MeasuredLogging]
+  rt: zio.Runtime[AkkaEnv with MeasuredLogging with KvdbSerdesThreadPool]
 ) {
   private val akkaEnv = rt.environment.get[AkkaEnv.Service]
   import akkaEnv._

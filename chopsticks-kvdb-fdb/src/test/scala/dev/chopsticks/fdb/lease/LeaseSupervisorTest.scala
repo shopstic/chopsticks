@@ -21,7 +21,7 @@ import dev.chopsticks.kvdb.codec.{KeySerdes, ValueSerdes}
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDefinition, KvdbMaterialization}
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbDatabaseConfig
 import dev.chopsticks.kvdb.fdb.{FdbDatabase, FdbMaterialization}
-import dev.chopsticks.kvdb.util.KvdbIoThreadPool
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import eu.timepit.refined.auto._
 import izumi.distage.constructors.HasConstructor
@@ -93,7 +93,7 @@ object LeaseSupervisorTest {
   }
 
   private[lease] val liveApi: ZLayer[
-    AkkaEnv with MeasuredLogging with Has[LeaseSupervisorTestDatabase.Db],
+    AkkaEnv with MeasuredLogging with KvdbSerdesThreadPool with Has[LeaseSupervisorTestDatabase.Db],
     Nothing,
     Has[KvdbDatabaseApi[LeaseSupervisorTestDatabase.BaseCf]]
   ] = {
@@ -169,7 +169,7 @@ class LeaseSupervisorTest
         config <- useConfig
         acquirer <- useLeaseAcquirer
         _ <- {
-          ZIO.foreach((0 until config.leaseSupervisor.partitionCount).toList) { partitionNumber =>
+          ZIO.foreach_((0 until config.leaseSupervisor.partitionCount).toList) { partitionNumber =>
             val expirationDurationMs = config.leaseSupervisor.expirationDuration.toMillis
             acquirer.forceAcquire(
               partitionNumber,
@@ -193,7 +193,7 @@ class LeaseSupervisorTest
         config <- useConfig
         acquirer <- useLeaseAcquirer
         _ <- {
-          ZIO.foreach((0 until config.leaseSupervisor.partitionCount).toList) { partitionNumber =>
+          ZIO.foreach_((0 until config.leaseSupervisor.partitionCount).toList) { partitionNumber =>
             acquirer.forceAcquire(partitionNumber)
           }
         }
@@ -271,7 +271,7 @@ class LeaseSupervisorTest
           config <- useConfig
           acquirer <- useLeaseAcquirer
           _ <- {
-            ZIO.foreach((0 until config.leaseSupervisor.partitionCount).toList) { partitionNumber =>
+            ZIO.foreach_((0 until config.leaseSupervisor.partitionCount).toList) { partitionNumber =>
               acquirer.forceAcquire(partitionNumber)
             }
           }
@@ -279,7 +279,7 @@ class LeaseSupervisorTest
 
           allLeases <- acquirer.getAllLeases()
           _ <- {
-            ZIO.foreach(allLeases.filter(_.assigneeWaitingFrom.nonEmpty)) { lease =>
+            ZIO.foreach_(allLeases.filter(_.assigneeWaitingFrom.nonEmpty)) { lease =>
               acquirer.setLease(lease.copy(owner = None))
             }
           }
@@ -300,7 +300,7 @@ class LeaseSupervisorTest
         acquirer <- useLeaseAcquirer
         ownPartitions = config.leaseSupervisor.ownPartitions
         _ <- {
-          ZIO.foreach((2 until config.leaseSupervisor.partitionCount).toList) { partitionNumber =>
+          ZIO.foreach_((2 until config.leaseSupervisor.partitionCount).toList) { partitionNumber =>
             acquirer.forceAcquire(partitionNumber)
           }
         }
@@ -569,6 +569,7 @@ class LeaseSupervisorTest
           ZLayer.succeed(config),
           LeaseAcquirer.live,
           KvdbIoThreadPool.live(keepAliveTimeMs = 5000),
+          KvdbSerdesThreadPool.live(keepAliveTimeMs = 5000),
           liveDb,
           liveApi,
           liveSupervisor(config.leaseSupervisor),

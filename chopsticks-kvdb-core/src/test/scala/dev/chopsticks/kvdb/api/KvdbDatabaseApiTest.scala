@@ -4,7 +4,7 @@ import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.fp.AkkaDiApp
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
-import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestUtils}
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
@@ -15,7 +15,8 @@ abstract class KvdbDatabaseApiTest
     with AsyncWordSpecLike
     with Matchers
     with AkkaTestKitAutoShutDown {
-  protected def managedDb: ZManaged[AkkaDiApp.Env with IzLogging with KvdbIoThreadPool, Throwable, DbApi]
+  protected def managedDb
+    : ZManaged[AkkaDiApp.Env with IzLogging with KvdbIoThreadPool with KvdbSerdesThreadPool, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
@@ -23,7 +24,8 @@ abstract class KvdbDatabaseApiTest
     typesafeConfig
   ))
   private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ loggingLayer)
-  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live() ++ loggingLayer
+  private lazy val runtimeLayer =
+    AkkaDiApp.Env.live >+> (KvdbIoThreadPool.live() ++ KvdbSerdesThreadPool.live()) ++ loggingLayer
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
   private lazy val withCf = KvdbTestUtils.createTestRunner(
     managedDb.map(_.columnFamily(dbMat.plain)),
