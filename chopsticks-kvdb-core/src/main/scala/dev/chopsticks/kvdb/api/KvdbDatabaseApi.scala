@@ -82,8 +82,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
 )(implicit
   rt: zio.Runtime[AkkaEnv with MeasuredLogging with KvdbSerdesThreadPool]
 ) {
-  private val akkaEnv = rt.environment.get[AkkaEnv.Service]
-  import akkaEnv._
+  private val serdesThreadPool = rt.environment.get[KvdbSerdesThreadPool.Service]
 
   def withOptions(
     modifier: KvdbApiClientOptions => KvdbApiClientOptions
@@ -104,7 +103,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           buildTransaction(batch)
-        }
+        }(serdesThreadPool.executionContext)
       }
       .mapAsync(options.batchWriteParallelism) {
         case (writes, passthrough) =>
@@ -122,7 +121,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
       .mapAsyncUnordered(options.serdesParallelism) { batch =>
         Future {
           buildTransaction(batch)
-        }
+        }(serdesThreadPool.executionContext)
       }
       .mapAsyncUnordered(options.batchWriteParallelism) {
         case (writes, passthrough) =>

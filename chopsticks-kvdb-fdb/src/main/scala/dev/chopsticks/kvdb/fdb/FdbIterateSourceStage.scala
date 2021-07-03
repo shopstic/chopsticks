@@ -18,13 +18,13 @@ import scala.collection.mutable
 
 object FdbIterateSourceStage {
   sealed trait StateMessage
-  private[fdb] object IteratorComplete extends StateMessage
-  final private[fdb] case class IteratorNext(keyValue: KeyValue) extends StateMessage
-  final private[fdb] case class IteratorFailure(exception: Throwable) extends StateMessage
-  private[fdb] object DownstreamPull extends StateMessage
-  private[fdb] object DownstreamFinish extends StateMessage
+  private[chopsticks] object IteratorComplete extends StateMessage
+  final private[chopsticks] case class IteratorNext(keyValue: KeyValue) extends StateMessage
+  final private[chopsticks] case class IteratorFailure(exception: Throwable) extends StateMessage
+  private[chopsticks] object DownstreamPull extends StateMessage
+  private[chopsticks] object DownstreamFinish extends StateMessage
 
-  final private[fdb] class BatchEmitter(
+  final private[chopsticks] class BatchEmitter(
     actor: ActorRef,
     iterator: AsyncIterator[KeyValue],
     maxBatchBytes: Int,

@@ -1,8 +1,5 @@
 package dev.chopsticks.fdb.lease
 
-import java.time.Instant
-import java.util.UUID
-import java.util.concurrent.CompletableFuture
 import akka.NotUsed
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Keep, Source}
@@ -11,17 +8,20 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
-import dev.chopsticks.kvdb.codec.KeyConstraints
-import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.kvdb.ColumnFamily
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
+import dev.chopsticks.kvdb.codec.KeyConstraints
+import dev.chopsticks.kvdb.fdb.{FdbDatabase, FdbReadApi}
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
 import eu.timepit.refined.types.all.{NonNegInt, PosInt}
 import izumi.reflect.{Tag, TagKK}
 import zio.clock.Clock
 import zio.{Has, Promise, RIO, Ref, Task, UIO, URLayer, ZIO, ZManaged}
 
+import java.time.Instant
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import scala.collection.immutable.ArraySeq
 import scala.concurrent.duration._
 import scala.math.Ordered.orderingToOrdered
@@ -115,8 +115,8 @@ object LeaseSupervisor {
       }
     } yield {
       new Service[A] {
-        import systemSvc.actorSystem
         import dev.chopsticks.stream.ZAkkaStreams.ops._
+        import systemSvc.actorSystem
 
         implicit val r = runtime
 
@@ -339,16 +339,11 @@ object LeaseSupervisor {
     leaseKeyspace: A,
     config: LeaseSupervisorConfig
   ): CompletableFuture[Seq[Lease]] = {
-    val rangeConstraint = KeyConstraints.range[LeaseKey](_.first, _.last)(leaseKeyspace.keySerdes)
-
-    fdb
-      .doGetRangeFuture(
-        tx,
-        leaseKeyspace,
-        rangeConstraint.from,
-        rangeConstraint.to,
-        config.partitionCount
-      )
+    val rangeConstraint =
+      KeyConstraints.range[LeaseKey](_.first, _.last, config.partitionCount.value)(leaseKeyspace.keySerdes)
+    val api = new FdbReadApi[BCF](tx, fdb.dbContext)
+    api
+      .getRange(leaseKeyspace, rangeConstraint)
       .thenApply { xs =>
         xs
           .iterator

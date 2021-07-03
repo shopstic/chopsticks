@@ -24,7 +24,7 @@ import squants.information.Information
 import scala.concurrent.duration.{Duration, FiniteDuration, _}
 
 object FdbTailSourceStage {
-  final private[fdb] case class EmitEmptyTail(emptyTail: EmptyTail)
+  final private[chopsticks] case class EmitEmptyTail(emptyTail: EmptyTail)
 }
 
 final class FdbTailSourceStage(
