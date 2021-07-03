@@ -4,7 +4,6 @@ import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Source}
 import akka.util.Timeout
 import akka.{Done, NotUsed}
-import cats.syntax.either._
 import cats.syntax.show._
 import com.apple.foundationdb._
 import com.apple.foundationdb.directory.DirectoryLayer
@@ -23,14 +22,12 @@ import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
   TransactionWrite
 }
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
-import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
 import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util.{KvdbCloseSignal, KvdbIoThreadPool}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
-import eu.timepit.refined.types.numeric.PosInt
 import org.reactivestreams.Publisher
 import pureconfig.ConfigConvert
 import zio._
@@ -103,8 +100,12 @@ object FdbDatabase {
       withVersionstampValueIdSet.contains(columnId)
     }
 
+    def columnPrefix(columnId: String): Array[Byte] = {
+      prefixMapById(columnId)
+    }
+
     def columnPrefix[CF <: BCF[_, _]](column: CF): Array[Byte] = {
-      prefixMapById(column.id)
+      columnPrefix(column.id)
     }
 
     def strinc[CF <: BCF[_, _]](column: CF): Array[Byte] = {
@@ -141,24 +142,35 @@ object FdbDatabase {
       prefixKey(column.id, key)
     }
 
-    def unprefixKey[CF <: BCF[_, _]](column: CF, key: Array[Byte]): Array[Byte] = {
-      val prefixLength = prefixMapById(column.id).length
+    def unprefixKey(columnId: String, key: Array[Byte]): Array[Byte] = {
+      val prefixLength = prefixMapById(columnId).length
       util.Arrays.copyOfRange(key, prefixLength, key.length)
+    }
+
+    def unprefixKey[CF <: BCF[_, _]](column: CF, key: Array[Byte]): Array[Byte] = {
+      unprefixKey(column.id, key)
+    }
+
+    def prefixKeyConstraints(
+      columnId: String,
+      constraints: List[KvdbKeyConstraint]
+    ): List[KvdbKeyConstraint] = {
+      val prefix = prefixMapById(columnId)
+      constraints.map { constraint =>
+        constraint
+          .copy(
+            operand = ByteString.copyFrom(prefix).concat(constraint.operand),
+            operandDisplay =
+              s"[columnId=${columnId}][columnPrefix=${ByteArrayUtil.printable(prefix)}][operand=${constraint.operandDisplay}]"
+          )
+      }
     }
 
     def prefixKeyConstraints[CF <: BCF[_, _]](
       column: CF,
       constraints: List[KvdbKeyConstraint]
     ): List[KvdbKeyConstraint] = {
-      val prefix = prefixMapById(column.id)
-      constraints.map { constraint =>
-        constraint
-          .copy(
-            operand = ByteString.copyFrom(prefix).concat(constraint.operand),
-            operandDisplay =
-              s"[columnId=${column.id}][columnPrefix=${ByteArrayUtil.printable(prefix)}][operand=${constraint.operandDisplay}]"
-          )
-      }
+      prefixKeyConstraints(column.id, constraints)
     }
   }
 
@@ -322,93 +334,23 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     )
   }
 
-  private def nonEqualFromConstraintToKeySelector(operator: Operator, operand: Array[Byte]): KeySelector = {
-    operator match {
-      case Operator.PREFIX =>
-        KeySelector.firstGreaterOrEqual(operand)
-      case Operator.GREATER =>
-        KeySelector.firstGreaterThan(operand)
-      case Operator.LESS =>
-        KeySelector.lastLessThan(operand)
-      case Operator.GREATER_EQUAL =>
-        KeySelector.firstGreaterOrEqual(operand)
-      case Operator.LESS_EQUAL =>
-        KeySelector.lastLessOrEqual(operand)
-      case Operator.FIRST =>
-        KeySelector.firstGreaterOrEqual(operand)
-      case Operator.LAST =>
-        KeySelector.lastLessOrEqual(ByteArrayUtil.strinc(operand))
-      case Operator.EQUAL =>
-        throw new IllegalArgumentException("Constraint must not have EQUAL operator")
-      case o =>
-        throw new IllegalArgumentException(s"Unrecognized operator: $o")
-    }
+  def read[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
+    TaskUtils
+      .fromCancellableCompletableFuture(
+        dbContext.db.readAsync { tx =>
+          fn(new FdbReadApi[BCF](tx, dbContext))
+        }
+      )
   }
 
-  private def toConstraintToKeySelector(
-    operator: Operator,
-    operand: Array[Byte],
-    firstOutOfRangeOperand: Array[Byte]
-  ) = {
-    operator match {
-      case Operator.EQUAL =>
-        KeySelector.firstGreaterOrEqual(operand)
-      case Operator.LESS =>
-        KeySelector.firstGreaterOrEqual(operand)
-      case Operator.LESS_EQUAL =>
-        KeySelector.firstGreaterThan(operand)
-      case Operator.PREFIX =>
-        KeySelector.firstGreaterOrEqual(ByteArrayUtil.strinc(operand))
-      case _ =>
-        KeySelector.firstGreaterOrEqual(firstOutOfRangeOperand)
-    }
-  }
-
-  private def doGet[Col <: CF](
-    tx: ReadTransaction,
-    column: Col,
-    constraints: List[KvdbKeyConstraint]
-  ): CompletableFuture[_ <: Either[Array[Byte], KvdbPair]] = {
-    if (constraints.isEmpty) {
-      CompletableFuture.completedFuture(Left(Array.emptyByteArray))
-    }
-    else {
-      val prefixedConstraints = dbContext.prefixKeyConstraints(column, constraints)
-      val headConstraint = prefixedConstraints.head
-      val headOperand = headConstraint.operand.toByteArray
-      val operator = headConstraint.operator
-
-      operator match {
-        case Operator.EQUAL =>
-          tx.get(headOperand).thenApply { value =>
-            if (value != null && keySatisfies(headOperand, prefixedConstraints.tail)) {
-              Right((headOperand, value))
-            }
-            else Left(headOperand)
-          }
-
-        case op =>
-          val keySelector = nonEqualFromConstraintToKeySelector(operator, headOperand)
-          val keyFuture = tx.getKey(keySelector)
-          val tailConstraints = if (op == Operator.PREFIX) prefixedConstraints else prefixedConstraints.tail
-
-          val ret: CompletableFuture[_ <: Either[Array[Byte], KvdbPair]] = keyFuture.thenCompose { key: Array[Byte] =>
-            if (
-              key != null && key.length > 0 && KeySerdes.isPrefix(dbContext.columnPrefix(column), key) && keySatisfies(
-                key,
-                tailConstraints
-              )
-            ) {
-              tx.get(key).thenApply(value => Either.right[Array[Byte], KvdbPair]((key, value)))
-            }
-            else {
-              CompletableFuture.completedFuture(Either.left[Array[Byte], KvdbPair](Array.emptyByteArray))
-            }
-          }
-
-          ret
-      }
-    }
+  def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[MeasuredLogging, V] = {
+    TaskUtils
+      .fromUninterruptibleCompletableFuture(
+        name,
+        dbContext.db.runAsync { tx =>
+          fn(new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking))
+        }
+      )
   }
 
   override def watchKeySource[Col <: CF](
@@ -507,224 +449,30 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .mapMaterializedValue(future => future.flatten)
   }
 
-  /*override def watchKeySource[Col <: CF](
-    column: Col,
-    key: Array[Byte]
-  ): Source[Option[Array[Byte]], NotUsed] = {
-    val prefixedKey = dbContext.prefixKey(column, key)
-
-    import dev.chopsticks.stream.ZAkkaStreams.ops._
-    val watchTimeout = zio.duration.Duration.fromScala(clientOptions.watchTimeout)
-    val watchMinLatency = clientOptions.watchMinLatency
-    val watchMinLatencyNanos = watchMinLatency.toNanos
-
-    Source
-      .unfoldAsync(Future.successful(System.nanoTime())) { waitFuture =>
-        import scala.jdk.FutureConverters._
-        val akkaService = rt.environment.get
-        val scheduler = akkaService.actorSystem.scheduler
-
-        import akkaService.dispatcher
-
-        waitFuture
-          .transformWith { lastTry =>
-            val txFuture = dbContext.db.runAsync { tx =>
-              tx.get(prefixedKey).thenApply { value =>
-                val maybeValue = Option(value)
-                val watchCompletableFuture = tx.watch(prefixedKey)
-                (watchCompletableFuture, maybeValue)
-              }
-            }: CompletableFuture[(CompletableFuture[Void], Option[Array[Byte]])]
-
-            txFuture
-              .asScala
-              .map {
-                case (future, maybeValue) =>
-                  val watchTask = TaskUtils
-                    .fromCancellableCompletableFuture(future)
-                    .as(maybeValue)
-
-                  val watchTaskWithTimeout = watchTimeout match {
-                    case Duration.Infinity => watchTask
-                    case d => watchTask.timeoutTo(maybeValue)(identity)(d)
-                  }
-
-                  val watchTaskWithRecovery = watchTaskWithTimeout
-                    .catchSome {
-                      case e: FDBException if e.getCode == 1009 => // Request for future version
-                        ZIO.succeed(maybeValue)
-                      case e: FDBException =>
-                        logger.warn(s"[watchKeySource][fdbErrorCode=${e.getCode}] ${e.getMessage}")
-                        ZIO.succeed(maybeValue)
-                    }
-
-                  val emit = Task.succeed(maybeValue) :: watchTaskWithRecovery :: Nil
-
-                  val nextWaitFuture = future.asScala.flatMap { _ =>
-                    val now = System.nanoTime()
-                    val f = Future.successful(now)
-
-                    lastTry match {
-                      case Failure(_) =>
-                        akka.pattern.after(watchMinLatency, scheduler)(f)
-                      case Success(lastNanos) =>
-                        val elapse = now - lastNanos
-
-                        if (elapse < watchMinLatencyNanos) {
-                          akka.pattern.after(
-                            FiniteDuration(watchMinLatencyNanos - elapse, TimeUnit.NANOSECONDS),
-                            scheduler
-                          )(f)
-                        }
-                        else f
-                    }
-                  }
-
-                  Some(nextWaitFuture -> emit)
-              }
-          }
-      }
-      .mapConcat(identity)
-      .interruptibleEffectMapAsyncUnordered(1)(identity)
-      .statefulMapConcat(() => {
-        var isFirst = true
-        var currentValue = Option.empty[Array[Byte]]
-
-        value => {
-          if (isFirst) {
-            isFirst = false
-            currentValue = value
-            currentValue :: Nil
-          }
-          else {
-            (currentValue, value) match {
-              case (Some(a), Some(b)) if a.sameElements(b) => Nil
-              case (None, None) => Nil
-              case _ =>
-                currentValue = value
-                currentValue :: Nil
-            }
-          }
-        }
-      })
-  }*/
-
   override def getTask[Col <: CF](
     column: Col,
     constraints: KvdbKeyConstraintList
   ): Task[Option[(Array[Byte], Array[Byte])]] = {
-    TaskUtils
-      .fromCancellableCompletableFuture(
-        dbContext.db.readAsync { tx =>
-          doGet(tx, column, constraints.constraints).thenApply { //noinspection MatchToPartialFunction
-            result =>
-              result match {
-                case Right((key, value)) =>
-                  Some(dbContext.unprefixKey(column, key) -> value)
-                case _ => None
-              }
-          }
-        }
-      )
-  }
-
-  private[chopsticks] def doGetRangeFuture[Col <: CF](
-    tx: ReadTransaction,
-    column: Col,
-    from: List[KvdbKeyConstraint],
-    to: List[KvdbKeyConstraint],
-    limit: PosInt
-  ): CompletableFuture[List[KvdbPair]] = {
-    val prefixedFrom = dbContext.prefixKeyConstraints(column, from)
-    val prefixedTo = dbContext.prefixKeyConstraints(column, to)
-    val fromHead = prefixedFrom.head
-    val operator = fromHead.operator
-    val headValidation =
-      if (operator == Operator.EQUAL || operator == Operator.PREFIX) prefixedFrom else prefixedFrom.tail
-    val headOperand = fromHead.operand.toByteArray
-
-    val startKeySelector = operator match {
-      case Operator.EQUAL => KeySelector.firstGreaterOrEqual(headOperand)
-      case _ => nonEqualFromConstraintToKeySelector(operator, headOperand)
-    }
-
-    val toHead = prefixedTo.head
-    val endKeySelector = toConstraintToKeySelector(
-      toHead.operator,
-      toHead.operand.toByteArray,
-      dbContext.strinc(column)
-    )
-    val columnPrefix = dbContext.columnPrefix(column)
-
-    tx.getRange(startKeySelector, endKeySelector, limit.value)
-      .asList()
-      .thenApply { javaList =>
-        val pairs = javaList.asScala.toList match {
-          case head :: tail =>
-            val headKey = head.getKey
-            if (
-              headKey != null && headKey.nonEmpty && KeySerdes.isPrefix(columnPrefix, headKey) && keySatisfies(
-                headKey,
-                headValidation
-              )
-            ) {
-              head :: tail.takeWhile { p =>
-                val key = p.getKey
-                key != null && key.nonEmpty && KeySerdes.isPrefix(columnPrefix, headKey) && keySatisfies(
-                  key,
-                  prefixedTo
-                )
-              }
-            }
-            else Nil
-          case Nil => Nil
-        }
-
-        pairs.map(p => dbContext.unprefixKey(column, p.getKey) -> p.getValue)
-      }
+    read(_.get(column, constraints.constraints))
   }
 
   override def getRangeTask[Col <: CF](column: Col, range: KvdbKeyRange): Task[List[KvdbPair]] = {
-    PosInt.from(range.limit) match {
-      case Left(_) =>
-        Task.fail(
-          InvalidKvdbArgumentException(s"range.limit of '${range.limit}' is invalid, must be a positive integer")
-        )
-      case Right(limit) =>
-        TaskUtils
-          .fromCancellableCompletableFuture(
-            dbContext.db
-              .readAsync { tx =>
-                doGetRangeFuture(tx, column, range.from, range.to, limit)
-              }
-          )
-    }
+    read(_.getRange(column, range))
   }
 
   override def batchGetTask[Col <: CF](
     column: Col,
     requests: Seq[KvdbKeyConstraintList]
   ): Task[Seq[Option[KvdbPair]]] = {
-    TaskUtils
-      .fromCancellableCompletableFuture(
-        dbContext.db
-          .readAsync { tx =>
-            val futures = requests.map { req =>
-              doGet(tx, column, req.constraints)
-                .thenApply { //noinspection MatchToPartialFunction
-                  result =>
-                    result match {
-                      case Right((key, value)) => Some(dbContext.unprefixKey(column, key) -> value)
-                      case _ => None
-                    }
-                }
-            }
+    read { api =>
+      val futures = requests.map { req =>
+        api.get(column, req.constraints)
+      }
 
-            CompletableFuture
-              .allOf(futures: _*)
-              .thenApply(_ => futures.map(_.join()))
-          }
-      )
+      CompletableFuture
+        .allOf(futures: _*)
+        .thenApply(_ => futures.map(_.join()))
+    }
   }
 
   override def batchGetRangeTask[Col <: CF](column: Col, ranges: Seq[KvdbKeyRange]): Task[List[List[KvdbPair]]] = {
@@ -734,82 +482,46 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       )
     }
     else {
-      TaskUtils
-        .fromCancellableCompletableFuture(
-          dbContext.db
-            .readAsync { tx =>
-              val futures = ranges.view.map { range =>
-                doGetRangeFuture(tx, column, range.from, range.to, PosInt.unsafeFrom(range.limit))
-              }.toList
+      read { api =>
+        val futures = ranges.view.map { range =>
+          api.getRange(column, range)
+        }.toList
 
-              CompletableFuture
-                .allOf(futures: _*)
-                .thenApply(_ => futures.map(_.join()))
-            }
-        )
+        CompletableFuture
+          .allOf(futures: _*)
+          .thenApply(_ => futures.map(_.join()))
+      }
     }
   }
 
   override def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): RIO[MeasuredLogging, Unit] = {
-    val prefixedKey = dbContext.prefixKey(column, key)
-
-    TaskUtils
-      .fromUninterruptibleCompletableFuture(
-        s"putTask column=${column.id}",
-        dbContext.db
-          .runAsync { tx =>
-            if (clientOptions.disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
-
-            if (dbContext.hasVersionstampKey(column)) {
-              tx.mutate(
-                MutationType.SET_VERSIONSTAMPED_KEY,
-                dbContext.adjustKeyVersionstamp(column, prefixedKey),
-                value
-              )
-            }
-            else if (dbContext.hasVersionstampValue(column)) {
-              tx.mutate(
-                MutationType.SET_VERSIONSTAMPED_VALUE,
-                prefixedKey,
-                value
-              )
-            }
-            else {
-              tx.set(prefixedKey, value)
-            }
-
-            COMPLETED_FUTURE
-          }
-      )
+    write(
+      s"putTask column=${column.id}",
+      api => {
+        api.put(column, key, value)
+        COMPLETED_FUTURE
+      }
+    )
   }
 
   override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[MeasuredLogging, Unit] = {
-    val prefixedKey = dbContext.prefixKey(column, key)
-
-    TaskUtils
-      .fromUninterruptibleCompletableFuture(
-        s"deleteTask column=${column.id}",
-        dbContext.db
-          .runAsync { tx =>
-            tx.clear(prefixedKey)
-            COMPLETED_FUTURE
-          }
-      )
+    write(
+      s"deleteTask column=${column.id}",
+      api => {
+        api.delete(column, key)
+        COMPLETED_FUTURE
+      }
+    )
   }
 
   override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[MeasuredLogging, Long] = {
-    val prefixedKey = dbContext.prefixKey(column, prefix)
-
-    TaskUtils
-      .fromUninterruptibleCompletableFuture(
-        s"deletePrefixTask column=${column.id}",
-        dbContext.db
-          .runAsync { tx =>
-            tx.clear(com.apple.foundationdb.Range.startsWith(prefixedKey))
-            COMPLETED_FUTURE
-          }
-      )
-      .as(0L)
+    write(
+      s"deletePrefixTask column=${column.id}",
+      api => {
+        api.deletePrefix(column, prefix)
+        COMPLETED_FUTURE
+      }
+    ).as(0L)
   }
 
   override def estimateCount[Col <: CF](column: Col): Task[Long] = ???
@@ -818,11 +530,11 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     Source
       .lazyFutureSource { () =>
         val initialTx = dbContext.db.createTransaction()
+        val initialApi = new FdbReadApi[BCF](initialTx, dbContext)
         val closeTx = () => initialTx.close()
 
-        //noinspection MatchToPartialFunction
         @nowarn("cat=other-match-analysis") // Bug in Scala 2.13.4 that falsely warns that this match is non-exhaustive
-        val future: Future[Source[KvdbBatch, NotUsed]] = doGet(initialTx, column, range.from).thenApply { result =>
+        val future: Future[Source[KvdbBatch, NotUsed]] = initialApi.getEither(column, range.from).thenApply { result =>
           val fromConstraints = dbContext.prefixKeyConstraints(column, range.from)
           val toConstraints = dbContext.prefixKeyConstraints(column, range.to)
 
@@ -837,10 +549,10 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                 val fromOperand = fromHead.operand.toByteArray
                 val startKeySelector = fromOperator match {
                   case Operator.EQUAL => KeySelector.firstGreaterOrEqual(fromOperand)
-                  case _ => nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
+                  case _ => initialApi.nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
                 }
                 val toHead = toConstraints.head
-                val endKeySelector = toConstraintToKeySelector(
+                val endKeySelector = initialApi.toConstraintToKeySelector(
                   toHead.operator,
                   toHead.operand.toByteArray,
                   dbContext.strinc(column)
@@ -893,51 +605,25 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   override def transactionTask(
     actions: Seq[TransactionWrite]
   ): RIO[MeasuredLogging, Unit] = {
-    TaskUtils
-      .fromUninterruptibleCompletableFuture(
-        "transactionTask",
-        dbContext.db
-          .runAsync { tx =>
-            tx.options().setReadYourWritesDisable()
+    write(
+      "transactionTask",
+      api => {
+        api.tx.options().setReadYourWritesDisable()
 
-            val disableWriteConflictChecking = clientOptions.disableWriteConflictChecking
+        actions.foreach {
+          case TransactionPut(columnId, key, value) =>
+            api.putByColumnId(columnId, key, value)
 
-            actions.foreach { action =>
-              if (disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
+          case TransactionDelete(columnId, key) =>
+            api.deleteByColumnId(columnId, key)
 
-              action match {
-                case TransactionPut(columnId, key, value) =>
-                  val prefixedKey = dbContext.prefixKey(columnId, key)
+          case TransactionDeleteRange(columnId, fromKey, toKey) =>
+            api.deleteRangeByColumnId(columnId, fromKey, toKey)
+        }
 
-                  if (dbContext.hasVersionstampKey(columnId)) {
-                    tx.mutate(
-                      MutationType.SET_VERSIONSTAMPED_KEY,
-                      dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
-                      value
-                    )
-                  }
-                  else if (dbContext.hasVersionstampValue(columnId)) {
-                    tx.mutate(
-                      MutationType.SET_VERSIONSTAMPED_VALUE,
-                      prefixedKey,
-                      value
-                    )
-                  }
-                  else {
-                    tx.set(prefixedKey, value)
-                  }
-
-                case TransactionDelete(columnId, key) =>
-                  tx.clear(dbContext.prefixKey(columnId, key))
-
-                case TransactionDeleteRange(columnId, fromKey, toKey) =>
-                  tx.clear(dbContext.prefixKey(columnId, fromKey), dbContext.prefixKey(columnId, toKey))
-              }
-            }
-
-            COMPLETED_FUTURE
-          }
-      )
+        COMPLETED_FUTURE
+      }
+    )
   }
 
   override def conditionalTransactionTask(
@@ -945,72 +631,48 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     condition: List[Option[(Array[Byte], Array[Byte])]] => Boolean,
     actions: Seq[TransactionWrite]
   ): RIO[MeasuredLogging, Unit] = {
-    TaskUtils
-      .fromUninterruptibleCompletableFuture(
-        "conditionalTransactionTask",
-        dbContext.db
-          .runAsync { tx =>
-            val readFutures = for (read <- reads) yield {
-              val key = read.key
-              val f: CompletableFuture[Option[KvdbPair]] = tx
-                .get(dbContext.prefixKey(read.columnId, key))
-                .thenApply { value => if (value != null) Some(key -> value) else None }
-              f
-            }
+    write(
+      "conditionalTransactionTask",
+      api => {
+        val readFutures = for (read <- reads) yield {
+          val key = read.key
+          val f: CompletableFuture[Option[KvdbPair]] = api
+            .tx
+            .get(dbContext.prefixKey(read.columnId, key))
+            .thenApply { value => if (value != null) Some(key -> value) else None }
+          f
+        }
 
-            val future: CompletableFuture[Unit] = CompletableFuture
-              .allOf(readFutures: _*)
-              .thenCompose { _ =>
-                val pairs = readFutures.map(_.join())
+        val future: CompletableFuture[Unit] = CompletableFuture
+          .allOf(readFutures: _*)
+          .thenCompose { _ =>
+            val pairs = readFutures.map(_.join())
 
-                val okToWrite = condition(pairs)
+            val okToWrite = condition(pairs)
 
-                if (okToWrite) {
-                  val disableWriteConflictChecking = clientOptions.disableWriteConflictChecking
+            if (okToWrite) {
+              actions.foreach {
+                case TransactionPut(columnId, key, value) =>
+                  api.putByColumnId(columnId, key, value)
 
-                  actions.foreach { action =>
-                    if (disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
+                case TransactionDelete(columnId, key) =>
+                  api.deleteByColumnId(columnId, key)
 
-                    action match {
-                      case TransactionPut(columnId, key, value) =>
-                        val prefixedKey = dbContext.prefixKey(columnId, key)
-
-                        if (dbContext.hasVersionstampKey(columnId)) {
-                          tx.mutate(
-                            MutationType.SET_VERSIONSTAMPED_KEY,
-                            dbContext.adjustKeyVersionstamp(columnId, prefixedKey),
-                            value
-                          )
-                        }
-                        else if (dbContext.hasVersionstampValue(columnId)) {
-                          tx.mutate(
-                            MutationType.SET_VERSIONSTAMPED_VALUE,
-                            prefixedKey,
-                            value
-                          )
-                        }
-                        else {
-                          tx.set(prefixedKey, value)
-                        }
-
-                      case TransactionDelete(columnId, key) =>
-                        tx.clear(dbContext.prefixKey(columnId, key))
-
-                      case TransactionDeleteRange(columnId, fromKey, toKey) =>
-                        tx.clear(dbContext.prefixKey(columnId, fromKey), dbContext.prefixKey(columnId, toKey))
-                    }
-                  }
-
-                  COMPLETED_FUTURE
-                }
-                else {
-                  CompletableFuture.failedFuture(ConditionalTransactionFailedException("Condition returns false"))
-                }
+                case TransactionDeleteRange(columnId, fromKey, toKey) =>
+                  api.deleteRangeByColumnId(columnId, fromKey, toKey)
               }
 
-            future
+              COMPLETED_FUTURE
+            }
+            else {
+              CompletableFuture.failedFuture(ConditionalTransactionFailedException("Condition returns false"))
+            }
           }
-      )
+
+        future
+
+      }
+    )
   }
 
   override def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed] = {
@@ -1031,19 +693,20 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
             val fromHead = newRange.from.head
             val fromOperator = fromHead.operator
             val fromOperand = fromHead.operand.toByteArray
+            val tx = dbContext.db.createTransaction()
+            val api = new FdbReadApi[BCF](tx, dbContext)
 
             val startKeySelector = fromOperator match {
               case Operator.EQUAL =>
                 KeySelector.firstGreaterOrEqual(fromOperand)
               case _ =>
-                nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
+                api.nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
             }
 
             val toHead = newRange.to.head
             val endKeySelector =
-              toConstraintToKeySelector(toHead.operator, toHead.operand.toByteArray, dbContext.strinc(column))
+              api.toConstraintToKeySelector(toHead.operator, toHead.operand.toByteArray, dbContext.strinc(column))
 
-            val tx = dbContext.db.createTransaction()
             val closeTx = () => tx.close()
             val iterator = tx.snapshot().getRange(startKeySelector, endKeySelector).iterator()
 
