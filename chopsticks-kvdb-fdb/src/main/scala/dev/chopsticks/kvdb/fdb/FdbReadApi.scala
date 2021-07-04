@@ -22,6 +22,10 @@ class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]] private[chopsticks] (
 ) {
   type CF = BCF[_, _]
 
+  def snapshot(): FdbReadApi[BCF] = {
+    new FdbReadApi[BCF](tx.snapshot(), dbContext)
+  }
+
   def nonEqualFromConstraintToKeySelector(operator: Operator, operand: Array[Byte]): KeySelector = {
     operator match {
       case Operator.PREFIX =>
