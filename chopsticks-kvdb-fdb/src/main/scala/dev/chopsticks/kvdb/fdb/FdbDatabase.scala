@@ -311,6 +311,7 @@ object FdbDatabase {
   }
 
   val COMPLETED_FUTURE: CompletableFuture[Unit] = CompletableFuture.completedFuture(())
+  val TRUE_FUTURE: CompletableFuture[Boolean] = CompletableFuture.completedFuture(true)
 }
 
 import dev.chopsticks.kvdb.fdb.FdbDatabase._
@@ -319,7 +320,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
   val dbContext: FdbContext[BCF],
-  writeFence: Transaction => Boolean = _ => true
+  writeFence: Transaction => CompletableFuture[Boolean] = _ => FdbDatabase.TRUE_FUTURE
 )(implicit rt: zio.Runtime[AkkaEnv with MeasuredLogging])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
@@ -329,7 +330,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     new FdbDatabase[BCF, CFS](materialization, newOptions, dbContext, writeFence)
   }
 
-  def withWriteFence(fence: Transaction => Boolean): FdbDatabase[BCF, CFS] = {
+  def withWriteFence(fence: Transaction => CompletableFuture[Boolean]): FdbDatabase[BCF, CFS] = {
     new FdbDatabase[BCF, CFS](materialization, clientOptions, dbContext, fence)
   }
 
@@ -353,12 +354,15 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .fromUninterruptibleCompletableFuture(
         name,
         dbContext.db.runAsync { tx =>
-          if (!writeFence(tx)) {
-            CompletableFuture.failedFuture[V](ConditionalTransactionFailedException("Write fenced"))
-          }
-          else {
-            fn(new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking))
-          }
+          writeFence(tx)
+            .thenCompose(ok => {
+              if (ok) {
+                fn(new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking))
+              }
+              else {
+                CompletableFuture.failedFuture[V](ConditionalTransactionFailedException("Write fenced"))
+              }
+            })
         }
       )
   }
