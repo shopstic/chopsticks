@@ -16,7 +16,7 @@ import eu.timepit.refined.types.numeric.PosInt
 import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 
-class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]] private[chopsticks] (
+class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]](
   val tx: ReadTransaction,
   dbContext: FdbContext[BCF]
 ) {

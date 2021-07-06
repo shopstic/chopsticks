@@ -4,7 +4,7 @@ import com.apple.foundationdb.{MutationType, Transaction}
 import dev.chopsticks.kvdb.ColumnFamily
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbContext
 
-final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]] private[chopsticks] (
+final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
   tx: Transaction,
   dbContext: FdbContext[BCF],
   disableWriteConflictChecking: Boolean

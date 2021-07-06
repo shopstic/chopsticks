@@ -95,6 +95,13 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
     )
   }
 
+  def withBackend(modifier: KvdbDatabase[BCF, _] => KvdbDatabase[BCF, _]): KvdbDatabaseApi[BCF] = {
+    new KvdbDatabaseApi[BCF](
+      modifier(db),
+      options
+    )
+  }
+
   def batchTransact[A, P](
     buildTransaction: Vector[A] => (List[TransactionWrite], P)
   ): Flow[A, P, NotUsed] = {
