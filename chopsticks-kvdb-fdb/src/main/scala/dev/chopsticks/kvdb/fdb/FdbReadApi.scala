@@ -117,6 +117,14 @@ class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]] private[chopsticks] (
     }
   }
 
+  def addReadConflictKeyIfNotSnapshot[Col <: CF](column: Col, key: Array[Byte]): Boolean = {
+    tx.addReadConflictKeyIfNotSnapshot(dbContext.prefixKey(column, key))
+  }
+
+  def addReadConflictRangeIfNotSnapshot[Col <: CF](column: Col, begin: Array[Byte], end: Array[Byte]): Boolean = {
+    tx.addReadConflictRangeIfNotSnapshot(dbContext.prefixKey(column, begin), dbContext.prefixKey(column, end))
+  }
+
   def getEither[Col <: CF](
     column: Col,
     constraints: List[KvdbKeyConstraint]
