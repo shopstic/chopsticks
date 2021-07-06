@@ -318,14 +318,19 @@ import dev.chopsticks.kvdb.fdb.FdbDatabase._
 final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] private (
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
-  val dbContext: FdbContext[BCF]
+  val dbContext: FdbContext[BCF],
+  writeFence: Transaction => Boolean = _ => true
 )(implicit rt: zio.Runtime[AkkaEnv with MeasuredLogging])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
   override def withOptions(modifier: KvdbClientOptions => KvdbClientOptions): KvdbDatabase[BCF, CFS] = {
     val newOptions = modifier(clientOptions)
-    new FdbDatabase[BCF, CFS](materialization, newOptions, dbContext)
+    new FdbDatabase[BCF, CFS](materialization, newOptions, dbContext, writeFence)
+  }
+
+  def withWriteFence(fence: Transaction => Boolean): FdbDatabase[BCF, CFS] = {
+    new FdbDatabase[BCF, CFS](materialization, clientOptions, dbContext, fence)
   }
 
   override def statsTask: Task[Map[(String, Map[String, String]), Double]] = Task {
@@ -348,7 +353,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .fromUninterruptibleCompletableFuture(
         name,
         dbContext.db.runAsync { tx =>
-          fn(new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking))
+          if (!writeFence(tx)) {
+            CompletableFuture.failedFuture(ConditionalTransactionFailedException("Write fenced"))
+          }
+          else {
+            fn(new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking))
+          }
         }
       )
   }
