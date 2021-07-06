@@ -354,7 +354,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
         name,
         dbContext.db.runAsync { tx =>
           if (!writeFence(tx)) {
-            CompletableFuture.failedFuture(ConditionalTransactionFailedException("Write fenced"))
+            CompletableFuture.failedFuture[V](ConditionalTransactionFailedException("Write fenced"))
           }
           else {
             fn(new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking))
