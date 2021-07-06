@@ -320,7 +320,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
   val dbContext: FdbContext[BCF],
-  writeFence: Transaction => CompletableFuture[Boolean] = _ => FdbDatabase.TRUE_FUTURE
+  writeFence: FdbWriteApi[BCF] => CompletableFuture[Boolean] = (_: FdbWriteApi[BCF]) => FdbDatabase.TRUE_FUTURE
 )(implicit rt: zio.Runtime[AkkaEnv with MeasuredLogging])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
@@ -330,7 +330,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     new FdbDatabase[BCF, CFS](materialization, newOptions, dbContext, writeFence)
   }
 
-  def withWriteFence(fence: Transaction => CompletableFuture[Boolean]): FdbDatabase[BCF, CFS] = {
+  def withWriteFence(fence: FdbWriteApi[BCF] => CompletableFuture[Boolean]): FdbDatabase[BCF, CFS] = {
     new FdbDatabase[BCF, CFS](materialization, clientOptions, dbContext, fence)
   }
 
@@ -354,10 +354,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .fromUninterruptibleCompletableFuture(
         name,
         dbContext.db.runAsync { tx =>
-          writeFence(tx)
+          val api = new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking)
+
+          writeFence(api)
             .thenCompose(ok => {
               if (ok) {
-                fn(new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking))
+                fn(api)
               }
               else {
                 CompletableFuture.failedFuture[V](ConditionalTransactionFailedException("Write fenced"))
