@@ -356,15 +356,16 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
         dbContext.db.runAsync { tx =>
           val api = new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking)
 
-          writeFence(api)
-            .thenCompose(ok => {
-              if (ok) {
-                fn(api)
-              }
-              else {
-                CompletableFuture.failedFuture[V](ConditionalTransactionFailedException("Write fenced"))
-              }
-            })
+          // Optimistically perform the writes in parallel with fencing
+          val writeFuture: CompletableFuture[V] = fn(api)
+          val fenceFuture: CompletableFuture[Unit] = writeFence(api)
+            .thenCompose { ok =>
+              if (ok) COMPLETED_FUTURE
+              else CompletableFuture.failedFuture[Unit](ConditionalTransactionFailedException("Write fenced"))
+            }
+
+          fenceFuture
+            .thenCombine(writeFuture, (_, ret: V) => ret)
         }
       )
   }

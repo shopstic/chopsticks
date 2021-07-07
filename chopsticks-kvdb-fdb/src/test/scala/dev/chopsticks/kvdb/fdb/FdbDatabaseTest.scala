@@ -23,7 +23,10 @@ object FdbDatabaseTest {
     override val keyspacesWithVersionstampValue = Set.empty
   }
 
-  val managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool with IzLogging, Throwable, TestDatabase.Db] = {
+  val managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool with IzLogging, Throwable, FdbDatabase[
+    TestDatabase.BaseCf,
+    TestDatabase.CfSet
+  ]] = {
     for {
       logger <- IzLogging.zioLogger.toManaged_
       rootDirectoryPath <- ZManaged.succeed(UUID.randomUUID().toString)
@@ -39,7 +42,7 @@ object FdbDatabaseTest {
       _ <- ZManaged.make(ZIO.succeed(database)) { db =>
         ZIO.foreachPar_(dbMaterialization.columnFamilySet.value) { column => db.dropColumnFamily(column).orDie }
       }
-    } yield database
+    } yield database.asInstanceOf[FdbDatabase[TestDatabase.BaseCf, TestDatabase.CfSet]]
   }
 }
 
