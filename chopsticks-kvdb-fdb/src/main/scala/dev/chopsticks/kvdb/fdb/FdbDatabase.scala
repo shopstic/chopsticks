@@ -625,7 +625,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     write(
       "transactionTask",
       api => {
-        api.tx.options().setReadYourWritesDisable()
+//        api.tx.options().setReadYourWritesDisable()
 
         actions.foreach {
           case TransactionPut(columnId, key, value) =>
