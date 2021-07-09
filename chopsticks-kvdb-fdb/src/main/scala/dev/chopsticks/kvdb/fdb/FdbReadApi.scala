@@ -71,7 +71,7 @@ class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]](
   private[chopsticks] def getEitherByColumnId(
     columnId: String,
     constraints: List[KvdbKeyConstraint]
-  ): CompletableFuture[_ <: Either[Array[Byte], KvdbPair]] = {
+  ): CompletableFuture[Either[Array[Byte], KvdbPair]] = {
     if (constraints.isEmpty) {
       CompletableFuture.completedFuture(Left(Array.emptyByteArray))
     }
@@ -95,7 +95,7 @@ class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]](
           val keyFuture = tx.getKey(keySelector)
           val tailConstraints = if (op == Operator.PREFIX) prefixedConstraints else prefixedConstraints.tail
 
-          val ret: CompletableFuture[_ <: Either[Array[Byte], KvdbPair]] = keyFuture.thenCompose { key: Array[Byte] =>
+          val ret: CompletableFuture[Either[Array[Byte], KvdbPair]] = keyFuture.thenCompose { key: Array[Byte] =>
             if (
               key != null && key.length > 0 && KeySerdes.isPrefix(
                 dbContext.columnPrefix(columnId),
@@ -128,7 +128,7 @@ class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]](
   def getEither[Col <: CF](
     column: Col,
     constraints: List[KvdbKeyConstraint]
-  ): CompletableFuture[_ <: Either[Array[Byte], KvdbPair]] = {
+  ): CompletableFuture[Either[Array[Byte], KvdbPair]] = {
     getEitherByColumnId(column.id, constraints)
   }
 

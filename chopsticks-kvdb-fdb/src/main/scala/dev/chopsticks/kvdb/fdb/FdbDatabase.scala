@@ -40,9 +40,9 @@ import java.nio.file.{Files, Paths}
 import java.nio.{ByteBuffer, ByteOrder}
 import java.time.Instant
 import java.util
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
-import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
 import scala.jdk.CollectionConverters._
@@ -54,7 +54,8 @@ object FdbDatabase {
     db: Database,
     prefixMap: Map[BCF[_, _], Array[Byte]],
     withVersionstampKeySet: Set[BCF[_, _]],
-    withVersionstampValueSet: Set[BCF[_, _]]
+    withVersionstampValueSet: Set[BCF[_, _]],
+    uuid: UUID
   ) {
     private val prefixMapById: Map[String, Array[Byte]] = prefixMap.map {
       case (k, v) =>
@@ -286,7 +287,8 @@ object FdbDatabase {
                 db = db,
                 prefixMap = prefixMap,
                 withVersionstampKeySet = materialization.keyspacesWithVersionstampKey.map(_.keyspace),
-                withVersionstampValueSet = materialization.keyspacesWithVersionstampValue.map(_.keyspace)
+                withVersionstampValueSet = materialization.keyspacesWithVersionstampValue.map(_.keyspace),
+                uuid = UUID.randomUUID()
               )
             }
         } { db =>
@@ -311,7 +313,6 @@ object FdbDatabase {
   }
 
   val COMPLETED_FUTURE: CompletableFuture[Unit] = CompletableFuture.completedFuture(())
-  val TRUE_FUTURE: CompletableFuture[Boolean] = CompletableFuture.completedFuture(true)
 }
 
 import dev.chopsticks.kvdb.fdb.FdbDatabase._
@@ -320,18 +321,18 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   val materialization: KvdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
   val dbContext: FdbContext[BCF],
-  writeFence: FdbWriteApi[BCF] => CompletableFuture[Boolean] = (_: FdbWriteApi[BCF]) => FdbDatabase.TRUE_FUTURE
+  ops: FdbOperations[BCF] = new FdbDefaultOperations[BCF]
 )(implicit rt: zio.Runtime[AkkaEnv with MeasuredLogging])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
   override def withOptions(modifier: KvdbClientOptions => KvdbClientOptions): KvdbDatabase[BCF, CFS] = {
     val newOptions = modifier(clientOptions)
-    new FdbDatabase[BCF, CFS](materialization, newOptions, dbContext, writeFence)
+    new FdbDatabase[BCF, CFS](materialization, newOptions, dbContext, ops)
   }
 
-  def withWriteFence(fence: FdbWriteApi[BCF] => CompletableFuture[Boolean]): FdbDatabase[BCF, CFS] = {
-    new FdbDatabase[BCF, CFS](materialization, clientOptions, dbContext, fence)
+  def withOps(modifier: FdbOperations[BCF] => FdbOperations[BCF]): FdbDatabase[BCF, CFS] = {
+    new FdbDatabase[BCF, CFS](materialization, clientOptions, dbContext, modifier(ops))
   }
 
   override def statsTask: Task[Map[(String, Map[String, String]), Double]] = Task {
@@ -344,7 +345,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     TaskUtils
       .fromCancellableCompletableFuture(
         dbContext.db.readAsync { tx =>
-          fn(new FdbReadApi[BCF](tx, dbContext))
+          ops.read[V](new FdbReadApi[BCF](tx, dbContext), fn)
         }
       )
   }
@@ -354,18 +355,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .fromUninterruptibleCompletableFuture(
         name,
         dbContext.db.runAsync { tx =>
-          val api = new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking)
-
-          // Optimistically perform the writes in parallel with fencing
-          val writeFuture: CompletableFuture[V] = fn(api)
-          val fenceFuture: CompletableFuture[Unit] = writeFence(api)
-            .thenCompose { ok =>
-              if (ok) COMPLETED_FUTURE
-              else CompletableFuture.failedFuture[Unit](ConditionalTransactionFailedException("Write fenced"))
-            }
-
-          fenceFuture
-            .thenCombine(writeFuture, (_, ret: V) => ret)
+          ops.write[V](new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking), fn)
         }
       )
   }
@@ -550,68 +540,71 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
         val initialApi = new FdbReadApi[BCF](initialTx, dbContext)
         val closeTx = () => initialTx.close()
 
-        @nowarn("cat=other-match-analysis") // Bug in Scala 2.13.4 that falsely warns that this match is non-exhaustive
-        val future: Future[Source[KvdbBatch, NotUsed]] = initialApi.getEither(column, range.from).thenApply { result =>
-          val fromConstraints = dbContext.prefixKeyConstraints(column, range.from)
-          val toConstraints = dbContext.prefixKeyConstraints(column, range.to)
+        val future: Future[Source[KvdbBatch, NotUsed]] =
+          ops.read(initialApi, _.getEither(column, range.from)).thenApply { result =>
+            val fromConstraints = dbContext.prefixKeyConstraints(column, range.from)
+            val toConstraints = dbContext.prefixKeyConstraints(column, range.to)
 
-          result match {
-            case Right((key, _)) if keySatisfies(key, toConstraints) =>
-              val keyValidator = keySatisfies(_: Array[Byte], toConstraints)
-              val keyTransformer = dbContext.unprefixKey(column, _: Array[Byte])
+            result match {
+              case Right((key, _)) if keySatisfies(key, toConstraints) =>
+                val keyValidator = keySatisfies(_: Array[Byte], toConstraints)
+                val keyTransformer = dbContext.unprefixKey(column, _: Array[Byte])
 
-              val iterate = (firstRun: Boolean, newRange: KvdbKeyRange) => {
-                val fromHead = newRange.from.head
-                val fromOperator = fromHead.operator
-                val fromOperand = fromHead.operand.toByteArray
-                val startKeySelector = fromOperator match {
-                  case Operator.EQUAL => KeySelector.firstGreaterOrEqual(fromOperand)
-                  case _ => initialApi.nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
-                }
-                val toHead = toConstraints.head
-                val endKeySelector = initialApi.toConstraintToKeySelector(
-                  toHead.operator,
-                  toHead.operand.toByteArray,
-                  dbContext.strinc(column)
-                )
-                val tx = if (firstRun) initialTx else dbContext.db.createTransaction()
-                val closeTx = () => tx.close()
-                val iterator = tx.snapshot().getRange(startKeySelector, endKeySelector).iterator()
-                iterator -> closeTx
-              }
-
-              Source
-                .fromGraph(
-                  new FdbIterateSourceStage(
-                    initialRange = KvdbKeyRange(fromConstraints, toConstraints),
-                    iterate = iterate,
-                    keyValidator = keyValidator,
-                    keyTransformer = keyTransformer,
-                    shutdownSignal = dbContext.dbCloseSignal,
-                    maxBatchBytes = clientOptions.batchReadMaxBatchBytes,
-                    disableIsolationGuarantee = clientOptions.disableIsolationGuarantee
+                val iterate = (firstRun: Boolean, newRange: KvdbKeyRange) => {
+                  val fromHead = newRange.from.head
+                  val fromOperator = fromHead.operator
+                  val fromOperand = fromHead.operand.toByteArray
+                  val startKeySelector = fromOperator match {
+                    case Operator.EQUAL => KeySelector.firstGreaterOrEqual(fromOperand)
+                    case _ => initialApi.nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
+                  }
+                  val toHead = toConstraints.head
+                  val endKeySelector = initialApi.toConstraintToKeySelector(
+                    toHead.operator,
+                    toHead.operand.toByteArray,
+                    dbContext.strinc(column)
                   )
-                )
-
-            case Right((k, _)) =>
-              closeTx()
-              val message =
-                s"Starting key: [${ByteArrayUtil.printable(k)}] satisfies fromConstraints ${fromConstraints.show} " +
-                  s"but does not satisfy toConstraint: ${toConstraints.show}"
-              Source.failed(SeekFailure(message))
-
-            case Left(k) =>
-              closeTx()
-              val message = {
-                if (k.nonEmpty) {
-                  s"Starting key: [${ByteArrayUtil.printable(k)}] does not satisfy constraints: ${fromConstraints.show}"
+                  val tx = if (firstRun) initialTx else dbContext.db.createTransaction()
+                  val closeTx = () => tx.close()
+                  val iterator = ops.iterate(
+                    new FdbReadApi[BCF](tx, dbContext),
+                    _.tx.snapshot().getRange(startKeySelector, endKeySelector).iterator()
+                  )
+                  iterator -> closeTx
                 }
-                else s"There's no starting key satisfying constraint: ${fromConstraints.show}"
-              }
 
-              Source.failed(SeekFailure(message))
-          }
-        }.asScala
+                Source
+                  .fromGraph(
+                    new FdbIterateSourceStage(
+                      initialRange = KvdbKeyRange(fromConstraints, toConstraints),
+                      iterate = iterate,
+                      keyValidator = keyValidator,
+                      keyTransformer = keyTransformer,
+                      shutdownSignal = dbContext.dbCloseSignal,
+                      maxBatchBytes = clientOptions.batchReadMaxBatchBytes,
+                      disableIsolationGuarantee = clientOptions.disableIsolationGuarantee
+                    )
+                  )
+
+              case Right((k, _)) =>
+                closeTx()
+                val message =
+                  s"Starting key: [${ByteArrayUtil.printable(k)}] satisfies fromConstraints ${fromConstraints.show} " +
+                    s"but does not satisfy toConstraint: ${toConstraints.show}"
+                Source.failed(SeekFailure(message))
+
+              case Left(k) =>
+                closeTx()
+                val message = {
+                  if (k.nonEmpty) {
+                    s"Starting key: [${ByteArrayUtil.printable(k)}] does not satisfy constraints: ${fromConstraints.show}"
+                  }
+                  else s"There's no starting key satisfying constraint: ${fromConstraints.show}"
+                }
+
+                Source.failed(SeekFailure(message))
+            }
+          }.asScala
 
         future
       }
@@ -725,7 +718,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
               api.toConstraintToKeySelector(toHead.operator, toHead.operand.toByteArray, dbContext.strinc(column))
 
             val closeTx = () => tx.close()
-            val iterator = tx.snapshot().getRange(startKeySelector, endKeySelector).iterator()
+            val iterator = ops.iterate(api, _.tx.snapshot().getRange(startKeySelector, endKeySelector).iterator())
 
             iterator -> closeTx
           }

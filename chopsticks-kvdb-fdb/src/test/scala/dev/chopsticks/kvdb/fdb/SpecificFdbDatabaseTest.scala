@@ -1,12 +1,10 @@
 package dev.chopsticks.kvdb.fdb
 
-import java.util.concurrent.atomic.AtomicLong
 import akka.testkit.ImplicitSender
-import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
-import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
 import dev.chopsticks.fp.AkkaDiApp
+import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
+import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.kvdb.KvdbDatabaseTest
-import dev.chopsticks.kvdb.codec.{KeyConstraints, KeySerdes}
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
@@ -16,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
 import zio.{Promise, ZIO}
 
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicLong
 
 final class SpecificFdbDatabaseTest
     extends AkkaTestKit
@@ -39,24 +37,6 @@ final class SpecificFdbDatabaseTest
   private lazy val runtimeLayer =
     ((IzLoggingRouter.live >>> IzLogging.live(izLoggingConfig)) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live()
   private lazy val withDb = KvdbTestUtils.createTestRunner(FdbDatabaseTest.managedDb, runtimeLayer)(runtime)
-
-  "withWriteFence" should {
-    "fail write" in withDb { db =>
-      db
-        .withWriteFence { api =>
-          implicit val keySerdes: KeySerdes[String] = defaultCf.keySerdes
-          api
-            .get(defaultCf, KeyConstraints.build[String](_.is("aaaa")).constraints)
-            .thenCompose(_ => CompletableFuture.completedFuture(false))
-        }
-        .putTask(defaultCf, "aaaa", "aaaa")
-        .as(false)
-        .catchSome {
-          case _: ConditionalTransactionFailedException => ZIO.succeed(true)
-        }
-        .map(passed => assert(passed))
-    }
-  }
 
   "conditionalTransactionTask" should {
     "fail upon conflict" in withDb { db =>
