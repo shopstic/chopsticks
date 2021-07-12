@@ -5,7 +5,7 @@ import dev.chopsticks.kvdb.ColumnFamily
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbContext
 
 final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
-  tx: Transaction,
+  override val tx: Transaction,
   dbContext: FdbContext[BCF],
   disableWriteConflictChecking: Boolean
 ) extends FdbReadApi[BCF](tx, dbContext) {
