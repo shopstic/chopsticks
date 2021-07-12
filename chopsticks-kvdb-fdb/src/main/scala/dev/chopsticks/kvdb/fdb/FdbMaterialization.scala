@@ -36,6 +36,14 @@ object FdbMaterialization {
   }
 
   object KeyspaceWithVersionstampValue {
+    def literal[BCF[A, B] <: ColumnFamily[A, B], CF[A, B] <: ColumnFamily[A, B], C <: BCF[_, Versionstamp]](
+      ks: CF[_, Versionstamp] with C
+    ): KeyspaceWithVersionstampValue[BCF] = {
+      new KeyspaceWithVersionstampValue[BCF] {
+        val keyspace: BCF[_, _] = ks
+      }
+    }
+
     def apply[BCF[A, B] <: ColumnFamily[A, B], CF[A, B] <: ColumnFamily[A, B], C <: BCF[_, V], V, L <: HList](
       ks: CF[_, V] with C
     )(implicit

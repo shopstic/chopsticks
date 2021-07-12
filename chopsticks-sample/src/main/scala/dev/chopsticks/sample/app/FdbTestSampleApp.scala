@@ -42,17 +42,20 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
 
   object sampleDb extends SampleDb.Materialization {
     implicit val testVersionstampValueSerdes: ValueSerdes[TestValueWithVersionstamp] = ValueSerdes.fromKeySerdes
+    implicit val literalVersionstampValueSerdes: ValueSerdes[Versionstamp] = ValueSerdes.fromKeySerdes
 
     object default extends SampleDb.Default
     object versionstampKeyTest extends SampleDb.VersionstampKeyTest
     object time extends SampleDb.Time
     object versionstampValueTest extends SampleDb.VersionstampValueTest
+    object literalVersionstampValueTest extends SampleDb.LiteralVersionstampValueTest
 
     override val keyspacesWithVersionstampKey = Set(
       KeyspaceWithVersionstampKey(versionstampKeyTest)
     )
     override val keyspacesWithVersionstampValue = Set(
-      KeyspaceWithVersionstampValue(versionstampValueTest)
+      KeyspaceWithVersionstampValue(versionstampValueTest),
+      KeyspaceWithVersionstampValue.literal(literalVersionstampValueTest)
     )
   }
 

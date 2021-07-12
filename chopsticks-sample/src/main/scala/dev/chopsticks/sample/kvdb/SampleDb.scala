@@ -14,6 +14,7 @@ object SampleDb extends KvdbDefinition {
   trait VersionstampKeyTest extends BaseCf[TestKeyWithVersionstamp, String]
   trait Time extends BaseCf[Instant, String]
   trait VersionstampValueTest extends BaseCf[String, TestValueWithVersionstamp]
+  trait LiteralVersionstampValueTest extends BaseCf[String, Versionstamp]
 
   type CfSet = Default with VersionstampKeyTest with Time with VersionstampValueTest
 
