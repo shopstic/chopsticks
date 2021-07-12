@@ -47,6 +47,10 @@ object KeyConstraints {
     toList(builder(seed[K]))
   }
 
+  def is[K: KeySerdes](key: K): List[KvdbKeyConstraint] = {
+    build[K](_.is(key)).constraints
+  }
+
   object Implicits {
     implicit val dbKeyConstraintShow: Show[KvdbKeyConstraint] = Show.show { r =>
       val decodedDisplay = r.operandDisplay
