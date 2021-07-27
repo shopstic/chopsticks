@@ -102,7 +102,10 @@ trait AkkaDiApp[Cfg] {
   lazy val appName: String = KebabCase.fromTokens(PascalCase.toTokens(this.getClass.getSimpleName.replace("$", "")))
 
   def unsafeLoadUntypedConfig: Config = {
-    val config = HoconConfig.unsafeResolveConfig(Some(this.getClass))
+    val config = HoconConfig.unsafeResolveConfig(Some(this.getClass.getPackage.getName.replace(
+      ".",
+      "/"
+    ) + "/" + appName + ".conf"))
 
     if (!config.getBoolean("akka.coordinated-shutdown.run-by-jvm-shutdown-hook")) {
       throw new IllegalArgumentException(

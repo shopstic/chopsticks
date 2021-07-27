@@ -14,7 +14,7 @@ object HoconConfig {
 
   def get: URIO[HoconConfig, Config] = ZIO.access[HoconConfig](_.get.config)
 
-  def unsafeResolveConfig(appClass: Option[Class[_]] = None): Config = {
+  def unsafeResolveConfig(resourceConfigFile: Option[String] = None): Config = {
     if (scala.sys.props.get("config.file").nonEmpty) {
       System.err.println(
         "System property 'config.file' was set, but should no longer be used " +
@@ -30,13 +30,10 @@ object HoconConfig {
         ConfigFactory.empty()
     }
 
-    val appConfig = appClass match {
-      case Some(kclass) =>
-        val appName = KebabCase.fromTokens(PascalCase.toTokens(kclass.getSimpleName.replace("$", "")))
-        val appConfigName = kclass.getPackage.getName.replace(".", "/") + "/" + appName + ".conf"
-
+    val appConfig = resourceConfigFile match {
+      case Some(configFile) =>
         ConfigFactory
-          .parseResources(appConfigName, ConfigParseOptions.defaults().setAllowMissing(false))
+          .parseResources(configFile, ConfigParseOptions.defaults().setAllowMissing(false))
 
       case None =>
         ConfigFactory.empty()
@@ -60,15 +57,20 @@ object HoconConfig {
     combinedResolvedConfig
   }
 
-  def live(appClass: Option[Class[_]] = None): ZLayer[Any, Throwable, HoconConfig] = {
-    Task {
-      unsafeResolveConfig(appClass)
-    }
+  def liveWithResourceConfigFile(resourceConfigFile: Option[String]): ZLayer[Any, Throwable, HoconConfig] = {
+    Task(unsafeResolveConfig(resourceConfigFile))
       .map(cfg =>
         new Service {
           override val config: Config = cfg
         }
       )
       .toLayer
+  }
+
+  def live(appClass: Option[Class[_]] = None): ZLayer[Any, Throwable, HoconConfig] = {
+    liveWithResourceConfigFile(appClass.map { kclass =>
+      val appName = KebabCase.fromTokens(PascalCase.toTokens(kclass.getSimpleName.replace("$", "")))
+      kclass.getPackage.getName.replace(".", "/") + "/" + appName + ".conf"
+    })
   }
 }
