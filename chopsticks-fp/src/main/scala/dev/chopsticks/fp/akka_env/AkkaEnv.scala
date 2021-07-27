@@ -31,7 +31,7 @@ object AkkaEnv extends Serializable {
       // Shutting down of the ActorSystem should be via ZManaged release
       // ZAkkaApp handles shutdown properly, hence we want to disable Akka's own
       // shutdown hook here
-      overridenConfig = ConfigFactory
+      overriddenConfig = ConfigFactory
         .parseString(
           """
           |akka.coordinated-shutdown.run-by-jvm-shutdown-hook = off""".stripMargin
@@ -39,7 +39,7 @@ object AkkaEnv extends Serializable {
         .withFallback(hoconConfig)
       actorSystem <- ZManaged.make {
         Task {
-          val as = ActorSystem(appName, overridenConfig)
+          val as = ActorSystem(appName, overriddenConfig)
           val cs = CoordinatedShutdown(as)
 
           as -> cs
