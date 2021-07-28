@@ -106,10 +106,26 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       }
   }
 
+  @deprecated("batchGetFlow will be removed in future versions, use getFlow or batchedGetFlow instead.", "3.3.0")
   def batchGetFlow[O](
     constraintsMapper: O => ConstraintsBuilder[K],
     useUnboundedCache: Boolean = false
   ): Flow[O, (O, Option[V]), NotUsed] = {
+    getFlow(constraintsMapper, useUnboundedCache)
+  }
+
+  def getFlow[O](
+    constraintsMapper: O => ConstraintsBuilder[K],
+    useUnboundedCache: Boolean = false
+  ): Flow[O, (O, Option[V]), NotUsed] = {
+    batchedGetFlow(constraintsMapper, useUnboundedCache)
+      .mapConcat(identity)
+  }
+
+  def batchedGetFlow[O](
+    constraintsMapper: O => ConstraintsBuilder[K],
+    useUnboundedCache: Boolean = false
+  ): Flow[O, Seq[(O, Option[V])], NotUsed] = {
     val maxBatchSize = options.batchWriteMaxBatchSize
     val groupWithin = options.batchWriteBatchingGroupWithin
 
@@ -200,14 +216,31 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
         }
       }))
       .mapAsync(1)(identity)
-      .mapConcat(identity)
   }
 
+  @deprecated(
+    "batchGetByKeysFlow will be removed in future versions, use getByKeysFlow or batchedGetByKeysFlow instead.",
+    "3.3.0"
+  )
   def batchGetByKeysFlow[In, Out](
     extractor: In => Out,
     useCache: Boolean = false
   )(implicit transformer: KeyTransformer[Out, K]): Flow[In, (In, Option[V]), NotUsed] = {
-    batchGetFlow(
+    getByKeysFlow(extractor, useCache)
+  }
+
+  def getByKeysFlow[In, Out](
+    extractor: In => Out,
+    useCache: Boolean = false
+  )(implicit transformer: KeyTransformer[Out, K]): Flow[In, (In, Option[V]), NotUsed] = {
+    batchedGetByKeysFlow(extractor, useCache).mapConcat(identity)
+  }
+
+  def batchedGetByKeysFlow[In, Out](
+    extractor: In => Out,
+    useCache: Boolean = false
+  )(implicit transformer: KeyTransformer[Out, K]): Flow[In, Seq[(In, Option[V])], NotUsed] = {
+    batchedGetFlow(
       (in: In) =>
         _ => {
           val key = transformer.transform(extractor(in))
