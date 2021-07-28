@@ -8,7 +8,7 @@ object Dependencies {
   val ZIO_VERSION = "1.0.10"
   val IZUMI_VERSION = "1.0.8"
   val REFINED_VERSION = "0.9.27"
-  val CALIBAN_VERSION = "1.0.1"
+  val CALIBAN_VERSION = "1.1.0"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -76,7 +76,6 @@ object Dependencies {
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
     .map(p => "com.github.pureconfig" %% p % "0.16.0")
-    .excludeAkkaActor
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
@@ -88,11 +87,11 @@ object Dependencies {
   val loggingDeps = Seq(
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
     "io.7mind.izumi" %% "logstage-adapter-slf4j" % IZUMI_VERSION,
-    "org.slf4j" % "jul-to-slf4j" % "1.7.31"
+    "org.slf4j" % "jul-to-slf4j" % "1.7.32"
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.1.4"
+    "org.codehaus.janino" % "janino" % "3.1.6"
   )
 
   val scalatestDeps = Seq(
@@ -157,7 +156,7 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "2.6"
+    "com.github.japgolly.microlibs" %% "utils" % "3.0"
   )
 
   val berkeleyDbDeps = Seq(
@@ -173,12 +172,12 @@ object Dependencies {
   )
 
   val distageDeps = Seq(
-    "io.7mind.izumi" %% "distage-core" % IZUMI_VERSION,
-    "io.7mind.izumi" %% "logstage-core" % IZUMI_VERSION,
-    "io.7mind.izumi" %% "logstage-rendering-circe" % IZUMI_VERSION,
-    "io.7mind.izumi" %% "distage-extension-logstage" % IZUMI_VERSION,
-    "io.7mind.izumi" %% "logstage-sink-slf4j" % IZUMI_VERSION
-  )
+    "io.7mind.izumi" %% "distage-core",
+    "io.7mind.izumi" %% "logstage-core",
+    "io.7mind.izumi" %% "logstage-rendering-circe",
+    "io.7mind.izumi" %% "distage-extension-logstage",
+    "io.7mind.izumi" %% "logstage-sink-slf4j"
+  ).map(_ % IZUMI_VERSION)
 
   val calibanDeps =
     Seq(
@@ -187,24 +186,8 @@ object Dependencies {
       "com.github.ghostdogpr" %% "caliban-akka-http"
     )
       .map(_ % CALIBAN_VERSION)
-      .overrideAkkaSerializationJackson
-      .overrideAkkaStreams
 
   val sourcecodeDeps = Seq(
     "com.lihaoyi" %% "sourcecode" % "0.2.7"
   )
-
-  implicit private class ModulesOps(modules: Seq[ModuleID]) {
-    def overrideAkkaSerializationJackson: Seq[ModuleID] =
-      modules.map(_.exclude("com.typesafe.akka", "akka-serialization-jackson_2.13")) ++
-        Seq("com.typesafe.akka" %% "akka-serialization-jackson" % AKKA_VERSION)
-
-    // todo remove this once this issue is resolved https://github.com/akka/akka/issues/30071
-    def overrideAkkaStreams: Seq[ModuleID] =
-      modules.map(_.exclude("com.typesafe.akka", "akka-stream_2.13")) ++ akkaStreamDeps
-
-    // todo remove this once this issue is resolved https://github.com/akka/akka/issues/30071
-    def excludeAkkaActor: Seq[ModuleID] =
-      modules.map(_.exclude("com.typesafe.akka", "akka-actor_2.13"))
-  }
 }
