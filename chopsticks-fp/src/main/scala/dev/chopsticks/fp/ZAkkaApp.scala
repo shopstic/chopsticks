@@ -14,6 +14,8 @@ import scala.util.control.NonFatal
 
 object ZAkkaApp {
   type ZAkkaAppEnv = ZEnv with HoconConfig with AkkaEnv with IzLogging
+  //noinspection TypeAnnotation
+  implicit val tag = zio.Tag[ZAkkaAppEnv]
 }
 
 trait ZAkkaApp {
