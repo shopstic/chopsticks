@@ -68,7 +68,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
           ZLayer.succeed(appConfig),
-          KvdbIoThreadPool.live(keepAliveTimeMs = 5000),
+          KvdbIoThreadPool.live,
           ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
           AppLayer(app)
         )

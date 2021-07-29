@@ -569,7 +569,7 @@ class LeaseSupervisorTest
           ZLayer.succeed(config),
           LeaseAcquirer.live,
           KvdbIoThreadPool.live(keepAliveTimeMs = 5000),
-          KvdbSerdesThreadPool.live(keepAliveTimeMs = 5000),
+          KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(keepAliveTimeMs = 5000),
           liveDb,
           liveApi,
           liveSupervisor(config.leaseSupervisor),

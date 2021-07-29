@@ -24,8 +24,8 @@ object FdbWatchTestNewApp extends ZAkkaApp {
       .injectSome[ZAkkaAppEnv](
         TypedConfig.live[FdbWatchTestAppConfig](),
         dbLayer,
-        KvdbIoThreadPool.live(),
-        KvdbSerdesThreadPool.live()
+        KvdbIoThreadPool.live,
+        KvdbSerdesThreadPool.fromDefaultAkkaDispatcher()
       )
       .as(ExitCode(0))
   }

@@ -61,7 +61,7 @@ object DynamicSubsetKvdbSampleApp extends AkkaDiApp[DynamicSubsetKvdbSampleAppCo
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
           ZLayer.fromManaged(rocksdbManaged),
-          KvdbIoThreadPool.live(),
+          KvdbIoThreadPool.live,
           ZLayer.succeed(appConfig),
           AppLayer(app)
         )

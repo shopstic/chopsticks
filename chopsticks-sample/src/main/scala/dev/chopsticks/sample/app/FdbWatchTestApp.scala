@@ -13,7 +13,7 @@ import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.ValueSerdes
 import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.kvdb.fdb.FdbMaterialization.{KeyspaceWithVersionstampKey, KeyspaceWithVersionstampValue}
-import dev.chopsticks.kvdb.util.KvdbIoThreadPool
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.sample.kvdb.SampleDb.TestValueWithVersionstamp
 import dev.chopsticks.sample.kvdb.{SampleDb, SampleDbEnv}
 import dev.chopsticks.stream.ZAkkaGraph.InterruptibleGraphOps
@@ -92,7 +92,9 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
             }
             .interruptibleRun()
             .unit
-            .onInterrupt(UIO(println("GONNA HANG ON FOR A WHILE")).delay(java.time.Duration.ofSeconds(5)))
+            .onInterrupt(UIO(println("Intentionally hang here for 5 seconds")) *> ZIO.unit.delay(
+              java.time.Duration.ofSeconds(5)
+            ))
         )
         .add(
           "update",
@@ -109,7 +111,7 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
         )
         .add(
           "interruptor",
-          ZIO.unit.delay(5.seconds.asJava)
+          ZIO.unit.delay(1.hour.asJava)
         )
         .run()
     } yield ()
@@ -124,7 +126,8 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
       LiveDiEnv(
         akkaAppDi ++ DiLayers(
           ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
-          KvdbIoThreadPool.live(),
+          KvdbIoThreadPool.live,
+          KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
           ZLayer.succeed(appConfig),
           AppLayer(app)
         )

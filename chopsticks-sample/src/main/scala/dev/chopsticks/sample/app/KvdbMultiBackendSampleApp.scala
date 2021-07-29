@@ -13,7 +13,7 @@ import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbDatabaseConfig
 import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase
 import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.RocksdbDatabaseConfig
-import dev.chopsticks.kvdb.util.KvdbIoThreadPool
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import dev.chopsticks.util.config.PureconfigLoader
@@ -101,7 +101,8 @@ object KvdbMultiBackendSampleApp extends AkkaDiApp[KvdbMultiBackendSampleAppConf
         akkaAppDi ++ DiLayers(
           ZLayer.fromManaged(fdbManaged),
           ZLayer.fromManaged(rocksdbManaged),
-          KvdbIoThreadPool.live(),
+          KvdbIoThreadPool.live,
+          KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
           ZLayer.succeed(appConfig),
           AppLayer(app)
         )
