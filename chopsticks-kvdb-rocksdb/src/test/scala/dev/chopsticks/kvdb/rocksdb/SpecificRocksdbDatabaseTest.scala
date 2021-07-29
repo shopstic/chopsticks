@@ -29,7 +29,7 @@ final class SpecificRocksdbDatabaseTest
     typesafeConfig
   ))
   private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ loggingLayer)
-  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live() ++ loggingLayer
+  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live ++ loggingLayer
   private lazy val withDb = KvdbTestUtils.createTestRunner(RocksdbDatabaseTest.managedDb, runtimeLayer)(runtime)
 
   "conditionalTransactionTask" should {

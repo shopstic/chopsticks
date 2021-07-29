@@ -25,7 +25,7 @@ abstract class KvdbDatabaseApiTest
   ))
   private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ loggingLayer)
   private lazy val runtimeLayer =
-    AkkaDiApp.Env.live >+> (KvdbIoThreadPool.live() ++ KvdbSerdesThreadPool.fromDefaultAkkaDispatcher()) ++ loggingLayer
+    AkkaDiApp.Env.live >+> (KvdbIoThreadPool.live ++ KvdbSerdesThreadPool.fromDefaultAkkaDispatcher()) ++ loggingLayer
   private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
   private lazy val withCf = KvdbTestUtils.createTestRunner(
     managedDb.map(_.columnFamily(dbMat.plain)),

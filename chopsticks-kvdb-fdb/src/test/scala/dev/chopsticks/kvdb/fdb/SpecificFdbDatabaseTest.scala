@@ -39,7 +39,7 @@ final class SpecificFdbDatabaseTest
     typesafeConfig
   )))
   private lazy val runtimeLayer =
-    ((IzLoggingRouter.live >>> IzLogging.live(izLoggingConfig)) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live()
+    ((IzLoggingRouter.live >>> IzLogging.live(izLoggingConfig)) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live
   private lazy val withDb = KvdbTestUtils.createTestRunner(FdbDatabaseTest.managedDb, runtimeLayer)(runtime)
 
   "system metadataVersion key" should {
