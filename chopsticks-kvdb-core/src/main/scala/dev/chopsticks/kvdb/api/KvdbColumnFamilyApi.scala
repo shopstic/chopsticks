@@ -116,15 +116,19 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def getFlow[O](
     constraintsMapper: O => ConstraintsBuilder[K],
-    useUnboundedCache: Boolean = false
+    useUnboundedCache: Boolean = false,
+    unordered: Boolean = false,
+    parallelism: PosInt = 1
   ): Flow[O, (O, Option[V]), NotUsed] = {
-    batchedGetFlow(constraintsMapper, useUnboundedCache)
+    batchedGetFlow(constraintsMapper, useUnboundedCache, unordered, parallelism)
       .mapConcat(identity)
   }
 
   def batchedGetFlow[O](
     constraintsMapper: O => ConstraintsBuilder[K],
-    useUnboundedCache: Boolean = false
+    useUnboundedCache: Boolean = false,
+    unordered: Boolean = false,
+    parallelism: PosInt = 1
   ): Flow[O, Seq[(O, Option[V])], NotUsed] = {
     val maxBatchSize = options.batchWriteMaxBatchSize
     val groupWithin = options.batchWriteBatchingGroupWithin
@@ -156,7 +160,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
           }
       }
 
-    flow
+    val taskFlow = flow
       .via(AkkaStreamUtils.statefulMapOptionFlow(() => {
         val cache = TrieMap.empty[KvdbKeyConstraintList, Option[V]]
 
@@ -215,7 +219,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
             Some(future)
         }
       }))
-      .mapAsync(1)(identity)
+
+    if (unordered) taskFlow.mapAsyncUnordered(parallelism)(identity)
+    else taskFlow.mapAsync(parallelism)(identity)
   }
 
   @deprecated(
@@ -231,14 +237,18 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
 
   def getByKeysFlow[In, Out](
     extractor: In => Out,
-    useCache: Boolean = false
+    useCache: Boolean = false,
+    unordered: Boolean = false,
+    parallelism: PosInt = 1
   )(implicit transformer: KeyTransformer[Out, K]): Flow[In, (In, Option[V]), NotUsed] = {
-    batchedGetByKeysFlow(extractor, useCache).mapConcat(identity)
+    batchedGetByKeysFlow(extractor, useCache, unordered, parallelism).mapConcat(identity)
   }
 
   def batchedGetByKeysFlow[In, Out](
     extractor: In => Out,
-    useCache: Boolean = false
+    useCache: Boolean = false,
+    unordered: Boolean = false,
+    parallelism: PosInt = 1
   )(implicit transformer: KeyTransformer[Out, K]): Flow[In, Seq[(In, Option[V])], NotUsed] = {
     batchedGetFlow(
       (in: In) =>
@@ -246,7 +256,9 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
           val key = transformer.transform(extractor(in))
           KeyConstraints[K](Queue(KvdbKeyConstraint(Operator.EQUAL, ByteString.copyFrom(cf.serializeKey(key)))))
         },
-      useCache
+      useCache,
+      unordered,
+      parallelism
     )
   }
 
