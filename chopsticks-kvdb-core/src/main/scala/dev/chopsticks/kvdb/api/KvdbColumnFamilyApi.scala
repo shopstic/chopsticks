@@ -22,13 +22,12 @@ import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbWriteTransactionBuil
 import dev.chopsticks.stream.AkkaStreamUtils
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
-import zio.{RIO, Task, ZIO}
+import zio.{RIO, Task, UIO, ZIO}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.concurrent.Future
-import scala.concurrent.duration._
 
 final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V] private[kvdb] (
   val db: KvdbDatabase[BCF, _],
@@ -117,111 +116,85 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def getFlow[O](
     constraintsMapper: O => ConstraintsBuilder[K],
     useUnboundedCache: Boolean = false,
-    unordered: Boolean = false,
-    parallelism: PosInt = 1
+    unordered: Boolean = false
   ): Flow[O, (O, Option[V]), NotUsed] = {
-    batchedGetFlow(constraintsMapper, useUnboundedCache, unordered, parallelism)
+    batchedGetFlow(constraintsMapper, useUnboundedCache, unordered)
       .mapConcat(identity)
   }
 
   def batchedGetFlow[O](
     constraintsMapper: O => ConstraintsBuilder[K],
     useUnboundedCache: Boolean = false,
-    unordered: Boolean = false,
-    parallelism: PosInt = 1
+    unordered: Boolean = false
   ): Flow[O, Seq[(O, Option[V])], NotUsed] = {
-    val maxBatchSize = options.batchWriteMaxBatchSize
-    val groupWithin = options.batchWriteBatchingGroupWithin
+    val batchFlow = Flow[O]
+      .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
 
-    val flow =
-      if (groupWithin > Duration.Zero) {
-        Flow[O]
-          .groupedWithin(maxBatchSize, groupWithin)
-          .map { keyBatch =>
-            (keyBatch, keyBatch.map(k => KeyConstraints.toList(constraintsMapper(k)(KeyConstraints.seed[K]))))
-          }
-      }
-      else {
-        Flow[O]
-          .batch(
-            maxBatchSize.toLong,
-            { o: O =>
-              val keyBatch = Vector.newBuilder[O]
-              val valueBatch = Vector.newBuilder[KvdbKeyConstraintList]
-              (keyBatch += o, valueBatch += KeyConstraints.toList(constraintsMapper(o)(KeyConstraints.seed[K])))
-            }
-          ) {
-            case ((keyBatch, valueBatch), o) =>
-              (keyBatch += o, valueBatch += KeyConstraints.toList(constraintsMapper(o)(KeyConstraints.seed[K])))
-          }
-          .map {
-            case (keyBatch, valueBatch) =>
-              (keyBatch.result(), valueBatch.result())
-          }
-      }
-
-    val taskFlow = flow
-      .via(AkkaStreamUtils.statefulMapOptionFlow(() => {
+    val processBatch =
+      if (useUnboundedCache) {
         val cache = TrieMap.empty[KvdbKeyConstraintList, Option[V]]
 
-        {
-          case (keyBatch: Seq[O], requests: Seq[KvdbKeyConstraintList]) =>
-            val future =
-              if (useUnboundedCache) {
-                val maybeValues = new Array[Option[V]](requests.size)
-                val uncachedIndicesBuilder = mutable.ArrayBuilder.make[Int]
-                val uncachedGetsBuilder = mutable.ArrayBuilder.make[KvdbKeyConstraintList]
+        (keyBatch: Vector[O]) => {
+          for {
+            requests <- UIO(keyBatch.map(k => KeyConstraints.toList(constraintsMapper(k)(KeyConstraints.seed[K]))))
+            results <- {
+              val maybeValues = new Array[Option[V]](requests.size)
+              val uncachedIndicesBuilder = mutable.ArrayBuilder.make[Int]
+              val uncachedGetsBuilder = mutable.ArrayBuilder.make[KvdbKeyConstraintList]
 
-                for ((request, index) <- requests.zipWithIndex) {
-                  cache.get(request) match {
-                    case Some(v) => maybeValues(index) = v
-                    case None =>
-                      //
-                      {
-                        val _ = uncachedIndicesBuilder += index
-                      }
-                      val _ = uncachedGetsBuilder += request
-                  }
-                }
-
-                val uncachedRequests = uncachedGetsBuilder.result()
-
-                if (uncachedRequests.isEmpty) {
-                  Future.successful(keyBatch.zip(maybeValues))
-                }
-                else {
-                  val uncachedIndices = uncachedIndicesBuilder.result()
-
-                  db.batchGetTask(cf, uncachedRequests.toList)
-                    .flatMap { pairs =>
-                      Task {
-                        for ((maybePair, index) <- pairs.zipWithIndex) {
-                          val maybeValue = maybePair.map(p => cf.unsafeDeserializeValue(p._2))
-                          maybeValues(uncachedIndices(index)) = maybeValue
-                          cache.update(uncachedRequests(index), maybeValue)
-                        }
-                        keyBatch.zip(maybeValues)
-                      }.lock(serdesThreadPool.executor)
+              for ((request, index) <- requests.zipWithIndex) {
+                cache.get(request) match {
+                  case Some(v) => maybeValues(index) = v
+                  case None =>
+                    //
+                    {
+                      val _ = uncachedIndicesBuilder += index
                     }
-                    .unsafeRunToFuture
+                    val _ = uncachedGetsBuilder += request
                 }
+              }
+
+              val uncachedRequests = uncachedGetsBuilder.result()
+
+              if (uncachedRequests.isEmpty) {
+                ZIO.succeed(keyBatch.zip(maybeValues))
               }
               else {
-                db.batchGetTask(cf, requests)
-                  .flatMap { maybePairs =>
+                val uncachedIndices = uncachedIndicesBuilder.result()
+
+                db.batchGetTask(cf, uncachedRequests.toList)
+                  .flatMap { pairs =>
                     Task {
-                      keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2))))
+                      for ((maybePair, index) <- pairs.zipWithIndex) {
+                        val maybeValue = maybePair.map(p => cf.unsafeDeserializeValue(p._2))
+                        maybeValues(uncachedIndices(index)) = maybeValue
+                        cache.update(uncachedRequests(index), maybeValue)
+                      }
+                      keyBatch.zip(maybeValues)
                     }.lock(serdesThreadPool.executor)
                   }
-                  .unsafeRunToFuture
               }
-
-            Some(future)
+            }
+          } yield results
         }
-      }))
+      }
+      else {
+        (keyBatch: Vector[O]) =>
+          {
+            for {
+              requests <- UIO(keyBatch.map(k => KeyConstraints.toList(constraintsMapper(k)(KeyConstraints.seed[K]))))
+              results <- db.batchGetTask(cf, requests)
+                .flatMap { maybePairs =>
+                  Task {
+                    keyBatch.zip(maybePairs.map(_.map(p => cf.unsafeDeserializeValue(p._2))))
+                  }.lock(serdesThreadPool.executor)
+                }
+            } yield results
+          }
+      }
 
-    if (unordered) taskFlow.mapAsyncUnordered(parallelism)(identity)
-    else taskFlow.mapAsync(parallelism)(identity)
+    if (unordered) batchFlow.mapAsyncUnordered(options.batchWriteParallelism.value)(processBatch(_).unsafeRunToFuture)
+    else batchFlow.mapAsync(options.batchWriteParallelism.value)(processBatch(_).unsafeRunToFuture)
   }
 
   @deprecated(
@@ -238,17 +211,15 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   def getByKeysFlow[In, Out](
     extractor: In => Out,
     useCache: Boolean = false,
-    unordered: Boolean = false,
-    parallelism: PosInt = 1
+    unordered: Boolean = false
   )(implicit transformer: KeyTransformer[Out, K]): Flow[In, (In, Option[V]), NotUsed] = {
-    batchedGetByKeysFlow(extractor, useCache, unordered, parallelism).mapConcat(identity)
+    batchedGetByKeysFlow(extractor, useCache, unordered).mapConcat(identity)
   }
 
   def batchedGetByKeysFlow[In, Out](
     extractor: In => Out,
     useCache: Boolean = false,
-    unordered: Boolean = false,
-    parallelism: PosInt = 1
+    unordered: Boolean = false
   )(implicit transformer: KeyTransformer[Out, K]): Flow[In, Seq[(In, Option[V])], NotUsed] = {
     batchedGetFlow(
       (in: In) =>
@@ -257,8 +228,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
           KeyConstraints[K](Queue(KvdbKeyConstraint(Operator.EQUAL, ByteString.copyFrom(cf.serializeKey(key)))))
         },
       useCache,
-      unordered,
-      parallelism
+      unordered
     )
   }
 
