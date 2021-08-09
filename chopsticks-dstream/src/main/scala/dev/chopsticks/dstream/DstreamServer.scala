@@ -16,7 +16,8 @@ object DstreamServer {
   final case class DstreamServerConfig(
     port: PortNumber,
     interface: NonEmptyString = "0.0.0.0",
-    shutdownTimeout: Timeout = 10.seconds
+    shutdownTimeout: Timeout = 10.seconds,
+    idleTimeout: Option[Timeout] = None
   )
 
   trait Service[Assignment, Result] {
@@ -43,7 +44,14 @@ object DstreamServer {
                   .newServerAt(interface = config.interface, port = config.port)
                   .withSettings(
                     settings
-                      .withPreviewServerSettings(settings.previewServerSettings.withEnableHttp2(true))
+                      .withPreviewServerSettings(
+                        settings
+                          .withTimeouts(settings.timeouts.withIdleTimeout(
+                            config.idleTimeout.map(_.duration).getOrElse(Duration.Inf)
+                          ))
+                          .previewServerSettings
+                          .withEnableHttp2(true)
+                      )
                   )
                   .bind(fn)
               }
