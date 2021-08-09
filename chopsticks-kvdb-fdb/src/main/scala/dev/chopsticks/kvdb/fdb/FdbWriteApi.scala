@@ -7,8 +7,9 @@ import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbContext
 final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
   override val tx: Transaction,
   dbContext: FdbContext[BCF],
-  disableWriteConflictChecking: Boolean
-) extends FdbReadApi[BCF](tx, dbContext) {
+  disableWriteConflictChecking: Boolean,
+  useSnapshotReads: Boolean
+) extends FdbReadApi[BCF](if (useSnapshotReads) tx.snapshot() else tx, dbContext) {
   private[chopsticks] def putByColumnId(columnId: String, key: Array[Byte], value: Array[Byte]): Unit = {
     val prefixedKey = dbContext.prefixKey(columnId, key)
 

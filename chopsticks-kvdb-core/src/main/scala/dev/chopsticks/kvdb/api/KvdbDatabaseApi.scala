@@ -39,6 +39,7 @@ object KvdbDatabaseApi {
     tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d,
     disableIsolationGuarantee: Boolean = false,
     disableWriteConflictChecking: Boolean = false,
+    useSnapshotReads: Boolean = false,
     serdesParallelism: PosInt = 2,
     watchTimeout: Duration = Duration.Inf,
     watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS)
@@ -51,6 +52,7 @@ object KvdbDatabaseApi {
         tailPollingBackoffFactor = tailPollingBackoffFactor,
         disableIsolationGuarantee = disableIsolationGuarantee,
         disableWriteConflictChecking = disableWriteConflictChecking,
+        useSnapshotReads = useSnapshotReads,
         watchTimeout = watchTimeout,
         watchMinLatency = watchMinLatency
       )
@@ -59,6 +61,8 @@ object KvdbDatabaseApi {
     def withDisabledIsolationGuarantee: KvdbApiClientOptions = copy(disableIsolationGuarantee = true)
 
     def withDisabledWriteConflictChecking: KvdbApiClientOptions = copy(disableWriteConflictChecking = true)
+
+    def withSnapshotReads: KvdbApiClientOptions = copy(useSnapshotReads = true)
   }
 
   //noinspection TypeAnnotation

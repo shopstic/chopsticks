@@ -345,7 +345,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     TaskUtils
       .fromCancellableCompletableFuture(
         dbContext.db.readAsync { tx =>
-          ops.read[V](new FdbReadApi[BCF](tx, dbContext), fn)
+          ops.read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
         }
       )
   }
@@ -355,7 +355,15 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .fromUninterruptibleCompletableFuture(
         name,
         dbContext.db.runAsync { tx =>
-          ops.write[V](new FdbWriteApi[BCF](tx, dbContext, clientOptions.disableWriteConflictChecking), fn)
+          ops.write[V](
+            new FdbWriteApi[BCF](
+              tx,
+              dbContext,
+              clientOptions.disableWriteConflictChecking,
+              clientOptions.useSnapshotReads
+            ),
+            fn
+          )
         }
       )
   }

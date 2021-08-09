@@ -60,6 +60,7 @@ object KvdbDatabase {
     tailPollingBackoffFactor: Double Refined Greater[W.`1.0d`.T] = 1.15d,
     disableIsolationGuarantee: Boolean = false,
     disableWriteConflictChecking: Boolean = false,
+    useSnapshotReads: Boolean = false,
     watchTimeout: Duration = Duration.Inf,
     watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS)
   )
