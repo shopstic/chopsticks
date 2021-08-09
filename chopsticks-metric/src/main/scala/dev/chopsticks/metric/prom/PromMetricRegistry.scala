@@ -55,30 +55,13 @@ final class PromMetricRegistry[C <: MetricGroup](
     cleanUpQueue.iterator().asScala.foreach(_())
   }
 
-  override def counter(config: CounterConfig[NoLabel] with C): MetricCounter = {
-    val prefixedName = prefixMetric(config, prefix)
-
-    val promCounter = counters.synchronized {
-      counters.getOrElseUpdate(
-        prefixedName, {
-          val metric = Counter.build(prefixedName, prefixedName).create()
-          registry.register(metric)
-          metric
-        }
-      )
-    }
-
-    val _ = cleanUpQueue.add(() => removeMetric(counters, prefixedName))
-    new PromCounter(promCounter)
-  }
-
   private def removeMetric[SC <: SimpleCollector[_]](
     map: mutable.Map[String, SC],
     prefixedName: String
   ): Unit = {
     map.synchronized {
       map.get(prefixedName).foreach { metric =>
-        val _ = counters.remove(prefixedName)
+        val _ = map.remove(prefixedName)
         registry.unregister(metric)
       }
     }
@@ -94,6 +77,23 @@ final class PromMetricRegistry[C <: MetricGroup](
         metric.remove(values: _*)
       }
     }
+  }
+
+  override def counter(config: CounterConfig[NoLabel] with C): MetricCounter = {
+    val prefixedName = prefixMetric(config, prefix)
+
+    val promCounter = counters.synchronized {
+      counters.getOrElseUpdate(
+        prefixedName, {
+          val metric = Counter.build(prefixedName, prefixedName).create()
+          registry.register(metric)
+          metric
+        }
+      )
+    }
+
+    val _ = cleanUpQueue.add(() => removeMetric(counters, prefixedName))
+    new PromCounter(promCounter)
   }
 
   override def counterWithLabels[L <: MetricLabel](
@@ -126,9 +126,11 @@ final class PromMetricRegistry[C <: MetricGroup](
     val promGauge = gauges.synchronized {
       gauges.getOrElseUpdate(
         prefixedName, {
-          Gauge
+          val metric = Gauge
             .build(prefixedName, prefixedName)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
@@ -148,10 +150,12 @@ final class PromMetricRegistry[C <: MetricGroup](
     val promGauge = gauges.synchronized {
       gauges.getOrElseUpdate(
         prefixedName, {
-          Gauge
+          val metric = Gauge
             .build(prefixedName, prefixedName)
             .labelNames(names: _*)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
@@ -166,9 +170,11 @@ final class PromMetricRegistry[C <: MetricGroup](
     val promGauge = gauges.synchronized {
       gauges.getOrElseUpdate(
         prefixedName, {
-          Gauge
+          val metric = Gauge
             .build(prefixedName, prefixedName)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
@@ -188,10 +194,12 @@ final class PromMetricRegistry[C <: MetricGroup](
     val promGauge = gauges.synchronized {
       gauges.getOrElseUpdate(
         prefixedName, {
-          Gauge
+          val metric = Gauge
             .build(prefixedName, prefixedName)
             .labelNames(names: _*)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
@@ -206,10 +214,12 @@ final class PromMetricRegistry[C <: MetricGroup](
     val promHistogram = histograms.synchronized {
       histograms.getOrElseUpdate(
         prefixedName, {
-          Histogram
+          val metric = Histogram
             .build(prefixedName, prefixedName)
             .buckets(config.buckets: _*)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
@@ -229,11 +239,13 @@ final class PromMetricRegistry[C <: MetricGroup](
     val promHistogram = histograms.synchronized {
       histograms.getOrElseUpdate(
         prefixedName, {
-          Histogram
+          val metric = Histogram
             .build(prefixedName, prefixedName)
             .buckets(config.buckets: _*)
             .labelNames(names: _*)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
@@ -248,14 +260,16 @@ final class PromMetricRegistry[C <: MetricGroup](
     val promSummary = summaries.synchronized {
       summaries.getOrElseUpdate(
         prefixedName, {
-          config.quantiles
+          val metric = config.quantiles
             .foldLeft(Summary.build(prefixedName, prefixedName)) {
               case (s, (quantile, error)) =>
                 s.quantile(quantile, error)
             }
             .maxAgeSeconds(config.maxAge.toSeconds)
             .ageBuckets(config.ageBuckets)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
@@ -275,7 +289,7 @@ final class PromMetricRegistry[C <: MetricGroup](
     val promSummary = summaries.synchronized {
       summaries.getOrElseUpdate(
         prefixedName, {
-          config.quantiles
+          val metric = config.quantiles
             .foldLeft(Summary.build(prefixedName, prefixedName)) {
               case (s, (quantile, error)) =>
                 s.quantile(quantile, error)
@@ -283,7 +297,9 @@ final class PromMetricRegistry[C <: MetricGroup](
             .maxAgeSeconds(config.maxAge.toSeconds)
             .ageBuckets(config.ageBuckets)
             .labelNames(names: _*)
-            .register()
+            .create()
+          registry.register(metric)
+          metric
         }
       )
     }
