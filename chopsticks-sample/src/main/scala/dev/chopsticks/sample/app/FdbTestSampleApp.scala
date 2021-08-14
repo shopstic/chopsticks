@@ -113,7 +113,8 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       .log("Drop test")
 
     _ <- Source(1 to 100)
-      .via(dbApi.batchTransact(batch => {
+      .toZAkkaSource
+      .viaZAkkaFlow(dbApi.batchTransact(batch => {
         val pairs = batch.zipWithIndex.map {
           case (i, index) =>
             TestKeyWithVersionstamp("foo", i, Versionstamp.incomplete(index)) -> s"foo$i"
@@ -121,12 +122,12 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
 
         testKeyspace.batchPut(pairs).result -> pairs
       }))
-      .toZAkkaSource
       .interruptibleRunIgnore()
       .log("Range populate foo")
 
     _ <- Source(1 to 100000)
-      .via(dbApi.batchTransact(batch => {
+      .toZAkkaSource
+      .viaZAkkaFlow(dbApi.batchTransact(batch => {
         val pairs = batch.zipWithIndex.map {
           case (i, index) =>
             TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
@@ -134,7 +135,6 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
 
         testKeyspace.batchPut(pairs).result -> pairs
       }))
-      .toZAkkaSource
       .interruptibleRunIgnore()
       .log("Range populate bar")
 
@@ -153,7 +153,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       .throttle(1, 1.second)
       .toZAkkaSource
       .interruptible
-      .via(
+      .viaZAkkaFlow(
         dbApi.batchTransact(batch => {
           val pairs = batch.zipWithIndex.map {
             case (i, index) =>

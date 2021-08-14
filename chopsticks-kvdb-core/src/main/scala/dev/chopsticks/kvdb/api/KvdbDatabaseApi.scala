@@ -10,7 +10,7 @@ import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
 import dev.chopsticks.kvdb.util.KvdbAliases.KvdbPair
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbReadTransactionBuilder, KvdbWriteTransactionBuilder}
-import dev.chopsticks.stream.AkkaStreamUtils
+import dev.chopsticks.stream.{AkkaStreamUtils, ZAkkaFlow}
 import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
@@ -25,6 +25,7 @@ import scala.concurrent.duration._
 import io.scalaland.chimney.dsl._
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.util.KvdbSerdesThreadPool
+import dev.chopsticks.stream.ZAkkaFlow.FlowToZAkkaFlow
 
 import scala.concurrent.Future
 
@@ -110,7 +111,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
 
   def batchTransact[A, P](
     buildTransaction: Vector[A] => (List[TransactionWrite], P)
-  ): Flow[A, P, NotUsed] = {
+  ): ZAkkaFlow[MeasuredLogging with AkkaEnv, Nothing, A, P, NotUsed] = {
     Flow[A]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
       .mapAsync(options.serdesParallelism) { batch =>
@@ -118,17 +119,17 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
           buildTransaction(batch)
         }(serdesThreadPool.executionContext)
       }
+      .toZAkkaFlow
       .mapAsync(options.batchWriteParallelism) {
         case (writes, passthrough) =>
           db.transactionTask(writes)
             .as(passthrough)
-            .unsafeRunToFuture
       }
   }
 
   def batchTransactUnordered[A, P](
     buildTransaction: Vector[A] => (List[TransactionWrite], P)
-  ): Flow[A, P, NotUsed] = {
+  ): ZAkkaFlow[MeasuredLogging with AkkaEnv, Nothing, A, P, NotUsed] = {
     Flow[A]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
       .mapAsyncUnordered(options.serdesParallelism) { batch =>
@@ -136,11 +137,11 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
           buildTransaction(batch)
         }(serdesThreadPool.executionContext)
       }
+      .toZAkkaFlow
       .mapAsyncUnordered(options.batchWriteParallelism) {
         case (writes, passthrough) =>
           db.transactionTask(writes)
             .as(passthrough)
-            .unsafeRunToFuture
       }
   }
 
