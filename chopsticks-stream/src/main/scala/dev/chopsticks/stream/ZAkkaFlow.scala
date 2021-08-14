@@ -1,159 +1,147 @@
 package dev.chopsticks.stream
 
 import akka.NotUsed
-import akka.stream.{Attributes, FlowShape, Graph, KillSwitch, KillSwitches, SourceShape, UniqueKillSwitch}
+import akka.stream._
 import akka.stream.scaladsl.{Flow, Keep, Source}
+import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext.TaskExtensions
-import zio.{RIO, ZIO}
+import zio.{Exit, RIO, ZIO, ZScope}
 
 import scala.annotation.unchecked.uncheckedVariance
-import scala.concurrent.Future
+import scala.concurrent.ExecutionContextExecutor
 
 object ZAkkaFlow {
   implicit final class FlowToZAkkaFlow[-In, +Out, +Mat](flow: => Flow[In, Out, Mat]) {
-    def toZAkkaFlow: ZAkkaFlow[Any, Nothing, In, Out, Mat] = ZAkkaFlow(flow)
+    def toZAkkaFlow: ZAkkaFlow[Any, Nothing, In, Out, Mat] = {
+      new ZAkkaFlow(_ => ZIO.succeed(flow))
+    }
   }
 
-  def apply[In]: ZAkkaFlow[Any, Nothing, In, In, NotUsed] = {
-    new ZAkkaFlow(ZIO.succeed(Flow[In]))
-  }
-
-  def apply[R, E, In, Out, Mat](make: ZIO[R, E, Flow[In, Out, Mat]]): ZAkkaFlow[R, E, In, Out, Mat] =
-    new ZAkkaFlow(make)
-
-  def apply[In, Out, Mat](flow: => Flow[In, Out, Mat]): ZAkkaFlow[Any, Nothing, In, Out, Mat] =
-    new ZAkkaFlow(ZIO.succeed(flow))
+  def apply[In]: ZAkkaFlow[Any, Nothing, In, In, NotUsed] = new ZAkkaFlow(_ => ZIO.succeed(Flow[In]))
 }
 
-final class ZAkkaFlow[-R, +E, -In, +Out, +Mat] private (val make: ZIO[R, E, Flow[In, Out, Mat]]) {
-  def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next]): ZAkkaFlow[R1, E, In, Next, Mat] = {
-    new ZAkkaFlow(
-      make
-        .flatMap { flow =>
-          ZIO.runtime[R1].map { implicit rt =>
-            flow
-              .mapAsync(parallelism) { a =>
-                runTask(a).fold(Future.failed, Future.successful).unsafeRunToFuture.flatten
-              }
+final class ZAkkaFlow[-R, +E, -In, +Out, +Mat] private (val make: ZScope[Exit[Any, Any]] => ZIO[
+  R,
+  E,
+  Flow[In, Out, Mat]
+]) {
+  def requireEnv: ZIO[R, E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
+    ZRunnable(make).toZIO.map(new ZAkkaFlow(_))
+  }
+
+  def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
+    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    new ZAkkaFlow(scope => {
+      for {
+        flow <- make(scope)
+        runtime <- ZIO.runtime[R1 with AkkaEnv]
+        promise <- zio.Promise.make[Nothing, Unit]
+      } yield {
+        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+
+        flow
+          .mapAsync(parallelism) { a =>
+            val task = for {
+              fib <- runTask(a).forkIn(scope)
+              interruptFib <- (promise.await *> fib.interrupt).forkIn(scope)
+              ret <- fib.join
+              _ <- interruptFib.interrupt
+            } yield ret
+
+            task.unsafeRunToFuture
           }
-        }
-    )
+          .watchTermination() { (mat, f) =>
+            f.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            mat
+          }
+      }
+    })
   }
 
   def mapAsyncUnordered[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
-    : ZAkkaFlow[R1, E, In, Next, Mat] = {
-    new ZAkkaFlow(
-      make
-        .flatMap { flow =>
-          ZIO.runtime[R1].map { implicit rt =>
-            flow
-              .mapAsync(parallelism) { a =>
-                runTask(a).fold(Future.failed, Future.successful).unsafeRunToFuture.flatten
-              }
+    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    new ZAkkaFlow(scope => {
+      for {
+        flow <- make(scope)
+        runtime <- ZIO.runtime[R1 with AkkaEnv]
+        promise <- zio.Promise.make[Nothing, Unit]
+      } yield {
+        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+
+        flow
+          .mapAsyncUnordered(parallelism) { a =>
+            val task = for {
+              fib <- runTask(a).forkIn(scope)
+              interruptFib <- (promise.await *> fib.interrupt).forkIn(scope)
+              ret <- fib.join
+              _ <- interruptFib.interrupt
+            } yield ret
+
+            task.unsafeRunToFuture
           }
-        }
-    )
-  }
-
-  private def interruptibleMapAsync_[R1 <: R, Next](
-    runTask: Out => RIO[R1, Next],
-    attributes: Option[Attributes]
-  )(
-    createFlow: (Out @uncheckedVariance => Future[Next]) => Flow[Out, Next, NotUsed]
-  ): ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
-    new ZAkkaFlow(
-      make
-        .flatMap { flow =>
-          ZIO.runtime[R1 with AkkaEnv].map { implicit rt =>
-            val env = rt.environment
-            val akkaService = env.get[AkkaEnv.Service]
-            import akkaService._
-
-            val nextFlow = Flow
-              .lazyFutureFlow(() => {
-                val completionPromise = rt.unsafeRun(zio.Promise.make[Nothing, Unit])
-                val underlyingFlow = createFlow { a: Out =>
-                  val interruptibleTask = for {
-                    fib <- runTask(a).fork
-                    c <- (completionPromise.await *> fib.interrupt).fork
-                    ret <- fib.join
-                    _ <- c.interrupt
-                  } yield ret
-
-                  interruptibleTask.unsafeRunToFuture
-                }
-
-                val underlyingFlowWithAttrs =
-                  attributes.fold(underlyingFlow)(attrs => underlyingFlow.withAttributes(attrs))
-
-                Future
-                  .successful(
-                    underlyingFlowWithAttrs
-                      .watchTermination() { (_, f) =>
-                        f.onComplete { _ =>
-                          val _ = rt.unsafeRun(completionPromise.succeed(()))
-                        }
-                        NotUsed
-                      }
-                  )
-              })
-
-            flow.via(nextFlow)
+          .watchTermination() { (mat, f) =>
+            f.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            mat
           }
-        }
-    )
-  }
-
-  def interruptibleMapAsync[R1 <: R, Next](
-    parallelism: Int,
-    attributes: Option[Attributes] = None
-  )(runTask: Out => RIO[R1, Next]): ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
-    interruptibleMapAsync_(runTask, attributes) { runFuture =>
-      Flow[Out].mapAsync(parallelism)(runFuture)
-    }
-  }
-
-  def interruptibleMapAsyncUnordered[R1 <: R, Next](
-    parallelism: Int,
-    attributes: Option[Attributes] = None
-  )(runTask: Out => RIO[R1, Next]): ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
-    interruptibleMapAsync_(runTask, attributes) { runFuture =>
-      Flow[Out].mapAsyncUnordered(parallelism)(runFuture)
-    }
+      }
+    })
   }
 
   def switchFlatMapConcat[R1 <: R, Next](f: Out => RIO[R1, Graph[SourceShape[Next], Any]])
     : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
-    new ZAkkaFlow(
-      make
-        .flatMap { flow =>
-          ZIO.runtime[R1 with AkkaEnv].map { implicit rt =>
-            val env = rt.environment
-            val akkaService = env.get[AkkaEnv.Service]
-            import akkaService.actorSystem
+    new ZAkkaFlow(scope => {
+      for {
+        flow <- make(scope)
+        runtime <- ZIO.runtime[R1 with AkkaEnv]
+      } yield {
+        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
 
-            flow
-              .statefulMapConcat(() => {
-                var currentKillSwitch = Option.empty[KillSwitch]
+        val env = rt.environment
+        val akkaService = env.get[AkkaEnv.Service]
+        import akkaService.actorSystem
 
-                in => {
-                  currentKillSwitch.foreach(_.shutdown())
+        flow
+          .statefulMapConcat(() => {
+            var currentKillSwitch = Option.empty[KillSwitch]
 
-                  val (ks, s) = Source
-                    .fromGraph(rt.unsafeRun(f(in)))
-                    .viaMat(KillSwitches.single)(Keep.right)
-                    .preMaterialize()
+            in => {
+              currentKillSwitch.foreach(_.shutdown())
 
-                  currentKillSwitch = Some(ks)
-                  List(s)
-                }
-              })
-              .async
-              .flatMapConcat(identity)
-          }
-        }
-    )
+              val (ks, s) = Source
+                .fromGraph(rt.unsafeRun(f(in)))
+                .viaMat(KillSwitches.single)(Keep.right)
+                .preMaterialize()
+
+              currentKillSwitch = Some(ks)
+              List(s)
+            }
+          })
+          .async
+          .flatMapConcat(identity)
+      }
+    })
+  }
+
+  def viaZAkkaFlow[R1 <: R, E1 >: E, Next, Mat2, Mat3](next: ZAkkaFlow[R1, E1, Out @uncheckedVariance, Next, Mat2])
+    : ZAkkaFlow[R1, E1, In, Next, Mat] = {
+    viaZAkkaFlowMat(next)(Keep.left)
+  }
+
+  def viaZAkkaFlowMat[R1 <: R, E1 >: E, Next, Mat2, Mat3](next: ZAkkaFlow[R1, E1, Out @uncheckedVariance, Next, Mat2])(
+    combine: (Mat, Mat2) => Mat3
+  ): ZAkkaFlow[R1, E1, In, Next, Mat3] = {
+    new ZAkkaFlow(scope => {
+      for {
+        flow <- make(scope)
+        nextFlow <- next.make(scope)
+      } yield {
+        flow
+          .viaMat(nextFlow)(combine)
+      }
+    })
   }
 
   def via[Next](flow: => Graph[FlowShape[Out, Next], Any]): ZAkkaFlow[R, E, In, Next, Mat] = {
@@ -171,18 +159,20 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat] private (val make: ZIO[R, E, Flow
     viaBuilderMat(_ => flow)(combine)
   }
 
-  def viaBuilderMat[Next, Mat2, Mat3](makeFlow: Flow[Out @uncheckedVariance, Out, NotUsed] => Graph[
+  def viaBuilderMat[Next, Mat2, Mat3](makeNext: Flow[Out @uncheckedVariance, Out, NotUsed] => Graph[
     FlowShape[Out, Next],
     Mat2
   ])(
     combine: (Mat, Mat2) => Mat3
   ): ZAkkaFlow[R, E, In, Next, Mat3] = {
-    new ZAkkaFlow(
-      make
-        .map { source =>
-          source.viaMat(makeFlow(Flow[Out]))(combine)
-        }
-    )
+    new ZAkkaFlow(scope => {
+      for {
+        flow <- make(scope)
+      } yield {
+        flow
+          .viaMat(makeNext(Flow[Out]))(combine)
+      }
+    })
   }
 
   def viaM[R1 <: R, E1 >: E, Next](makeFlow: ZIO[R1, E1, Graph[FlowShape[Out, Next], Any]])
@@ -198,17 +188,18 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat] private (val make: ZIO[R, E, Flow
     viaMatM(makeFlow(Flow[Out]))(Keep.left)
   }
 
-  def viaMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeFlow: ZIO[R1, E1, Graph[FlowShape[Out, Next], Mat2]])(
+  def viaMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeNext: ZIO[R1, E1, Graph[FlowShape[Out, Next], Mat2]])(
     combine: (Mat, Mat2) => Mat3
   ): ZAkkaFlow[R1, E1, In, Next, Mat3] = {
-    new ZAkkaFlow(
+    new ZAkkaFlow(scope => {
       for {
-        source <- make
-        flow <- makeFlow
+        flow <- make(scope)
+        nextFlow <- makeNext
       } yield {
-        source.viaMat(flow)(combine)
+        flow
+          .viaMat(nextFlow)(combine)
       }
-    )
+    })
   }
 
   def viaBuilderMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeFlow: Flow[Out @uncheckedVariance, Out, NotUsed] => ZIO[
@@ -222,8 +213,13 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat] private (val make: ZIO[R, E, Flow
   }
 
   def interruptible: ZAkkaFlow[R, E, In, Out, UniqueKillSwitch] = {
-    new ZAkkaFlow(
-      make.map(_.viaMat(KillSwitches.single)(Keep.right))
-    )
+    new ZAkkaFlow(scope => {
+      for {
+        flow <- make(scope)
+      } yield {
+        flow
+          .viaMat(KillSwitches.single)(Keep.right)
+      }
+    })
   }
 }

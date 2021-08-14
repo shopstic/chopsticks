@@ -145,8 +145,8 @@ object DstreamStateTestApp extends ZAkkaApp {
       Source(1 to Int.MaxValue)
         .initialDelay(1.minute)
         .map(Assignment(_))
-        .via(distributionFlow)
         .toZAkkaSource
+        .viaZAkkaFlow(distributionFlow)
         .interruptibleRunIgnore()
     }
   }

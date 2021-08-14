@@ -68,7 +68,7 @@ object KvdbDatabaseTest extends Matchers with Inside {
   ): RIO[AkkaEnv with IzLogging, immutable.Seq[(Array[Byte], Array[Byte])]] = {
     source
       .toMat(collectSink)(Keep.right)
-      .runToIO
+      .uninterruptibleRun
   }
 
   private def collectValues(
@@ -76,7 +76,7 @@ object KvdbDatabaseTest extends Matchers with Inside {
   ): RIO[AkkaEnv with IzLogging, immutable.Seq[Array[Byte]]] = {
     source
       .toMat(collectValuesSink)(Keep.right)
-      .runToIO
+      .uninterruptibleRun
   }
 
   private[kvdb] val $ : (KeyConstraints[String] => KeyConstraints[String]) => KvdbKeyConstraintList =
@@ -863,7 +863,7 @@ abstract private[kvdb] class KvdbDatabaseTest
         batches <- db.withOptions(_.copy(batchReadMaxBatchBytes = maxBatchBytes))
           .iterateSource(defaultCf, $$(_.first, _.last))
           .toMat(Sink.seq)(Keep.right)
-          .runToIO
+          .uninterruptibleRun
       } yield {
         batches.size should be < count
       }
@@ -1026,7 +1026,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     "complete with UnsupportedKvdbOperationException if constraint list is empty" in withDb { db =>
       db.tailSource(defaultCf, $$(identity, identity))
         .toMat(Sink.head)(Keep.right)
-        .runToIO
+        .uninterruptibleRun
         .either
         .map { ret =>
           ret should matchPattern {
@@ -1057,7 +1057,7 @@ abstract private[kvdb] class KvdbDatabaseTest
             inclusive = true
           )
           .toMat(Sink.seq)(Keep.right)
-          .runToIO
+          .uninterruptibleRun
       } yield {
         batches.size should be < count
       }
@@ -1135,7 +1135,7 @@ abstract private[kvdb] class KvdbDatabaseTest
           .collect { case Right(b) => b }
           .completionTimeout(1.second)
           .toMat(Sink.head)(Keep.right)
-          .runToIO
+          .uninterruptibleRun
           .map(_.head)
       } yield {
         byteArrayToString(head._1) should equal("aaaa")
@@ -1148,7 +1148,7 @@ abstract private[kvdb] class KvdbDatabaseTest
     "complete with UnsupportedKvdbOperationException if constraint list is empty" in withDb { db =>
       db.concurrentTailSource(defaultCf, List.empty)
         .toMat(Sink.head)(Keep.right)
-        .runToIO
+        .uninterruptibleRun
         .either
         .map { ret =>
           ret should matchPattern {

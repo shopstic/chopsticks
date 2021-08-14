@@ -1,7 +1,7 @@
 package dev.chopsticks.dstream
 
 import akka.NotUsed
-import akka.stream.scaladsl.{Flow, Sink}
+import akka.stream.scaladsl.Sink
 import dev.chopsticks.dstream.DstreamState.WorkResult
 import dev.chopsticks.dstream.metric.DstreamMasterMetricsManager
 import dev.chopsticks.fp.ZManageable
@@ -24,7 +24,8 @@ object DstreamMaster {
   trait Service[In, Assignment, Result, Out] {
     def manageFlow[R1, R2, R3](config: DstreamMasterConfig, createAssignment: In => URIO[R1, Assignment])(
       handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
-    )(withAttempt: (In, Task[Out]) => RIO[R3, Out]): URManaged[R1 with R2 with R3, Flow[In, Out, NotUsed]]
+    )(withAttempt: (In, Task[Out]) => RIO[R3, Out])
+      : URManaged[R1 with R2 with R3, ZAkkaFlow[Any, Nothing, In, Out, NotUsed]]
   }
 
   val defaultRetrySchedule: Schedule[Any, Throwable, Throwable] = Schedule
@@ -90,15 +91,14 @@ object DstreamMaster {
         zflow =
           if (config.ordered) {
             ZAkkaFlow[In]
-              .interruptibleMapAsync(config.parallelism)(process)
+              .mapAsync(config.parallelism)(process)
           }
           else {
             ZAkkaFlow[In]
-              .interruptibleMapAsyncUnordered(config.parallelism)(process)
+              .mapAsyncUnordered(config.parallelism)(process)
           }
-
-        flow <- zflow.make.toManaged_
-      } yield flow
+        zFlowWithoutEnv <- zflow.requireEnv.toManaged_
+      } yield zFlowWithoutEnv
     }
 
     val manageable = ZManageable(createFlow _)
@@ -121,7 +121,7 @@ object DstreamMaster {
           handleResult: (In, WorkResult[Result]) => RIO[R2, Out]
         )(
           withAttempt: (In, Task[Out]) => RIO[R3, Out]
-        ): URManaged[R1 with R2 with R3, Flow[In, Out, NotUsed]] = {
+        ): URManaged[R1 with R2 with R3, ZAkkaFlow[Any, Nothing, In, Out, NotUsed]] = {
           fn(config).flatMap { create =>
             for {
               env <- ZManaged.environment[R1 with R2 with R3]

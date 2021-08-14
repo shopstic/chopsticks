@@ -24,7 +24,7 @@ object ZAkkaStreams {
   def graph[R, A](
     make: => RunnableGraph[Future[A]]
   ): RIO[AkkaEnv, A] = {
-    make.runToIO
+    make.uninterruptibleRun
   }
 
   @deprecated("Use runToIO(...) extension method instead", "3.0.0")

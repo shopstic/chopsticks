@@ -81,9 +81,9 @@ object DstreamTestUtils {
           masterFib <- masterAssignmentSource
             .wireTap(assignment => logger.debug(s"masterAssignmentSource >>> $assignment"))
             .async
-            .via(distributionFlow)
-            .alsoTo(masterOutputSink)
             .toZAkkaSource
+            .viaZAkkaFlow(distributionFlow)
+            .viaBuilder(_.alsoTo(masterOutputSink))
             .interruptibleRunIgnore()
             .debug("master")
             .forkDaemon

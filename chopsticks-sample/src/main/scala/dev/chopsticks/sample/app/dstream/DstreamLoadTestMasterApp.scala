@@ -128,7 +128,7 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
           )
         )
         .toZAkkaSource
-        .interruptibleMapAsyncUnordered(12) { assignment =>
+        .mapAsyncUnordered(12) { assignment =>
           Dstreams
             .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
               val workerId = result.metadata.getText(Dstreams.WORKER_ID_HEADER).get

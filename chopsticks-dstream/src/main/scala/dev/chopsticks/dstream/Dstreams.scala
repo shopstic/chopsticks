@@ -147,7 +147,7 @@ object Dstreams {
         .toZAkkaSource
         .interruptible
         .viaBuilder(_.initialTimeout(initialTimeout))
-        .interruptibleMapAsync(1) {
+        .mapAsync(1) {
           assignment =>
             makeSource(assignment)
               .map(s => promise.success(s))

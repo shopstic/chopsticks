@@ -129,7 +129,7 @@ object DstreamWorker {
                   .toZAkkaSource
                   .interruptible
                   .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
-                  .interruptibleMapAsync(1) {
+                  .mapAsync(1) {
                     assignment =>
                       makeSource(workerId, assignment)
                         .tap(s => UIO(promise.success(s)))

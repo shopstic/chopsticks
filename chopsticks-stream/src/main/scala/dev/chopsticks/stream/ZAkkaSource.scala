@@ -2,19 +2,18 @@ package dev.chopsticks.stream
 
 import akka.NotUsed
 import akka.actor.Status
+import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Sink, Source}
 import akka.stream._
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.iz_logging.LogCtx
-import dev.chopsticks.fp.zio_ext.{MeasuredLogging, TaskExtensions}
-import dev.chopsticks.stream.ZAkkaGraph.{InterruptibleGraphOps, UninterruptibleGraphOps}
-import shapeless.<:!<
-import zio._
+import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
+import dev.chopsticks.fp.zio_ext.TaskExtensions
+import dev.chopsticks.stream.ZAkkaGraph._
+import zio.{Cause, Exit, RIO, Task, UIO, URIO, ZIO, ZScope}
 
 import scala.annotation.unchecked.uncheckedVariance
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
+import shapeless.<:!<
 
 object ZAkkaSource {
   implicit final class InterruptibleZAkkaSourceOps[-R, +V, +Mat <: KillSwitch](zSource: => ZAkkaSource[
@@ -23,67 +22,51 @@ object ZAkkaSource {
     V,
     Mat
   ]) {
-    def interruptibleRunIgnore(graceful: Boolean = true, interruptionTimeout: Duration = Duration.Inf)(implicit
+    def interruptibleRunIgnore(graceful: Boolean = true)(implicit
       ctx: LogCtx
-    ): RIO[MeasuredLogging with AkkaEnv with R, Unit] = {
-      interruptibleRunWith(Sink.ignore, graceful, interruptionTimeout).unit
+    ): RIO[IzLogging with AkkaEnv with R, Unit] = {
+      interruptibleRunWith(Sink.ignore, graceful).unit
     }
 
-    def interruptibleRunWith[Out](
-      sink: => Sink[V, Future[Out]],
-      graceful: Boolean = true,
-      interruptionTimeout: Duration = Duration.Inf
-    )(implicit
+    def interruptibleRunWith[Out](sink: => Graph[SinkShape[V], Future[Out]], graceful: Boolean = true)(implicit
       ctx: LogCtx
-    ): RIO[MeasuredLogging with AkkaEnv with R, Out] = {
-      for {
-        graph <- zSource.make.map(_.toMat(sink)(Keep.both))
-        ret <- graph.interruptibleRun(graceful, interruptionTimeout)
-      } yield ret
+    ): RIO[IzLogging with AkkaEnv with R, Out] = {
+      zSource.to(sink).flatMap(_.interruptibleRun(graceful))
     }
   }
 
   implicit final class UninterruptibleZAkkaSourceOps[-R, +V, +Mat](zSource: => ZAkkaSource[R, Throwable, V, Mat])(
     implicit notKillSwitch: Mat <:!< KillSwitch
   ) {
-    def runIgnore: ZIO[AkkaEnv with R, Throwable, Unit] = {
-      runWith(Sink.ignore).unit
+    def uninterruptibleRunIgnore: ZIO[AkkaEnv with R, Throwable, Unit] = {
+      uninterruptibleRunWith(Sink.ignore).unit
     }
 
-    def runWith[Out](sink: => Graph[SinkShape[V], Future[Out]]): ZIO[AkkaEnv with R, Throwable, Out] = {
-      for {
-        graph <- zSource.make.map(_.toMat(sink)(Keep.right))
-        ret <- graph.runToIO
-      } yield ret
+    def uninterruptibleRunWith[Out](sink: => Graph[SinkShape[V], Future[Out]]): RIO[AkkaEnv with R, (Mat, Out)] = {
+      zSource.to(sink).flatMap(_.uninterruptibleRun)
     }
 
-    def interruptibleRunIgnore(graceful: Boolean = true, interruptionTimeout: Duration = Duration.Inf)(implicit
+    def interruptibleRunIgnore(graceful: Boolean = true)(implicit
       ctx: LogCtx
-    ): ZIO[MeasuredLogging with AkkaEnv with R, Throwable, Unit] = {
-      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunIgnore(graceful, interruptionTimeout)
+    ): RIO[IzLogging with AkkaEnv with R, Unit] = {
+      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunIgnore(graceful)
     }
 
     def interruptibleRunWith[Out](
       sink: => Sink[V, Future[Out]],
-      graceful: Boolean = true,
-      interruptionTimeout: Duration = Duration.Inf
+      graceful: Boolean = true
     )(implicit
       ctx: LogCtx
-    ): ZIO[MeasuredLogging with AkkaEnv with R, Throwable, Out] = {
-      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunWith(sink, graceful, interruptionTimeout)
+    ): RIO[IzLogging with AkkaEnv with R, Out] = {
+      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunWith(sink, graceful)
     }
   }
 
   implicit final class SourceToZAkkaSource[+V, +Mat](source: => Source[V, Mat]) {
-    def toZAkkaSource: ZAkkaSource[Any, Nothing, V, Mat] = ZAkkaSource(source)
+    def toZAkkaSource: ZAkkaSource[Any, Nothing, V, Mat] = {
+      new ZAkkaSource(_ => ZIO.succeed(source))
+    }
   }
-
-  def apply[R, E, V, Mat](make: ZIO[R, E, Source[V, Mat]]): ZAkkaSource[R, E, V, Mat] = new ZAkkaSource(make)
-  def apply[V, Mat](source: => Source[V, Mat]): ZAkkaSource[Any, Nothing, V, Mat] =
-    new ZAkkaSource(ZIO.succeed(source))
-
-  def from[R, E, V, Mat](make: ZIO[R, E, Source[V, Mat]]): ZAkkaSource[R, E, V, Mat] = new ZAkkaSource(make)
-  def from[V, Mat](source: => Source[V, Mat]): ZAkkaSource[Any, Nothing, V, Mat] = new ZAkkaSource(ZIO.succeed(source))
 
   def interruptibleLazySource[R, V](
     effect: RIO[R, V]
@@ -164,117 +147,169 @@ object ZAkkaSource {
   }
 }
 
-final class ZAkkaSource[-R, +E, +V, +Mat] private (val make: ZIO[R, E, Source[V, Mat]]) {
-  def mapAsync[R1 <: R, Out](parallelism: Int)(runTask: V => RIO[R1, Out]): ZAkkaSource[R1, E, Out, Mat] = {
-    new ZAkkaSource(
+final class ZAkkaSource[-R, +E, +Out, +Mat] private (val make: ZScope[Exit[Any, Any]] => ZIO[
+  R,
+  E,
+  Source[Out, Mat]
+]) {
+  def to[Ret](sink: Graph[SinkShape[Out], Future[Ret]]): ZIO[R with AkkaEnv, E, RunnableGraph[(Mat, Future[Ret])]] = {
+    for {
+      scope <- ZScope.make[Exit[Any, Any]]
+      runtime <- ZIO.runtime[AkkaEnv]
+      source <- make(scope.scope)
+    } yield {
+      source
+        .toMat(sink) { (mat, future) =>
+          implicit val rt: zio.Runtime[AkkaEnv] = runtime
+          implicit val ec: ExecutionContextExecutor = runtime.environment.get[AkkaEnv.Service].dispatcher
+
+          mat -> future
+            .transformWith { result =>
+              val finalizer = result match {
+                case Failure(exception) =>
+                  scope.close(Exit.Failure(Cause.fail(exception)))
+                case Success(value) =>
+                  scope.close(Exit.Success(value))
+              }
+              rt.unsafeRunToFuture(
+                UIO(println("BEFORE finalizer")) *> finalizer.tap(r => UIO(println(s"AFTER finalizer $r")))
+              ).transform(_ => result)
+            }
+        }
+    }
+  }
+
+  def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
       for {
-        source <- make
-        flow <- ZAkkaFlow[V].mapAsync(parallelism)(runTask).make
-      } yield source.via(flow)
-    )
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].mapAsync(parallelism)(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
   }
 
-  def mapAsyncUnordered[R1 <: R, Out](parallelism: Int)(runTask: V => RIO[R1, Out]): ZAkkaSource[R1, E, Out, Mat] = {
-    new ZAkkaSource(
+  def mapAsyncUnordered[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
       for {
-        source <- make
-        flow <- ZAkkaFlow[V].mapAsyncUnordered(parallelism)(runTask).make
-      } yield source.via(flow)
-    )
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].mapAsyncUnordered(parallelism)(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
   }
 
-  def interruptibleMapAsync[R1 <: R, Out](
-    parallelism: Int,
-    attributes: Option[Attributes] = None
-  )(runTask: V => RIO[R1, Out]): ZAkkaSource[R1 with AkkaEnv, E, Out, Mat] = {
-    new ZAkkaSource[R1 with AkkaEnv, E, Out, Mat](
+  def switchFlatMapConcat[R1 <: R, Next](runTask: Out => RIO[R1, Graph[SourceShape[Next], Any]])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
       for {
-        source <- make
-        flow <- ZAkkaFlow[V].interruptibleMapAsync(parallelism, attributes)(runTask).make
-      } yield source.via(flow)
-    )
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].switchFlatMapConcat(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
   }
 
-  def interruptibleMapAsyncUnordered[R1 <: R, Out](
-    parallelism: Int,
-    attributes: Option[Attributes] = None
-  )(runTask: V => RIO[R1, Out]): ZAkkaSource[R1 with AkkaEnv, E, Out, Mat] = {
-    new ZAkkaSource[R1 with AkkaEnv, E, Out, Mat](
-      for {
-        source <- make
-        flow <- ZAkkaFlow[V].interruptibleMapAsyncUnordered(parallelism, attributes)(runTask).make
-      } yield source.via(flow)
-    )
+  def viaZAkkaFlow[R1 <: R, E1 >: E, Next, Mat2, Mat3](next: ZAkkaFlow[R1, E1, Out @uncheckedVariance, Next, Mat2])
+    : ZAkkaSource[R1, E1, Next, Mat] = {
+    viaZAkkaFlowMat(next)(Keep.left)
   }
 
-  def via[Out](flow: => Graph[FlowShape[V, Out], Any]): ZAkkaSource[R, E, Out, Mat] = {
-    viaMat(flow)(Keep.left)
-  }
-
-  def viaBuilder[Out](makeFlow: Flow[V @uncheckedVariance, V, NotUsed] => Graph[FlowShape[V, Out], Any])
-    : ZAkkaSource[R, E, Out, Mat] = {
-    viaBuilderMat(makeFlow)(Keep.left)
-  }
-
-  def viaMat[Out, Mat2, Mat3](flow: => Graph[FlowShape[V, Out], Mat2])(
+  def viaZAkkaFlowMat[R1 <: R, E1 >: E, Next, Mat2, Mat3](next: ZAkkaFlow[R1, E1, Out @uncheckedVariance, Next, Mat2])(
     combine: (Mat, Mat2) => Mat3
-  ): ZAkkaSource[R, E, Out, Mat3] = {
-    viaBuilderMat(_ => flow)(combine)
+  ): ZAkkaSource[R1, E1, Next, Mat3] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+        nextFlow <- next.make(scope)
+      } yield {
+        source
+          .viaMat(nextFlow)(combine)
+      }
+    })
   }
 
-  def viaBuilderMat[Out, Mat2, Mat3](makeFlow: Flow[V @uncheckedVariance, V, NotUsed] => Graph[
-    FlowShape[V, Out],
+  def viaBuilderMat[Next, Mat2, Mat3](makeFlow: Flow[Out @uncheckedVariance, Out, NotUsed] => Graph[
+    FlowShape[Out, Next],
     Mat2
   ])(
     combine: (Mat, Mat2) => Mat3
-  ): ZAkkaSource[R, E, Out, Mat3] = {
-    new ZAkkaSource(
-      make
-        .map { source =>
-          source.viaMat(makeFlow(Flow[V]))(combine)
-        }
-    )
+  ): ZAkkaSource[R, E, Next, Mat3] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+      } yield {
+        source
+          .viaMat(makeFlow(Flow[Out]))(combine)
+      }
+    })
   }
 
-  def viaM[R1 <: R, E1 >: E, Out](makeFlow: ZIO[R1, E1, Graph[FlowShape[V, Out], Any]])
-    : ZAkkaSource[R1, E1, Out, Mat] = {
+  def viaMat[Next, Mat2, Mat3](flow: => Graph[FlowShape[Out, Next], Mat2])(
+    combine: (Mat, Mat2) => Mat3
+  ): ZAkkaSource[R, E, Next, Mat3] = {
+    viaBuilderMat(_ => flow)(combine)
+  }
+
+  def via[Next](flow: => Graph[FlowShape[Out, Next], Any]): ZAkkaSource[R, E, Next, Mat] = {
+    viaMat(flow)(Keep.left)
+  }
+
+  def viaBuilder[Next](makeFlow: Flow[Out @uncheckedVariance, Out, NotUsed] => Graph[FlowShape[Out, Next], Any])
+    : ZAkkaSource[R, E, Next, Mat] = {
+    viaBuilderMat(makeFlow)(Keep.left)
+  }
+
+  def viaM[R1 <: R, E1 >: E, Next](makeFlow: ZIO[R1, E1, Graph[FlowShape[Out, Next], Any]])
+    : ZAkkaSource[R1, E1, Next, Mat] = {
     viaMatM(makeFlow)(Keep.left)
   }
 
-  def viaBuilderM[R1 <: R, E1 >: E, Out](makeFlow: Flow[V @uncheckedVariance, V, NotUsed] => ZIO[
+  def viaBuilderM[R1 <: R, E1 >: E, Next](makeFlow: Flow[Out @uncheckedVariance, Out, NotUsed] => ZIO[
     R1,
     E1,
-    Graph[FlowShape[V, Out], Any]
-  ]): ZAkkaSource[R1, E1, Out, Mat] = {
-    viaMatM(makeFlow(Flow[V]))(Keep.left)
+    Graph[FlowShape[Out, Next], Any]
+  ]): ZAkkaSource[R1, E1, Next, Mat] = {
+    viaMatM(makeFlow(Flow[Out]))(Keep.left)
   }
 
-  def viaMatM[R1 <: R, E1 >: E, Out, Mat2, Mat3](makeFlow: ZIO[R1, E1, Graph[FlowShape[V, Out], Mat2]])(
+  def viaMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeFlow: ZIO[R1, E1, Graph[FlowShape[Out, Next], Mat2]])(
     combine: (Mat, Mat2) => Mat3
-  ): ZAkkaSource[R1, E1, Out, Mat3] = {
-    new ZAkkaSource(
+  ): ZAkkaSource[R1, E1, Next, Mat3] = {
+    new ZAkkaSource(scope => {
       for {
-        source <- make
-        flow <- makeFlow
+        source <- make(scope)
+        nextFlow <- makeFlow
       } yield {
-        source.viaMat(flow)(combine)
+        source
+          .viaMat(nextFlow)(combine)
       }
-    )
+    })
   }
 
-  def viaBuilderMatM[R1 <: R, E1 >: E, Out, Mat2, Mat3](makeFlow: Flow[V @uncheckedVariance, V, NotUsed] => ZIO[
+  def viaBuilderMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeFlow: Flow[Out @uncheckedVariance, Out, NotUsed] => ZIO[
     R1,
     E1,
-    Graph[FlowShape[V, Out], Mat2]
+    Graph[FlowShape[Out, Next], Mat2]
   ])(
     combine: (Mat, Mat2) => Mat3
-  ): ZAkkaSource[R1, E1, Out, Mat3] = {
-    viaMatM(makeFlow(Flow[V]))(combine)
+  ): ZAkkaSource[R1, E1, Next, Mat3] = {
+    viaMatM(makeFlow(Flow[Out]))(combine)
   }
 
-  def interruptible: ZAkkaSource[R, E, V, UniqueKillSwitch] = {
-    new ZAkkaSource(
-      make.map(_.viaMat(KillSwitches.single)(Keep.right))
-    )
+  def interruptible: ZAkkaSource[R, E, Out, UniqueKillSwitch] = {
+    new ZAkkaSource(scope => {
+      for {
+        flow <- make(scope)
+      } yield {
+        flow
+          .viaMat(KillSwitches.single)(Keep.right)
+      }
+    })
   }
 }

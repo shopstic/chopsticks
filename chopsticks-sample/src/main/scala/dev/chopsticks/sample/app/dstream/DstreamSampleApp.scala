@@ -72,8 +72,8 @@ object DstreamSampleApp extends ZAkkaApp {
     for {
       ks <- UIO(KillSwitches.shared("server shared killswitch"))
       logger <- ZIO.access[IzLogging](_.get.logger)
-      workDistributionFlow <- ZAkkaFlow[Assignment]
-        .interruptibleMapAsyncUnordered(12) { assignment =>
+      workDistributionFlow = ZAkkaFlow[Assignment]
+        .mapAsyncUnordered(12) { assignment =>
           Dstreams
             .distribute(ZIO.succeed(assignment)) { result: WorkResult[Result] =>
               result
@@ -89,12 +89,11 @@ object DstreamSampleApp extends ZAkkaApp {
                 .retry(Schedule.forever.tapInput((e: Throwable) => UIO(logger.error(s"Distribute failed: $e"))))
             }
         }
-        .make
       result <- Source(1 to 100)
         .map(Assignment(_))
-        .via(workDistributionFlow)
-        .viaMat(ks.flow)(Keep.right)
         .toZAkkaSource
+        .viaZAkkaFlow(workDistributionFlow)
+        .viaMat(ks.flow)(Keep.right)
         .interruptibleRunIgnore()
     } yield result
   }
