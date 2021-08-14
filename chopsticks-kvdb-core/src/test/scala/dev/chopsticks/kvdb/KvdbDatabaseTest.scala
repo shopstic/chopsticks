@@ -1341,7 +1341,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   }
 
   "conditionalTransactionTask" should {
-    "perform writes if condition returns false" in withDb { db =>
+    "perform writes if condition returns true" in withDb { db =>
       for {
         _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
         _ <- db.conditionalTransactionTask(

@@ -351,22 +351,27 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   }
 
   def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[MeasuredLogging, V] = {
-    TaskUtils
-      .fromUninterruptibleCompletableFuture(
-        name, {
-          val tx = dbContext.db.createTransaction()
-          val resultFuture = ops.write[V](
-            new FdbWriteApi[BCF](
-              tx,
-              dbContext,
-              clientOptions.disableWriteConflictChecking,
-              clientOptions.useSnapshotReads
-            ),
-            fn
+    Task
+      .bracket(UIO(dbContext.db.createTransaction())) { tx =>
+        UIO(tx.close())
+      } { tx =>
+        TaskUtils
+          .fromUninterruptibleCompletableFuture(
+            name, {
+              ops
+                .write[V](
+                  new FdbWriteApi[BCF](
+                    tx,
+                    dbContext,
+                    clientOptions.disableWriteConflictChecking,
+                    clientOptions.useSnapshotReads
+                  ),
+                  fn
+                )
+                .thenCompose(v => tx.commit().thenApply(_ => v))
+            }
           )
-          tx.commit().thenCompose(_ => resultFuture)
-        }
-      )
+      }
       .retry(
         Schedule
           .recurs(clientOptions.writeMaxRetryCount.value)
