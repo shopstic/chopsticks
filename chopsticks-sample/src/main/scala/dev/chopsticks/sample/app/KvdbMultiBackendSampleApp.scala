@@ -5,7 +5,6 @@ import com.typesafe.config.Config
 import dev.chopsticks.fp.AppLayer.AppEnv
 import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
@@ -33,7 +32,7 @@ object KvdbMultiBackendSampleAppConfig {
 }
 
 final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
-  def populate: RIO[AkkaEnv with IzLogging, Int] = {
+  def populate: RIO[AkkaEnv with MeasuredLogging, Int] = {
     Source(1 to 100)
       .flatMapConcat { i =>
         Source(1 to 100)
@@ -49,7 +48,7 @@ final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
       .interruptibleRunWith(Sink.fold(0)((s, b) => s + b.size))
   }
 
-  def scanAndCollect: RIO[AkkaEnv with IzLogging, Seq[(TestKey, TestValue)]] = {
+  def scanAndCollect: RIO[AkkaEnv with MeasuredLogging, Seq[(TestKey, TestValue)]] = {
     db
       .api
       .columnFamily(db.storage.default)

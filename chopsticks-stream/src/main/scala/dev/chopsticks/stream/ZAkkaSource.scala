@@ -5,14 +5,15 @@ import akka.actor.Status
 import akka.stream._
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
-import dev.chopsticks.fp.zio_ext.TaskExtensions
+import dev.chopsticks.fp.iz_logging.LogCtx
+import dev.chopsticks.fp.zio_ext.{MeasuredLogging, TaskExtensions}
 import dev.chopsticks.stream.ZAkkaGraph.{InterruptibleGraphOps, UninterruptibleGraphOps}
 import shapeless.<:!<
 import zio._
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
 
 object ZAkkaSource {
@@ -22,18 +23,22 @@ object ZAkkaSource {
     V,
     Mat
   ]) {
-    def interruptibleRunIgnore(graceful: Boolean = true)(implicit
+    def interruptibleRunIgnore(graceful: Boolean = true, interruptionTimeout: Duration = Duration.Inf)(implicit
       ctx: LogCtx
-    ): ZIO[IzLogging with AkkaEnv with R, Throwable, Unit] = {
-      interruptibleRunWith(Sink.ignore, graceful).unit
+    ): RIO[MeasuredLogging with AkkaEnv with R, Unit] = {
+      interruptibleRunWith(Sink.ignore, graceful, interruptionTimeout).unit
     }
 
-    def interruptibleRunWith[Out](sink: => Sink[V, Future[Out]], graceful: Boolean = true)(implicit
+    def interruptibleRunWith[Out](
+      sink: => Sink[V, Future[Out]],
+      graceful: Boolean = true,
+      interruptionTimeout: Duration = Duration.Inf
+    )(implicit
       ctx: LogCtx
-    ): ZIO[IzLogging with AkkaEnv with R, Throwable, Out] = {
+    ): RIO[MeasuredLogging with AkkaEnv with R, Out] = {
       for {
         graph <- zSource.make.map(_.toMat(sink)(Keep.both))
-        ret <- graph.interruptibleRun(graceful)
+        ret <- graph.interruptibleRun(graceful, interruptionTimeout)
       } yield ret
     }
   }
@@ -52,16 +57,20 @@ object ZAkkaSource {
       } yield ret
     }
 
-    def interruptibleRunIgnore(graceful: Boolean = true)(implicit
+    def interruptibleRunIgnore(graceful: Boolean = true, interruptionTimeout: Duration = Duration.Inf)(implicit
       ctx: LogCtx
-    ): ZIO[IzLogging with AkkaEnv with R, Throwable, Unit] = {
-      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunIgnore(graceful)
+    ): ZIO[MeasuredLogging with AkkaEnv with R, Throwable, Unit] = {
+      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunIgnore(graceful, interruptionTimeout)
     }
 
-    def interruptibleRunWith[Out](sink: => Sink[V, Future[Out]], graceful: Boolean = true)(implicit
+    def interruptibleRunWith[Out](
+      sink: => Sink[V, Future[Out]],
+      graceful: Boolean = true,
+      interruptionTimeout: Duration = Duration.Inf
+    )(implicit
       ctx: LogCtx
-    ): ZIO[IzLogging with AkkaEnv with R, Throwable, Out] = {
-      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunWith(sink, graceful)
+    ): ZIO[MeasuredLogging with AkkaEnv with R, Throwable, Out] = {
+      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunWith(sink, graceful, interruptionTimeout)
     }
   }
 

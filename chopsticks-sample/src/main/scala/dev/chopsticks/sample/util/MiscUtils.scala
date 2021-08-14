@@ -4,6 +4,7 @@ import akka.Done
 import akka.stream.scaladsl.{Sink, Source}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
+import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import zio.{RIO, ZIO}
 
@@ -21,7 +22,7 @@ object MiscUtils {
 
   def logRates(interval: FiniteDuration)(collect: => ListMap[String, Double])(implicit
     logCtx: LogCtx
-  ): RIO[AkkaEnv with IzLogging, Done] = {
+  ): RIO[AkkaEnv with MeasuredLogging, Done] = {
     for {
       logger <- ZIO.access[IzLogging](_.get.logger)
       ret <- Source
