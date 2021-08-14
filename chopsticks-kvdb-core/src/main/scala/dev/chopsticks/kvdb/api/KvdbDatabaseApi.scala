@@ -15,7 +15,7 @@ import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric.Greater
-import eu.timepit.refined.types.numeric.PosInt
+import eu.timepit.refined.types.numeric.{NonNegInt, PosInt}
 import io.scalaland.chimney.Patcher
 import squants.information.Information
 import squants.information.InformationConversions._
@@ -42,7 +42,8 @@ object KvdbDatabaseApi {
     useSnapshotReads: Boolean = false,
     serdesParallelism: PosInt = 2,
     watchTimeout: Duration = Duration.Inf,
-    watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS)
+    watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS),
+    writeMaxRetryCount: NonNegInt = 1
   ) {
     def patchClientOptions(options: KvdbClientOptions): KvdbClientOptions = {
       options.copy(
@@ -54,7 +55,8 @@ object KvdbDatabaseApi {
         disableWriteConflictChecking = disableWriteConflictChecking,
         useSnapshotReads = useSnapshotReads,
         watchTimeout = watchTimeout,
-        watchMinLatency = watchMinLatency
+        watchMinLatency = watchMinLatency,
+        writeMaxRetryCount = writeMaxRetryCount
       )
     }
 

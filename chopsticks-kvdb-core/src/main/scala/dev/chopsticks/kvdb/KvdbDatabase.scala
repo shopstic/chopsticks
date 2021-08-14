@@ -15,6 +15,7 @@ import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric.Greater
+import eu.timepit.refined.types.numeric.NonNegInt
 import pureconfig.ConfigConvert
 import squants.information.Information
 import squants.information.InformationConversions._
@@ -62,7 +63,8 @@ object KvdbDatabase {
     disableWriteConflictChecking: Boolean = false,
     useSnapshotReads: Boolean = false,
     watchTimeout: Duration = Duration.Inf,
-    watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS)
+    watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS),
+    writeMaxRetryCount: NonNegInt = 1
   )
 
   object KvdbClientOptions {

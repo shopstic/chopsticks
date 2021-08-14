@@ -353,9 +353,9 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[MeasuredLogging, V] = {
     TaskUtils
       .fromUninterruptibleCompletableFuture(
-        name,
-        dbContext.db.runAsync { tx =>
-          ops.write[V](
+        name, {
+          val tx = dbContext.db.createTransaction()
+          val resultFuture = ops.write[V](
             new FdbWriteApi[BCF](
               tx,
               dbContext,
@@ -364,7 +364,16 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
             ),
             fn
           )
+          tx.commit().thenCompose(_ => resultFuture)
         }
+      )
+      .retry(
+        Schedule
+          .recurs(clientOptions.writeMaxRetryCount.value)
+          .whileInput[Throwable] {
+            case ex: FDBException if ex.isRetryableNotCommitted => true
+            case _ => false
+          }
       )
   }
 
@@ -793,16 +802,13 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   }
 
   override def dropColumnFamily[Col <: CF](column: Col): RIO[MeasuredLogging, Unit] = {
-    TaskUtils
-      .fromUninterruptibleCompletableFuture(
-        "dropColumnFamily",
-        dbContext.db
-          .runAsync { tx =>
-            val prefix = dbContext.columnPrefix(column)
-            tx.clear(com.apple.foundationdb.Range.startsWith(prefix))
-            COMPLETED_FUTURE
-          }
-      )
+    write(
+      "dropColumnFamily",
+      api => {
+        val prefix = dbContext.columnPrefix(column)
+        api.tx.clear(com.apple.foundationdb.Range.startsWith(prefix))
+        COMPLETED_FUTURE
+      }
+    )
   }
-
 }
