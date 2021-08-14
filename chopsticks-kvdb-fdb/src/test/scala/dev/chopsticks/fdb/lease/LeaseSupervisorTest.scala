@@ -26,7 +26,7 @@ import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import eu.timepit.refined.auto._
 import izumi.distage.constructors.HasConstructor
 import logstage.Log
-import org.scalatest.{Inspectors, Succeeded}
+import org.scalatest.{Ignore, Inspectors, Succeeded}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
 import zio.blocking.Blocking
@@ -37,6 +37,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Random
 
+@Ignore
 object LeaseSupervisorTest {
   import dev.chopsticks.kvdb.codec.fdb_key._
 
