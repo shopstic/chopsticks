@@ -4,6 +4,7 @@ import akka.NotUsed
 import akka.actor.Status
 import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Sink, Source}
 import akka.stream._
+import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext.TaskExtensions
@@ -152,6 +153,10 @@ final class ZAkkaSource[-R, +E, +Out, +Mat] private (val make: ZScope[Exit[Any, 
   E,
   Source[Out, Mat]
 ]) {
+  def requireEnv: ZIO[R, E, ZAkkaSource[Any, E, Out, Mat]] = {
+    ZRunnable(make).toZIO.map(new ZAkkaSource(_))
+  }
+
   def to[Ret](sink: Graph[SinkShape[Out], Future[Ret]]): ZIO[R with AkkaEnv, E, RunnableGraph[(Mat, Future[Ret])]] = {
     for {
       scope <- ZScope.make[Exit[Any, Any]]
