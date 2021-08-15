@@ -2,19 +2,19 @@ package dev.chopsticks.stream
 
 import akka.NotUsed
 import akka.actor.Status
-import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Sink, Source}
 import akka.stream._
+import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Sink, Source}
 import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext.TaskExtensions
 import dev.chopsticks.stream.ZAkkaGraph._
-import zio.{Cause, Exit, IO, NeedsEnv, RIO, Task, UIO, URIO, ZIO, ZScope}
+import shapeless.<:!<
+import zio.{Exit, IO, NeedsEnv, RIO, Task, URIO, ZIO, ZScope}
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
-import shapeless.<:!<
 
 object ZAkkaSource {
   implicit final class InterruptibleZAkkaSourceOps[-R, +V, +Mat <: KillSwitch](zSource: => ZAkkaSource[
@@ -176,15 +176,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
           val (mat3, future) = combine(mat, mat2)
           mat3 -> future
             .transformWith { result =>
-              val finalizer = result match {
-                case Failure(exception) =>
-                  scope.close(Exit.Failure(Cause.fail(exception)))
-                case Success(value) =>
-                  scope.close(Exit.Success(value))
-              }
-              rt.unsafeRunToFuture(
-                UIO(println("BEFORE finalizer")) *> finalizer.tap(r => UIO(println(s"AFTER finalizer $r")))
-              ).transform(_ => result)
+              rt.unsafeRunToFuture(scope.close(Exit.Success(()))).transform(_ => result)
             }
         }
     }
