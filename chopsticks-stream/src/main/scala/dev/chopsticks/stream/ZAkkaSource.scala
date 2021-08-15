@@ -157,18 +157,20 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
     ZRunnable(make).toZIO.map(new ZAkkaSource(_))
   }
 
-  def to[Ret](sink: Graph[SinkShape[Out], Future[Ret]]): ZIO[R with AkkaEnv, E, RunnableGraph[(Mat, Future[Ret])]] = {
+  def toMat[Ret, Mat2, Mat3](sink: Graph[SinkShape[Out], Mat2])(combine: (Mat, Mat2) => (Mat3, Future[Ret]))
+    : ZIO[R with AkkaEnv, E, RunnableGraph[(Mat3, Future[Ret])]] = {
     for {
       scope <- ZScope.make[Exit[Any, Any]]
       runtime <- ZIO.runtime[AkkaEnv]
       source <- make(scope.scope)
     } yield {
       source
-        .toMat(sink) { (mat, future) =>
+        .toMat(sink) { (mat, mat2) =>
           implicit val rt: zio.Runtime[AkkaEnv] = runtime
           implicit val ec: ExecutionContextExecutor = runtime.environment.get[AkkaEnv.Service].dispatcher
 
-          mat -> future
+          val (mat3, future) = combine(mat, mat2)
+          mat3 -> future
             .transformWith { result =>
               val finalizer = result match {
                 case Failure(exception) =>
@@ -182,6 +184,10 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
             }
         }
     }
+  }
+
+  def to[Ret](sink: Graph[SinkShape[Out], Future[Ret]]): ZIO[R with AkkaEnv, E, RunnableGraph[(Mat, Future[Ret])]] = {
+    toMat(sink)(Keep.both)
   }
 
   def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
