@@ -15,11 +15,10 @@ import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric.Greater
-import eu.timepit.refined.types.numeric.NonNegInt
 import pureconfig.ConfigConvert
 import squants.information.Information
 import squants.information.InformationConversions._
-import zio.{RIO, Task}
+import zio.{RIO, Schedule, Task}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -64,11 +63,14 @@ object KvdbDatabase {
     useSnapshotReads: Boolean = false,
     watchTimeout: Duration = Duration.Inf,
     watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS),
-    writeMaxRetryCount: NonNegInt = 1
+    writeCustomRetrySchedule: Option[Schedule[Any, Throwable, Any]] = None
   )
 
   object KvdbClientOptions {
     import dev.chopsticks.util.config.PureconfigConverters._
+    // Configuration of retry schedule via HOCON is not yet supported
+    implicit val writeRetryScheduleConfigConvert: ConfigConvert[Schedule[Any, Throwable, Any]] =
+      ConfigConvert.viaStringOpt[Schedule[Any, Throwable, Any]](_ => None, _ => "")
     //noinspection TypeAnnotation
     implicit val configConvert = ConfigConvert[KvdbClientOptions]
   }

@@ -15,11 +15,11 @@ import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric.Greater
-import eu.timepit.refined.types.numeric.{NonNegInt, PosInt}
+import eu.timepit.refined.types.numeric.PosInt
 import io.scalaland.chimney.Patcher
 import squants.information.Information
 import squants.information.InformationConversions._
-import zio.{RIO, Task, URIO, ZIO}
+import zio.{RIO, Schedule, Task, URIO, ZIO}
 
 import scala.concurrent.duration._
 import io.scalaland.chimney.dsl._
@@ -44,7 +44,7 @@ object KvdbDatabaseApi {
     serdesParallelism: PosInt = 2,
     watchTimeout: Duration = Duration.Inf,
     watchMinLatency: FiniteDuration = Duration(50, TimeUnit.MILLISECONDS),
-    writeMaxRetryCount: NonNegInt = 1
+    writeCustomRetrySchedule: Option[Schedule[Any, Throwable, Any]] = None
   ) {
     def patchClientOptions(options: KvdbClientOptions): KvdbClientOptions = {
       options.copy(
@@ -57,7 +57,7 @@ object KvdbDatabaseApi {
         useSnapshotReads = useSnapshotReads,
         watchTimeout = watchTimeout,
         watchMinLatency = watchMinLatency,
-        writeMaxRetryCount = writeMaxRetryCount
+        writeCustomRetrySchedule = writeCustomRetrySchedule
       )
     }
 

@@ -50,6 +50,15 @@ import scala.jdk.FutureConverters._
 import scala.util.Failure
 
 object FdbDatabase {
+  val defaultWriteRetrySchedule: Schedule[Any, Throwable, Any] = {
+    Schedule
+      .forever
+      .whileInput[Throwable] {
+        case ex: FDBException if ex.isRetryable && !ex.isMaybeCommitted => true
+        case _ => false
+      }
+  }
+
   final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](
     db: Database,
     prefixMap: Map[BCF[_, _], Array[Byte]],
@@ -372,14 +381,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
             }
           )
       }
-      .retry(
-        Schedule
-          .recurs(clientOptions.writeMaxRetryCount.value)
-          .whileInput[Throwable] {
-            case ex: FDBException if ex.isRetryableNotCommitted => true
-            case _ => false
-          }
-      )
+      .retry(clientOptions.writeCustomRetrySchedule.getOrElse(defaultWriteRetrySchedule))
   }
 
   override def watchKeySource[Col <: CF](
