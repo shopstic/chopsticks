@@ -50,6 +50,7 @@ final class FdbTailSourceStage(
     new KillableGraphStageLogic(shutdownListener.future, shape) with GraphStageWithActorLogic {
       private var timer = Option.empty[Cancellable]
       private var pollingDelay: FiniteDuration = Duration.Zero
+      private var closeLast: () => Unit = _
 
       private def pendingEmitEmptyTail(newRange: KvdbKeyRange): Receive = {
         case DownstreamPull => // Ignore
@@ -65,6 +66,7 @@ final class FdbTailSourceStage(
       private def pendingPull(range: KvdbKeyRange): Receive = {
         case DownstreamPull =>
           val (iterator, close) = iterate(range)
+          closeLast = close
           val batchEmitter = new BatchEmitter(
             actor = self,
             iterator = iterator,
@@ -122,7 +124,9 @@ final class FdbTailSourceStage(
           }
 
         case IteratorFailure(ex: FDBException)
-            if ex.getCode == 1007 /* Transaction too old */ || ex.getCode == 1009 /* Request for future version */ =>
+            if ex.getCode == 1007 /* Transaction too old */ ||
+              ex.getCode == 1009 /* Request for future version */ ||
+              ex.getCode == 1037 /* process_behind */ =>
           close()
           self ! IteratorComplete
 
@@ -149,9 +153,14 @@ final class FdbTailSourceStage(
       )
 
       override def postStop(): Unit = {
-        super.postStop()
-        timer.foreach(_.cancel())
-        shutdownListener.unregister()
+        try {
+          if (closeLast != null) closeLast()
+        }
+        finally {
+          super.postStop()
+          timer.foreach(_.cancel())
+          shutdownListener.unregister()
+        }
       }
 
       override def preStart(): Unit = {

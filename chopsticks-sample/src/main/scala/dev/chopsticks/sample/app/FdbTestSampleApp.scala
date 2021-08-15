@@ -69,6 +69,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
         akkaAppDi ++ DiLayers(
           ZLayer.succeed(appConfig),
           KvdbIoThreadPool.live,
+          KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
           ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
           AppLayer(app)
         )

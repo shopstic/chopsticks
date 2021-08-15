@@ -54,7 +54,12 @@ object FdbDatabase {
     Schedule
       .forever
       .whileInput[Throwable] {
-        case ex: FDBException if ex.isRetryable && !ex.isMaybeCommitted => true
+        case ex: FDBException
+            if (ex.isRetryable ||
+              ex.getCode == 1007 /* Transaction too old */ ||
+              ex.getCode == 1009 /* Request for future version */ ||
+              ex.getCode == 1037 /* process_behind */ ) &&
+              ex.getCode != 1021 /* commit_unknown_result */ => true
         case _ => false
       }
   }
