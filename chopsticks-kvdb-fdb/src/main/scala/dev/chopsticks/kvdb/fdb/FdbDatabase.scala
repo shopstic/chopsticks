@@ -556,7 +556,11 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     ).as(0L)
   }
 
-  override def estimateCount[Col <: CF](column: Col): Task[Long] = ???
+  override def estimateCount[Col <: CF](column: Col): Task[Long] = {
+    read(api =>
+      api.tx.getEstimatedRangeSizeBytes(Range.startsWith(dbContext.columnPrefix(column))).thenApply(_.longValue())
+    )
+  }
 
   override def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed] = {
     Source
