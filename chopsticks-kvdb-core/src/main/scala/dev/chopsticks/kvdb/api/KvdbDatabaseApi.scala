@@ -26,6 +26,7 @@ import io.scalaland.chimney.dsl._
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.util.KvdbSerdesThreadPool
 import dev.chopsticks.stream.ZAkkaFlow.FlowToZAkkaFlow
+import pureconfig.ConfigConvert
 
 import scala.concurrent.Future
 
@@ -73,6 +74,13 @@ object KvdbDatabaseApi {
     implicit val dbToApiOptionsPatcher = Patcher.derive[KvdbApiClientOptions, KvdbClientOptions]
 
     val default: KvdbApiClientOptions = KvdbApiClientOptions()
+
+    import dev.chopsticks.util.config.PureconfigConverters._
+    // Configuration of retry schedule via HOCON is not yet supported
+    implicit val writeRetryScheduleConfigConvert: ConfigConvert[Schedule[Any, Throwable, Any]] =
+      ConfigConvert.viaStringOpt[Schedule[Any, Throwable, Any]](_ => None, _ => "")
+    //noinspection TypeAnnotation
+    implicit val configConvert = ConfigConvert[KvdbApiClientOptions]
   }
 
   def apply[BCF[A, B] <: ColumnFamily[A, B]](
