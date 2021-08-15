@@ -9,7 +9,7 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext.TaskExtensions
 import dev.chopsticks.stream.ZAkkaGraph._
-import zio.{Cause, Exit, RIO, Task, UIO, URIO, ZIO, ZScope}
+import zio.{Cause, Exit, IO, NeedsEnv, RIO, Task, UIO, URIO, ZIO, ZScope}
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -64,7 +64,7 @@ object ZAkkaSource {
   }
 
   implicit final class SourceToZAkkaSource[+V, +Mat](source: => Source[V, Mat]) {
-    def toZAkkaSource: ZAkkaSource[Any, Nothing, V, Mat] = {
+    def toZAkkaSource: UAkkaSource[V, Mat] = {
       new ZAkkaSource(_ => ZIO.succeed(source))
     }
   }
@@ -153,6 +153,10 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
   E,
   Source[Out, Mat]
 ]) {
+  def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaSource[Any, E, Out, Mat]] = {
+    requireEnv.provide(r)
+  }
+
   def requireEnv: ZIO[R, E, ZAkkaSource[Any, E, Out, Mat]] = {
     ZRunnable(make).toZIO.map(new ZAkkaSource(_))
   }

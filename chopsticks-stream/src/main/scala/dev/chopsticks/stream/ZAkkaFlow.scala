@@ -6,19 +6,19 @@ import akka.stream.scaladsl.{Flow, Keep, Source}
 import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext.TaskExtensions
-import zio.{Exit, RIO, ZIO, ZScope}
+import zio.{Exit, IO, NeedsEnv, RIO, ZIO, ZScope}
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.ExecutionContextExecutor
 
 object ZAkkaFlow {
   implicit final class FlowToZAkkaFlow[-In, +Out, +Mat](flow: => Flow[In, Out, Mat]) {
-    def toZAkkaFlow: ZAkkaFlow[Any, Nothing, In, Out, Mat] = {
+    def toZAkkaFlow: UAkkaFlow[In, Out, Mat] = {
       new ZAkkaFlow(_ => ZIO.succeed(flow))
     }
   }
 
-  def apply[In]: ZAkkaFlow[Any, Nothing, In, In, NotUsed] = new ZAkkaFlow(_ => ZIO.succeed(Flow[In]))
+  def apply[In]: UAkkaFlow[In, In, NotUsed] = new ZAkkaFlow(_ => ZIO.succeed(Flow[In]))
 }
 
 final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => ZIO[
@@ -26,6 +26,10 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZScope[Exit[Any, Any]] 
   E,
   Flow[In, Out, Mat]
 ]) {
+  def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
+    requireEnv.provide(r)
+  }
+
   def requireEnv: ZIO[R, E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
     ZRunnable(make).toZIO.map(new ZAkkaFlow(_))
   }
