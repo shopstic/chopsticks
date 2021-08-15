@@ -21,7 +21,7 @@ object ZAkkaFlow {
   def apply[In]: ZAkkaFlow[Any, Nothing, In, In, NotUsed] = new ZAkkaFlow(_ => ZIO.succeed(Flow[In]))
 }
 
-final class ZAkkaFlow[-R, +E, -In, +Out, +Mat] private (val make: ZScope[Exit[Any, Any]] => ZIO[
+final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => ZIO[
   R,
   E,
   Flow[In, Out, Mat]

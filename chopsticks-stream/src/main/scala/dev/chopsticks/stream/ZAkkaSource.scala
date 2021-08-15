@@ -148,7 +148,7 @@ object ZAkkaSource {
   }
 }
 
-final class ZAkkaSource[-R, +E, +Out, +Mat] private (val make: ZScope[Exit[Any, Any]] => ZIO[
+final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => ZIO[
   R,
   E,
   Source[Out, Mat]
