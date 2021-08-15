@@ -127,7 +127,7 @@ object DstreamWorker {
                 result <- createRequest(workerId)
                   .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
                   .toZAkkaSource
-                  .interruptible
+                  .killswitch
                   .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
                   .mapAsync(1) {
                     assignment =>

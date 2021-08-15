@@ -79,6 +79,7 @@ object DynamicSubsetKvdbSampleApp extends AkkaDiApp[DynamicSubsetKvdbSampleAppCo
           .columnFamily(cf)
           .source
           .toZAkkaSource
+          .killswitch
           .interruptibleRunIgnore()
           .catchSome {
             case _: SeekFailure => ZIO.unit

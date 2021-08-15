@@ -103,6 +103,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       .columnFamily(sampleDb.default)
       .source
       .toZAkkaSource
+      .killswitch
       .interruptibleRunWith(Sink.foreach(println))
       .log("Default dump")
 
@@ -122,6 +123,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
 
         testKeyspace.batchPut(pairs).result -> pairs
       }))
+      .killswitch
       .interruptibleRunIgnore()
       .log("Range populate foo")
 
@@ -135,12 +137,14 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
 
         testKeyspace.batchPut(pairs).result -> pairs
       }))
+      .killswitch
       .interruptibleRunIgnore()
       .log("Range populate bar")
 
     _ <- testKeyspace
       .source(_ startsWith "bar", _ ltEq "bar" -> 50000)
       .toZAkkaSource
+      .killswitch
       .interruptibleRunWith(Sink.fold(0)((s, _) => s + 1))
       //        .repeat(Schedule.forever)
       .logResult("Range scan", r => s"counted $r")
@@ -152,7 +156,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
     _ <- Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
       .throttle(1, 1.second)
       .toZAkkaSource
-      .interruptible
+      .killswitch
       .viaZAkkaFlow(
         dbApi.batchTransact(batch => {
           val pairs = batch.zipWithIndex.map {
@@ -173,6 +177,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
       .sliding(2)
       .map(_.toList)
       .toZAkkaSource
+      .killswitch
       .interruptibleRunWith(Sink.foreach {
         case previous :: next :: Nil =>
           assert(previous.version.compareTo(next.version) < 0, s"$previous vs $next")
@@ -183,6 +188,7 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
     _ <- testKeyspace
       .tailSource(_ gt "bar" -> 100000, _ startsWith "bar")
       .toZAkkaSource
+      .killswitch
       .interruptibleRunWith(Sink.foreach {
         case (k, v) =>
           println(s"Tail got: k=$k v=$v")

@@ -84,6 +84,7 @@ object DstreamTestUtils {
             .toZAkkaSource
             .viaZAkkaFlow(distributionFlow)
             .viaBuilder(_.alsoTo(masterOutputSink))
+            .killswitch
             .interruptibleRunIgnore()
             .debug("master")
             .forkDaemon

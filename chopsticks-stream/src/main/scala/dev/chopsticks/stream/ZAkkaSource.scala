@@ -46,21 +46,6 @@ object ZAkkaSource {
     def uninterruptibleRunWith[Out](sink: => Graph[SinkShape[V], Future[Out]]): RIO[AkkaEnv with R, (Mat, Out)] = {
       zSource.to(sink).flatMap(_.uninterruptibleRun)
     }
-
-    def interruptibleRunIgnore(graceful: Boolean = true)(implicit
-      ctx: LogCtx
-    ): RIO[IzLogging with AkkaEnv with R, Unit] = {
-      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunIgnore(graceful)
-    }
-
-    def interruptibleRunWith[Out](
-      sink: => Sink[V, Future[Out]],
-      graceful: Boolean = true
-    )(implicit
-      ctx: LogCtx
-    ): RIO[IzLogging with AkkaEnv with R, Out] = {
-      new InterruptibleZAkkaSourceOps(zSource.interruptible).interruptibleRunWith(sink, graceful)
-    }
   }
 
   implicit final class SourceToZAkkaSource[+V, +Mat](source: => Source[V, Mat]) {
@@ -309,7 +294,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
     viaMatM(makeFlow(Flow[Out]))(combine)
   }
 
-  def interruptible: ZAkkaSource[R, E, Out, UniqueKillSwitch] = {
+  def killswitch: ZAkkaSource[R, E, Out, UniqueKillSwitch] = {
     new ZAkkaSource(scope => {
       for {
         flow <- make(scope)
@@ -319,4 +304,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
       }
     })
   }
+
+  @deprecated("Use .killswitch instead", since = "3.4.0")
+  def interruptible: ZAkkaSource[R, E, Out, UniqueKillSwitch] = killswitch
 }
