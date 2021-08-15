@@ -43,7 +43,7 @@ final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
           }
       }
       .toZAkkaSource
-      .killswitch
+      .killSwitch
       .via(db.api.columnFamily(db.storage.default).putPairsInBatchesFlow)
       .interruptibleRunWith(Sink.fold(0)((s, b) => s + b.size))
   }
@@ -54,7 +54,7 @@ final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
       .columnFamily(db.storage.default)
       .source(_ startsWith "item 49", _ lt "item 49" -> Instant.MIN.plusSeconds(50))
       .toZAkkaSource
-      .killswitch
+      .killSwitch
       .interruptibleRunWith(Sink.seq)
   }
 

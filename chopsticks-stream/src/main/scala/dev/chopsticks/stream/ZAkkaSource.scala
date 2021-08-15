@@ -294,7 +294,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
     viaMatM(makeFlow(Flow[Out]))(combine)
   }
 
-  def killswitch: ZAkkaSource[R, E, Out, UniqueKillSwitch] = {
+  def killSwitch: ZAkkaSource[R, E, Out, UniqueKillSwitch] = {
     new ZAkkaSource(scope => {
       for {
         flow <- make(scope)
@@ -305,6 +305,6 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
     })
   }
 
-  @deprecated("Use .killswitch instead", since = "3.4.0")
-  def interruptible: ZAkkaSource[R, E, Out, UniqueKillSwitch] = killswitch
+  @deprecated("Use .killSwitch instead", since = "3.4.0")
+  def interruptible: ZAkkaSource[R, E, Out, UniqueKillSwitch] = killSwitch
 }

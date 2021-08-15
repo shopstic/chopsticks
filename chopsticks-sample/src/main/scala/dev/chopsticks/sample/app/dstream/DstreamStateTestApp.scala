@@ -133,7 +133,7 @@ object DstreamStateTestApp extends ZAkkaApp {
               last <- result
                 .source
                 .toZAkkaSource
-                .killswitch
+                .killSwitch
                 .interruptibleRunWith(Sink.last)
               _ <- zlogger.debug(
                 s"Server < ${result.metadata.getText(Dstreams.WORKER_ID_HEADER) -> "worker"} ${assignment.valueIn -> "assignment"} $last"
@@ -148,7 +148,7 @@ object DstreamStateTestApp extends ZAkkaApp {
         .map(Assignment(_))
         .toZAkkaSource
         .viaZAkkaFlow(distributionFlow)
-        .killswitch
+        .killSwitch
         .interruptibleRunIgnore()
     }
   }

@@ -47,7 +47,7 @@ object MiscUtils {
           }
         })
         .toZAkkaSource
-        .killswitch
+        .killSwitch
         .interruptibleRunWith(Sink.foreach { elapsed =>
           logger.info(s"${elapsed
             .map {

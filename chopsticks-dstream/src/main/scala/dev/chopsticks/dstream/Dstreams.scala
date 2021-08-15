@@ -145,7 +145,7 @@ object Dstreams {
       result <- requestBuilder
         .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
         .toZAkkaSource
-        .killswitch
+        .killSwitch
         .viaBuilder(_.initialTimeout(initialTimeout))
         .mapAsync(1) {
           assignment =>

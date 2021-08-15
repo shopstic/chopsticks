@@ -22,7 +22,7 @@ object ZAkkaStreamTestApp extends ZAkkaApp {
           1.second
         }
       ))
-      .killswitch
+      .killSwitch
       .interruptibleRunWith(akka.stream.scaladsl.Sink.foreach { e =>
         if (e > 2) throw new IllegalStateException("test death")
         println(s"OUT $e")
