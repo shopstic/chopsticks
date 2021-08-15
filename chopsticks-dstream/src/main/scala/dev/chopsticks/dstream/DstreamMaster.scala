@@ -97,7 +97,7 @@ object DstreamMaster {
             ZAkkaFlow[In]
               .mapAsyncUnordered(config.parallelism)(process)
           }
-        zFlowWithoutEnv <- zflow.requireEnv.toManaged_
+        zFlowWithoutEnv <- zflow.toZIO.toManaged_
       } yield zFlowWithoutEnv
     }
 

@@ -10,7 +10,7 @@ import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext.TaskExtensions
 import dev.chopsticks.stream.ZAkkaGraph._
 import shapeless.<:!<
-import zio.{Exit, IO, NeedsEnv, RIO, Task, URIO, ZIO, ZScope}
+import zio.{IO, NeedsEnv, RIO, Task, URIO, ZIO}
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -133,25 +133,25 @@ object ZAkkaSource {
   }
 }
 
-final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => ZIO[
+final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   R,
   E,
   Source[Out, Mat]
 ]) {
   def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaSource[Any, E, Out, Mat]] = {
-    requireEnv.provide(r)
+    toZIO.provide(r)
   }
 
-  def requireEnv: ZIO[R, E, ZAkkaSource[Any, E, Out, Mat]] = {
+  def toZIO: ZIO[R, E, ZAkkaSource[Any, E, Out, Mat]] = {
     ZRunnable(make).toZIO.map(new ZAkkaSource(_))
   }
 
   def toMat[Ret, Mat2, Mat3](sink: Graph[SinkShape[Out], Mat2])(combine: (Mat, Mat2) => (Mat3, Future[Ret]))
     : ZIO[R with AkkaEnv, E, RunnableGraph[(Mat3, Future[Ret])]] = {
     for {
-      scope <- ZScope.make[Exit[Any, Any]]
+      scope <- ZAkkaScope.make
       runtime <- ZIO.runtime[AkkaEnv]
-      source <- make(scope.scope)
+      source <- make(scope)
     } yield {
       source
         .toMat(sink) { (mat, mat2) =>
@@ -161,7 +161,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
           val (mat3, future) = combine(mat, mat2)
           mat3 -> future
             .transformWith { result =>
-              rt.unsafeRunToFuture(scope.close(Exit.Success(()))).transform(_ => result)
+              rt.unsafeRunToFuture(scope.close()).transform(_.flatMap(_ => result))
             }
         }
     }
@@ -183,12 +183,36 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => 
     })
   }
 
+  def mapAsyncWithScope[R1 <: R, Next](parallelism: Int)(runTask: (Out, ZAkkaScope) => RIO[R1, Next])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].mapAsyncWithScope(parallelism)(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
+  }
+
   def mapAsyncUnordered[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
     : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
         flow <- ZAkkaFlow[Out].mapAsyncUnordered(parallelism)(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
+  }
+
+  def mapAsyncUnorderedWithScope[R1 <: R, Next](parallelism: Int)(runTask: (Out, ZAkkaScope) => RIO[R1, Next])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].mapAsyncUnorderedWithScope(parallelism)(runTask).make(scope)
       } yield {
         source.via(flow)
       }

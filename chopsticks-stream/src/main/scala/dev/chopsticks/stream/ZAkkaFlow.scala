@@ -6,10 +6,10 @@ import akka.stream.scaladsl.{Flow, Keep, Source}
 import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.zio_ext.TaskExtensions
-import zio.{Exit, IO, NeedsEnv, RIO, ZIO, ZScope}
+import zio.{IO, NeedsEnv, RIO, ZIO}
 
 import scala.annotation.unchecked.uncheckedVariance
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, Future}
 
 object ZAkkaFlow {
   implicit final class FlowToZAkkaFlow[-In, +Out, +Mat](flow: => Flow[In, Out, Mat]) {
@@ -21,77 +21,82 @@ object ZAkkaFlow {
   def apply[In]: UAkkaFlow[In, In, NotUsed] = new ZAkkaFlow(_ => ZIO.succeed(Flow[In]))
 }
 
-final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZScope[Exit[Any, Any]] => ZIO[
+final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   R,
   E,
   Flow[In, Out, Mat]
 ]) {
   def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
-    requireEnv.provide(r)
+    toZIO.provide(r)
   }
 
-  def requireEnv: ZIO[R, E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
+  def toZIO: ZIO[R, E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
     ZRunnable(make).toZIO.map(new ZAkkaFlow(_))
+  }
+
+  private def mapAsync_[R1 <: R, Next](runTask: (Out, ZAkkaScope) => RIO[R1, Next])(createFlow: (
+    Flow[In @uncheckedVariance, Out @uncheckedVariance, Mat],
+    Out @uncheckedVariance => Future[Next]
+  ) => Flow[In @uncheckedVariance, Next, Mat @uncheckedVariance]): ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    new ZAkkaFlow(scope => {
+      for {
+        flow <- make(scope)
+        runtime <- ZIO.runtime[R1 with AkkaEnv]
+        promise <- zio.Promise.make[Nothing, Unit]
+      } yield {
+        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+
+        createFlow(
+          flow,
+          item => {
+            val task = for {
+              fib <- scope.fork(runTask(item, scope))
+              interruptFib <- scope.fork(promise.await *> fib.interrupt)
+              ret <- fib.join
+              _ <- interruptFib.interrupt
+            } yield ret
+
+            task.unsafeRunToFuture
+          }
+        )
+          .watchTermination() { (mat, future) =>
+            future.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            mat
+          }
+      }
+    })
   }
 
   def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
     : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
-    new ZAkkaFlow(scope => {
-      for {
-        flow <- make(scope)
-        runtime <- ZIO.runtime[R1 with AkkaEnv]
-        promise <- zio.Promise.make[Nothing, Unit]
-      } yield {
-        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
-        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+    mapAsync_((item, _) => runTask(item)) { (flow, runFuture) =>
+      flow
+        .mapAsync(parallelism)(runFuture)
+    }
+  }
 
-        flow
-          .mapAsync(parallelism) { a =>
-            val task = for {
-              fib <- runTask(a).forkIn(scope)
-              interruptFib <- (promise.await *> fib.interrupt).forkIn(scope)
-              ret <- fib.join
-              _ <- interruptFib.interrupt
-            } yield ret
-
-            task.unsafeRunToFuture
-          }
-          .watchTermination() { (mat, f) =>
-            f.onComplete(_ => rt.unsafeRun(promise.succeed(())))
-            mat
-          }
-      }
-    })
+  def mapAsyncWithScope[R1 <: R, Next](parallelism: Int)(runTask: (Out, ZAkkaScope) => RIO[R1, Next])
+    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    mapAsync_(runTask) { (flow, runFuture) =>
+      flow
+        .mapAsync(parallelism)(runFuture)
+    }
   }
 
   def mapAsyncUnordered[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
     : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
-    new ZAkkaFlow(scope => {
-      for {
-        flow <- make(scope)
-        runtime <- ZIO.runtime[R1 with AkkaEnv]
-        promise <- zio.Promise.make[Nothing, Unit]
-      } yield {
-        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
-        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
-
-        flow
-          .mapAsyncUnordered(parallelism) { a =>
-            val task = for {
-              fib <- runTask(a).forkIn(scope)
-              interruptFib <- (promise.await *> fib.interrupt).forkIn(scope)
-              ret <- fib.join
-              _ <- interruptFib.interrupt
-            } yield ret
-
-            task.unsafeRunToFuture
-          }
-          .watchTermination() { (mat, f) =>
-            f.onComplete(_ => rt.unsafeRun(promise.succeed(())))
-            mat
-          }
-      }
-    })
+    mapAsync_((item, _) => runTask(item)) { (flow, runFuture) =>
+      flow
+        .mapAsyncUnordered(parallelism)(runFuture)
+    }
+  }
+  def mapAsyncUnorderedWithScope[R1 <: R, Next](parallelism: Int)(runTask: (Out, ZAkkaScope) => RIO[R1, Next])
+    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    mapAsync_(runTask) { (flow, runFuture) =>
+      flow
+        .mapAsyncUnordered(parallelism)(runFuture)
+    }
   }
 
   def switchFlatMapConcat[R1 <: R, Next](f: Out => RIO[R1, Graph[SourceShape[Next], Any]])
