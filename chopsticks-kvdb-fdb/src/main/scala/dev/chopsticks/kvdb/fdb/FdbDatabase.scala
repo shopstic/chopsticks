@@ -378,6 +378,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                   fn
                 )
                 .thenCompose(v => tx.commit().thenApply(_ => v))
+                .whenComplete((_, _) => tx.close())
             }
           )
       }
