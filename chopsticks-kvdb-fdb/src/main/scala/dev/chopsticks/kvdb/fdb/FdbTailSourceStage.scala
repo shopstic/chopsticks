@@ -153,13 +153,14 @@ final class FdbTailSourceStage(
       )
 
       override def postStop(): Unit = {
+        timer.foreach(_.cancel())
+        shutdownListener.unregister()
+
         try {
           if (closeLast != null) closeLast()
         }
         finally {
           super.postStop()
-          timer.foreach(_.cancel())
-          shutdownListener.unregister()
         }
       }
 

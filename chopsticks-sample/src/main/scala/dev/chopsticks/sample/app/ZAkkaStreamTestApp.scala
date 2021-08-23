@@ -11,9 +11,20 @@ object ZAkkaStreamTestApp extends ZAkkaApp {
   override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
     val stream = Source(1 to 10)
       .toZAkkaSource
+      .mapAsyncWithScope(10) { (i, scope) =>
+        import zio.duration._
+        val task =
+          UIO(println(s"Processing with scope $i")) *> ZIO.succeed(i).delay(6.seconds) *> UIO(
+            println(s"Finished processing with scope $i")
+          )
+
+        scope
+          .fork(task.onInterrupt(UIO(println(s"Interrupted with scope $i"))))
+          .as(i)
+      }
       .mapAsync(10) { i =>
         import zio.duration._
-        val task = UIO(println(s"Processing $i")) *> ZIO.succeed(i).delay(if (i > 5) 10.seconds else Duration.Zero)
+        val task = UIO(println(s"Processing $i")) *> ZIO.succeed(i).delay(if (i > 5) 6.seconds else Duration.Zero)
         task.onInterrupt(UIO(println(s"Interrupted $i")))
       }
       .viaBuilder(_.take(3).buffer(10, OverflowStrategy.backpressure).throttle(
