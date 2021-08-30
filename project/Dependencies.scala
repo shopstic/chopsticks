@@ -3,12 +3,12 @@ import sbt._
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.6"
-  val AKKA_VERSION = "2.6.15"
+  val AKKA_VERSION = "2.6.16"
   val AKKA_HTTP_VERSION = "10.2.1"
-  val ZIO_VERSION = "1.0.10"
+  val ZIO_VERSION = "1.0.11"
   val IZUMI_VERSION = "1.0.8"
   val REFINED_VERSION = "0.9.27"
-  val CALIBAN_VERSION = "1.1.0"
+  val CALIBAN_VERSION = "1.1.1"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -50,7 +50,7 @@ object Dependencies {
   )
 
   val zioMagicDeps = Seq(
-    "io.github.kitlangton" %% "zio-magic" % "0.3.3"
+    "io.github.kitlangton" %% "zio-magic" % "0.3.8"
   )
 
   val squantsDeps = Seq(
@@ -58,8 +58,8 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.11.0",
-    "io.prometheus" % "simpleclient_common" % "0.11.0"
+    "io.prometheus" % "simpleclient" % "0.12.0",
+    "io.prometheus" % "simpleclient_common" % "0.12.0"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
@@ -156,7 +156,7 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "3.0"
+    "com.github.japgolly.microlibs" %% "utils" % "3.0.1"
   )
 
   val berkeleyDbDeps = Seq(

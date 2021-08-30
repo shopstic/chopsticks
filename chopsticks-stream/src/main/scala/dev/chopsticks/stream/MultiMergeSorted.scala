@@ -10,7 +10,7 @@ object MultiMergeSorted {
   def merge[T](sources: Seq[Source[T, Any]], untilLastSourceComplete: Boolean = false)(implicit
     ordering: Ordering[T]
   ): Source[T, Any] = {
-    Source.fromGraph(GraphDSL.create(new MultiMergeSorted[T](sources.size, ordering, untilLastSourceComplete)) {
+    Source.fromGraph(GraphDSL.createGraph(new MultiMergeSorted[T](sources.size, ordering, untilLastSourceComplete)) {
       implicit b => merge =>
         import GraphDSL.Implicits._
 
