@@ -115,7 +115,7 @@ object Dependencies {
   )
 
   val fdbDeps = Seq(
-    "org.foundationdb" % "fdb-java" % "6.3.18"
+    "org.foundationdb" % "fdb-java" % "6.3.15"
   )
 
   val shapelessDeps = Seq(
