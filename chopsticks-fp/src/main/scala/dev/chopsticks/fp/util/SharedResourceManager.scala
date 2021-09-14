@@ -80,15 +80,15 @@ object SharedResourceManager {
 
                 case None =>
                   for {
-                    acquirePromise <- Promise.make[Nothing, Res]
-                    releasePromise <- Promise.make[Nothing, Unit]
-                    fib <- factory.manage(id).use { res =>
-                      acquirePromise.succeed(res) *> releasePromise.await
-                    }.forkDaemon
-                    res <- acquirePromise.await
+                    relMap <- ZManaged.ReleaseMap.make
+                    res <- factory.manage(id).zio.provideSome[R]((_, relMap)).map(_._2)
                     _ <- tmap.put(
                       id,
-                      Right(SharedResource(res, 1, releasePromise.succeed(()) *> fib.await.unit))
+                      Right(SharedResource(
+                        res,
+                        1,
+                        relMap.releaseAll(zio.Exit.Success(()), ExecutionStrategy.Sequential).unit
+                      ))
                     ).commit
                   } yield res
               }
