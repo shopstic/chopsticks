@@ -1,6 +1,6 @@
 package dev.chopsticks.fp
+import zio.Tag
 
-import izumi.reflect.Tag
 import zio.{Has, URIO, ZIO}
 
 object ZService {

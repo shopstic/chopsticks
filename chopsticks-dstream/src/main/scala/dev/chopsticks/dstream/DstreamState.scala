@@ -7,6 +7,7 @@ import akka.stream.{ActorAttributes, Attributes, Graph, SinkShape, StreamSubscri
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.zio_ext.ZIOExtensions
 import dev.chopsticks.stream.FailIfEmptyFlow
 import org.reactivestreams.Publisher
 import zio._
@@ -108,7 +109,7 @@ object DstreamState {
             .ignore
             .as(Source.empty)
 
-          provideAssignmentTask.raceFirst(workerWatchTask)
+          provideAssignmentTask.safeRaceFirst(workerWatchTask)
         }
       }
 

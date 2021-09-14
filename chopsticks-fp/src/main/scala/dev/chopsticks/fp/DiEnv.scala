@@ -5,7 +5,6 @@ import distage.Injector
 import izumi.distage.model.effect.QuasiIO
 import izumi.distage.model.exceptions.ProvisioningException
 import izumi.distage.planning.extensions.GraphDumpBootstrapModule
-import izumi.reflect.Tag
 import zio._
 
 object DiEnv {

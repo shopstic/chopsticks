@@ -24,7 +24,7 @@ object SharedResourceManager {
     factory >>> live[R, Id, Res]
   }
 
-  def live[R: izumi.reflect.Tag, Id: izumi.reflect.Tag, Res: izumi.reflect.Tag]
+  def live[R: zio.Tag, Id: zio.Tag, Res: zio.Tag]
     : RLayer[SharedResourceFactory[R, Id, Res], SharedResourceManager[R, Id, Res]] = {
     val managedTmap: UManaged[TMap[Id, Either[BusyState, SharedResource[Res]]]] = ZManaged
       .make {

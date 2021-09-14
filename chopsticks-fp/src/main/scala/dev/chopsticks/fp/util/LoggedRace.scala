@@ -15,18 +15,8 @@ final class LoggedRace[-R] private (queue: Queue[R with MeasuredLogging => Task[
     ZIO
       .environment[R with MeasuredLogging]
       .flatMap { env =>
-        val tasks = queue.toList.map(_(env))
-
-        tasks match {
-          case head :: tail :: Nil =>
-            head.raceFirst(tail)
-          case head :: tail =>
-            head.run.raceAll(tail.map(_.run)).flatMap(ZIO.done(_)).refailWithTrace
-          case Nil =>
-            Task.unit
-        }
+        queue.toList.map(_(env)).reduce(_ safeRaceFirst _)
       }
-      .interruptAllChildrenPar
   }
 }
 

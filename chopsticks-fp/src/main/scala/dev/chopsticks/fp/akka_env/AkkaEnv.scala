@@ -5,6 +5,7 @@ import akka.actor.typed.scaladsl.adapter._
 import akka.actor.{typed, ActorSystem, CoordinatedShutdown}
 import com.typesafe.config.ConfigFactory
 import dev.chopsticks.fp.config.HoconConfig
+import dev.chopsticks.fp.zio_ext._
 import zio.{RLayer, Task, URIO, ZIO, ZLayer, ZManaged}
 
 import scala.concurrent.ExecutionContextExecutor
@@ -46,7 +47,7 @@ object AkkaEnv extends Serializable {
         }
       } { case (as, cs) =>
         (Task
-          .fromFuture(_ => cs.run(JvmExitReason)).unit raceFirst Task
+          .fromFuture(_ => cs.run(JvmExitReason)).unit safeRaceFirst Task
           .fromFuture { _ =>
             as.whenTerminated
           })

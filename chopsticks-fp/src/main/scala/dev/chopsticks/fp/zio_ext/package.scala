@@ -32,6 +32,15 @@ package object zio_ext {
   }
 
   implicit final class ZIOExtensions[R >: Nothing, E <: Any, A](io: ZIO[R, E, A]) {
+    def safeRaceFirst[R1 <: R, E1 >: E, A1 >: A](that: ZIO[R1, E1, A1]): ZIO[R1, E1, A1] = {
+      ZIO
+        .bracket(io.interruptible.fork.zip(that.interruptible.fork)) { case (leftFib, rightFib) =>
+          leftFib.interrupt.zipPar(rightFib.interrupt)
+        } { case (leftFib, rightFib) =>
+          leftFib.join.raceFirst(rightFib.join)
+        }
+    }
+
     def interruptAllChildrenPar: ZIO[R, E, A] = {
       io.ensuringChildren(fibs => {
         ZIO.fiberId.flatMap { fs =>
@@ -123,17 +132,22 @@ package object zio_ext {
     private def measurementHandleInterruption[R1, E2, A2](name: String, startTime: Long)(io: ZIO[R1, E2, A2])(implicit
       ctx: LogCtx
     ) = {
-      io.onInterrupt {
-        for {
-          elapse <- nanoTime.map(endTime => endTime - startTime)
-          elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
-          _ <- IzLogging.loggerWithContext(ctx).map {
-            _
-              .withCustomContext("task" -> name, "elapsed" -> elapsed)
-              .log(ctx.level)("interrupting...")
-          }
-        } yield ()
-      }
+      ZIO
+        .bracketExit(io.interruptible.fork) { (fib, exit: Exit[Any, Any]) =>
+          val log = for {
+            elapse <- nanoTime.map(endTime => endTime - startTime)
+            elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
+            _ <- IzLogging.loggerWithContext(ctx).map {
+              _
+                .withCustomContext("task" -> name, "elapsed" -> elapsed)
+                .log(ctx.level)("interrupting...")
+            }
+          } yield ()
+
+          log.when(exit.interrupted) *> fib.interrupt
+        } { fib =>
+          fib.join
+        }
     }
   }
 

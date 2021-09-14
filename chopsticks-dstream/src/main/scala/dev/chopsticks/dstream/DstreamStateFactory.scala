@@ -2,7 +2,7 @@ package dev.chopsticks.dstream
 
 import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import izumi.reflect.Tag
+import zio.Tag
 import zio.clock.Clock
 import zio.{UManaged, URLayer, ZManaged}
 

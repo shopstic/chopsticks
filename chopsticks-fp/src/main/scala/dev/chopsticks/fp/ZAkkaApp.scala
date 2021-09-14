@@ -42,12 +42,9 @@ trait ZAkkaApp {
 
     val main = for {
       actorSystem <- AkkaEnv.actorSystem
-      appFib <- run(commandArgs.toList)
+      exitCode <- run(commandArgs.toList)
         .on(actorSystem.dispatcher)
-        .fork
-      exitCode <- appFib
-        .join
-        .raceFirst(
+        .safeRaceFirst(
           // This will win the race when the actor system crashes outright
           // without going through CoordinatedShutdown
           Task
@@ -65,7 +62,6 @@ trait ZAkkaApp {
         //noinspection SimplifyBuildUseInspection
         for {
           fiber <- main
-            .interruptAllChildrenPar
             .provideLayer(runtimeLayer)
             .catchAllTrace { case (e, maybeTrace) =>
               UIO {
