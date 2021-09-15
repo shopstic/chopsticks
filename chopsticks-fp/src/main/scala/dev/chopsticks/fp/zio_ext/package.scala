@@ -33,7 +33,7 @@ package object zio_ext {
   }
 
   implicit final class ZIOExtensions[R >: Nothing, E <: Any, A](io: ZIO[R, E, A]) {
-    def safeRaceFirst[R1 <: R, E1 >: E, A1 >: A](that: ZIO[R1, E1, A1]): ZIO[R1, E1, A1] = {
+    def interruptibleRace[R1 <: R, E1 >: E, A1 >: A](that: ZIO[R1, E1, A1]): ZIO[R1, E1, A1] = {
       Race(io).add(that).run()
     }
 

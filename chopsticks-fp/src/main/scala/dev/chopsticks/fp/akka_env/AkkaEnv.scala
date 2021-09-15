@@ -47,7 +47,7 @@ object AkkaEnv extends Serializable {
         }
       } { case (as, cs) =>
         (Task
-          .fromFuture(_ => cs.run(JvmExitReason)).unit safeRaceFirst Task
+          .fromFuture(_ => cs.run(JvmExitReason)).unit interruptibleRace Task
           .fromFuture { _ =>
             as.whenTerminated
           })

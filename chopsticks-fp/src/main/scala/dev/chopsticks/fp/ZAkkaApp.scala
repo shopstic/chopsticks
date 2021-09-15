@@ -44,7 +44,7 @@ trait ZAkkaApp {
       actorSystem <- AkkaEnv.actorSystem
       exitCode <- run(commandArgs.toList)
         .on(actorSystem.dispatcher)
-        .safeRaceFirst(
+        .interruptibleRace(
           // This will win the race when the actor system crashes outright
           // without going through CoordinatedShutdown
           Task

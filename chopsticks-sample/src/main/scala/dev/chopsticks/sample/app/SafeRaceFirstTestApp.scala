@@ -22,7 +22,7 @@ object SafeRaceFirstTestApp extends ZAkkaApp {
           )
       }))
       .run()
-      .safeRaceFirst(ZManaged
+      .interruptibleRace(ZManaged
         .make(UIO(println("acquire"))) { _ =>
           UIO(println("release"))
         }

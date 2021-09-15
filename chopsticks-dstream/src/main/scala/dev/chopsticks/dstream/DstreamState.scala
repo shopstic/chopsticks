@@ -109,7 +109,7 @@ object DstreamState {
             .ignore
             .as(Source.empty)
 
-          provideAssignmentTask.safeRaceFirst(workerWatchTask)
+          provideAssignmentTask.interruptibleRace(workerWatchTask)
         }
       }
 
