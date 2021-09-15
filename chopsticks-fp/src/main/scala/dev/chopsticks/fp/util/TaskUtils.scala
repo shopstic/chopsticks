@@ -1,7 +1,7 @@
 package dev.chopsticks.fp.util
 
 import java.util.concurrent.{CompletableFuture, CompletionException}
-import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import zio.{RIO, Task, UIO, ZIO}
 
@@ -88,12 +88,6 @@ object TaskUtils {
         }
       }
     }
-
-  @deprecated("Use LoggedRace(...) instead", "3.2.0")
-  def raceFirst(tasks: Iterable[(String, Task[Unit])])(implicit logCtx: LogCtx): RIO[MeasuredLogging, Unit] = {
-    LoggedRace(tasks)
-      .run()
-  }
 
   private def succeedNowTask[A](value: A): Task[A] = Task.succeed(value)
 }

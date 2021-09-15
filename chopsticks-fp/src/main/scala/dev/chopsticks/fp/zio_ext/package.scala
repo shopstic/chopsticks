@@ -1,6 +1,7 @@
 package dev.chopsticks.fp
 
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
+import dev.chopsticks.fp.util.Race
 import dev.chopsticks.util.implicits.SquantsImplicits._
 import logstage.Log
 import squants.time.Nanoseconds
@@ -33,12 +34,7 @@ package object zio_ext {
 
   implicit final class ZIOExtensions[R >: Nothing, E <: Any, A](io: ZIO[R, E, A]) {
     def safeRaceFirst[R1 <: R, E1 >: E, A1 >: A](that: ZIO[R1, E1, A1]): ZIO[R1, E1, A1] = {
-      ZIO
-        .bracket(io.interruptible.fork.zip(that.interruptible.fork)) { case (leftFib, rightFib) =>
-          leftFib.interrupt.zipPar(rightFib.interrupt)
-        } { case (leftFib, rightFib) =>
-          leftFib.join.raceFirst(rightFib.join)
-        }
+      Race(io).add(that).run()
     }
 
     def interruptAllChildrenPar: ZIO[R, E, A] = {
