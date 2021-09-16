@@ -9,7 +9,7 @@ import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class MultiMergeSortedTest
+final class MultiMergeSortedTest
     extends AkkaTestKit
     with ImplicitSender
     with AnyWordSpecLike
