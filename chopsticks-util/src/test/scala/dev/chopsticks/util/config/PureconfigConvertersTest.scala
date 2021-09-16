@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import pureconfig.{CamelCase, ConfigConvert}
 import eu.timepit.refined.auto._
+import org.scalacheck.Arbitrary
 import org.scalatestplus.scalacheck.Checkers
 
 object PureconfigConvertersTest {
@@ -54,8 +55,10 @@ final class PureconfigConvertersTest extends AnyWordSpecLike with Assertions wit
 
   "PureconfigFastCamelCaseNamingConvention" should {
     "tokenize words in the same way as PureConfig's CamelCase tokenizer" in {
-      import org.scalacheck.Arbitrary._
       import org.scalacheck.Prop._
+      // we don't support handling "Σ" which contains two different lower case chars
+      val stringGen = Arbitrary.arbString.arbitrary.filterNot(value => value.contains("Σ"))
+      implicit val arbitraryString = Arbitrary(stringGen)
       check((s: String) => CamelCase.toTokens(s).toList == PureconfigFastCamelCaseNamingConvention.toTokens(s).toList)
     }
   }
