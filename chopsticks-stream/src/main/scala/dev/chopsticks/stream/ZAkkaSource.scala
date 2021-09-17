@@ -171,6 +171,30 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
     toMat(sink)(Keep.both)
   }
 
+  def scanAsync[R1 <: R, Next](zero: Next)(runTask: (Next, Out) => RIO[R1, Next])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].scanAsync(zero)(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
+  }
+
+  def scanAsyncWithScope[R1 <: R, Next](zero: Next)(runTask: (Next, Out, ZAkkaScope) => RIO[R1, Next])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].scanAsyncWithScope(zero)(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
+  }
+
   def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
     : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
