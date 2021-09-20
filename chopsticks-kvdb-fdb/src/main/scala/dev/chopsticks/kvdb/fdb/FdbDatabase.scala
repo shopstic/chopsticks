@@ -652,19 +652,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     write(
       "transactionTask",
       api => {
-//        api.tx.options().setReadYourWritesDisable()
-
-        actions.foreach {
-          case TransactionPut(columnId, key, value) =>
-            api.putByColumnId(columnId, key, value)
-
-          case TransactionDelete(columnId, key) =>
-            api.deleteByColumnId(columnId, key)
-
-          case TransactionDeleteRange(columnId, fromKey, toKey) =>
-            api.deleteRangeByColumnId(columnId, fromKey, toKey)
-        }
-
+        api.transact(actions)
         COMPLETED_FUTURE
       }
     )
@@ -695,17 +683,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
             val okToWrite = condition(pairs)
 
             if (okToWrite) {
-              actions.foreach {
-                case TransactionPut(columnId, key, value) =>
-                  api.putByColumnId(columnId, key, value)
-
-                case TransactionDelete(columnId, key) =>
-                  api.deleteByColumnId(columnId, key)
-
-                case TransactionDeleteRange(columnId, fromKey, toKey) =>
-                  api.deleteRangeByColumnId(columnId, fromKey, toKey)
-              }
-
+              api.transact(actions)
               COMPLETED_FUTURE
             }
             else {

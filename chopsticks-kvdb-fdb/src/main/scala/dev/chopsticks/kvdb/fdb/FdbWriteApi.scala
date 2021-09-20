@@ -2,6 +2,12 @@ package dev.chopsticks.kvdb.fdb
 
 import com.apple.foundationdb.{MutationType, Transaction}
 import dev.chopsticks.kvdb.ColumnFamily
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
+  TransactionDelete,
+  TransactionDeleteRange,
+  TransactionPut,
+  TransactionWrite
+}
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbContext
 
 final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
@@ -65,5 +71,18 @@ final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
 
   def deleteRangePrefix[Col <: CF](column: Col, from: Array[Byte], to: Array[Byte]): Unit = {
     deleteRangeByColumnId(column.id, from, to)
+  }
+
+  def transact(actions: Seq[TransactionWrite]): Unit = {
+    actions.foreach {
+      case TransactionPut(columnId, key, value) =>
+        putByColumnId(columnId, key, value)
+
+      case TransactionDelete(columnId, key) =>
+        deleteByColumnId(columnId, key)
+
+      case TransactionDeleteRange(columnId, fromKey, toKey) =>
+        deleteRangeByColumnId(columnId, fromKey, toKey)
+    }
   }
 }
