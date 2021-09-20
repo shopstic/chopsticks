@@ -15,12 +15,7 @@ import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
-import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
-  TransactionDelete,
-  TransactionDeleteRange,
-  TransactionPut,
-  TransactionWrite
-}
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
