@@ -20,7 +20,8 @@ object TypedConfig {
 
   def live[Cfg: ConfigReader: zio.Tag](
     configNamespace: String = "app",
-    logLevel: Log.Level = Log.Level.Info
+    logLevel: Log.Level = Log.Level.Info,
+    maskedKeys: Set[String] = Set.empty
   ): RLayer[IzLogging with HoconConfig, TypedConfig[Cfg]] = {
     val effect = for {
       hoconConfig <- HoconConfig.get
@@ -37,14 +38,21 @@ object TypedConfig {
               .map { entry =>
                 val origin = entry.getValue.origin().description().replaceFirst(" @ (.+): (\\d+)", ": $2")
                 val value = entry.getValue
+                val key = entry.getKey
 
-                val renderedValue = value match {
-                  case list: ConfigList =>
-                    list.iterator().asScala.map(_.render(ConfigRenderOptions.concise())).mkString("[", ", ", "]")
-                  case v => v.render(ConfigRenderOptions.concise())
-                }
+                val renderedValue =
+                  if (maskedKeys.contains(key)) {
+                    "*********"
+                  }
+                  else {
+                    value match {
+                      case list: ConfigList =>
+                        list.iterator().asScala.map(_.render(ConfigRenderOptions.concise())).mkString("[", ", ", "]")
+                      case v => v.render(ConfigRenderOptions.concise())
+                    }
+                  }
 
-                List(configNamespace + "." + entry.getKey, renderedValue, origin)
+                List(configNamespace + "." + key, renderedValue, origin)
               }
         )
 
