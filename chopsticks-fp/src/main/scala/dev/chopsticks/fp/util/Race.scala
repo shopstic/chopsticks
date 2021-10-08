@@ -39,7 +39,8 @@ object Race {
               case head :: tail :: Nil =>
                 head.join.raceFirst(tail.join)
               case head :: tail =>
-                head.join.raceAll(tail.map(_.join))
+                head.join.either.raceAll(tail.map(_.join.either))
+                  .flatMap(ZIO.fromEither(_))
               case Nil => ??? // Impossible at the type-level
             }
         }
