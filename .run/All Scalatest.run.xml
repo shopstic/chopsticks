@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="All Scalatest" type="CompoundRunConfigurationType">
+    <toRun name="ScalaTests in 'chopsticks-kvdb-codec-berkeleydb-key'" type="ScalaTestRunConfiguration" />
+    <toRun name="ScalaTests in 'chopsticks-kvdb-codec-protobuf-value'" type="ScalaTestRunConfiguration" />
+    <toRun name="ScalaTests in 'chopsticks-kvdb-fdb'" type="ScalaTestRunConfiguration" />
+    <toRun name="ScalaTests in 'chopsticks-kvdb-lmdb'" type="ScalaTestRunConfiguration" />
+    <toRun name="ScalaTests in 'chopsticks-kvdb-rocksdb'" type="ScalaTestRunConfiguration" />
+    <toRun name="ScalaTests in 'chopsticks-stream'" type="ScalaTestRunConfiguration" />
+    <toRun name="ScalaTests in 'chopsticks-testkit'" type="ScalaTestRunConfiguration" />
+    <toRun name="ScalaTests in 'chopsticks-util'" type="ScalaTestRunConfiguration" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -3,14 +3,12 @@ import zio.{IO, ZIO}
 
 trait AppRuntime[R] extends zio.Runtime[R] {
 
-  /**
-    * The main function of the application, which will be passed the command-line
-    * arguments to the program and has to return an `IO` with the errors fully handled.
+  /** The main function of the application, which will be passed the command-line arguments to the program and has to
+    * return an `IO` with the errors fully handled.
     */
   def run(args: List[String]): ZIO[R, Nothing, Int]
 
-  /**
-    * The Scala main function, intended to be called only by the Scala runtime.
+  /** The Scala main function, intended to be called only by the Scala runtime.
     */
   // $COVERAGE-OFF$ Bootstrap to `Unit`
   final def main(args0: Array[String]): Unit =

@@ -28,14 +28,13 @@ object KvdbUtils {
     util.Arrays.copyOfRange(input, 0, i + 1)
   }
 
-  /**
-    *  From FDB ByteArrayUtil.java
-    * Computes the first key that would sort outside the range prefixed by {@code key}.
-    * {@code key} must be non-null, and contain at least some character this is not
-    * {@code \xFF} (255).
+  /** From FDB ByteArrayUtil.java Computes the first key that would sort outside the range prefixed by {@code key}.
+    * {@code key} must be non-null, and contain at least some character this is not {@code \xFF} (255).
     *
-    * @param key prefix key
-    * @return a newly created byte array
+    * @param key
+    *   prefix key
+    * @return
+    *   a newly created byte array
     */
   def strinc(key: Array[Byte]): Array[Byte] = {
     val copy = rstrip(key, 0xFF.toByte)

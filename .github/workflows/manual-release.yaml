@@ -23,7 +23,7 @@ jobs:
             /root/.sbt
           key: build-cache-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/*.scala') }}
       - name: Setup FDB cluster file and start FDB
-        run: mkdir -p ~/.fdb && cp /etc/foundationdb/fdb.cluster ~/.fdb/cluster.file && service foundationdb start
+        run: mkdir -p ~/.fdb && cp /etc/foundationdb/fdb.cluster ~/.config/fdb/cluster.file && service foundationdb start
       - name: Install GPG
         run: apt update && apt install -y gnupg
       - name: Setup git credentials

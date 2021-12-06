@@ -33,9 +33,9 @@ import scala.util.{Failure, Random, Success, Try}
 
 object ConditionalRestartSource {
 
-  /** Restarts source based on the `shouldRestart` function.
-    * Warning: cancelling restarts happens concurrently, so if backoff elapses instantly, there may arise situation
-    * when stream gets restarted one more time and right after that (concurrently) it will get shutdown.
+  /** Restarts source based on the `shouldRestart` function. Warning: cancelling restarts happens concurrently, so if
+    * backoff elapses instantly, there may arise situation when stream gets restarted one more time and right after that
+    * (concurrently) it will get shutdown.
     */
   def restartSource[A, Mat](minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double)(
     sourceFactory: () => Source[A, Mat]

@@ -1,5 +1,4 @@
 import Dependencies._
-import sbt.Resolver
 
 //Global / semanticdbEnabled := true
 
@@ -18,8 +17,8 @@ ThisBuild / Test / javaOptions += "-Xmx1536m"
 
 ThisBuild / run / fork := true
 
-ThisBuild / githubOwner := "shopstic"
-ThisBuild / githubRepository := "chopsticks"
+ThisBuild / PB.protocVersion := "3.17.3"
+ThisBuild / versionScheme := Some("semver-spec")
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
@@ -57,7 +56,9 @@ lazy val dstream = Build
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= akkaGrpcRuntimeDeps ++ enumeratumDeps ++ (zioMagicDeps ++ akkaTestDeps).map(_ % "test"),
+    libraryDependencies ++= akkaGrpcRuntimeDeps ++ enumeratumDeps ++ (zioMagicDeps ++ akkaTestDeps ++ zioTestDeps).map(
+      _ % "test"
+    ),
     akkaGrpcCodeGeneratorSettings += "server_power_apis",
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
   )
@@ -185,8 +186,8 @@ lazy val root = (project in file("."))
   .settings(
     name := "chopsticks",
     publish / skip := true,
-    dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
-    Build.ossPublishSettings
+    dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
+//    Build.ossPublishSettings
   )
   .aggregate(
     util,

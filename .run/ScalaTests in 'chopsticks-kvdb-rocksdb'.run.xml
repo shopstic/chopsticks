@@ -1,0 +1,24 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ScalaTests in 'chopsticks-kvdb-rocksdb'" type="ScalaTestRunConfiguration" factoryName="ScalaTest" nameIsGenerated="true" show_console_on_std_err="false" show_console_on_std_out="false">
+    <module name="kvdb-rocksdb" />
+    <option name="allowRunningInParallel" value="false" />
+    <option name="projectPathOnTarget" />
+    <option name="selectedOptions">
+      <list />
+    </option>
+    <option name="testKind" value="All in package" />
+    <option name="classBuf">
+      <list>
+        <option value="dev.chopsticks.kvdb.rocksdb.RocksdbDatabaseTest" />
+        <option value="dev.chopsticks.kvdb.rocksdb.SpecificRocksdbDatabaseTest" />
+      </list>
+    </option>
+    <option name="jrePath" value="chopsticks-run" />
+    <option name="searchTest" value="In single module" />
+    <option name="shortenClasspath" value="NONE" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+      <option name="BSP.BeforeRunTask" enabled="true" CHOSEN_TARGET="file:$PROJECT_DIR$/#kvdb-rocksdb/Test" />
+    </method>
+  </configuration>
+</component>

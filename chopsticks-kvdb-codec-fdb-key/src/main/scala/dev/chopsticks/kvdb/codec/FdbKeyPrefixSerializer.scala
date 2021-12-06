@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb.codec
 
 import com.apple.foundationdb.tuple.Tuple
 import magnolia.{CaseClass, Magnolia, SealedTrait}
-import shapeless.{HList, HNil, :: => :::}
+import shapeless.{:: => :::, HList, HNil}
 
 import scala.annotation.{implicitNotFound, nowarn}
 import scala.language.experimental.macros

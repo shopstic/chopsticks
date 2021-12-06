@@ -1,7 +1,7 @@
 package dev.chopsticks.util.config
 
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDate, LocalDateTime, LocalTime, Duration => JavaDuration}
+import java.time.{Duration => JavaDuration, LocalDate, LocalDateTime, LocalTime}
 import akka.actor.ActorPath
 import akka.util.{ByteString, Timeout}
 import com.typesafe.config.ConfigValue

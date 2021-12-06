@@ -1,6 +1,5 @@
 import com.jsuereth.sbtpgp.PgpKeys
 import com.timushev.sbt.updates.UpdatesPlugin.autoImport._
-import com.typesafe.sbt.GitPlugin.autoImport.git
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
 import protocbridge.Target
 import wartremover.WartRemover.autoImport._
@@ -54,15 +53,8 @@ object Build {
     Project(projectName, file(s"chopsticks-$projectName"))
       .settings(
         name := s"chopsticks-$projectName",
-        version := {
-          val useSnapshotVersion = sys.env.get("CHOPSTICKS_USE_SNAPSHOT_VERSION").map(_.toLowerCase).contains("true")
-          val buildVersion = (ThisBuild / version).value
-          if (useSnapshotVersion || !buildVersion.endsWith("-SNAPSHOT")) buildVersion
-          else {
-            val shortGitSha = sys.env.get("GITHUB_SHA").orElse(git.gitHeadCommit.value).get.take(8)
-            s"${buildVersion.dropRight("-SNAPSHOT".length)}-$shortGitSha"
-          }
-        },
+        version := (ThisBuild / version).value,
+        publishMavenStyle := (ThisBuild / publishMavenStyle).value,
         Build.cq := {
           (Compile / scalafmtCheck).value
           (Test / scalafmtCheck).value
@@ -87,12 +79,12 @@ object Build {
         wartremoverExcluded += sourceManaged.value,
         wartremoverExcluded += baseDirectory.value / "target" / "scala-2.13" / "akka-grpc",
         dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
-        libraryDependencies ++= Dependencies.scalatestDeps,
-        ossPublishSettings
+        libraryDependencies ++= Dependencies.scalatestDeps
+//        ossPublishSettings
       )
   }
 
-  def ossPublishSettings: Seq[Def.Setting[_]] = {
+  /*def ossPublishSettings: Seq[Def.Setting[_]] = {
     import sbtrelease.ReleaseStateTransformations._
     import sbtrelease.ReleasePlugin.autoImport._
     Seq(
@@ -112,10 +104,6 @@ object Build {
           "scm:git:https://github.com/shopstic/chopsticks.git"
         )
       ),
-      publishTo := {
-        if (sys.env.get("PUBLISH_TO_SONATYPE").exists(_.toBoolean)) sonatypePublishToBundle.value
-        else sbtghpackages.GitHubPackagesKeys.githubPublishTo.value
-      },
       sonatypeProfileName := "dev.chopsticks",
       sonatypeRepository := "https://s01.oss.sonatype.org/service/local",
       sonatypeCredentialHost := "s01.oss.sonatype.org",
@@ -165,6 +153,6 @@ object Build {
     import scala.sys.process._
     val secret = sys.env("PGP_SECRET")
     val _ = (s"echo $secret" #| "base64 --decode" #| "gpg --batch --import").!!
-  }
+  }*/
 
 }

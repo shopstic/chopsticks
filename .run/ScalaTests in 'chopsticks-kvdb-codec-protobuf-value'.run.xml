@@ -1,0 +1,23 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ScalaTests in 'chopsticks-kvdb-codec-protobuf-value'" type="ScalaTestRunConfiguration" factoryName="ScalaTest" nameIsGenerated="true" show_console_on_std_err="false" show_console_on_std_out="false">
+    <module name="kvdb-codec-protobuf-value" />
+    <option name="allowRunningInParallel" value="false" />
+    <option name="projectPathOnTarget" />
+    <option name="selectedOptions">
+      <list />
+    </option>
+    <option name="testKind" value="All in package" />
+    <option name="classBuf">
+      <list>
+        <option value="dev.chopsticks.kvdb.codec.protobuf_value.ProtobufValueSerdesTest" />
+      </list>
+    </option>
+    <option name="jrePath" value="chopsticks-run" />
+    <option name="searchTest" value="In single module" />
+    <option name="shortenClasspath" value="NONE" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+      <option name="BSP.BeforeRunTask" enabled="true" CHOSEN_TARGET="file:$PROJECT_DIR$/#kvdb-codec-protobuf-value/Test" />
+    </method>
+  </configuration>
+</component>

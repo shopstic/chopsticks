@@ -13,9 +13,9 @@ object RocksdbColumnFamilyConfig {
   object TotalOrderScanPattern extends ReadPattern
   final case class PrefixedScanPattern(minPrefixLength: PosInt) extends ReadPattern
 
-  final case class InvalidCompressionType(given: String) extends FailureReason {
+  final case class InvalidCompressionType(compressionType: String) extends FailureReason {
     def description: String =
-      s"Invalid RocksDB compression type '$given', valid types are: " +
+      s"Invalid RocksDB compression type '$compressionType', valid types are: " +
         s"${(CompressionType.values.map(_.getLibraryName).collect { case c if c ne null => s"'$c'" } :+ "'none'").mkString(", ")}"
   }
 

@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb.codec
 
 import com.sleepycat.bind.tuple.TupleOutput
 import magnolia.{CaseClass, Magnolia}
-import shapeless.{HList, HNil, :: => :::}
+import shapeless.{:: => :::, HList, HNil}
 
 import scala.annotation.implicitNotFound
 import scala.language.experimental.macros

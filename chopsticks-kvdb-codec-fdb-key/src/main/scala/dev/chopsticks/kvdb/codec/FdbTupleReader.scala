@@ -5,9 +5,9 @@ import java.util.UUID
 
 import com.apple.foundationdb.tuple.{Tuple, Versionstamp}
 
-/**
-  * Intentionally not thread-safe.
-  * @param tuple Tuple
+/** Intentionally not thread-safe.
+  * @param tuple
+  *   Tuple
   */
 final class FdbTupleReader(tuple: Tuple) {
   private var currentIndex = 0

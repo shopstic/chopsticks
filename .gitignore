@@ -6,4 +6,7 @@ target/
 /.metals
 /out
 metals.sbt
-/.shell-history
+/.zsh_history
+/.dev-sdks
+/.env
+/result
