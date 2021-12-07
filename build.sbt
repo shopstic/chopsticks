@@ -1,8 +1,26 @@
 import Dependencies._
 
 //Global / semanticdbEnabled := true
-
 ThisBuild / organization := "dev.chopsticks"
+ThisBuild / developers := List(
+  Developer(
+    id = "nktpro",
+    name = "Jacky Nguyen",
+    email = "nktpro@gmail.com",
+    url = new URL("https://github.com/nktpro/")
+  ),
+  Developer(
+    id = "pwliwanow",
+    name = "Pawel Iwanow",
+    email = "pwliwanow@gmail.com",
+    url = new URL("https://github.com/pwliwanow/")
+  )
+)
+
+ThisBuild / description := "Essential Scala libraries for everyday use"
+ThisBuild / licenses := List("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
+ThisBuild / homepage := Some(url("https://chopsticks.dev"))
+
 ThisBuild / scalaVersion := SCALA_VERSION
 ThisBuild / javacOptions ++= Build.javacOptions
 ThisBuild / scalacOptions ++= Build.scalacOptions
