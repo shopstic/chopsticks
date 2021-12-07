@@ -1,45 +1,60 @@
 name: Release
+
 on:
   workflow_dispatch:
     inputs:
       releaseVersion:
-        description: 'Version to release (e.g. 2.4.0)'
+        description: 'Release version'
         required: true
+      nextVersion:
+        description: 'Next version'
+        required: true
+
+defaults:
+  run:
+    shell: nix develop -v -c bash {0}
+
 jobs:
   build:
-    name: Release
-    runs-on: ubuntu-latest
-    container:
-      image: shopstic/jdk11-sbt-fdb-server:1.4.4
-    if: ${{ github.ref == 'refs/heads/master' && github.repository == 'shopstic/chopsticks' }}
+    name: Release ${{ github.event.inputs.releaseVersion }}
+    runs-on: [self-hosted, nix, chopsticks]
     steps:
-      - name: Install git
-        run: apt-get install git -y
       - uses: actions/checkout@v2
-      - uses: actions/cache@v2
         with:
-          path: |
-            /root/.cache/coursier
-            /root/.sbt
-          key: build-cache-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/*.scala') }}
-      - name: Setup FDB cluster file and start FDB
-        run: mkdir -p ~/.fdb && cp /etc/foundationdb/fdb.cluster ~/.config/fdb/cluster.file && service foundationdb start
-      - name: Install GPG
-        run: apt update && apt install -y gnupg
-      - name: Setup git credentials
+          fetch-depth: 0
+
+      - name: Set environment variables
         run: |
-          git config --global user.name 'Auto Deployer'
-          git config --global user.email 'auto-deployer@shopstic.github.com'
-      - name: Release
+          echo "PROTOC_CACHE=${XDG_CACHE_HOME}/protoc_cache" >> "${GITHUB_ENV}"
+          echo "COURSIER_CACHE=${XDG_CACHE_HOME}/coursier" >> "${GITHUB_ENV}"
+          echo "SBT_OPTS=-Dsbt.global.base=${XDG_CACHE_HOME}/sbt -Dsbt.ivy.home=${XDG_CACHE_HOME}/ivy -Xmx4g -Xss6m -XX:-UseContainerSupport" >> "${GITHUB_ENV}"
+
+      - name: Set release version
         env:
-          FATAL_WARNINGS: "true"
-          PUBLISH_TO_SONATYPE: "true"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          PGP_SECRET: ${{ secrets.PGP_SECRET }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-#        run: sbt "release release-version ${{ github.event.inputs.releaseVersion }} with-defaults"
+          RELEASE_VERSION: ${{ github.event.inputs.releaseVersion }}
         run: |
-          export GPG_TTY=$(tty)
-          sbt "release release-version ${{ github.event.inputs.releaseVersion }} with-defaults"
+          sbt --client "set ThisBuild / version := \"${RELEASE_VERSION}\""
+
+      - name: Publish
+        env:
+          PGP_SIGNING_KEY: ${{ secrets.PGP_SIGNING_KEY }}
+          PGP_SIGNING_KEY_FP: ${{ secrets.PGP_SIGNING_KEY_FP }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+        run: |
+          printenv PGP_SIGNING_KEY | base64 -d | gpg --import
+          ./release.sh publish
+
+      - name: Tag and bump
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.releaseVersion }}
+          NEXT_VERSION: ${{ github.event.inputs.nextVersion }}
+        run: |
+          git config --global user.email "ci-runner@shopstic.com"
+          git config --global user.name "CI Runner"
+          git tag "${RELEASE_VERSION}"
+          git push origin --tags
+          
+          echo "ThisBuild / version := \"${NEXT_VERSION}-SNAPSHOT\"" > ./version.sbt
+          git commit -m "Bump version to "${NEXT_VERSION}-SNAPSHOT"
+          git push origin master
