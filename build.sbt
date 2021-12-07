@@ -29,11 +29,9 @@ ThisBuild / Test / testOptions := Seq(Tests.Argument("-l", Build.ItTagName), Tes
 //ThisBuild / Build.ITest / testOptions := Seq(Tests.Argument("-n", Build.ItTagName), Tests.Cleanup(() => System.gc()))
 
 ThisBuild / Test / fork := Build.forkTests
-ThisBuild / Test / javaOptions += "-Xmx1536m"
+ThisBuild / Test / javaOptions += "-Xmx2g"
 //ThisBuild / Build.ITest / fork := Build.forkTests
 //ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
-
-ThisBuild / run / fork := true
 
 ThisBuild / PB.protocVersion := "3.17.3"
 ThisBuild / versionScheme := Some("semver-spec")
