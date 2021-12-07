@@ -17,7 +17,7 @@ jobs:
         run: |
           echo "PROTOC_CACHE=${XDG_CACHE_HOME}/protoc_cache" >> "${GITHUB_ENV}"
           echo "COURSIER_CACHE=${XDG_CACHE_HOME}/coursier" >> "${GITHUB_ENV}"
-          echo "SBT_OPTS='-Dsbt.global.base=${XDG_CACHE_HOME}/sbt -Dsbt.ivy.home=${XDG_CACHE_HOME}/ivy -Xmx4g -Xss6m'" >> "${GITHUB_ENV}"
+          echo "SBT_OPTS=-Dsbt.global.base=${XDG_CACHE_HOME}/sbt -Dsbt.ivy.home=${XDG_CACHE_HOME}/ivy -Xmx4g -Xss6m" >> "${GITHUB_ENV}"
 
       - name: Check code quality
         run: |
