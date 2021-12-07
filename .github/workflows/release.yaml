@@ -54,5 +54,5 @@ jobs:
           git push origin --tags
           
           echo "ThisBuild / version := \"${NEXT_VERSION}-SNAPSHOT\"" > ./version.sbt
-          git commit -m "Bump version to ${NEXT_VERSION}-SNAPSHOT"
+          git commit -a -m "Bump version to ${NEXT_VERSION}-SNAPSHOT"
           git push origin master
