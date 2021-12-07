@@ -33,7 +33,7 @@
           };
           compileJdk = pkgs.callPackage hotPot.lib.wrapJdk {
             jdk = pkgs.jdk11;
-            args = ''--run "if [[ -f ./.env ]]; then source ./.env; fi"'';
+            args = ''--run "if [[ -f ./.env ]]; then source ./.env; fi" --set DYLD_LIBRARY_PATH ${fdb.defaultPackage.${fdbLibSystem}}/lib'';
           };
           sbt = pkgs.sbt.override {
             jre = {
