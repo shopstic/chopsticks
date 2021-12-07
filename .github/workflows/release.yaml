@@ -20,8 +20,6 @@ jobs:
     runs-on: [self-hosted, nix, chopsticks]
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
 
       - name: Set environment variables
         run: |
@@ -33,7 +31,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ github.event.inputs.releaseVersion }}
         run: |
-          sbt --client "set ThisBuild / version := \"${RELEASE_VERSION}\""
+          echo "ThisBuild / version := \"${RELEASE_VERSION}\"" > ./version.sbt
 
       - name: Publish
         env:
@@ -56,5 +54,5 @@ jobs:
           git push origin --tags
           
           echo "ThisBuild / version := \"${NEXT_VERSION}-SNAPSHOT\"" > ./version.sbt
-          git commit -m "Bump version to "${NEXT_VERSION}-SNAPSHOT"
+          git commit -m "Bump version to ${NEXT_VERSION}-SNAPSHOT"
           git push origin master
