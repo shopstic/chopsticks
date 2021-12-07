@@ -15,8 +15,6 @@ object Build {
 
   val ItTagName = "dev.chopsticks.test.tags.IntegrationTest"
 
-  val forkTests = sys.env.get("FORK_TESTS").forall(_ == "false")
-
   val javacOptions = Seq("-encoding", "UTF-8")
   val scalacOptions: Seq[String] = Seq(
     "-encoding",
