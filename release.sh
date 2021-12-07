@@ -30,10 +30,10 @@ get_release_version() {
   fi
 }
 
-release() {
+publish() {
   local SONATYPE_USERNAME=${SONATYPE_USERNAME:?"SONATYPE_USERNAME is required"}
   local SONATYPE_PASSWORD=${SONATYPE_PASSWORD:?"SONATYPE_PASSWORD is required"}
-  local PGP_SIGNING_KEY=${PGP_SIGNING_KEY:?"PGP_SIGNING_KEY is required"}
+  local PGP_SIGNING_KEY_FP=${PGP_SIGNING_KEY_FP:?"PGP_SIGNING_KEY_FP is required"}
   local RELEASE_VERSION
   RELEASE_VERSION=$("$0" get_release_version) || exit $?
 
@@ -41,7 +41,7 @@ release() {
   sbt --client 'set ThisBuild / publishTo := sonatypePublishToBundle.value'
   sbt --client 'set ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"'
   sbt --client "set ThisBuild / credentials += Credentials(\"Sonatype Nexus Repository Manager\", \"s01.oss.sonatype.org\", \"${SONATYPE_USERNAME}\", \"${SONATYPE_PASSWORD}\")"
-  sbt --client "set Global / pgpSigningKey := Some(\"${PGP_SIGNING_KEY}\")"
+  sbt --client "set Global / pgpSigningKey := Some(\"${PGP_SIGNING_KEY_FP}\")"
   sbt --client sonatypeBundleClean
   sbt --client publishSigned
 

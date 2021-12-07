@@ -36,3 +36,13 @@ jobs:
 
       - name: Test
         run: sbt --client test
+
+      - name: Publish
+        env:
+          PGP_SIGNING_KEY: ${{ secrets.PGP_SIGNING_KEY }}
+          PGP_SIGNING_KEY_FP: ${{ secrets.PGP_SIGNING_KEY_FP }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+        run: |
+          printenv PGP_SIGNING_KEY | base64 -d | gpg --import
+          ./release.sh publish
