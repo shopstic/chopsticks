@@ -13,36 +13,38 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Set environment variables
-        run: |
-          echo "PROTOC_CACHE=${XDG_CACHE_HOME}/protoc_cache" >> "${GITHUB_ENV}"
-          echo "COURSIER_CACHE=${XDG_CACHE_HOME}/coursier" >> "${GITHUB_ENV}"
-          echo "SBT_OPTS=-Dsbt.global.base=${XDG_CACHE_HOME}/sbt -Dsbt.ivy.home=${XDG_CACHE_HOME}/ivy -Xmx4g -Xss6m -XX:-UseContainerSupport" >> "${GITHUB_ENV}"
+      - run: git rev-list --count refs/remotes/origin/master
 
-      - name: Check code quality
-        run: |
-          sbt --client 'set ThisBuild / scalacOptions ++= Seq("-Werror")'
-          sbt --client cq
-
-      - name: Compile
-        run: sbt --client compile
-
-      - name: Compile tests
-        run: sbt --client 'Test / compile'
-
-#      - name: Debug
+#      - name: Set environment variables
 #        run: |
-#          trap : TERM INT; sleep infinity & wait
-
-      - name: Test
-        run: sbt --client test
-
-      - name: Publish
-        env:
-          PGP_SIGNING_KEY: ${{ secrets.PGP_SIGNING_KEY }}
-          PGP_SIGNING_KEY_FP: ${{ secrets.PGP_SIGNING_KEY_FP }}
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-        run: |
-          printenv PGP_SIGNING_KEY | base64 -d | gpg --import
-          ./release.sh publish
+#          echo "PROTOC_CACHE=${XDG_CACHE_HOME}/protoc_cache" >> "${GITHUB_ENV}"
+#          echo "COURSIER_CACHE=${XDG_CACHE_HOME}/coursier" >> "${GITHUB_ENV}"
+#          echo "SBT_OPTS=-Dsbt.global.base=${XDG_CACHE_HOME}/sbt -Dsbt.ivy.home=${XDG_CACHE_HOME}/ivy -Xmx4g -Xss6m -XX:-UseContainerSupport" >> "${GITHUB_ENV}"
+#
+#      - name: Check code quality
+#        run: |
+#          sbt --client 'set ThisBuild / scalacOptions ++= Seq("-Werror")'
+#          sbt --client cq
+#
+#      - name: Compile
+#        run: sbt --client compile
+#
+#      - name: Compile tests
+#        run: sbt --client 'Test / compile'
+#
+##      - name: Debug
+##        run: |
+##          trap : TERM INT; sleep infinity & wait
+#
+#      - name: Test
+#        run: sbt --client test
+#
+#      - name: Publish
+#        env:
+#          PGP_SIGNING_KEY: ${{ secrets.PGP_SIGNING_KEY }}
+#          PGP_SIGNING_KEY_FP: ${{ secrets.PGP_SIGNING_KEY_FP }}
+#          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+#          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+#        run: |
+#          printenv PGP_SIGNING_KEY | base64 -d | gpg --import
+#          ./release.sh publish
