@@ -1,20 +1,14 @@
 # Scala chopsticks
 ![Build](https://github.com/shopstic/chopsticks/workflows/Build/badge.svg)
-[![Scala Steward badge](https://img.shields.io/badge/Scala_Steward-helping-blue.svg?style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAQCAMAAAARSr4IAAAAVFBMVEUAAACHjojlOy5NWlrKzcYRKjGFjIbp293YycuLa3pYY2LSqql4f3pCUFTgSjNodYRmcXUsPD/NTTbjRS+2jomhgnzNc223cGvZS0HaSD0XLjbaSjElhIr+AAAAAXRSTlMAQObYZgAAAHlJREFUCNdNyosOwyAIhWHAQS1Vt7a77/3fcxxdmv0xwmckutAR1nkm4ggbyEcg/wWmlGLDAA3oL50xi6fk5ffZ3E2E3QfZDCcCN2YtbEWZt+Drc6u6rlqv7Uk0LdKqqr5rk2UCRXOk0vmQKGfc94nOJyQjouF9H/wCc9gECEYfONoAAAAASUVORK5CYII=)](https://scala-steward.org)
+[![Scala Steward badge](https://img.shields.io/badge/Scala_Steward-helping-blue.svg?style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAQCAMAAAARSr4IAAAAVFBMVEUAAACHjojlOy5NWlrKzcYRKjGFjIbp293YycuLa3pYY2LSqql4f3pCUFTgSjNodYRmcXUsPD/NTTbjRS+2jomhgnzNc223cGvZS0HaSD0XLjbaSjElhIr+AAAAAXRSTlMAQObYZgAAAHlJREFUCNdNyosOwyAIhWHAQS1Vt7a77/3fcxxdmv0xwmckutAR1nkm4ggbyEcg/wWmlGLDAA3oL50xi6fk5ffZ3E2E3QfZDCcCN2YtbEWZt+Drc6u6rlqv7Uk0LdKqqr5rk2UCRXOk0vmQKGfc94nOJyQjouF9H/wCc9gECEYfONoAAAAASUVORK5CYII=)](https://scala-steward.org) 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/shopstic/helmet/blob/main/LICENSE)
+[![Latest Release](https://img.shields.io/maven-central/v/dev.chopsticks/chopsticks-stream_2.13)](https://search.maven.org/search?q=g:dev.chopsticks)
 
 `chopsticks` is an essential collection of Scala libraries for everyday use. It's designed specifically to build high performance, production-grade functional reactive stream systems. These have been used extensively in our internal production streaming systems for years, dealing with __over 1 million persistent writes / s with concurrently up to 30 million reads / s__ in each individual server.
 
 ## License
 
 [Apache 2.0 license](./LICENSE.txt)
-
-## Download [ ![Download](https://api.bintray.com/packages/shopstic/maven/chopsticks-fp/images/download.svg) ](https://bintray.com/shopstic/maven/chopsticks-fp/_latestVersion)
-
-All artifacts are published to [bintray](https://bintray.com/shopstic/). Simply add a resolver to your `build.sbt`:
-
-```scala
-ThisBuild / resolvers += Resolver.bintrayRepo("shopstic", "maven")
-```
 
 ## chopsticks-kvdb-*
 
