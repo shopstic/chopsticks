@@ -17,7 +17,7 @@ jobs:
         run: |
           echo "PROTOC_CACHE=${XDG_CACHE_HOME}/protoc_cache" >> "${GITHUB_ENV}"
           echo "COURSIER_CACHE=${XDG_CACHE_HOME}/coursier" >> "${GITHUB_ENV}"
-          echo "SBT_OPTS=-Dsbt.global.base=${XDG_CACHE_HOME}/sbt -Dsbt.ivy.home=${XDG_CACHE_HOME}/ivy -Xmx4g -Xss6m -XshowSettings:system" >> "${GITHUB_ENV}"
+          echo "SBT_OPTS=-Dsbt.global.base=${XDG_CACHE_HOME}/sbt -Dsbt.ivy.home=${XDG_CACHE_HOME}/ivy -Xmx4g -Xss6m -XX:-UseContainerSupport" >> "${GITHUB_ENV}"
 
       - name: Check code quality
         run: |
@@ -29,10 +29,6 @@ jobs:
 
       - name: Compile tests
         run: sbt --client 'Test / compile'
-
-      - name: Debug
-        run: |
-          trap : TERM INT; sleep infinity & wait
 
       - name: Test
         run: sbt --client test
