@@ -50,7 +50,7 @@ jobs:
         run: |
           git config --global user.email "ci-runner@shopstic.com"
           git config --global user.name "CI Runner"
-          git tag "${RELEASE_VERSION}"
+          git tag "v${RELEASE_VERSION}"
           git push origin --tags
           
           echo "ThisBuild / version := \"${NEXT_VERSION}-SNAPSHOT\"" > ./version.sbt
