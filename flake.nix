@@ -27,13 +27,18 @@
           chopsticksSystem = if system == "aarch64-linux" then "x86_64-linux" else system;
           chopsticksPkgs = import nixpkgs { system = chopsticksSystem; };
 
+          jdkArgs = [
+            "--set DYLD_LIBRARY_PATH ${fdb.defaultPackage.${fdbLibSystem}}/lib"
+            "--set LD_LIBRARY_PATH ${fdb.defaultPackage.${fdbLibSystem}}/lib"
+          ];
+
           runJdk = pkgs.callPackage hotPot.lib.wrapJdk {
             jdk = (import nixpkgs { system = fdbLibSystem; }).jdk11;
-            args = "--set DYLD_LIBRARY_PATH ${fdb.defaultPackage.${fdbLibSystem}}/lib";
+            args = pkgs.lib.concatStringsSep " " jdkArgs;
           };
           compileJdk = pkgs.callPackage hotPot.lib.wrapJdk {
             jdk = pkgs.jdk11;
-            args = ''--run "if [[ -f ./.env ]]; then source ./.env; fi" --set DYLD_LIBRARY_PATH ${fdb.defaultPackage.${fdbLibSystem}}/lib'';
+            args = pkgs.lib.concatStringsSep " " (jdkArgs ++ [''--run "if [[ -f ./.env ]]; then source ./.env; fi"'']);
           };
           sbt = pkgs.sbt.override {
             jre = {
