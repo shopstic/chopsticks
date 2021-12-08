@@ -1,12 +1,11 @@
 package dev.chopsticks.graphql.subscription
 
 import java.util.concurrent.TimeoutException
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.ws.{Message, TextMessage, WebSocketRequest}
-import akka.stream.scaladsl.{BidiFlow, Keep, RestartSource, Sink, Source}
+import akka.stream.scaladsl.{BidiFlow, Flow, Keep, RestartSource, Sink, Source}
 import akka.stream.stage._
 import akka.stream._
 import caliban.client.CalibanClientError.ServerError
@@ -37,7 +36,12 @@ object ConditionalRestartSource {
     * backoff elapses instantly, there may arise situation when stream gets restarted one more time and right after that
     * (concurrently) it will get shutdown.
     */
-  def restartSource[A, Mat](minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double)(
+  def restartSource[A, Mat](
+    minBackoff: FiniteDuration,
+    maxBackoff: FiniteDuration,
+    randomFactor: Double,
+    idleTimeout: Option[FiniteDuration]
+  )(
     sourceFactory: () => Source[A, Mat]
   )(shouldRestart: Try[Mat] => Boolean)(implicit mat: Materializer): Source[A, Future[Mat]] = {
     import mat.executionContext
@@ -52,8 +56,7 @@ object ConditionalRestartSource {
                 Attributes.CancellationStrategy(Attributes.cancellationStrategyCompleteState) :: Nil
               )
             )
-            // idleTimeout for safety until https://github.com/hasura/graphql-engine/issues/5099 is resolved
-            .idleTimeout(5.seconds)
+            .via(idleTimeout.fold(Flow[A])(timeout => Flow[A].idleTimeout(timeout)))
             .recoverWithRetries(
               1,
               {
@@ -86,22 +89,31 @@ object GraphQlSubscriptionSource {
   def apply[A](
     uri: Uri,
     subscription: SelectionBuilder[RootSubscription, A],
+    idleTimeout: Option[FiniteDuration],
     minRestartBackoff: FiniteDuration = 50.millis,
     maxRestartBackoff: FiniteDuration = 250.millis
   )(implicit actorSystem: ActorSystem): Source[A, Future[Unit]] = {
-    apply(Random.alphanumeric.take(10).mkString(""), uri, subscription, minRestartBackoff, maxRestartBackoff)
+    apply(
+      id = Random.alphanumeric.take(10).mkString(""),
+      uri = uri,
+      subscription = subscription,
+      idleTimeout = idleTimeout,
+      minRestartBackoff = minRestartBackoff,
+      maxRestartBackoff = maxRestartBackoff
+    )
   }
 
   def apply[A](
     id: String,
     uri: Uri,
     subscription: SelectionBuilder[RootSubscription, A],
+    idleTimeout: Option[FiniteDuration],
     minRestartBackoff: FiniteDuration,
     maxRestartBackoff: FiniteDuration
   )(implicit actorSystem: ActorSystem): Source[A, Future[Unit]] = {
     import actorSystem.dispatcher
     ConditionalRestartSource
-      .restartSource(minRestartBackoff, maxRestartBackoff, 0.1) { () =>
+      .restartSource(minRestartBackoff, maxRestartBackoff, 0.1, idleTimeout) { () =>
         val wsFlow = Http().webSocketClientFlow(WebSocketRequest(uri, subprotocol = Some("graphql-ws")))
         val subscriptionBidiFlow = new GraphQlSubscriptionBidiFlow[A](id, subscription)
         val flow =
