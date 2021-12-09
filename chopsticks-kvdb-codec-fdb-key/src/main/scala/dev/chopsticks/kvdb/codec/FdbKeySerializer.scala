@@ -102,7 +102,7 @@ object FdbKeySerializer {
       }
     }
 
-  //noinspection MatchToPartialFunction
+  // noinspection MatchToPartialFunction
   implicit def deriveOption[T](implicit encoder: FdbKeySerializer[T]): PredefinedFdbKeySerializer[Option[T]] = {
     define { (o, maybeValue) =>
       maybeValue match {

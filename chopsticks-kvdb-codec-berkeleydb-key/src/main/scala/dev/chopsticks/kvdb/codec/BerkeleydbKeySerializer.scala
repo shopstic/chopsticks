@@ -79,7 +79,7 @@ object BerkeleydbKeySerializer {
   ): PredefinedBerkeleydbKeySerializer[F[A, B]] =
     define((tupleOutput: TupleOutput, value: F[A, B]) => serializer.serialize(tupleOutput, refType.unwrap(value)))
 
-  //noinspection MatchToPartialFunction
+  // noinspection MatchToPartialFunction
   implicit def deriveOption[T](implicit
     encoder: BerkeleydbKeySerializer[T]
   ): PredefinedBerkeleydbKeySerializer[Option[T]] = {

@@ -41,7 +41,7 @@ final case class DstreamLoadTestWorkerAppConfig(
 )
 
 object DstreamLoadTestWorkerAppConfig {
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit lazy val configConvert = {
     import dev.chopsticks.util.config.PureconfigConverters._
     ConfigConvert[DstreamLoadTestWorkerAppConfig]
@@ -70,7 +70,7 @@ object DstreamLoadTestWorkerApp extends AkkaDiApp[DstreamLoadTestWorkerAppConfig
     }
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     val managed = for {
       appConfig <- ZManaged.access[AppConfig](_.get)

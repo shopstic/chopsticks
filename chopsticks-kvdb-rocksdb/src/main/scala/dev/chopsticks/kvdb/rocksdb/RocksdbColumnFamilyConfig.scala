@@ -29,7 +29,7 @@ object RocksdbColumnFamilyConfig {
       _.getLibraryName
     )
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit val configConvert = {
     import dev.chopsticks.util.config.PureconfigConverters._
     ConfigConvert[RocksdbColumnFamilyConfig]

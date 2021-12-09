@@ -191,7 +191,7 @@ class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]](
     columnId: String,
     constraints: List[KvdbKeyConstraint]
   ): CompletableFuture[Option[KvdbPair]] = {
-    getEitherByColumnId(columnId, constraints).thenApply { //noinspection MatchToPartialFunction
+    getEitherByColumnId(columnId, constraints).thenApply { // noinspection MatchToPartialFunction
       result =>
         result match {
           case Right((key, value)) =>
@@ -205,7 +205,7 @@ class FdbReadApi[BCF[A, B] <: ColumnFamily[A, B]](
     column: Col,
     constraints: List[KvdbKeyConstraint]
   ): CompletableFuture[Option[KvdbPair]] = {
-    getEither(column, constraints).thenApply { //noinspection MatchToPartialFunction
+    getEither(column, constraints).thenApply { // noinspection MatchToPartialFunction
       result =>
         result match {
           case Right((key, value)) =>

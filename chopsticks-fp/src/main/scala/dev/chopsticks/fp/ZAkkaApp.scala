@@ -14,7 +14,7 @@ import scala.util.control.NonFatal
 
 object ZAkkaApp {
   type ZAkkaAppEnv = ZEnv with HoconConfig with AkkaEnv with IzLogging
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit val tag = zio.Tag[ZAkkaAppEnv]
 }
 
@@ -59,7 +59,7 @@ trait ZAkkaApp {
 
     try {
       val exitCode = bootstrapRuntime.unsafeRun {
-        //noinspection SimplifyBuildUseInspection
+        // noinspection SimplifyBuildUseInspection
         for {
           fiber <- main
             .provideLayer(runtimeLayer)

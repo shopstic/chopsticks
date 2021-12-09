@@ -15,7 +15,7 @@ final class PureconfigLoaderTest extends AnyWordSpecLike with Assertions with Ma
   import PureconfigLoaderTest._
 
   "load with a default hint" in {
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit val configReader = {
       import dev.chopsticks.util.config.PureconfigConverters._
       ConfigReader[Foo]
@@ -38,7 +38,7 @@ final class PureconfigLoaderTest extends AnyWordSpecLike with Assertions with Ma
   }
 
   "load with a custom hint" in {
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit val configReader = {
       import dev.chopsticks.util.config.PureconfigConverters._
       implicit val hint: ProductHint[Foo] = ProductHint[Foo](allowUnknownKeys = true)

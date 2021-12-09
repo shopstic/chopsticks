@@ -67,27 +67,24 @@ object OptimizedDecoder extends LowPriorityOptimizedDecoder {
               // if we are in here then we are decoding a case class so we need a record schema
               require(schema.getType == Schema.Type.RECORD)
               val values = ctx.parameters.map { p =>
-                /**
-                  * For a field in the target type (the case class we are marshalling to), we must
-                  * try to pull a value from the Avro GenericRecord. After the value has been retrieved,
-                  * it needs to be decoded into the appropriate Scala type.
+                /** For a field in the target type (the case class we are marshalling to), we must try to pull a value
+                  * from the Avro GenericRecord. After the value has been retrieved, it needs to be decoded into the
+                  * appropriate Scala type.
                   *
-                  * If the writer schema does not have an entry for the field then we can consider schema
-                  * evolution using the following rules in the given order.
+                  * If the writer schema does not have an entry for the field then we can consider schema evolution
+                  * using the following rules in the given order.
                   *
-                  * 1. If the reader schema contains a default for this field, we will use that default.
-                  * 2. If the parameter is defined with a scala default method then we will use that default value.
-                  * 3. If the field is marked as @transient
+                  *   1. If the reader schema contains a default for this field, we will use that default. 2. If the
+                  *      parameter is defined with a scala default method then we will use that default value. 3. If the
+                  *      field is marked as @transient
                   *
                   * If none of these rules can be satisfied then an exception will be thrown.
                   */
                 val extractor = new AnnotationExtractors(p.annotations)
 
-                /**
-                  * We may have a schema with a field in snake case like say { "first_name": "sam" } and
-                  * that schema needs to be used for a case class field `firstName`.
-                  * The field mapper is used to map fields in a schema to fields in a case class by
-                  * transforming the class field name to the wire name format.
+                /** We may have a schema with a field in snake case like say { "first_name": "sam" } and that schema
+                  * needs to be used for a case class field `firstName`. The field mapper is used to map fields in a
+                  * schema to fields in a case class by transforming the class field name to the wire name format.
                   */
                 val name = fieldMapper.to(extractor.name.getOrElse(p.label))
 

@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 object BerkeleydbKeyCodecTest {
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit lazy val defaultZoneIdLocalDateTimeKeySerdes =
     BerkeleydbKeySerdes.createLocalDateTimeKeySerdes(ZoneId.systemDefault())
   final case class Sym(symbol: String) extends AnyVal

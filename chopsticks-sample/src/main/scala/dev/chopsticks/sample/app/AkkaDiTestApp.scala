@@ -55,7 +55,7 @@ object AkkaDiTestApp extends AkkaDiApp[Unit] {
     ZService[IzLogging.Service].flatMap(_.zioLogger.error("test error here"))
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     val managed = ZManaged
       .make(UIO("whatever")) { _ =>

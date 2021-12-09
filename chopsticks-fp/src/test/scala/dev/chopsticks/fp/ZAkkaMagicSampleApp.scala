@@ -18,7 +18,7 @@ import scala.jdk.DurationConverters.ScalaDurationOps
 object ZAkkaMagicSampleApp extends ZAkkaApp {
   final case class AppConfig(foo: String, bar: Boolean, baz: FiniteDuration)
   object AppConfig {
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit lazy val configConvert = {
       import dev.chopsticks.util.config.PureconfigConverters._
       ConfigConvert[AppConfig]
@@ -53,7 +53,7 @@ object ZAkkaMagicSampleApp extends ZAkkaApp {
     layer
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     for {
       as <- AkkaEnv.actorSystem

@@ -41,7 +41,7 @@ object ArbitraryTime {
 
   lazy val uniformZoneOffset: Gen[ZoneOffset] = for {
     hours <- Gen.choose(-18, 18)
-    //The mins and secs must have the same sign as hours and not go over 18 hours.
+    // The mins and secs must have the same sign as hours and not go over 18 hours.
     maxTicks = 59 * (if (hours >= 0) 1 else -1) * (if (math.abs(hours) >= 18) 0 else 1)
     minutes <- Gen.choose(0, maxTicks)
     seconds <- Gen.choose(0, maxTicks)

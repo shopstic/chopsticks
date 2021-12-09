@@ -13,7 +13,7 @@ final class StatefulMapWithCompleteFlow[In, Out](val funs: () => (In => Out, () 
 
   override def initialAttributes: Attributes = Attributes.name("statefulMapWithCompleteFlow")
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   // scalastyle:off
   def createLogic(inheritedAttributes: Attributes) = new GraphStageLogic(shape) with InHandler with OutHandler {
     lazy val decider = inheritedAttributes.mandatoryAttribute[SupervisionStrategy].decider

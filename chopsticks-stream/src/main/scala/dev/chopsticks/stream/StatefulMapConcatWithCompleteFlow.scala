@@ -16,7 +16,7 @@ final class StatefulMapConcatWithCompleteFlow[In, Out](
 
   override def initialAttributes: Attributes = Attributes.name("statefulMapConcatWithComplete")
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   // scalastyle:off
   def createLogic(inheritedAttributes: Attributes) = new GraphStageLogic(shape) with InHandler with OutHandler {
     lazy val decider = inheritedAttributes.mandatoryAttribute[SupervisionStrategy].decider

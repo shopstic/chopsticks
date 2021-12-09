@@ -7,7 +7,7 @@ import pureconfig.ConfigConvert
 final case class GrpcClientConfig(host: NonEmptyString, port: PortNumber, useTls: Boolean)
 
 object GrpcClientConfig {
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit lazy val configConvert = {
     import dev.chopsticks.util.config.PureconfigConverters._
     ConfigConvert[GrpcClientConfig]

@@ -39,7 +39,7 @@ final case class DstreamLoadTestMasterAppConfig(
 )
 
 object DstreamLoadTestMasterAppConfig {
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit lazy val configConvert = {
     import dev.chopsticks.util.config.PureconfigConverters._
     ConfigConvert[DstreamLoadTestMasterAppConfig]
@@ -74,7 +74,7 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
     }
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     manageServer.use { _ =>
       calculateResult.unit

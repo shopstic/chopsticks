@@ -23,7 +23,7 @@ final case class DynamicSubsetKvdbSampleAppConfig(subsetIds: Set[NonEmptyString]
 
 object DynamicSubsetKvdbSampleAppConfig {
   import dev.chopsticks.util.config.PureconfigConverters._
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit val configConvert = ConfigConvert[DynamicSubsetKvdbSampleAppConfig]
 }
 
@@ -69,7 +69,7 @@ object DynamicSubsetKvdbSampleApp extends AkkaDiApp[DynamicSubsetKvdbSampleAppCo
     }
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     for {
       dbService <- ZIO.service[DynamicKvdbService]

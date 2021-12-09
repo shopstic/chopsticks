@@ -22,7 +22,7 @@ final class LastStateFlow[E, S, R] private (seed: => S, next: (S, E) => S, resul
     val logic: GraphStageLogic = new GraphStageLogic(shape) {
       import shape._
 
-      //noinspection ScalaStyle
+      // noinspection ScalaStyle
       // scalastyle:off null
       private var currentState: S = seed
 

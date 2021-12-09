@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 object KeyConstraintsTest {
   final case class StockDbKeyTest(symbol: String, year: Int, month: Int)
   object StockDbKeyTest {
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit val dbKey = KeySerdes[StockDbKeyTest]
   }
 }

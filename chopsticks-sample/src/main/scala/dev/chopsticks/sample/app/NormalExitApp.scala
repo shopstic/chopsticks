@@ -28,7 +28,7 @@ object NormalExitApp extends AkkaDiApp[NotUsed] {
     }
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     ZIO.accessM[IzLogging](_.get.zioLogger.info("works"))
   }

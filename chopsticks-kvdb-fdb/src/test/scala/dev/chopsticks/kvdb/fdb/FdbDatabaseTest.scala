@@ -17,9 +17,9 @@ object FdbDatabaseTest {
     val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = {
       ColumnFamilySet[BaseCf] of plain and lookup
     }
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     override val keyspacesWithVersionstampKey = Set.empty
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     override val keyspacesWithVersionstampValue = Set.empty
   }
 

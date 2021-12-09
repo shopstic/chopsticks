@@ -38,7 +38,7 @@ object DstreamUtils {
     grpcClientSettingsConfigReader
       .toManaged_
       .flatMap { implicit settingsConfigReader: ConfigReader[GrpcClientSettings] =>
-        //noinspection TypeAnnotation
+        // noinspection TypeAnnotation
         implicit val configReader = {
           import dev.chopsticks.util.config.PureconfigConverters._
           ConfigReader[DstreamWorkerConfig]

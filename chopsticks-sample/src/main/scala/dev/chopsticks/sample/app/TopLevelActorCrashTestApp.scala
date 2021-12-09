@@ -28,7 +28,7 @@ object TopLevelActorCrashTestApp extends AkkaDiApp[NotUsed] {
     }
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     val managed = ZManaged.make(UIO("foo")) { _ =>
       UIO(println("This release should still be invoked even when the actor system is terminated unexpectedly"))

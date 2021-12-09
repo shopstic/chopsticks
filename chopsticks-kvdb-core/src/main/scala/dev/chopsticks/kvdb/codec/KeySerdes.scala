@@ -11,7 +11,7 @@ trait KeySerdes[K] extends KeySerializer[K] with KeyDeserializer[K] with KeyPref
 }
 
 object KeySerdes extends StrictLogging {
-  //noinspection ScalaStyle
+  // noinspection ScalaStyle
   // scalastyle:off
   type Aux[P, F <: HList] = KeySerdes[P] {
     type Flattened = F
@@ -93,10 +93,10 @@ object KeySerdes extends StrictLogging {
     while (i < minLen) {
       val b1 = a1(i)
       val b2 = a2(i)
-      //noinspection ScalaStyle
-      //scalastyle:off
+      // noinspection ScalaStyle
+      // scalastyle:off
       if (b1 != b2) return (b1 & 0xFF) - (b2 & 0xFF)
-      //scalastyle:on
+      // scalastyle:on
       i += 1
     }
     a1.length - a2.length

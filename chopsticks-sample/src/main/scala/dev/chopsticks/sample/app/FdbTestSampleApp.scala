@@ -31,7 +31,7 @@ final case class FdbTestSampleAppConfig(
 )
 
 object FdbTestSampleAppConfig {
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit val configReader = {
     import dev.chopsticks.util.config.PureconfigConverters._
     ConfigConvert[FdbTestSampleAppConfig]

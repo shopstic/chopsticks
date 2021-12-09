@@ -71,7 +71,7 @@ object KvdbDatabase {
     // Configuration of retry schedule via HOCON is not yet supported
     implicit val writeRetryScheduleConfigConvert: ConfigConvert[Schedule[Any, Throwable, Any]] =
       ConfigConvert.viaStringOpt[Schedule[Any, Throwable, Any]](_ => None, _ => "")
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit val configConvert = ConfigConvert[KvdbClientOptions]
   }
 }

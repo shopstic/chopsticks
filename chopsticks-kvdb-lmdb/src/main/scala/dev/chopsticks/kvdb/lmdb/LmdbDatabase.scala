@@ -49,7 +49,7 @@ object LmdbDatabase extends StrictLogging {
 
   object LmdbDatabaseConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit val configConvert = ConfigConvert[LmdbDatabaseConfig]
   }
 
@@ -302,7 +302,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
           if (isValid) {
             val key = bufferToArray(cursor.key())
-            //noinspection CorrespondsUnsorted
+            // noinspection CorrespondsUnsorted
             if (KeySerdes.isEqual(key, headOperand)) satisfiyingPairAtCursor(cursor.next(), cursor, tailConstraints)
             else {
               if (keySatisfies(key, tailConstraints)) Right((key, bufferToArray(cursor.`val`())))

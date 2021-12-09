@@ -42,7 +42,7 @@ object DstreamSampleApp extends ZAkkaApp {
       .as(ExitCode(0))
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     LoggedRace()
       .add("Run", start)

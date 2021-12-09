@@ -51,7 +51,7 @@ object RocksdbDatabase extends StrictLogging {
 
   object RocksdbDatabaseConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit val configConvert = ConfigConvert[RocksdbDatabaseConfig]
   }
 
@@ -256,7 +256,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
           if (iter.isValid) {
             val key = iter.key()
-            //noinspection CorrespondsUnsorted
+            // noinspection CorrespondsUnsorted
             if (KeySerdes.isEqual(key, headOperand) && keySatisfies(key, tailConstraints)) Right(key -> iter.value())
             else Left(key)
           }

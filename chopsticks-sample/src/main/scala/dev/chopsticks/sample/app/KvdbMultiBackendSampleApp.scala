@@ -24,7 +24,7 @@ import java.time.Instant
 final case class KvdbMultiBackendSampleAppConfig(fdb: FdbDatabaseConfig, rocksdb: RocksdbDatabaseConfig)
 
 object KvdbMultiBackendSampleAppConfig {
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit val configReader = {
     import dev.chopsticks.util.config.PureconfigConverters._
     ConfigReader[KvdbMultiBackendSampleAppConfig]
@@ -110,7 +110,7 @@ object KvdbMultiBackendSampleApp extends AkkaDiApp[KvdbMultiBackendSampleAppConf
     }
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     for {
       fdbApi <- TestKvdbApi[FdbService]

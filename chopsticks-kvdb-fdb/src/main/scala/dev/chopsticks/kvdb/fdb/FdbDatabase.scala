@@ -196,7 +196,7 @@ object FdbDatabase {
 
   object FdbDatabaseConfig {
     import dev.chopsticks.util.config.PureconfigConverters._
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit val configConvert = ConfigConvert[FdbDatabaseConfig]
   }
 

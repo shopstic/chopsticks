@@ -31,7 +31,7 @@ object IzLogging {
     import dev.chopsticks.util.config.PureconfigConverters._
     implicit val levelConfigReader: ConfigReader[Level] =
       ConfigReader.fromString(l => Right(Level.parseSafe(l, Level.Info)))
-    //noinspection TypeAnnotation
+    // noinspection TypeAnnotation
     implicit val configReader = ConfigReader[IzLoggingConfig]
   }
 

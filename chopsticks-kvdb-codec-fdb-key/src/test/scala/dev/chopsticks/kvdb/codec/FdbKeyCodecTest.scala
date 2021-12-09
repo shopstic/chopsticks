@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 object FdbKeyCodecTest {
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   implicit lazy val defaultZoneIdLocalDateTimeKeySerdes =
     FdbKeySerdes.createLocalDateTimeKeySerdes(ZoneId.systemDefault())
 }

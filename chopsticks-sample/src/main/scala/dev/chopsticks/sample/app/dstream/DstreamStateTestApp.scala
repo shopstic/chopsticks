@@ -104,7 +104,7 @@ object DstreamStateTestApp extends ZAkkaApp {
       )
   }
 
-  //noinspection TypeAnnotation
+  // noinspection TypeAnnotation
   def app = {
     LoggedRace()
       .add("master", runMaster)
