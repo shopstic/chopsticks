@@ -54,7 +54,7 @@ object Dependencies {
   )
 
   val squantsDeps = Seq(
-    "org.typelevel" %% "squants" % "1.7.4"
+    "org.typelevel" %% "squants" % "1.8.3"
   )
 
   val prometheusClientDeps = Seq(
