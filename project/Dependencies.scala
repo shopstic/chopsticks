@@ -168,7 +168,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.6.6"
+    "com.lihaoyi" %% "pprint" % "0.7.0"
   )
 
   val distageDeps = Seq(
