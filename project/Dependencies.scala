@@ -39,7 +39,7 @@ object Dependencies {
   )
 
   lazy val zioInteropReactivestreamsDeps = Seq(
-    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.8"
+    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.9"
   )
 
   val zioTestDeps = Seq(
