@@ -3,9 +3,9 @@ import sbt._
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.7"
-  val AKKA_VERSION = "2.6.17"
+  val AKKA_VERSION = "2.6.18"
   val AKKA_HTTP_VERSION = "10.2.1"
-  val ZIO_VERSION = "1.0.12"
+  val ZIO_VERSION = "1.0.13"
   val IZUMI_VERSION = "1.0.8"
   val REFINED_VERSION = "0.9.28"
   val CALIBAN_VERSION = "1.2.4"
@@ -39,7 +39,7 @@ object Dependencies {
   )
 
   lazy val zioInteropReactivestreamsDeps = Seq(
-    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.8"
+    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.9"
   )
 
   val zioTestDeps = Seq(
@@ -58,12 +58,12 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.12.0",
-    "io.prometheus" % "simpleclient_common" % "0.12.0"
+    "io.prometheus" % "simpleclient" % "0.14.1",
+    "io.prometheus" % "simpleclient_common" % "0.14.1"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.1.1"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.1.2"
   )
 
   val catsCoreDeps = Seq(
@@ -81,7 +81,7 @@ object Dependencies {
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
 
   val nameofDeps = Seq(
-    "com.github.dwickern" %% "scala-nameof" % "3.0.0" % Provided
+    "com.github.dwickern" %% "scala-nameof" % "4.0.0" % Provided
   )
 
   val loggingDeps = Seq(
@@ -99,7 +99,7 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % "3.2.10",
     "org.scalatestplus" %% "scalacheck-1-15" % "3.2.10.0",
     "org.scalacheck" %% "scalacheck" % "1.15.4",
-    "org.scalamock" %% "scalamock" % "5.1.0"
+    "org.scalamock" %% "scalamock" % "5.2.0"
   )
 
   val hamstersDeps = Seq(
@@ -107,7 +107,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.26.1"
+    "org.rocksdb" % "rocksdbjni" % "6.27.3"
   )
 
   val lmdbDeps = Seq(
@@ -115,7 +115,7 @@ object Dependencies {
   )
 
   val fdbDeps = Seq(
-    "org.foundationdb" % "fdb-java" % "6.3.22"
+    "org.foundationdb" % "fdb-java" % "6.3.23"
   )
 
   val shapelessDeps = Seq(
@@ -168,7 +168,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.6.6"
+    "com.lihaoyi" %% "pprint" % "0.7.1"
   )
 
   val distageDeps = Seq(
