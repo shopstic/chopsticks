@@ -1,12 +1,8 @@
 package dev.chopsticks.kvdb.lmdb
 
-import java.nio.ByteBuffer
-import java.nio.ByteBuffer.allocateDirect
-import java.util.concurrent.atomic.{AtomicBoolean, LongAdder}
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import akka.{Done, NotUsed}
 import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Sink, Source}
+import akka.{Done, NotUsed}
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
@@ -32,6 +28,10 @@ import zio.clock.Clock
 import zio.internal.Executor
 import zio.{Schedule, Task, ZIO, ZManaged}
 
+import java.nio.ByteBuffer
+import java.nio.ByteBuffer.allocateDirect
+import java.util.concurrent.atomic.{AtomicBoolean, LongAdder}
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
 import scala.util.control.{ControlThrowable, NonFatal}
@@ -804,6 +804,8 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       case TransactionDeleteRange(columnId, fromKey, toKey) =>
         val _ =
           doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey)
+      case _: TransactionMutateAdd =>
+        ???
     }
   }
 

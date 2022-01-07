@@ -1,21 +1,15 @@
 package dev.chopsticks.kvdb.rocksdb
 
-import java.nio.charset.StandardCharsets.UTF_8
-import akka.{Done, NotUsed}
 import akka.stream.Attributes
 import akka.stream.scaladsl.{Merge, Sink, Source}
+import akka.{Done, NotUsed}
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
-import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
-  TransactionDelete,
-  TransactionDeleteRange,
-  TransactionPut,
-  TransactionWrite
-}
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder._
 import dev.chopsticks.kvdb.codec.KeyConstraints.Implicits._
 import dev.chopsticks.kvdb.codec.KeySerdes
 import dev.chopsticks.kvdb.proto.KvdbKeyConstraint.Operator
@@ -32,6 +26,7 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.{Task, ZIO, ZManaged}
 
+import java.nio.charset.StandardCharsets.UTF_8
 import scala.concurrent.Future
 import scala.util.control.NonFatal
 
@@ -767,6 +762,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
               fromKey,
               toKey
             )
+
+          case _: TransactionMutateAdd =>
+            ???
         }
 
         val writeOptions = newWriteOptions()
@@ -829,6 +827,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
               throw UnsupportedKvdbOperationException(
                 "TransactionDeleteRange is not yet supported in conditionalTransactionTask"
               )
+
+            case _: TransactionMutateAdd => ???
           }
 
           try {

@@ -2,12 +2,7 @@ package dev.chopsticks.kvdb.fdb
 
 import com.apple.foundationdb.{MutationType, Transaction}
 import dev.chopsticks.kvdb.ColumnFamily
-import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.{
-  TransactionDelete,
-  TransactionDeleteRange,
-  TransactionPut,
-  TransactionWrite
-}
+import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder._
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbContext
 
 final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
@@ -83,6 +78,9 @@ final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
 
       case TransactionDeleteRange(columnId, fromKey, toKey) =>
         deleteRangeByColumnId(columnId, fromKey, toKey)
+
+      case TransactionMutateAdd(columnId, key, value) =>
+        tx.mutate(MutationType.ADD, dbContext.prefixKey(columnId, key), value)
     }
   }
 }

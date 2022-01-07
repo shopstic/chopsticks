@@ -4,7 +4,7 @@ import "scalapb/scalapb.proto";
 package dev.chopsticks.kvdb.proto;
 
 message KvdbKeyConstraintList {
-  repeated KvdbKeyConstraint constraints = 1 [(scalapb.field).collection_type="List"];
+  repeated KvdbKeyConstraint constraints = 1 [(scalapb.field).collection_type = "List"];
 }
 
 message KvdbKeyConstraint {
@@ -25,10 +25,35 @@ message KvdbKeyConstraint {
 }
 
 message KvdbKeyRange {
-  repeated KvdbKeyConstraint from = 1 [(scalapb.field).collection_type="List"];
-  repeated KvdbKeyConstraint to = 2 [(scalapb.field).collection_type="List"];
+  repeated KvdbKeyConstraint from = 1 [(scalapb.field).collection_type = "List"];
+  repeated KvdbKeyConstraint to = 2 [(scalapb.field).collection_type = "List"];
   int32 limit = 3;
 }
+
+/*message KvdbTransactionWrite {
+  oneof sealed_value {
+    KvdbTransactionPut put = 1;
+    KvdbTransactionDelete delete = 2;
+    KvdbTransactionDeleteRange delete_range = 3;
+  }
+}
+
+message KvdbTransactionPut {
+  string column_id = 1;
+  bytes key = 2;
+  bytes value = 3;
+}
+
+message KvdbTransactionDelete {
+  string column_id = 1;
+  bytes key = 2;
+}
+
+message KvdbTransactionDeleteRange {
+  string column_id = 1;
+  bytes from_key = 2;
+  bytes toKey_key = 3;
+}*/
 
 //message KvdbPutRequest {
 //  string column_id = 1;
