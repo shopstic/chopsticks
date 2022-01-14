@@ -2,7 +2,7 @@ import sbt._
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
-  val SCALA_VERSION = "2.13.7"
+  val SCALA_VERSION = "2.13.8"
   val AKKA_VERSION = "2.6.18"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.13"
@@ -87,7 +87,7 @@ object Dependencies {
   val loggingDeps = Seq(
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
     "io.7mind.izumi" %% "logstage-adapter-slf4j" % IZUMI_VERSION,
-    "org.slf4j" % "jul-to-slf4j" % "1.7.32"
+    "org.slf4j" % "jul-to-slf4j" % "1.7.33"
   )
 
   val janinoDeps = Seq(
