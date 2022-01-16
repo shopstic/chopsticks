@@ -9,7 +9,7 @@ import pureconfig.generic.FieldCoproductHint
 
 sealed trait IzLoggingFormat
 final case class IzLoggingTextFormat(withExceptions: Boolean, withoutColors: Boolean) extends IzLoggingFormat
-final case class IzLoggingJsonFormat(pretty: Boolean) extends IzLoggingFormat
+final case class IzLoggingJsonFormat(prettyPrint: Boolean) extends IzLoggingFormat
 object IzLoggingFormat {
   implicit val hint: FieldCoproductHint[IzLoggingFormat] =
     new FieldCoproductHint[IzLoggingFormat]("type") {
