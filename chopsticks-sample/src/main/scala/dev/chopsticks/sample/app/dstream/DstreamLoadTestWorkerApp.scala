@@ -2,15 +2,13 @@ package dev.chopsticks.sample.app.dstream
 
 import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.{Keep, Source}
-import com.typesafe.config.Config
 import dev.chopsticks.dstream.Dstreams
-import dev.chopsticks.fp.AppLayer.AppEnv
-import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
+import dev.chopsticks.fp.ZAkkaApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
-import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.sample.app.dstream.proto.load_test._
-import dev.chopsticks.util.config.PureconfigLoader
 import io.grpc.{Status, StatusRuntimeException}
 import pureconfig.ConfigConvert
 import zio._
@@ -48,32 +46,24 @@ object DstreamLoadTestWorkerAppConfig {
   }
 }
 
-object DstreamLoadTestWorkerApp extends AkkaDiApp[DstreamLoadTestWorkerAppConfig] {
+object DstreamLoadTestWorkerApp extends ZAkkaApp {
   final case object RandomFailureTestException
       extends RuntimeException("Failed randomly for testing...")
       with NoStackTrace
 
-  override def config(allConfig: Config): Task[DstreamLoadTestWorkerAppConfig] = {
-    Task(PureconfigLoader.unsafeLoad[DstreamLoadTestWorkerAppConfig](allConfig, "app"))
-  }
+  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+    import zio.magic._
 
-  override def liveEnv(
-    akkaAppDi: DiModule,
-    appConfig: DstreamLoadTestWorkerAppConfig,
-    allConfig: Config
-  ): Task[DiEnv[AppEnv]] = {
-    Task {
-      LiveDiEnv(akkaAppDi ++ DiLayers(
-        ZLayer.succeed(appConfig),
-        AppLayer(app)
-      ))
-    }
+    app
+      .injectSome[ZAkkaAppEnv](
+        TypedConfig.live[DstreamLoadTestWorkerAppConfig]()
+      )
+      .as(ExitCode(0))
   }
-
   //noinspection TypeAnnotation
   def app = {
     val managed = for {
-      appConfig <- ZManaged.access[AppConfig](_.get)
+      appConfig <- TypedConfig.get[DstreamLoadTestWorkerAppConfig].toManaged_
     } yield {
       for {
         _ <- ZIO.foreachPar_(1 to appConfig.workers.resolvedCount) { i =>

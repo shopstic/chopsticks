@@ -1,40 +1,24 @@
 package dev.chopsticks.fp.iz_logging
 
+import akka.stream.RestartSettings
 import com.typesafe.config.Config
+import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.util.config.PureconfigLoader
 import izumi.fundamentals.platform.time.IzTimeSafe
 import izumi.logstage.api.Log
-import izumi.logstage.api.Log.{CustomContext, Level}
-import izumi.logstage.api.rendering.RenderingPolicy
+import izumi.logstage.api.Log.CustomContext
 import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
 import izumi.logstage.api.rendering.logunits.Styler.TrimType
 import izumi.logstage.api.rendering.logunits.{Extractor, Renderer, Styler}
+import izumi.logstage.api.rendering.{RenderingOptions, StringRenderingPolicy}
 import izumi.logstage.sink.QueueingSink
 import izumi.logstage.sink.file.models.{FileRotation, FileSinkConfig}
 import izumi.logstage.sink.file.{FileServiceImpl, FileSink}
 import logstage._
-import pureconfig.ConfigReader
 import zio._
 
 object IzLogging {
-
-  final case class JsonFileSinkConfig(
-    path: String,
-    rotationMaxFileCount: Int,
-    rotationMaxFileBytes: Int
-  )
-
-  final case class IzLoggingConfig(level: Level, noColor: Boolean, jsonFileSink: Option[JsonFileSinkConfig])
-
-  object IzLoggingConfig {
-    import dev.chopsticks.util.config.PureconfigConverters._
-    implicit val levelConfigReader: ConfigReader[Level] =
-      ConfigReader.fromString(l => Right(Level.parseSafe(l, Level.Info)))
-    //noinspection TypeAnnotation
-    implicit val configReader = ConfigReader[IzLoggingConfig]
-  }
-
   trait Service {
     def logger: IzLogger
     def loggerWithCtx(ctx: LogCtx): IzLogger
@@ -56,34 +40,61 @@ object IzLogging {
     ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx))
   def zioLogger: URIO[IzLogging, LogIO3[ZIO]] = ZIO.access[IzLogging](_.get.zioLogger)
 
-  def unsafeCreate(config: IzLoggingConfig, routerFactory: IzLoggingRouter.Service): LiveService = {
-    val consoleSink = {
-      val renderingPolicy =
-        if (config.noColor) RenderingPolicy.simplePolicy(Some(IzLogTemplates.consoleLayout))
-        else RenderingPolicy.coloringPolicy(Some(IzLogTemplates.consoleLayout))
-      ConsoleSink(renderingPolicy)
-    }
+  def unsafeCreate(
+    config: IzLoggingConfig,
+    routerFactory: IzLoggingRouter.Service,
+    akkaSvc: AkkaEnv.Service
+  ): LiveService = {
+    val sinks = config.sinks.values.collect {
+      case sinkConfig if sinkConfig.enabled =>
+        val renderingPolicy = sinkConfig.format match {
+          case IzLoggingTextFormat(withExceptions, withoutColors) =>
+            new StringRenderingPolicy(
+              RenderingOptions(withExceptions = withExceptions, colored = !withoutColors),
+              template = Some(IzLogTemplates.consoleLayout)
+            )
 
-    val maybeFileSink = config.jsonFileSink.map { fileSinkConfig =>
-      object jsonFileSink
-          extends FileSink(
-            LogstageCirceRenderingPolicy(prettyPrint = false),
-            new FileServiceImpl(fileSinkConfig.path),
-            FileRotation.FileLimiterRotation(fileSinkConfig.rotationMaxFileCount),
-            FileSinkConfig.soft(fileSinkConfig.rotationMaxFileBytes)
-          ) {
-        override def recoverOnFail(e: String): Unit = Console.err.println(e)
-      }
+          case IzLoggingJsonFormat(prettyPrint) =>
+            LogstageCirceRenderingPolicy(prettyPrint = prettyPrint)
+        }
 
-      new QueueingSink(jsonFileSink)
-    }
+        sinkConfig.destination match {
+          case IzLoggingConsoleDestination() => ConsoleSink(renderingPolicy)
+          case IzLoggingFileDestination(path, rotationMaxFileCount, rotationMaxFileBytes) =>
+            object jsonFileSink
+                extends FileSink(
+                  renderingPolicy = LogstageCirceRenderingPolicy(prettyPrint = false),
+                  fileService = new FileServiceImpl(path.value),
+                  rotation = FileRotation.FileLimiterRotation(rotationMaxFileCount.value),
+                  config = FileSinkConfig.inBytes(rotationMaxFileBytes.value)
+                ) {
+              override def recoverOnFail(e: String): Unit = Console.err.println(e)
+            }
 
-    val sinks = consoleSink :: maybeFileSink.toList
+            val queueingSink = new QueueingSink(jsonFileSink)
+            queueingSink.start()
+            queueingSink
+
+          case IzLoggingTcpDestination(host, port, bufferSize) =>
+            val tcpFlowRestartSettings = {
+              import scala.concurrent.duration._
+              RestartSettings(minBackoff = 100.millis, maxBackoff = 5.seconds, randomFactor = 0.2)
+            }
+
+            new IzLoggingTcpSink(
+              host = host,
+              port = port,
+              renderingPolicy = renderingPolicy,
+              bufferSize = bufferSize,
+              tcpFlowRestartSettings = tcpFlowRestartSettings,
+              akkaSvc = akkaSvc
+            )
+        }
+    }.toList
+
     val logger =
       IzLogger(routerFactory.create(config.level, sinks))(IzLoggingCustomRenderers.LoggerTypeCtxKey -> "iz")
     val zioLogger = LogZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
-
-    maybeFileSink.foreach(_.start())
 
     // configure slf4j to use LogStage router
     StaticLogRouter.instance.setup(logger.router)
@@ -94,17 +105,17 @@ object IzLogging {
     PureconfigLoader.unsafeLoad[IzLoggingConfig](hoconConfig, configNamespace)
   }
 
-  def create(config: IzLoggingConfig): RIO[IzLoggingRouter, LiveService] = {
-    ZIO
-      .access[IzLoggingRouter](_.get)
-      .flatMap { routerFactory =>
-        Task {
-          unsafeCreate(config, routerFactory)
-        }
+  def create(config: IzLoggingConfig): RIO[AkkaEnv with IzLoggingRouter, LiveService] = {
+    for {
+      izLoggingRouterSvc <- ZIO.access[IzLoggingRouter](_.get)
+      akkaSvc <- ZIO.access[AkkaEnv](_.get)
+      svc <- Task {
+        unsafeCreate(config, izLoggingRouterSvc, akkaSvc)
       }
+    } yield svc
   }
 
-  def live(config: IzLoggingConfig): ZLayer[IzLoggingRouter, Throwable, IzLogging] = {
+  def live(config: IzLoggingConfig): RLayer[AkkaEnv with IzLoggingRouter, IzLogging] = {
     val managed = ZManaged.make {
       create(config)
     } { service =>
@@ -114,7 +125,7 @@ object IzLogging {
     managed.toLayer
   }
 
-  def live(hoconConfig: Config): RLayer[IzLoggingRouter, IzLogging] = {
+  def live(hoconConfig: Config): RLayer[AkkaEnv with IzLoggingRouter, IzLogging] = {
     val effect = for {
       config <- Task(unsafeLoadConfig(hoconConfig))
       service <- create(config)
@@ -123,7 +134,7 @@ object IzLogging {
     effect.toLayer
   }
 
-  def live(): ZLayer[HoconConfig with IzLoggingRouter, Throwable, IzLogging] = {
+  def live(): RLayer[AkkaEnv with IzLoggingRouter with HoconConfig, IzLogging] = {
     val managed = for {
       hoconConfig <- HoconConfig.get.toManaged_
       service <- live(hoconConfig).build

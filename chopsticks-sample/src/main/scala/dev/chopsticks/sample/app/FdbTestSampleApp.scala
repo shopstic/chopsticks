@@ -2,25 +2,21 @@ package dev.chopsticks.sample.app
 
 import akka.stream.scaladsl.{Sink, Source}
 import com.apple.foundationdb.tuple.Versionstamp
-import com.typesafe.config.Config
-import dev.chopsticks.fp.AppLayer.AppEnv
-import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.ValueSerdes
 import dev.chopsticks.kvdb.codec.fdb_key._
-import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
-import dev.chopsticks.kvdb.codec.protobuf_value._
 import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.kvdb.fdb.FdbMaterialization.{KeyspaceWithVersionstampKey, KeyspaceWithVersionstampValue}
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.sample.kvdb.SampleDb.{TestKeyWithVersionstamp, TestValueWithVersionstamp}
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
-import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigConvert
 import zio._
 
@@ -38,9 +34,11 @@ object FdbTestSampleAppConfig {
   }
 }
 
-object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
+object FdbTestSampleApp extends ZAkkaApp {
 
   object sampleDb extends SampleDb.Materialization {
+    import dev.chopsticks.kvdb.codec.protobuf_value._
+    import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
     implicit val testVersionstampValueSerdes: ValueSerdes[TestValueWithVersionstamp] = ValueSerdes.fromKeySerdes
     implicit val literalVersionstampValueSerdes: ValueSerdes[Versionstamp] = ValueSerdes.fromKeySerdes
 
@@ -59,26 +57,22 @@ object FdbTestSampleApp extends AkkaDiApp[FdbTestSampleAppConfig] {
     )
   }
 
-  override def liveEnv(
-    akkaAppDi: DiModule,
-    appConfig: FdbTestSampleAppConfig,
-    allConfig: Config
-  ): Task[DiEnv[AppEnv]] = {
-    Task {
-      LiveDiEnv(
-        akkaAppDi ++ DiLayers(
-          ZLayer.succeed(appConfig),
-          KvdbIoThreadPool.live,
-          KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
-          ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
-          AppLayer(app)
-        )
-      )
-    }
-  }
+  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+    import zio.magic._
 
-  override def config(allConfig: Config): Task[FdbTestSampleAppConfig] = Task {
-    PureconfigLoader.unsafeLoad[FdbTestSampleAppConfig](allConfig, "app")
+    val dbLayer = (for {
+      appConfig <- TypedConfig.get[FdbTestSampleAppConfig].toManaged_
+      db <- FdbDatabase.manage(sampleDb, appConfig.db)
+    } yield db).toLayer
+
+    app
+      .injectSome[ZAkkaAppEnv](
+        TypedConfig.live[FdbTestSampleAppConfig](),
+        KvdbIoThreadPool.live,
+        KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
+        dbLayer
+      )
+      .as(ExitCode(0))
   }
 
   def app: RIO[

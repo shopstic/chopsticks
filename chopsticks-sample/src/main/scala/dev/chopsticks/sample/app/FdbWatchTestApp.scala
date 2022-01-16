@@ -3,12 +3,12 @@ package dev.chopsticks.sample.app
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink}
 import com.apple.foundationdb.tuple.Versionstamp
-import com.typesafe.config.Config
-import dev.chopsticks.fp.AppLayer.AppEnv
-import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
+import dev.chopsticks.fp.ZAkkaApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.config.TypedConfig
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.util.LoggedRace
-import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.ValueSerdes
 import dev.chopsticks.kvdb.fdb.FdbDatabase
@@ -17,7 +17,6 @@ import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.sample.kvdb.SampleDb.TestValueWithVersionstamp
 import dev.chopsticks.sample.kvdb.{SampleDb, SampleDbEnv}
 import dev.chopsticks.stream.ZAkkaGraph.InterruptibleGraphOps
-import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigReader
 import zio._
 import zio.duration._
@@ -36,12 +35,12 @@ object FdbWatchTestAppConfig {
   }
 }
 
-object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
+object FdbWatchTestApp extends ZAkkaApp {
 
   object sampleDb extends SampleDb.Materialization {
     import dev.chopsticks.kvdb.codec.fdb_key._
-    import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
     import dev.chopsticks.kvdb.codec.protobuf_value._
+    import dev.chopsticks.kvdb.codec.primitive.literalStringDbValue
     implicit val testVersionstampValueSerdes: ValueSerdes[TestValueWithVersionstamp] = ValueSerdes.fromKeySerdes
 
     object default extends SampleDb.Default
@@ -64,14 +63,15 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
       changeCounter = new LongAdder()
       lastAtomic = new AtomicReference(Option.empty[TestValueWithVersionstamp])
       dbApi <- KvdbDatabaseApi(db)
+      zLogger <- IzLogging.zioLogger
       actorSystem <- AkkaEnv.actorSystem
       _ <- LoggedRace()
         .add(
           "logging",
           Task
             .effectSuspend {
-              UIO(
-                println(s"watch=${watchCounter.longValue()} change=${changeCounter.longValue()} last=${lastAtomic.get}")
+              zLogger.info(
+                s"${watchCounter.longValue() -> "watch"} ${changeCounter.longValue() -> "change"} ${lastAtomic.get -> "last"}"
               )
             }
             .repeat(Schedule.fixed(1.second.asJava))
@@ -117,25 +117,21 @@ object FdbWatchTestApp extends AkkaDiApp[FdbWatchTestAppConfig] {
     } yield ()
   }
 
-  override def liveEnv(
-    akkaAppDi: DiModule,
-    appConfig: FdbWatchTestAppConfig,
-    allConfig: Config
-  ): Task[DiEnv[AppEnv]] = {
-    Task {
-      LiveDiEnv(
-        akkaAppDi ++ DiLayers(
-          ZLayer.fromManaged(FdbDatabase.manage(sampleDb, appConfig.db)),
-          KvdbIoThreadPool.live,
-          KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
-          ZLayer.succeed(appConfig),
-          AppLayer(app)
-        )
-      )
-    }
-  }
+  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+    import zio.magic._
 
-  override def config(allConfig: Config): Task[FdbWatchTestAppConfig] = Task(
-    PureconfigLoader.unsafeLoad[FdbWatchTestAppConfig](allConfig, "app")
-  )
+    val dbLayer = (for {
+      appConfig <- TypedConfig.get[FdbTestSampleAppConfig].toManaged_
+      db <- FdbDatabase.manage(sampleDb, appConfig.db)
+    } yield db).toLayer
+
+    app
+      .injectSome[ZAkkaAppEnv](
+        TypedConfig.live[FdbTestSampleAppConfig](),
+        KvdbIoThreadPool.live,
+        KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
+        dbLayer
+      )
+      .as(ExitCode(0))
+  }
 }

@@ -1,36 +1,29 @@
 package dev.chopsticks.kvdb.api
 
-import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
-import dev.chopsticks.fp.AkkaDiApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
-import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool, KvdbTestUtils}
-import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool, KvdbTestSuite}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.{Task, ZManaged}
+import zio.{Task, UIO, ZManaged}
 
 abstract class KvdbDatabaseApiTest
-    extends AkkaTestKit
-    with AsyncWordSpecLike
+    extends AsyncWordSpecLike
     with Matchers
-    with AkkaTestKitAutoShutDown {
-  protected def managedDb
-    : ZManaged[AkkaDiApp.Env with IzLogging with KvdbIoThreadPool with KvdbSerdesThreadPool, Throwable, DbApi]
+    with KvdbTestSuite {
+  protected def managedDb: ZManaged[ZAkkaAppEnv with KvdbIoThreadPool with KvdbSerdesThreadPool, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
-  private lazy val loggingLayer = (IzLoggingRouter.live >>> IzLogging.live(
-    typesafeConfig
-  ))
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ loggingLayer)
-  private lazy val runtimeLayer =
-    AkkaDiApp.Env.live >+> (KvdbIoThreadPool.live ++ KvdbSerdesThreadPool.fromDefaultAkkaDispatcher()) ++ loggingLayer
-  private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
-  private lazy val withCf = KvdbTestUtils.createTestRunner(
-    managedDb.map(_.columnFamily(dbMat.plain)),
-    runtimeLayer
-  )(runtime)
+  private lazy val withDb = createTestRunner(managedDb) { effect =>
+    import zio.magic._
+
+    effect.injectSome[ZAkkaAppEnv](
+      KvdbIoThreadPool.live,
+      KvdbSerdesThreadPool.fromDefaultAkkaDispatcher()
+    )
+  }
 
 //  "open" should {
 //    "work" in withDb { db =>
@@ -73,8 +66,11 @@ abstract class KvdbDatabaseApiTest
         }
       }
 
-      "work with cf" in withCf { cf =>
+      "work with cf" in withDb { db =>
         for {
+          cf <- UIO {
+            db.columnFamily(dbMat.plain)
+          }
           _ <- cf.putTask("foo", "bar")
           v <- cf.getValueTask(_ is "foo")
         } yield {

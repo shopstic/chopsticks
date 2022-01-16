@@ -1,36 +1,32 @@
 package dev.chopsticks.kvdb.rocksdb
 
-import akka.testkit.ImplicitSender
-import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
-import dev.chopsticks.fp.AkkaDiApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.KvdbDatabaseTest
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
-import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
-import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestSuite}
 import org.scalatest.Inside
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
 import zio.{Promise, ZIO}
 
 final class SpecificRocksdbDatabaseTest
-    extends AkkaTestKit
-    with AsyncWordSpecLike
+    extends AsyncWordSpecLike
     with Matchers
     with Inside
-    with ImplicitSender
-    with AkkaTestKitAutoShutDown {
+    with KvdbTestSuite {
   import KvdbDatabaseTest._
 
   private val dbMat = RocksdbDatabaseTest.dbMaterialization
 
   private lazy val defaultCf = dbMat.plain
 
-  private lazy val loggingLayer = (IzLoggingRouter.live >>> IzLogging.live(
-    typesafeConfig
-  ))
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ loggingLayer)
-  private lazy val runtimeLayer = AkkaDiApp.Env.live >+> KvdbIoThreadPool.live ++ loggingLayer
-  private lazy val withDb = KvdbTestUtils.createTestRunner(RocksdbDatabaseTest.managedDb, runtimeLayer)(runtime)
+  private lazy val withDb = createTestRunner(RocksdbDatabaseTest.managedDb) { effect =>
+    import zio.magic._
+
+    effect.injectSome[ZAkkaAppEnv](
+      KvdbIoThreadPool.live
+    )
+  }
 
   "conditionalTransactionTask" should {
     "fail upon conflict" in withDb { db =>

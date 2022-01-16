@@ -1,16 +1,11 @@
 package dev.chopsticks.kvdb.fdb
 
-import akka.testkit.ImplicitSender
 import com.apple.foundationdb.MutationType
 import com.apple.foundationdb.tuple.ByteArrayUtil
-import dev.chopsticks.fp.AkkaDiApp
-import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
-import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.KvdbDatabaseTest
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
-import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
-import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
-import izumi.logstage.api.IzLogger.Level
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestSuite}
 import org.scalatest.Inside
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
@@ -21,26 +16,23 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicLong
 
 final class SpecificFdbDatabaseTest
-    extends AkkaTestKit
-    with AsyncWordSpecLike
+    extends AsyncWordSpecLike
     with Matchers
     with Inside
-    with ImplicitSender
-    with AkkaTestKitAutoShutDown {
+    with KvdbTestSuite {
   import KvdbDatabaseTest._
 
   private val dbMat = FdbDatabaseTest.dbMaterialization
 
   private lazy val defaultCf = dbMat.plain
 
-  private val izLoggingConfig = IzLoggingConfig(level = Level.Info, noColor = false, jsonFileSink = None)
+  private lazy val withDb = createTestRunner(FdbDatabaseTest.managedDb) { effect =>
+    import zio.magic._
 
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
-    typesafeConfig
-  )))
-  private lazy val runtimeLayer =
-    ((IzLoggingRouter.live >>> IzLogging.live(izLoggingConfig)) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live
-  private lazy val withDb = KvdbTestUtils.createTestRunner(FdbDatabaseTest.managedDb, runtimeLayer)(runtime)
+    effect.injectSome[ZAkkaAppEnv](
+      KvdbIoThreadPool.live
+    )
+  }
 
   "system metadataVersion key" should {
     "enforce conflicts" in withDb { db =>

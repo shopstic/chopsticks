@@ -3,22 +3,20 @@ package dev.chopsticks.sample.app.dstream
 import akka.actor.ActorSystem
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Keep, Sink, Source}
-import com.typesafe.config.Config
 import dev.chopsticks.dstream.DstreamState.WorkResult
-import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.Dstreams.DstreamServerConfig
 import dev.chopsticks.dstream._
+import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
-import dev.chopsticks.fp.AppLayer.AppEnv
-import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
+import dev.chopsticks.fp.ZAkkaApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto.load_test._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
-import dev.chopsticks.util.config.PureconfigLoader
 import io.prometheus.client.CollectorRegistry
 import pureconfig.ConfigConvert
 import zio._
@@ -46,32 +44,24 @@ object DstreamLoadTestMasterAppConfig {
   }
 }
 
-object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig] {
+object DstreamLoadTestMasterApp extends ZAkkaApp {
   val currentValue = new AtomicReference(BigInt(0))
   private val counter = new LongAdder()
 
   private lazy val serviceId = "dstream_load_test_master"
 
-  override def config(allConfig: Config): Task[DstreamLoadTestMasterAppConfig] = {
-    Task(PureconfigLoader.unsafeLoad[DstreamLoadTestMasterAppConfig](allConfig, "app"))
-  }
+  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+    import zio.magic._
 
-  override def liveEnv(
-    akkaAppDi: DiModule,
-    appConfig: DstreamLoadTestMasterAppConfig,
-    allConfig: Config
-  ): Task[DiEnv[AppEnv]] = {
-    Task {
-      val extraLayers = DiLayers(
-        ZLayer.succeed(appConfig),
+    app
+      .injectSome[ZAkkaAppEnv](
+        TypedConfig.live[DstreamLoadTestMasterAppConfig](),
         ZLayer.succeed(CollectorRegistry.defaultRegistry),
         PromMetricRegistryFactory.live[DstreamStateMetric](serviceId),
         DstreamStateMetricsManager.live,
-        DstreamState.manage[Assignment, Result](serviceId),
-        AppLayer(app)
+        DstreamState.manage[Assignment, Result](serviceId).toLayer
       )
-      LiveDiEnv(extraLayers ++ akkaAppDi)
-    }
+      .as(ExitCode(0))
   }
 
   //noinspection TypeAnnotation
@@ -83,7 +73,7 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
 
   private[sample] def manageServer = {
     for {
-      appConfig <- ZManaged.access[AppConfig](_.get)
+      appConfig <- TypedConfig.get[DstreamLoadTestMasterAppConfig].toManaged_
       akkaRuntime <- ZManaged.runtime[AkkaEnv with MeasuredLogging]
       dstreamState <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
       binding <- Dstreams
@@ -103,7 +93,7 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
 
   private[sample] def calculateResult = {
     for {
-      appConfig <- ZIO.access[AppConfig](_.get)
+      appConfig <- TypedConfig.get[DstreamLoadTestMasterAppConfig]
       logger <- ZIO.access[IzLogging](_.get.logger)
       result <- runMaster.log("Master")
       _ <- Task {
@@ -116,7 +106,7 @@ object DstreamLoadTestMasterApp extends AkkaDiApp[DstreamLoadTestMasterAppConfig
 
   private[sample] def runMaster = {
     for {
-      appConfig <- ZIO.access[AppConfig](_.get)
+      appConfig <- TypedConfig.get[DstreamLoadTestMasterAppConfig]
       ks = KillSwitches.shared("server shared killswitch")
       result <- Source(1 to appConfig.partitions)
         .map(v =>
