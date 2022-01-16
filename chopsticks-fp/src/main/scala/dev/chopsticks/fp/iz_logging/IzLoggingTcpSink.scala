@@ -2,7 +2,13 @@ package dev.chopsticks.fp.iz_logging
 
 import akka.actor.Status
 import akka.stream.scaladsl.{Keep, RestartFlow, Source, Tcp}
-import akka.stream.{CompletionStrategy, KillSwitches, OverflowStrategy, RestartSettings}
+import akka.stream.{
+  AbruptStageTerminationException,
+  CompletionStrategy,
+  KillSwitches,
+  OverflowStrategy,
+  RestartSettings
+}
 import akka.util.ByteString
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import eu.timepit.refined.types.net.PortNumber
@@ -51,6 +57,7 @@ final class IzLoggingTcpSink(
   locally {
     import akkaSvc.dispatcher
     future.onComplete {
+      case Failure(_: AbruptStageTerminationException) =>
       case Failure(exception) =>
         Console.err.println("IzLoggingTcpSink failed")
         exception.printStackTrace(Console.err)
