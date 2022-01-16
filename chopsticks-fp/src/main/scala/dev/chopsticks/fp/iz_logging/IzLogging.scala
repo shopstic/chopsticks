@@ -63,7 +63,7 @@ object IzLogging {
           case IzLoggingFileDestination(path, rotationMaxFileCount, rotationMaxFileBytes) =>
             object jsonFileSink
                 extends FileSink(
-                  renderingPolicy = LogstageCirceRenderingPolicy(prettyPrint = false),
+                  renderingPolicy = renderingPolicy,
                   fileService = new FileServiceImpl(path.value),
                   rotation = FileRotation.FileLimiterRotation(rotationMaxFileCount.value),
                   config = FileSinkConfig.inBytes(rotationMaxFileBytes.value)
