@@ -1,11 +1,11 @@
 package dev.chopsticks.kvdb.rocksdb
 
-import dev.chopsticks.fp.AkkaDiApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.TestDatabase._
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.rocksdb.RocksdbColumnFamilyConfig.{PointLookupPattern, PrefixedScanPattern}
-import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestUtils}
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbTestSuite}
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
@@ -45,9 +45,9 @@ object RocksdbDatabaseTest {
     val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] = ColumnFamilySet[BaseCf] of plain and lookup
   }
 
-  val managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool, Throwable, Db] = {
+  val managedDb: ZManaged[ZAkkaAppEnv with KvdbIoThreadPool, Throwable, Db] = {
     for {
-      dir <- KvdbTestUtils.managedTempDir
+      dir <- KvdbTestSuite.managedTempDir
       db <- RocksdbDatabase.manage(
         dbMaterialization,
         RocksdbDatabase.RocksdbDatabaseConfig(

@@ -59,7 +59,7 @@ lazy val testkit = Build
 lazy val fp = Build
   .defineProject("fp")
   .settings(
-    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ distageDeps ++ sourcecodeDeps ++ zioMagicDeps.map(_ % "test")
+    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ logstageDeps ++ sourcecodeDeps ++ zioMagicDeps.map(_ % "test")
   )
   .dependsOn(util)
 
@@ -87,7 +87,7 @@ lazy val kvdbCore = Build
   .defineProject("kvdb-core")
   .settings(
     libraryDependencies ++= shapelessDeps ++ scalapbRuntimeDeps ++ chimneyDeps ++
-      kittensDeps ++ betterFilesDeps,
+      kittensDeps ++ betterFilesDeps ++ zioMagicDeps.map(_ % "test"),
     Compile / PB.targets := Seq(
       scalapb
         .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value

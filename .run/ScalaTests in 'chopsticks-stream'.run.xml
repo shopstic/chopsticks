@@ -9,11 +9,12 @@
     <option name="testKind" value="All in package" />
     <option name="classBuf">
       <list>
-        <option value="dev.chopsticks.stream.BatchWithOptionalAggregateFlowTest" />
         <option value="dev.chopsticks.stream.AkkaStreamUtilsTest" />
         <option value="dev.chopsticks.stream.MultiMergeSortedTest" />
         <option value="dev.chopsticks.stream.StatefulConflateFlowTest" />
         <option value="dev.chopsticks.stream.ReplayLastBroadcastHubTest" />
+        <option value="dev.chopsticks.stream.BatchWithOptionalAggregateFlowTest" />
+        <option value="dev.chopsticks.stream.proxy.HaProxyProtocolTest" />
       </list>
     </option>
     <option name="jrePath" value="chopsticks-run" />

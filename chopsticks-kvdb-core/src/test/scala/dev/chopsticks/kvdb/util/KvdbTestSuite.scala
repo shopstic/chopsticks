@@ -1,35 +1,40 @@
 package dev.chopsticks.kvdb.util
 
 import better.files.File
-import dev.chopsticks.fp.AkkaDiApp
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.ZScalatestSuite
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.BaseCf
-import org.scalatest.Assertion
+import org.scalatest.{Assertion, Suite}
 import zio.blocking.{blocking, Blocking}
-import zio.{RIO, Task, TaskLayer, ZManaged}
+import zio.{RIO, Task, ZManaged}
 
 import scala.concurrent.Future
 
-object KvdbTestUtils {
+object KvdbTestSuite {
   def managedTempDir: ZManaged[Blocking, Throwable, File] = {
     ZManaged.make {
       blocking(Task(File.newTemporaryDirectory().deleteOnExit()))
     } { f => blocking(Task(f.delete())).orDie }
   }
+}
 
-  def createTestRunner[R <: AkkaDiApp.Env with IzLogging, Db](
-    managed: ZManaged[R, Throwable, Db],
-    layer: TaskLayer[R]
-  )(implicit
-    rt: zio.Runtime[Any]
-  ): (Db => RIO[R, Assertion]) => Future[Assertion] = {
+trait KvdbTestSuite extends ZScalatestSuite {
+  this: Suite =>
+
+  def createTestRunner[R <: ZAkkaAppEnv, Db](
+    managedDb: ZManaged[R, Throwable, Db]
+  )(inject: RIO[R, Assertion] => RIO[ZAkkaAppEnv, Assertion]): (Db => RIO[R, Assertion]) => Future[Assertion] = {
     (testCode: Db => RIO[R, Assertion]) =>
-      managed
-        .use(testCode(_).interruptAllChildrenPar)
-        .provideLayer(layer)
-        .unsafeRunToFuture
+      {
+        bootstrapRuntime
+          .unsafeRunToFuture(
+            inject(managedDb
+              .use(testCode(_).interruptAllChildrenPar))
+              .provide(appEnv)
+          )
+      }
   }
 
   def populateColumn[CF <: BaseCf[K, V], K, V](

@@ -1,14 +1,14 @@
 package dev.chopsticks.kvdb.fdb
 
-import java.util.UUID
-
-import dev.chopsticks.fp.AkkaDiApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, LookupCf, PlainCf}
-import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest, TestDatabase}
-import zio.{ZIO, ZManaged}
-import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.util.KvdbIoThreadPool
+import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest, TestDatabase}
+import zio.{RManaged, ZIO, ZManaged}
+import dev.chopsticks.kvdb.codec.primitive._
+
+import java.util.UUID
 
 object FdbDatabaseTest {
   object dbMaterialization extends TestDatabase.Materialization with FdbMaterialization[TestDatabase.BaseCf] {
@@ -23,7 +23,7 @@ object FdbDatabaseTest {
     override val keyspacesWithVersionstampValue = Set.empty
   }
 
-  val managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool with IzLogging, Throwable, FdbDatabase[
+  val managedDb: RManaged[ZAkkaAppEnv with KvdbIoThreadPool, FdbDatabase[
     TestDatabase.BaseCf,
     TestDatabase.CfSet
   ]] = {

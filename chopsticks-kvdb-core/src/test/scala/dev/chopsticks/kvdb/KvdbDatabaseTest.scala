@@ -1,38 +1,33 @@
 package dev.chopsticks.kvdb
 
-import java.nio.charset.StandardCharsets.UTF_8
-import akka.actor.Status
+import akka.actor.{ActorSystem, Status}
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
-import akka.testkit.{ImplicitSender, TestProbe}
+import akka.testkit.TestProbe
 import com.google.protobuf.ByteString
-import dev.chopsticks.fp.AkkaDiApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
-import dev.chopsticks.fp.iz_logging.IzLogging.IzLoggingConfig
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.codec.KeyConstraints
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.proto.{KvdbKeyConstraint, KvdbKeyConstraintList, KvdbKeyRange}
 import dev.chopsticks.kvdb.util.KvdbAliases._
 import dev.chopsticks.kvdb.util.KvdbException._
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils._
-import dev.chopsticks.kvdb.util.KvdbTestUtils.populateColumn
-import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestUtils}
+import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestSuite}
 import dev.chopsticks.stream.ZAkkaGraph.UninterruptibleGraphOps
-import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
-import org.scalatest.{Assertion, Inside, Succeeded}
+import eu.timepit.refined.auto._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
+import org.scalatest.{Assertion, Inside, Succeeded}
+import squants.information.InformationConversions._
 import zio.{RIO, Task, ZManaged}
 
+import java.nio.charset.StandardCharsets.UTF_8
 import scala.collection.immutable
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.implicitConversions
-import eu.timepit.refined.auto._
-import izumi.logstage.api.Log.Level
-import squants.information.InformationConversions._
-
-import scala.concurrent.Future
 
 object KvdbDatabaseTest extends Matchers with Inside {
   private def flattenFlow[T] = Flow[Array[T]].mapConcat { b =>
@@ -108,32 +103,26 @@ object KvdbDatabaseTest extends Matchers with Inside {
 }
 
 abstract private[kvdb] class KvdbDatabaseTest
-    extends AkkaTestKit
-    with AsyncWordSpecLike
+    extends AsyncWordSpecLike
     with Matchers
     with Inside
-//    with ParallelTestExecution
-    with ImplicitSender
-    with AkkaTestKitAutoShutDown {
+    with KvdbTestSuite {
   import KvdbDatabaseTest._
 
-  protected def managedDb: ZManaged[AkkaDiApp.Env with KvdbIoThreadPool with IzLogging, Throwable, TestDatabase.Db]
+  protected def managedDb: ZManaged[ZAkkaAppEnv with KvdbIoThreadPool, Throwable, TestDatabase.Db]
 
   protected def dbMat: TestDatabase.Materialization
 
   private lazy val defaultCf = dbMat.plain
   private lazy val lookupCf = dbMat.lookup
 
-  private val izLoggingConfig = IzLoggingConfig(level = Level.Info, noColor = false, jsonFileSink = None)
+  private lazy val withDb = createTestRunner(managedDb) { effect =>
+    import zio.magic._
 
-  private lazy val runtime = AkkaDiApp.createRuntime(AkkaDiApp.Env.live ++ (IzLoggingRouter.live >>> IzLogging.live(
-    typesafeConfig
-  )))
-
-  private lazy val runtimeLayer =
-    ((IzLoggingRouter.live >>> IzLogging.live(izLoggingConfig)) ++ AkkaDiApp.Env.live) >+> KvdbIoThreadPool.live
-
-  private lazy val withDb = KvdbTestUtils.createTestRunner(managedDb, runtimeLayer)(runtime)
+    effect.injectSome[ZAkkaAppEnv](
+      KvdbIoThreadPool.live
+    )
+  }
 
   "wrong column family" should {
     "not compile" in withDb { db =>
@@ -1064,17 +1053,23 @@ abstract private[kvdb] class KvdbDatabaseTest
     }
 
     "tail" in withDb { db =>
-      val source = db
-        .tailSource(defaultCf, $$(_ ^= "bbbb", _ ^= "bbbb"))
-        .collect { case Right(b) => b }
-        .via(flattenFlow)
-      val probe = TestProbe()
-      val ks = source
-        .viaMat(KillSwitches.single)(Keep.right)
-        .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
-        .run()
-
       for {
+        actorSystem <- AkkaEnv.actorSystem
+        source = db
+          .tailSource(defaultCf, $$(_ ^= "bbbb", _ ^= "bbbb"))
+          .collect { case Right(b) => b }
+          .via(flattenFlow)
+        probe = {
+          implicit val as: ActorSystem = actorSystem
+          TestProbe()
+        }
+        ks = {
+          implicit val as: ActorSystem = actorSystem
+          source
+            .viaMat(KillSwitches.single)(Keep.right)
+            .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
+            .run()
+        }
         _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
         _ <- Task(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "bbbb1", "bbbb1")
@@ -1100,20 +1095,25 @@ abstract private[kvdb] class KvdbDatabaseTest
     }
 
     "tail last when empty" in withDb { db =>
-      val source = db
-        .tailSource(defaultCf, $$(_.last, _.last))
-        .collect {
-          case Right(b) =>
-            b
-        }
-        .via(flattenFlow)
-      val probe = TestProbe()
-
-      source
-        .take(1)
-        .runWith(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
-
       for {
+        actorSystem <- AkkaEnv.actorSystem
+        source = db
+          .tailSource(defaultCf, $$(_.last, _.last))
+          .collect {
+            case Right(b) =>
+              b
+          }
+          .via(flattenFlow)
+        probe = {
+          implicit val as: ActorSystem = actorSystem
+          TestProbe()
+        }
+        _ = {
+          implicit val as: ActorSystem = actorSystem
+          source
+            .take(1)
+            .runWith(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
+        }
         _ <- Task(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "aaaa", "aaaa")
         pair <- Task {
@@ -1158,25 +1158,31 @@ abstract private[kvdb] class KvdbDatabaseTest
     }
 
     "tail" in withDb { db =>
-      val source = db
-        .concurrentTailSource(
-          defaultCf,
-          List(
-            $$(_ ^= "aaaa", _ ^= "aaaa"),
-            $$(_ ^= "bbbb", _ ^= "bbbb")
-          )
-        )
-        .collect {
-          case (index, Right(b)) => (index, b.map(p => byteArrayToString(p._1) -> byteArrayToString(p._2)).toVector)
-        }
-
-      val probe = TestProbe()
-      val ks = source
-        .viaMat(KillSwitches.single)(Keep.right)
-        .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
-        .run()
-
       for {
+        actorSystem <- AkkaEnv.actorSystem
+        mat = {
+          implicit val as: ActorSystem = actorSystem
+          val source = db
+            .concurrentTailSource(
+              defaultCf,
+              List(
+                $$(_ ^= "aaaa", _ ^= "aaaa"),
+                $$(_ ^= "bbbb", _ ^= "bbbb")
+              )
+            )
+            .collect {
+              case (index, Right(b)) => (index, b.map(p => byteArrayToString(p._1) -> byteArrayToString(p._2)).toVector)
+            }
+
+          val probe = TestProbe()
+          val ks = source
+            .viaMat(KillSwitches.single)(Keep.right)
+            .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
+            .run()
+
+          probe -> ks
+        }
+        (probe, ks) = mat
         _ <- db.putTask(defaultCf, "cccc1", "cccc1")
         _ <- Task(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "bbbb1", "bbbb1")
@@ -1200,19 +1206,25 @@ abstract private[kvdb] class KvdbDatabaseTest
 
   "tailValuesSource" should {
     "tail" in withDb { db =>
-      val source = db
-        .tailSource(defaultCf, $$(_ ^= "bbbb", _ ^= "bbbb"))
-        .collect {
-          case Right(v) => v.map(_._2)
-        }
-        .via(flattenFlow)
-      val probe = TestProbe()
-      val ks = source
-        .viaMat(KillSwitches.single)(Keep.right)
-        .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
-        .run()
-
       for {
+        actorSystem <- AkkaEnv.actorSystem
+        mat = {
+          implicit val as: ActorSystem = actorSystem
+          val source = db
+            .tailSource(defaultCf, $$(_ ^= "bbbb", _ ^= "bbbb"))
+            .collect {
+              case Right(v) => v.map(_._2)
+            }
+            .via(flattenFlow)
+          val probe = TestProbe()
+          val ks = source
+            .viaMat(KillSwitches.single)(Keep.right)
+            .to(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
+            .run()
+
+          probe -> ks
+        }
+        (probe, ks) = mat
         _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
         _ <- Task(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "bbbb1", "bbbb1")

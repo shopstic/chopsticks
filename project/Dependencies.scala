@@ -171,11 +171,9 @@ object Dependencies {
     "com.lihaoyi" %% "pprint" % "0.7.1"
   )
 
-  val distageDeps = Seq(
-    "io.7mind.izumi" %% "distage-core",
+  val logstageDeps = Seq(
     "io.7mind.izumi" %% "logstage-core",
     "io.7mind.izumi" %% "logstage-rendering-circe",
-    "io.7mind.izumi" %% "distage-extension-logstage",
     "io.7mind.izumi" %% "logstage-sink-slf4j"
   ).map(_ % IZUMI_VERSION)
 

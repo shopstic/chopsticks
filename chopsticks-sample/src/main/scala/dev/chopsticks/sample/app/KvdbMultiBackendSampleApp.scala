@@ -1,12 +1,11 @@
 package dev.chopsticks.sample.app
 
 import akka.stream.scaladsl.{Sink, Source}
-import com.typesafe.config.Config
-import dev.chopsticks.fp.AppLayer.AppEnv
-import dev.chopsticks.fp.DiEnv.{DiModule, LiveDiEnv}
+import dev.chopsticks.fp.ZAkkaApp
+import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.zio_ext._
-import dev.chopsticks.fp.{AkkaDiApp, AppLayer, DiEnv, DiLayers}
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.fdb.FdbDatabase
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbDatabaseConfig
@@ -15,9 +14,8 @@ import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.RocksdbDatabaseConfig
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
-import dev.chopsticks.util.config.PureconfigLoader
 import pureconfig.ConfigReader
-import zio.{Has, RIO, Task, URIO, ZIO, ZLayer}
+import zio.{ExitCode, Has, RIO, Task, URIO, ZIO}
 
 import java.time.Instant
 
@@ -72,42 +70,35 @@ object TestKvdbApi {
   }
 }
 
-object KvdbMultiBackendSampleApp extends AkkaDiApp[KvdbMultiBackendSampleAppConfig] {
+object KvdbMultiBackendSampleApp extends ZAkkaApp {
   import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Backends
 
-  override def config(allConfig: Config): Task[KvdbMultiBackendSampleAppConfig] = Task(
-    PureconfigLoader.unsafeLoad[KvdbMultiBackendSampleAppConfig](allConfig, "app")
-  )
+  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+    import zio.magic._
 
-  override def liveEnv(
-    akkaAppDi: DiModule,
-    appConfig: KvdbMultiBackendSampleAppConfig,
-    allConfig: Config
-  ): Task[DiEnv[AppEnv]] = {
-    Task {
-      val fdbManaged = for {
-        backend <- FdbDatabase
-          .manage(Backends.fdbStorage, appConfig.fdb)
-        api <- KvdbDatabaseApi(backend).toManaged_
-      } yield FdbService(api, Backends.fdbStorage)
+    val fdbManaged = for {
+      appConfig <- TypedConfig.get[KvdbMultiBackendSampleAppConfig].toManaged_
+      backend <- FdbDatabase
+        .manage(Backends.fdbStorage, appConfig.fdb)
+      api <- KvdbDatabaseApi(backend).toManaged_
+    } yield FdbService(api, Backends.fdbStorage)
 
-      val rocksdbManaged = for {
-        backend <- RocksdbDatabase
-          .manage(Backends.rocksdbStorage, appConfig.rocksdb)
-        api <- KvdbDatabaseApi(backend).toManaged_
-      } yield RocksdbService(api, Backends.rocksdbStorage)
+    val rocksdbManaged = for {
+      appConfig <- TypedConfig.get[KvdbMultiBackendSampleAppConfig].toManaged_
+      backend <- RocksdbDatabase
+        .manage(Backends.rocksdbStorage, appConfig.rocksdb)
+      api <- KvdbDatabaseApi(backend).toManaged_
+    } yield RocksdbService(api, Backends.rocksdbStorage)
 
-      LiveDiEnv(
-        akkaAppDi ++ DiLayers(
-          ZLayer.fromManaged(fdbManaged),
-          ZLayer.fromManaged(rocksdbManaged),
-          KvdbIoThreadPool.live,
-          KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
-          ZLayer.succeed(appConfig),
-          AppLayer(app)
-        )
+    app
+      .injectSome[ZAkkaAppEnv](
+        TypedConfig.live[KvdbMultiBackendSampleAppConfig](),
+        KvdbIoThreadPool.live,
+        KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
+        fdbManaged.toLayer,
+        rocksdbManaged.toLayer
       )
-    }
+      .as(ExitCode(0))
   }
 
   //noinspection TypeAnnotation
