@@ -215,20 +215,26 @@ object HaProxyDecoder {
     )
   }
 
+  private[proxy] def startsWithProxyProtocolSignature(bi: ByteIterator): Boolean = {
+    var i = 0
+    var isSignatureCorrect = true
+    while (isSignatureCorrect && i < V2ProtocolSignature.length) {
+      val b = bi.getByte
+      isSignatureCorrect = b == V2ProtocolSignature(i)
+      i += 1
+    }
+    i == V2ProtocolSignature.length && isSignatureCorrect
+  }
+
   private def base64Message(fullMessage: ByteString): String = {
     new String(Base64.getEncoder.encode(fullMessage.toArrayUnsafe()))
   }
 
   private def expectV2Protocol(bi: ByteIterator, fullMessage: ByteString): Unit = {
-    var i = 0
-    while (i < V2ProtocolSignature.length) {
-      val b = bi.getByte
-      if (b != V2ProtocolSignature(i)) {
-        throw HaProxyProtocolError(
-          s"Decoding protocol signature has failed at position $i. Base64 encoded message: ${base64Message(fullMessage)}"
-        )
-      }
-      i += 1
+    if (!startsWithProxyProtocolSignature(bi)) {
+      throw HaProxyProtocolError(
+        s"Decoding protocol signature has failed. Base64 encoded message: ${base64Message(fullMessage)}"
+      )
     }
   }
 }
@@ -262,28 +268,33 @@ final class HaProxyDecodingFlow
           val newByteString = grab(in)
           if (alreadyMaterialized) push(out, newByteString)
           else {
-            byteString ++= newByteString
-            if (byteString.length < HaProxyProtocol.HeaderLength) pull(in)
+            val combined = byteString ++ newByteString
+            // if signature doesn't match or is too short (signature should always be sent in a single packet), then it's not HaProxyMessage
+            if (!HaProxyDecoder.startsWithProxyProtocolSignature(combined.iterator)) push(out, newByteString)
             else {
-              val totalMessageLength = {
-                val bytesBesidesHeader = byteString.slice(14, 16).iterator.getUnsignedShort
-                HaProxyProtocol.HeaderLength + bytesBesidesHeader
-              }
-              if (byteString.length < totalMessageLength) pull(in)
+              byteString = combined
+              if (byteString.length < HaProxyProtocol.HeaderLength) pull(in)
               else {
-                val messageByteString = byteString.take(totalMessageLength)
-                try {
-                  val decoded = HaProxyDecoder.decode(messageByteString)
-                  val _ = proxyMessagePromise.success(decoded)
-                  alreadyMaterialized = true
-                  if (byteString.length <= totalMessageLength) pull(in)
-                  else push(out, byteString.drop(totalMessageLength))
+                val totalMessageLength = {
+                  val bytesBesidesHeader = byteString.slice(14, 16).iterator.getUnsignedShort
+                  HaProxyProtocol.HeaderLength + bytesBesidesHeader
                 }
-                catch {
-                  case error: HaProxyProtocolError =>
-                    val _ = proxyMessagePromise.failure(error)
+                if (byteString.length < totalMessageLength) pull(in)
+                else {
+                  val messageByteString = byteString.take(totalMessageLength)
+                  try {
+                    val decoded = HaProxyDecoder.decode(messageByteString)
+                    val _ = proxyMessagePromise.success(decoded)
                     alreadyMaterialized = true
-                    failStage(error)
+                    if (byteString.length <= totalMessageLength) pull(in)
+                    else push(out, byteString.drop(totalMessageLength))
+                  }
+                  catch {
+                    case error: HaProxyProtocolError =>
+                      val _ = proxyMessagePromise.failure(error)
+                      alreadyMaterialized = true
+                      failStage(error)
+                  }
                 }
               }
             }
