@@ -97,11 +97,11 @@ object HaProxyProtocol {
   private[proxy] val AddressFamilies =
     Set(AddressFamilyUnspecified, AddressFamilyIpV4, AddressFamilyIpV6, AddressFamilyUnix)
 
-  def decodingFlow: Flow[ByteString, ByteString, Future[HaProxyMessage]] = {
+  def decodingFlow: Flow[ByteString, ByteString, Future[Option[HaProxyMessage]]] = {
     Flow.fromGraph(new HaProxyDecodingFlow)
   }
 
-  def decodingProtocol: BidiFlow[ByteString, ByteString, ByteString, ByteString, Future[HaProxyMessage]] = {
+  def decodingProtocol: BidiFlow[ByteString, ByteString, ByteString, ByteString, Future[Option[HaProxyMessage]]] = {
     BidiFlow.fromFlowsMat(decodingFlow, Flow[ByteString])(Keep.left)
   }
 
@@ -256,7 +256,7 @@ object HaProxyDecodingFlowException {
 }
 
 final class HaProxyDecodingFlow
-    extends GraphStageWithMaterializedValue[FlowShape[ByteString, ByteString], Future[HaProxyMessage]] {
+    extends GraphStageWithMaterializedValue[FlowShape[ByteString, ByteString], Future[Option[HaProxyMessage]]] {
   import HaProxyProtocol._
 
   val in: Inlet[ByteString] = Inlet("HaProxyDecodingFlow.in")
@@ -265,8 +265,8 @@ final class HaProxyDecodingFlow
   override val shape = FlowShape(in, out)
 
   override def createLogicAndMaterializedValue(inheritedAttributes: Attributes)
-    : (GraphStageLogic, Future[HaProxyMessage]) = {
-    val proxyMessagePromise = Promise[HaProxyMessage]()
+    : (GraphStageLogic, Future[Option[HaProxyMessage]]) = {
+    val proxyMessagePromise = Promise[Option[HaProxyMessage]]()
     val logic: GraphStageLogic = new GraphStageLogic(shape) {
 
       val handler = new InHandler with OutHandler {
@@ -277,11 +277,14 @@ final class HaProxyDecodingFlow
           val newByteString = grab(in)
           if (alreadyMaterialized) push(out, newByteString)
           else {
-            val combined = byteString ++ newByteString
-            // if signature doesn't match or is too short (signature should always be sent in a single packet), then it's not HaProxyMessage
-            if (!HaProxyDecoder.startsWithProxyProtocolSignature(combined.iterator)) push(out, newByteString)
+            byteString ++= newByteString
+            // if signature doesn't match or is too short (signature should always be sent in a single packet), then fallback to "regular" traffic
+            if (!HaProxyDecoder.startsWithProxyProtocolSignature(byteString.iterator)) {
+              val _ = proxyMessagePromise.success(None)
+              alreadyMaterialized = true
+              push(out, newByteString)
+            }
             else {
-              byteString = combined
               if (byteString.length < HaProxyProtocol.HeaderLength) pull(in)
               else {
                 val totalMessageLength = {
@@ -293,7 +296,7 @@ final class HaProxyDecodingFlow
                   val messageByteString = byteString.take(totalMessageLength)
                   try {
                     val decoded = HaProxyDecoder.decode(messageByteString)
-                    val _ = proxyMessagePromise.success(decoded)
+                    val _ = proxyMessagePromise.success(Some(decoded))
                     alreadyMaterialized = true
                     if (byteString.length <= totalMessageLength) pull(in)
                     else push(out, byteString.drop(totalMessageLength))
