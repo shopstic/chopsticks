@@ -84,7 +84,11 @@ object FdbTestSampleApp extends ZAkkaApp {
     _ <- dbApi
       .columnFamily(sampleDb.default)
       .putTask("foo0000", "foo0000")
-      .log("put foo0000")(LogCtx.auto.withAttributes("key" -> "foo0000", "value" -> "foo0000", "foo" -> true))
+      .log("put foo0000")(LogCtx.auto.withAttributes(
+        "the_key_here" -> "foo0000",
+        "the_value_here" -> "foo0000",
+        "foo" -> true
+      ))
     _ <- dbApi
       .columnFamily(sampleDb.default)
       .putTask("foo1000", "foo1000")

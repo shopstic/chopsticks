@@ -1,10 +1,12 @@
 package dev.chopsticks.fp.iz_logging
 
+import dev.chopsticks.util.config.PureconfigFastCamelCaseNamingConvention
 import izumi.fundamentals.platform.exceptions.IzThrowable
 import izumi.logstage.api.Log
 import izumi.logstage.api.Log.LogArg
-import izumi.logstage.api.rendering.{LogstageCodec, RenderedMessage, RenderedParameter, RenderingOptions}
 import izumi.logstage.api.rendering.logunits.LogFormat.LogFormatImpl
+import izumi.logstage.api.rendering.{LogstageCodec, RenderedMessage, RenderedParameter, RenderingOptions}
+import pureconfig.SnakeCase
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -18,7 +20,11 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
   }
 
   @inline private[this] def formatKvStrings(withColor: Boolean, name: String, value: String): String = {
-    val key = wrapped(withColor, KEY_COLOR, name)
+    val key = wrapped(
+      withColors = withColor,
+      color = KEY_COLOR,
+      message = SnakeCase.fromTokens(PureconfigFastCamelCaseNamingConvention.toTokens(name))
+    )
     val v = wrapped(withColors = false, Console.CYAN, value)
     s"$key=$v"
   }
@@ -198,7 +204,11 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
   }
 
   override def formatKv(withColor: Boolean)(name: String, codec: Option[LogstageCodec[Any]], value: Any): String = {
-    val key = wrapped(withColor, KEY_COLOR, name)
+    val key = wrapped(
+      withColors = withColor,
+      color = KEY_COLOR,
+      message = SnakeCase.fromTokens(PureconfigFastCamelCaseNamingConvention.toTokens(name))
+    )
     val v = argToString(codec, value, withColor)
     s"$key=$v"
   }

@@ -70,8 +70,11 @@ object FdbWatchTestApp extends ZAkkaApp {
           "logging",
           Task
             .effectSuspend {
+              val watchCount = watchCounter.longValue()
+              val changeCount = changeCounter.longValue()
+
               zLogger.info(
-                s"${watchCounter.longValue() -> "watch"} ${changeCounter.longValue() -> "change"} ${lastAtomic.get -> "last"}"
+                s"$watchCount $changeCount ${lastAtomic.get -> "lastVersionstamp"}"
               )
             }
             .repeat(Schedule.fixed(1.second.asJava))
