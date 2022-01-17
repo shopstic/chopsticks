@@ -30,6 +30,8 @@ object IzLogging {
   final case class LiveService(logger: IzLogger, zioLogger: LogIO3[ZIO], logLevel: Log.Level) extends Service {
     override def loggerWithCtx(ctx: LogCtx): IzLogger =
       logger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
+        .withCustomContext(CustomContext(ctx.logArgs))
+
     override def zioLoggerWithCtx(ctx: LogCtx): LogIO3[ZIO] =
       zioLogger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
   }

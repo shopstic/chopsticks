@@ -6,7 +6,7 @@ import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.TypedConfig
-import dev.chopsticks.fp.iz_logging.IzLogging
+import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.ValueSerdes
@@ -84,7 +84,7 @@ object FdbTestSampleApp extends ZAkkaApp {
     _ <- dbApi
       .columnFamily(sampleDb.default)
       .putTask("foo0000", "foo0000")
-      .log("put foo0000")
+      .log("put foo0000")(LogCtx.auto.withAttributes("key" -> "foo0000", "value" -> "foo0000", "foo" -> true))
     _ <- dbApi
       .columnFamily(sampleDb.default)
       .putTask("foo1000", "foo1000")

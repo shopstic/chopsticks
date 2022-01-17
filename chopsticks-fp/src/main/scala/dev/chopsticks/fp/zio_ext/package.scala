@@ -6,8 +6,8 @@ import dev.chopsticks.util.implicits.SquantsImplicits._
 import logstage.Log
 import squants.time.Nanoseconds
 import zio._
-import zio.duration._
 import zio.clock.Clock
+import zio.duration._
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{Duration, FiniteDuration}
