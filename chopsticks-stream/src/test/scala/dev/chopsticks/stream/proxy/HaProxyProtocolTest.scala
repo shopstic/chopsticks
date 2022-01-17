@@ -42,7 +42,7 @@ final class HaProxyProtocolTest
       .run()
 
     val haMessage = futureHaMessage.await
-    haMessage mustEqual HaProxyMessage(
+    haMessage mustEqual Some(HaProxyMessage(
       HaProxyTransportProtocol.Stream,
       HaProxyAddresses.HaProxyIpv4Addresses(
         src = HaProxyAddresses.HaProxyIpv4Address(
@@ -54,7 +54,7 @@ final class HaProxyProtocolTest
           port = 2000
         )
       )
-    )
+    ))
 
     futureResult.await mustEqual Seq("TCP MESSAGE", "ANOTHER MESSAGE")
   }
@@ -74,7 +74,7 @@ final class HaProxyProtocolTest
       .run()
 
     val haMessage = futureHaMessage.await
-    haMessage mustEqual HaProxyMessage(
+    haMessage mustEqual Some(HaProxyMessage(
       HaProxyTransportProtocol.Dgram,
       HaProxyAddresses.HaProxyIpv6Addresses(
         src = HaProxyAddresses.HaProxyIpv6Address(
@@ -86,7 +86,7 @@ final class HaProxyProtocolTest
           port = 1500
         )
       )
-    )
+    ))
 
     futureResult.await mustEqual Seq("MSG", "ANOTHER MESSAGE")
   }
@@ -126,7 +126,7 @@ final class HaProxyProtocolTest
       .run()
 
     val haMessage = futureHaMessage.await
-    haMessage mustEqual HaProxyMessage(
+    haMessage mustEqual Some(HaProxyMessage(
       HaProxyTransportProtocol.Stream,
       HaProxyAddresses.HaProxyIpv4Addresses(
         src = HaProxyAddresses.HaProxyIpv4Address(
@@ -138,7 +138,7 @@ final class HaProxyProtocolTest
           port = 2000
         )
       )
-    )
+    ))
 
     futureResult.await mustEqual Seq("TCP MESSAGE", "ANOTHER MESSAGE")
   }
@@ -156,7 +156,7 @@ final class HaProxyProtocolTest
       .run()
 
     val haMessage = futureHaMessage.await
-    haMessage mustEqual HaProxyMessage(
+    haMessage mustEqual Some(HaProxyMessage(
       HaProxyTransportProtocol.Stream,
       HaProxyAddresses.HaProxyIpv4Addresses(
         src = HaProxyAddresses.HaProxyIpv4Address(
@@ -168,7 +168,7 @@ final class HaProxyProtocolTest
           port = 2000
         )
       )
-    )
+    ))
 
     futureResult.await mustEqual Seq("TCP MESSAGE", "ANOTHER MESSAGE")
   }
@@ -189,7 +189,7 @@ final class HaProxyProtocolTest
       .run()
 
     val haMessage = futureHaMessage.await
-    haMessage mustEqual HaProxyMessage(
+    haMessage mustEqual Some(HaProxyMessage(
       HaProxyTransportProtocol.Stream,
       HaProxyAddresses.HaProxyIpv4Addresses(
         src = HaProxyAddresses.HaProxyIpv4Address(
@@ -201,16 +201,14 @@ final class HaProxyProtocolTest
           port = 2775
         )
       )
-    )
+    ))
 
     futureResult.await mustEqual Seq("000000000000000000000000000000000000000000000000000000000000000000000000000000")
   }
 
-  "messages that arrive before HaProxyMessage should be passed-through" in {
+  "messages that arrive before HaProxyMessage should be passed-through and materialized value should equal to None" in {
     val source = Source(List(
       ByteString.fromString("TCP MESSAGE1"),
-      ByteString.fromArray(Hex.decode("0D0A0D0A000D0A515549540A2111000C0A0101011402")), // 1st part of the proxy message
-      ByteString.fromArray(Hex.decode("020203E807D0")), // 2nd part of the proxy message
       ByteString.fromString("TCP MESSAGE2")
     ))
     val (futureHaMessage, futureResult) = source
@@ -220,19 +218,7 @@ final class HaProxyProtocolTest
       .run()
 
     val haMessage = futureHaMessage.await
-    haMessage mustEqual HaProxyMessage(
-      HaProxyTransportProtocol.Stream,
-      HaProxyAddresses.HaProxyIpv4Addresses(
-        src = HaProxyAddresses.HaProxyIpv4Address(
-          addr = InetAddress.getByName("10.1.1.1"),
-          port = 1000
-        ),
-        dst = HaProxyAddresses.HaProxyIpv4Address(
-          addr = InetAddress.getByName("20.2.2.2"),
-          port = 2000
-        )
-      )
-    )
+    haMessage mustEqual None
 
     futureResult.await mustEqual Seq("TCP MESSAGE1", "TCP MESSAGE2")
   }
