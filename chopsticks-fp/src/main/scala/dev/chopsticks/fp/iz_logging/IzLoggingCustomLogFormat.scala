@@ -207,7 +207,7 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
     val key = wrapped(
       withColors = withColor,
       color = KEY_COLOR,
-      message = SnakeCase.fromTokens(PureconfigFastCamelCaseNamingConvention.toTokens(name))
+      message = name
     )
     val v = argToString(codec, value, withColor)
     s"$key=$v"
