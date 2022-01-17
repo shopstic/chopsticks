@@ -7,7 +7,7 @@ import java.util.Base64
 import akka.stream.scaladsl.{BidiFlow, Flow, Keep}
 import akka.stream.stage.{GraphStageLogic, GraphStageWithMaterializedValue, InHandler, OutHandler}
 import akka.util.{ByteIterator, ByteString}
-import dev.chopsticks.stream.proxy.HaProxyProtocol.{HaProxyMessage, HaProxyProtocolError}
+import dev.chopsticks.stream.proxy.HaProxyProtocol.HaProxyMessage
 
 import java.net.InetAddress
 import scala.collection.compat.immutable.ArraySeq
@@ -25,8 +25,8 @@ object HaProxyProtocol {
     val Ipv6AddressLength = 16
     val UnixAddressLength = 108
 
-    final case class HaProxyIpv4Address(addr: InetAddress, port: Short)
-    final case class HaProxyIpv6Address(addr: InetAddress, port: Short)
+    final case class HaProxyIpv4Address(addr: InetAddress, port: Int)
+    final case class HaProxyIpv6Address(addr: InetAddress, port: Int)
     final case class HaProxyUnixAddress(addr: ArraySeq[Byte])
 
     sealed abstract class HaProxySpecifiedAddresses extends HaProxyAddresses {
@@ -106,17 +106,23 @@ object HaProxyProtocol {
   }
 
   private def byte(hexString: String): Byte = {
-    val firstDigit = toDigit(hexString.charAt(0));
-    val secondDigit = toDigit(hexString.charAt(1));
+    val firstDigit = toDigit(hexString.charAt(0))
+    val secondDigit = toDigit(hexString.charAt(1))
     ((firstDigit << 4) + secondDigit).toByte
   }
 
   private def toDigit(hexChar: Char): Int = {
-    val digit = Character.digit(hexChar, 16);
+    val digit = Character.digit(hexChar, 16)
     if (digit == -1) {
       throw new IllegalArgumentException(s"Invalid Hexadecimal Character: $hexChar")
     }
     digit
+  }
+
+  implicit private[proxy] class ByteIteratorOps(val bi: ByteIterator) extends AnyVal {
+    def getUnsignedShort(implicit order: ByteOrder): Int = {
+      bi.getShort(order) & 0xFFFF
+    }
   }
 }
 
@@ -169,13 +175,13 @@ object HaProxyDecoder {
         )
     }
 
-    val _ = bi.getShort // length parameter
+    val _ = bi.getUnsignedShort // length parameter
     val addresses: HaProxyAddresses =
       if (addressFamily == AddressFamilyIpV4) {
         val srcAddress = bi.getBytes(4)
         val dstAddress = bi.getBytes(4)
-        val srcPort = bi.getShort
-        val dstPort = bi.getShort
+        val srcPort = bi.getUnsignedShort
+        val dstPort = bi.getUnsignedShort
         HaProxyAddresses.HaProxyIpv4Addresses(
           src = HaProxyAddresses.HaProxyIpv4Address(InetAddress.getByAddress(srcAddress), srcPort),
           dst = HaProxyAddresses.HaProxyIpv4Address(InetAddress.getByAddress(dstAddress), dstPort)
@@ -184,8 +190,8 @@ object HaProxyDecoder {
       else if (addressFamily == AddressFamilyIpV6) {
         val srcAddress = bi.getBytes(HaProxyAddresses.Ipv6AddressLength)
         val dstAddress = bi.getBytes(HaProxyAddresses.Ipv6AddressLength)
-        val srcPort = bi.getShort
-        val dstPort = bi.getShort
+        val srcPort = bi.getUnsignedShort
+        val dstPort = bi.getUnsignedShort
         HaProxyAddresses.HaProxyIpv6Addresses(
           src = HaProxyAddresses.HaProxyIpv6Address(InetAddress.getByAddress(srcAddress), srcPort),
           dst = HaProxyAddresses.HaProxyIpv6Address(InetAddress.getByAddress(dstAddress), dstPort)
@@ -236,6 +242,8 @@ object HaProxyDecodingFlowException {
 
 final class HaProxyDecodingFlow
     extends GraphStageWithMaterializedValue[FlowShape[ByteString, ByteString], Future[HaProxyMessage]] {
+  import HaProxyProtocol._
+
   val in: Inlet[ByteString] = Inlet("HaProxyDecodingFlow.in")
   val out: Outlet[ByteString] = Outlet("HaProxyDecodingFlow.out")
 
@@ -258,8 +266,7 @@ final class HaProxyDecodingFlow
             if (byteString.length < HaProxyProtocol.HeaderLength) pull(in)
             else {
               val totalMessageLength = {
-                val bytesBesidesHeader =
-                  byteString.slice(14, 16).iterator.getShort(HaProxyProtocol.ProxyProtocolByteOrder)
+                val bytesBesidesHeader = byteString.slice(14, 16).iterator.getUnsignedShort
                 HaProxyProtocol.HeaderLength + bytesBesidesHeader
               }
               if (byteString.length < totalMessageLength) pull(in)

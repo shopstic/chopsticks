@@ -173,13 +173,16 @@ final class HaProxyProtocolTest
     futureResult.await mustEqual Seq("TCP MESSAGE", "ANOTHER MESSAGE")
   }
 
-  "reproducer" in {
+  "decode port numbers above 32767" in {
     val source = Source(List(
-      ByteString.fromString(
-        "DQoNCgANClFVSVQKIREAVGRAC2oKeySW8cEK1wMABCZDxm4EAD4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACcAAAAJAAAAAAAAAAF6aW5jb3JhAHJiek5CTUhCTwAANAEBAA=="
-      ).decodeBase64
+      ByteString
+        .fromString(
+          "DQoNCgANClFVSVQKIREAVGRAC2oKeySW8cEK1wMABCZDxm4EAD4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        )
+        .decodeBase64
     ))
     val (futureHaMessage, futureResult) = source
+      .wireTap(bs => println(Hex.encode(bs.toArrayUnsafe())))
       .viaMat(HaProxyProtocol.decodingFlow)(Keep.right)
       .map(bs => Hex.encode(bs.toArray))
       .toMat(Sink.seq)(Keep.both)
@@ -191,7 +194,7 @@ final class HaProxyProtocolTest
       HaProxyAddresses.HaProxyIpv4Addresses(
         src = HaProxyAddresses.HaProxyIpv4Address(
           addr = InetAddress.getByName("100.64.11.106"),
-          port = 1000
+          port = 61889
         ),
         dst = HaProxyAddresses.HaProxyIpv4Address(
           addr = InetAddress.getByName("10.123.36.150"),
@@ -200,7 +203,7 @@ final class HaProxyProtocolTest
       )
     )
 
-    futureResult.await mustEqual Seq("...")
+    futureResult.await mustEqual Seq("000000000000000000000000000000000000000000000000000000000000000000000000000000")
   }
 
 }
