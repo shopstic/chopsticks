@@ -239,11 +239,20 @@ object HaProxyDecoder {
   }
 }
 
-final case class HaProxyDecodingFlowException(message: String, cause: Option[Throwable])
-    extends RuntimeException(message, cause.orNull)
+sealed trait HaProxyDecodingFlowException extends Product with Serializable
 
 object HaProxyDecodingFlowException {
-  def apply(message: String): HaProxyDecodingFlowException = HaProxyDecodingFlowException(message, None)
+  final case class DownstreamFailedBeforeHaProxyMessageMaterialized(downstreamFailure: Throwable)
+      extends RuntimeException("Downstream has finished before HaProxyMessage could be materialized", downstreamFailure)
+      with HaProxyDecodingFlowException
+
+  final case class UpstreamFinishedBeforeHaProxyMessageMaterialized()
+      extends RuntimeException("Upstream has finished before HaProxyMessage could be materialized")
+      with HaProxyDecodingFlowException
+
+  final case class UpstreamFailedBeforeHaProxyMessageMaterialized(upstreamFailure: Throwable)
+      extends RuntimeException("Upstream has failed before HaProxyMessage could be materialized", upstreamFailure)
+      with HaProxyDecodingFlowException
 }
 
 final class HaProxyDecodingFlow
@@ -308,10 +317,7 @@ final class HaProxyDecodingFlow
         override def onDownstreamFinish(cause: Throwable): Unit = {
           if (!alreadyMaterialized) {
             val _ = proxyMessagePromise.failure(
-              HaProxyDecodingFlowException(
-                message = "Downstream has finished before HaProxyMessage could be materialized",
-                cause = Some(cause)
-              )
+              HaProxyDecodingFlowException.DownstreamFailedBeforeHaProxyMessageMaterialized(cause)
             )
           }
           cancelStage(cause)
@@ -320,7 +326,7 @@ final class HaProxyDecodingFlow
         override def onUpstreamFinish(): Unit = {
           if (!alreadyMaterialized) {
             val _ = proxyMessagePromise.failure(
-              HaProxyDecodingFlowException("Upstream has finished before HaProxyMessage could be materialized")
+              HaProxyDecodingFlowException.UpstreamFinishedBeforeHaProxyMessageMaterialized()
             )
           }
           completeStage()
@@ -329,10 +335,7 @@ final class HaProxyDecodingFlow
         override def onUpstreamFailure(ex: Throwable): Unit = {
           if (!alreadyMaterialized) {
             val _ = proxyMessagePromise.failure(
-              HaProxyDecodingFlowException(
-                message = "Upstream has failed before HaProxyMessage could be materialized",
-                cause = Some(ex)
-              )
+              HaProxyDecodingFlowException.UpstreamFailedBeforeHaProxyMessageMaterialized(ex)
             )
           }
           failStage(ex)
