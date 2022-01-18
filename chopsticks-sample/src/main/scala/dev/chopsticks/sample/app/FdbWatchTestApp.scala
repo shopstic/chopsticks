@@ -64,7 +64,6 @@ object FdbWatchTestApp extends ZAkkaApp {
       lastAtomic = new AtomicReference(Option.empty[TestValueWithVersionstamp])
       dbApi <- KvdbDatabaseApi(db)
       zLogger <- IzLogging.zioLogger
-      logger <- IzLogging.logger
       actorSystem <- AkkaEnv.actorSystem
       _ <- LoggedRace()
         .add(
