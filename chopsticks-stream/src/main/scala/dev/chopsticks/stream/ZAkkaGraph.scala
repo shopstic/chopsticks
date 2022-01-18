@@ -1,6 +1,7 @@
 package dev.chopsticks.stream
 
 import akka.stream.KillSwitch
+import akka.stream.SubscriptionWithCancelException.NonFailureCancellation
 import akka.stream.scaladsl.RunnableGraph
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
@@ -32,7 +33,10 @@ object ZAkkaGraph {
 
           task.onInterrupt {
             val wait = task.fold(
-              e => logger.error(s"Graph interrupted ($graceful) which led to: ${e.getMessage -> "exception"}"),
+              {
+                case _: NonFailureCancellation =>
+                case e => logger.error(s"Graph interrupted ($graceful) which led to: ${e.toString -> "exception"}")
+              },
               _ => ()
             )
 

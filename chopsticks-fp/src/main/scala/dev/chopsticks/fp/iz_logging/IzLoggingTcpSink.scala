@@ -19,6 +19,7 @@ import izumi.logstage.api.logger.LogSink
 import izumi.logstage.api.rendering.RenderingPolicy
 
 import scala.util.Failure
+import scala.util.control.NonFatal
 
 final class IzLoggingTcpSink(
   host: NonEmptyString,
@@ -65,8 +66,17 @@ final class IzLoggingTcpSink(
     }
   }
 
-  override def flush(e: Log.Entry): Unit = {
-    sourceActorRef ! renderingPolicy.render(e) + "\n"
+  override def flush(entry: Log.Entry): Unit = {
+    try {
+      sourceActorRef ! renderingPolicy.render(entry) + "\n"
+    }
+    catch {
+      case NonFatal(e) =>
+        Console.err.println("IzLoggingTcpSink failed rendering log entry")
+        pprint.tokenize(entry, height = Int.MaxValue).foreach(Console.err.print)
+        Console.err.println()
+        e.printStackTrace(Console.err)
+    }
   }
 
   override def close(): Unit = {

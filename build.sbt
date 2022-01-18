@@ -59,7 +59,9 @@ lazy val testkit = Build
 lazy val fp = Build
   .defineProject("fp")
   .settings(
-    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ logstageDeps ++ sourcecodeDeps ++ zioMagicDeps.map(_ % "test")
+    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ logstageDeps ++ sourcecodeDeps ++ pprintDeps ++ zioMagicDeps.map(
+      _ % "test"
+    )
   )
   .dependsOn(util)
 
