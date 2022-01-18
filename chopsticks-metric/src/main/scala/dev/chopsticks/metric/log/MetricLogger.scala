@@ -4,7 +4,7 @@ import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.metric.{MetricCounter, MetricGauge, MetricReference}
 import izumi.logstage.api.IzLogger
-import izumi.logstage.api.Log.CustomContext
+import izumi.logstage.api.Log.{CustomContext, LogArg}
 import izumi.logstage.api.rendering.{AnyEncoded, StrictEncoded}
 import zio.clock.Clock
 import zio.{Schedule, UIO, ULayer, URIO, URLayer, ZIO, ZLayer, ZRef}
@@ -168,7 +168,11 @@ object MetricLogger {
 
   private def defaultLog(logger: IzLogger, pairs: ListMap[String, AnyEncoded]): UIO[Unit] = {
     UIO {
-      logger(CustomContext(pairs.toList: _*))
+      val logArgs = pairs.map { case (k, v) =>
+        LogArg(Seq(k), v.value, hiddenName = false, v.codec)
+      }.toList
+
+      logger(CustomContext(logArgs))
         .info("")
     }
   }
