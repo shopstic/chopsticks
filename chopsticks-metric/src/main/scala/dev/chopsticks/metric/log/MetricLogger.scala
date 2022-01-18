@@ -4,8 +4,8 @@ import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.metric.{MetricCounter, MetricGauge, MetricReference}
 import izumi.logstage.api.IzLogger
-import izumi.logstage.api.Log.{CustomContext, LogArg}
-import izumi.logstage.api.rendering.{LogstageCodec, StrictEncoded}
+import izumi.logstage.api.Log.CustomContext
+import izumi.logstage.api.rendering.{AnyEncoded, StrictEncoded}
 import zio.clock.Clock
 import zio.{Schedule, UIO, ULayer, URIO, URLayer, ZIO, ZLayer, ZRef}
 
@@ -112,7 +112,7 @@ object MetricLogger {
 
   def live(
     interval: FiniteDuration = 1.second,
-    log: (IzLogger, Iterable[(String, String)]) => UIO[Unit] = defaultLog
+    log: (IzLogger, ListMap[String, AnyEncoded]) => UIO[Unit] = defaultLog
   ): URLayer[Clock with IzLogging, MetricLogger] = {
     def run(collect: UIO[ListMap[String, PeriodicValue]], logCtx: LogCtx) = {
       for {
@@ -124,7 +124,8 @@ object MetricLogger {
             output <- priorSnapRef.modify { priorSnapshot =>
               val next = snapshot.map {
                 case (k, PeriodicSnapshot(v)) =>
-                  (k, v)
+                  (k, StrictEncoded.to(v))
+
                 case (k, PeriodicRate(values)) =>
                   val rate = values.foldLeft(0d) {
                     case (acc, (mk, mv)) =>
@@ -134,7 +135,7 @@ object MetricLogger {
                       }
                       acc + mv - priorValue
                   }
-                  (k, rate.toString)
+                  (k, StrictEncoded.to(rate))
               }
               (next, snapshot)
             }
@@ -165,18 +166,9 @@ object MetricLogger {
     }
   }
 
-  private def defaultLog(logger: IzLogger, pairs: Iterable[(String, String)]): UIO[Unit] = {
+  private def defaultLog(logger: IzLogger, pairs: ListMap[String, AnyEncoded]): UIO[Unit] = {
     UIO {
-      // We have to go low-level here to preserve ordering
-      val logArgs = pairs
-        .map(StrictEncoded.toPair[String])
-        .map {
-          case (k, v) => LogArg(Seq(k), v.value, hiddenName = false, v.codec.map(_.asInstanceOf[LogstageCodec[Any]]))
-        }
-        .toList
-
-      logger
-        .withCustomContext(CustomContext(logArgs))
+      logger(CustomContext(pairs.toList: _*))
         .info("")
     }
   }
