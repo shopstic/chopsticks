@@ -64,6 +64,7 @@ object FdbWatchTestApp extends ZAkkaApp {
       lastAtomic = new AtomicReference(Option.empty[TestValueWithVersionstamp])
       dbApi <- KvdbDatabaseApi(db)
       zLogger <- IzLogging.zioLogger
+      logger <- IzLogging.logger
       actorSystem <- AkkaEnv.actorSystem
       _ <- LoggedRace()
         .add(
@@ -74,7 +75,7 @@ object FdbWatchTestApp extends ZAkkaApp {
               val changeCount = changeCounter.longValue()
 
               zLogger.info(
-                s"$watchCount $changeCount ${lastAtomic.get -> "lastVersionstamp"}"
+                s"Status update $watchCount $changeCount ${lastAtomic.get -> "lastVersionstamp"}"
               )
             }
             .repeat(Schedule.fixed(1.second.asJava))

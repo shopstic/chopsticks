@@ -1,12 +1,10 @@
 package dev.chopsticks.fp.iz_logging
 
-import dev.chopsticks.util.config.PureconfigFastCamelCaseNamingConvention
 import izumi.fundamentals.platform.exceptions.IzThrowable
 import izumi.logstage.api.Log
 import izumi.logstage.api.Log.LogArg
 import izumi.logstage.api.rendering.logunits.LogFormat.LogFormatImpl
 import izumi.logstage.api.rendering.{LogstageCodec, RenderedMessage, RenderedParameter, RenderingOptions}
-import pureconfig.SnakeCase
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -20,11 +18,7 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
   }
 
   @inline private[this] def formatKvStrings(withColor: Boolean, name: String, value: String): String = {
-    val key = wrapped(
-      withColors = withColor,
-      color = KEY_COLOR,
-      message = SnakeCase.fromTokens(PureconfigFastCamelCaseNamingConvention.toTokens(name))
-    )
+    val key = wrapped(withColors = withColor, color = KEY_COLOR, message = name)
     val v = wrapped(withColors = false, Console.CYAN, value)
     s"$key=$v"
   }
@@ -74,29 +68,20 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
           val _ = acc += uncoloredRepr
         }
 
-        val rawOriginalName = uncoloredRepr.arg.name
         val rawNormalizedName = uncoloredRepr.normalizedName
 
-        val count = occurences.getOrElseUpdate(rawOriginalName, 0)
+        val count = occurences.getOrElseUpdate(rawNormalizedName, 0)
 
         {
-          val _ = occurences.put(rawOriginalName, count + 1)
+          val _ = occurences.put(rawNormalizedName, count + 1)
         }
 
-        val (normalizedName, originalName) =
+        val normalizedName =
           if (count == 0) {
-            (rawNormalizedName, rawOriginalName)
+            rawNormalizedName
           }
           else {
-            (s"$rawNormalizedName.$count", s"$rawOriginalName.$count")
-          }
-
-        val visibleName =
-          if (withColors) {
-            originalName
-          }
-          else {
-            normalizedName
+            s"$rawNormalizedName.$count"
           }
 
         {
@@ -117,7 +102,7 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
 
         val _ = (
           if (!uncoloredRepr.arg.hiddenName) {
-            messageBuilder.append(formatKvStrings(withColors, visibleName, maybeColoredRepr))
+            messageBuilder.append(formatKvStrings(withColors, normalizedName, maybeColoredRepr))
           }
           else {
             messageBuilder.append(maybeColoredRepr)
@@ -204,11 +189,7 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
   }
 
   override def formatKv(withColor: Boolean)(name: String, codec: Option[LogstageCodec[Any]], value: Any): String = {
-    val key = wrapped(
-      withColors = withColor,
-      color = KEY_COLOR,
-      message = name
-    )
+    val key = wrapped(withColors = withColor, color = KEY_COLOR, message = name)
     val v = argToString(codec, value, withColor)
     s"$key=$v"
   }
