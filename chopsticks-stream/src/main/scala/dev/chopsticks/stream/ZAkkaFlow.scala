@@ -233,21 +233,34 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
     E1,
     Graph[FlowShape[Out, Next], Any]
   ]): ZAkkaFlow[R1, E1, In, Next, Mat] = {
-    viaMatM(makeFlow(Flow[Out]))(Keep.left)
+    viaBuilderMatWithScopeM((f, _) => makeFlow(f))(Keep.left)
   }
 
-  def viaMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeNext: ZIO[R1, E1, Graph[FlowShape[Out, Next], Mat2]])(
+  def viaBuilderMatWithScopeM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeFlow: (
+    Flow[Out @uncheckedVariance, Out, NotUsed],
+    ZAkkaScope
+  ) => ZIO[
+    R1,
+    E1,
+    Graph[FlowShape[Out, Next], Mat2]
+  ])(
     combine: (Mat, Mat2) => Mat3
   ): ZAkkaFlow[R1, E1, In, Next, Mat3] = {
     new ZAkkaFlow(scope => {
       for {
         flow <- make(scope)
-        nextFlow <- makeNext
+        viaFlow <- makeFlow(Flow[Out], scope)
       } yield {
         flow
-          .viaMat(nextFlow)(combine)
+          .viaMat(viaFlow)(combine)
       }
     })
+  }
+
+  def viaMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeNext: ZIO[R1, E1, Graph[FlowShape[Out, Next], Mat2]])(
+    combine: (Mat, Mat2) => Mat3
+  ): ZAkkaFlow[R1, E1, In, Next, Mat3] = {
+    viaBuilderMatWithScopeM((_, _) => makeNext)(combine)
   }
 
   def viaBuilderMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeFlow: Flow[Out @uncheckedVariance, Out, NotUsed] => ZIO[
@@ -257,7 +270,7 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   ])(
     combine: (Mat, Mat2) => Mat3
   ): ZAkkaFlow[R1, E1, In, Next, Mat3] = {
-    viaMatM(makeFlow(Flow[Out]))(combine)
+    viaBuilderMatWithScopeM((f, _) => makeFlow(f))(combine)
   }
 
   @deprecated("Use .killSwitch instead", since = "3.4.0")

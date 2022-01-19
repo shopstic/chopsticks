@@ -342,6 +342,27 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
     viaMatM(makeFlow(Flow[Out]))(combine)
   }
 
+  def viaBuilderWithScopeMatM[R1 <: R, E1 >: E, Next, Mat2, Mat3](makeFlow: (
+    Flow[Out @uncheckedVariance, Out, NotUsed],
+    ZAkkaScope
+  ) => ZIO[
+    R1,
+    E1,
+    Graph[FlowShape[Out, Next], Mat2]
+  ])(
+    combine: (Mat, Mat2) => Mat3
+  ): ZAkkaSource[R1, E1, Next, Mat3] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+        nextFlow <- makeFlow(Flow[Out], scope)
+      } yield {
+        source
+          .viaMat(nextFlow)(combine)
+      }
+    })
+  }
+
   def killSwitch: ZAkkaSource[R, E, Out, UniqueKillSwitch] = {
     new ZAkkaSource(scope => {
       for {
