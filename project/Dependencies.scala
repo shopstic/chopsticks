@@ -186,6 +186,6 @@ object Dependencies {
       .map(_ % CALIBAN_VERSION)
 
   val sourcecodeDeps = Seq(
-    "com.lihaoyi" %% "sourcecode" % "0.2.7"
+    "com.lihaoyi" %% "sourcecode" % "0.2.8"
   )
 }
