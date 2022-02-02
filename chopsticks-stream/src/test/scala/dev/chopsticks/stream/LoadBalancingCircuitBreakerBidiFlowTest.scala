@@ -12,6 +12,7 @@ import org.scalatest.matchers.must.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import java.time.{Clock, Instant}
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.compat.immutable.ArraySeq
 import scala.concurrent.duration.DurationInt
 
@@ -216,6 +217,51 @@ final class LoadBalancingCircuitBreakerBidiFlowTest extends AkkaTestKit
       probes.responses.expectNext() mustEqual LoadBalancingCircuitBreakerBidiFlowTestResponse.Success
     }
 
+    "respect resetFailuresOnSuccess parameter" in {
+      val servers = ArraySeq("localhost:1111")
+      val resetTimeout = Timeout(10.seconds)
+      val isServerActive = new AtomicBoolean(true)
+      val probes = runTestLoadBalandingCircuitBreakerBidiFlow(
+        servers = servers,
+        maxFailuresCount = 1,
+        resetTimeout = resetTimeout,
+        initialServerStateInactive = false,
+        resetFailuresOnSuccess = true,
+        onOneServerGotActiveChange = () => isServerActive.set(true),
+        onAllServersInactiveChange = () => isServerActive.set(false)
+      )
+      val _ = probes.ensureSubscriptions()
+
+      probes.requestsWithDestination.request(10)
+      probes.responses.request(10)
+
+      val initialRequests = (1 to 2).map { i =>
+        val _ = probes.requests.sendNext(i.toString)
+        val request = probes.requestsWithDestination.expectNext()
+        request.request mustEqual i.toString
+        request.destination mustEqual servers(0)
+        request
+      }
+
+      probes.responsesWithDestination.sendNext(createDestTimeoutResponse(initialRequests(0)))
+      probes.responses.expectNext() mustEqual LoadBalancingCircuitBreakerBidiFlowTestResponse.Timeout
+
+      val _ = probes.requests.sendNext("3")
+      val _ = probes.requestsWithDestination.expectNoMessage(100.millis)
+      isServerActive.get mustEqual false
+
+      probes.responsesWithDestination.sendNext(createDestOkResponse(initialRequests(1)))
+      probes.responses.expectNext() mustEqual LoadBalancingCircuitBreakerBidiFlowTestResponse.Success
+      isServerActive.get mustEqual true
+
+      val lastRequest = probes.requestsWithDestination.expectNext()
+      lastRequest.request mustEqual "3"
+      lastRequest.destination mustEqual servers(0)
+      probes.responsesWithDestination.sendNext(createDestOkResponse(lastRequest))
+      probes.responses.expectNext() mustEqual LoadBalancingCircuitBreakerBidiFlowTestResponse.Success
+      isServerActive.get mustEqual true
+    }
+
     "load balance requests among active servers" in {
       val servers = ArraySeq("localhost:1111", "localhost:1112", "localhost:1113")
       val maxFailures: PosInt = 1
@@ -311,14 +357,16 @@ final class LoadBalancingCircuitBreakerBidiFlowTest extends AkkaTestKit
       case _ => false
     },
     onOneServerGotActiveChange: () => Unit = () => (),
-    onAllServersInactiveChange: () => Unit = () => ()
+    onAllServersInactiveChange: () => Unit = () => (),
+    resetFailuresOnSuccess: Boolean = false
   ): LoadBalancingCircuitBreakerBidiFlowTestProbes = {
     val loadBalancingCircuitBreakerFlow = {
       LoadBalancingCircuitBreakerBidiFlow[String, LoadBalancingCircuitBreakerBidiFlowTestResponse, String](
         config = LoadBalancingCircuitBreakerPerServerConfig(
           maxFailuresCount = maxFailuresCount,
           resetTimeout = resetTimeout,
-          initialServerStateInactive = initialServerStateInactive
+          initialServerStateInactive = initialServerStateInactive,
+          resetFailuresOnSuccess = resetFailuresOnSuccess
         ),
         servers = servers,
         clock = Clock.systemUTC(),
