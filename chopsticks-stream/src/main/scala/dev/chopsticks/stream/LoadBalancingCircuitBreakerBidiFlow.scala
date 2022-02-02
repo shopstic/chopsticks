@@ -17,7 +17,8 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 final case class LoadBalancingCircuitBreakerPerServerConfig(
   maxFailuresCount: PosInt,
   resetTimeout: Timeout,
-  initialServerStateInactive: Boolean
+  initialServerStateInactive: Boolean,
+  resetFailuresOnSuccess: Boolean
 )
 
 object LoadBalancingCircuitBreakerPerServerConfig {
@@ -133,6 +134,10 @@ object LoadBalancingCircuitBreakerBidiFlow {
           if (config.maxFailuresCount.value <= failureTimestamps.length) {
             transitionToInactive(responseTimestamp)
           }
+        }
+        else if (config.resetFailuresOnSuccess) {
+          if (isActive) failureTimestamps.clear()
+          else transitionToActive()
         }
         LoadBalancingCircuitBreakerRegularRequest
       }
@@ -368,7 +373,7 @@ final class LoadBalancingCircuitBreakerBidiFlow[Request, Response, ServerId](
         else {
           onOneServerGotActiveChange()
         }
-        val intervalMs = Math.max(20, config.resetTimeout.duration.toMillis / 3)
+        val intervalMs = Math.min(500, Math.max(20, config.resetTimeout.duration.toMillis / 3))
         val interval = FiniteDuration(intervalMs, TimeUnit.MILLISECONDS)
         scheduleAtFixedRate(
           timerKey = LoadBalancingCircuitBreakerBidiFlowTimer,
