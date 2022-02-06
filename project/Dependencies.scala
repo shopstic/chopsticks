@@ -58,8 +58,8 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.14.1",
-    "io.prometheus" % "simpleclient_common" % "0.14.1"
+    "io.prometheus" % "simpleclient" % "0.15.0",
+    "io.prometheus" % "simpleclient_common" % "0.15.0"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
