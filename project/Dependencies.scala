@@ -87,7 +87,7 @@ object Dependencies {
   val loggingDeps = Seq(
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
     "io.7mind.izumi" %% "logstage-adapter-slf4j" % IZUMI_VERSION,
-    "org.slf4j" % "jul-to-slf4j" % "1.7.33"
+    "org.slf4j" % "jul-to-slf4j" % "1.7.36"
   )
 
   val janinoDeps = Seq(
