@@ -471,6 +471,21 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
+  def tailBatchedVerboseSource(
+    from: ConstraintsBuilder[K],
+    to: ConstraintsBuilder[K]
+  ): Source[Either[Instant, List[(K, V)]], NotUsed] = {
+    import cats.syntax.either._
+    db.tailSource(cf, KeyConstraints.range[K](from, to))
+      .mapAsync(options.serdesParallelism) {
+        case Left(e) => Future.successful(Either.left(e.time))
+        case Right(batch) =>
+          Future {
+            Either.right(batch.view.map(p => cf.unsafeDeserialize(p)).to(List))
+          }(serdesThreadPool.executionContext)
+      }
+  }
+
   @deprecated("Use rawConcurrentTailVerboseSource instead", "2.14")
   def concurrentTailVerboseRawSource(
     ranges: ConstraintsRangesBuilder[K]
