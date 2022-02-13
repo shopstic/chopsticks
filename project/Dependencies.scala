@@ -119,7 +119,7 @@ object Dependencies {
   )
 
   val shapelessDeps = Seq(
-    "com.chuusai" %% "shapeless" % "2.3.7"
+    "com.chuusai" %% "shapeless" % "2.3.8"
   )
 
   val scalapbRuntimeDeps = Seq(
