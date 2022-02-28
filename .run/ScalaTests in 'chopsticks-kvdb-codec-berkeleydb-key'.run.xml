@@ -9,8 +9,8 @@
     <option name="testKind" value="All in package" />
     <option name="classBuf">
       <list>
-        <option value="dev.chopsticks.kvdb.codec.BerkeleydbKeyCodecTest" />
         <option value="dev.chopsticks.kvdb.codec.KeyConstraintsTest" />
+        <option value="dev.chopsticks.kvdb.codec.BerkeleydbKeyCodecTest" />
       </list>
     </option>
     <option name="jrePath" value="chopsticks-run" />

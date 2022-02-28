@@ -14,6 +14,7 @@
         <option value="dev.chopsticks.stream.StatefulConflateFlowTest" />
         <option value="dev.chopsticks.stream.ReplayLastBroadcastHubTest" />
         <option value="dev.chopsticks.stream.BatchWithOptionalAggregateFlowTest" />
+        <option value="dev.chopsticks.stream.LoadBalancingCircuitBreakerBidiFlowTest" />
         <option value="dev.chopsticks.stream.proxy.HaProxyProtocolTest" />
       </list>
     </option>

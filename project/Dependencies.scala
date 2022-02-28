@@ -183,7 +183,7 @@ object Dependencies {
       "com.github.ghostdogpr" %% "caliban-client",
       "com.github.ghostdogpr" %% "caliban-akka-http"
     )
-      .map(_ % CALIBAN_VERSION)
+      .map(c => (c % CALIBAN_VERSION).exclude("com.typesafe.akka", "akka-serialization-jackson_2.13"))
 
   val sourcecodeDeps = Seq(
     "com.lihaoyi" %% "sourcecode" % "0.2.8"
