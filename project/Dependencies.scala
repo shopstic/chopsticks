@@ -6,9 +6,9 @@ object Dependencies {
   val AKKA_VERSION = "2.6.18"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.13"
-  val IZUMI_VERSION = "1.0.8"
+  val IZUMI_VERSION = "1.0.10"
   val REFINED_VERSION = "0.9.28"
-  val CALIBAN_VERSION = "1.2.4"
+  val CALIBAN_VERSION = "1.3.3"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -58,8 +58,8 @@ object Dependencies {
   )
 
   val prometheusClientDeps = Seq(
-    "io.prometheus" % "simpleclient" % "0.14.1",
-    "io.prometheus" % "simpleclient_common" % "0.14.1"
+    "io.prometheus" % "simpleclient" % "0.15.0",
+    "io.prometheus" % "simpleclient_common" % "0.15.0"
   )
 
   val akkaGrpcRuntimeDeps = Seq(
@@ -87,7 +87,7 @@ object Dependencies {
   val loggingDeps = Seq(
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
     "io.7mind.izumi" %% "logstage-adapter-slf4j" % IZUMI_VERSION,
-    "org.slf4j" % "jul-to-slf4j" % "1.7.33"
+    "org.slf4j" % "jul-to-slf4j" % "1.7.36"
   )
 
   val janinoDeps = Seq(
@@ -107,7 +107,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "6.27.3"
+    "org.rocksdb" % "rocksdbjni" % "6.28.2"
   )
 
   val lmdbDeps = Seq(
@@ -119,7 +119,7 @@ object Dependencies {
   )
 
   val shapelessDeps = Seq(
-    "com.chuusai" %% "shapeless" % "2.3.7"
+    "com.chuusai" %% "shapeless" % "2.3.8"
   )
 
   val scalapbRuntimeDeps = Seq(
@@ -186,6 +186,6 @@ object Dependencies {
       .map(_ % CALIBAN_VERSION)
 
   val sourcecodeDeps = Seq(
-    "com.lihaoyi" %% "sourcecode" % "0.2.7"
+    "com.lihaoyi" %% "sourcecode" % "0.2.8"
   )
 }
