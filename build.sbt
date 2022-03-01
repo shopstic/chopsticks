@@ -169,6 +169,15 @@ lazy val metric = Build
   )
   .dependsOn(fp)
 
+lazy val promRemoteWriter = Build
+  .defineProject("prom-remote-writer")
+  .enablePlugins(AkkaGrpcPlugin)
+  .settings(
+    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
+    libraryDependencies ++= akkaStreamDeps ++ akkaSlf4jDeps ++ snappyDeps ++ sttpDeps ++ zioDeps
+  )
+  .dependsOn(util)
+
 lazy val zioGrpcCommon = Build
   .defineProject("zio-grpc-common")
   .settings(Build.createScalapbSettings(withGrpc = true))
@@ -225,6 +234,7 @@ lazy val root = (project in file("."))
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
     metric,
+    promRemoteWriter,
     zioGrpcCommon,
     sample
   )
