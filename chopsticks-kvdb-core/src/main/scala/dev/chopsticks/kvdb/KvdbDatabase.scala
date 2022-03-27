@@ -87,6 +87,8 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def transactionBuilder(): KvdbWriteTransactionBuilder[BCF] = new KvdbWriteTransactionBuilder[BCF]
 
+  def transactionFactory(): KvdbWriteTransactionFactory[BCF] = new KvdbWriteTransactionFactory[BCF]
+
   def readTransactionBuilder(): KvdbReadTransactionBuilder[BCF] = new KvdbReadTransactionBuilder[BCF]
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]]
