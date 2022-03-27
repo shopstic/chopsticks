@@ -27,6 +27,11 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
     this
   }
 
+  def addAll(operations: Iterable[TransactionWrite]): this.type = {
+    operations.foreach(add)
+    this
+  }
+
   def put[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
     column: CF[K, V] with CF2,
     key: K,
