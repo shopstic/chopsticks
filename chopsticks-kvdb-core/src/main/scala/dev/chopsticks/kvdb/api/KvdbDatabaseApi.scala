@@ -9,7 +9,13 @@ import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
 import dev.chopsticks.kvdb.util.KvdbAliases.KvdbPair
-import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbReadTransactionBuilder, KvdbWriteTransactionBuilder}
+import dev.chopsticks.kvdb.{
+  ColumnFamily,
+  KvdbDatabase,
+  KvdbReadTransactionBuilder,
+  KvdbWriteTransactionBuilder,
+  KvdbWriteTransactionFactory
+}
 import dev.chopsticks.stream.{AkkaStreamUtils, ZAkkaFlow}
 import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
@@ -182,4 +188,5 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
 
   def readTransactionBuilder: KvdbReadTransactionBuilder[BCF] = db.readTransactionBuilder()
   def transactionBuilder: KvdbWriteTransactionBuilder[BCF] = db.transactionBuilder()
+  def transactionFactory: KvdbWriteTransactionFactory[BCF] = db.transactionFactory()
 }
