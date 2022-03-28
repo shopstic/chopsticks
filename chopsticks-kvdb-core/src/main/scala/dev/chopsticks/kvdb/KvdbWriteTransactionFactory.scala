@@ -58,15 +58,18 @@ final class KvdbWriteTransactionFactory[BCF[A, B] <: ColumnFamily[A, B]] {
   def deletePrefixRange[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K, FP, TP](
     column: CF[K, _] with CF2,
     fromPrefix: FP,
-    toPrefix: TP
+    toPrefix: TP,
+    inclusive: Boolean
   )(implicit
     ev1: KeyPrefix[FP, K],
     ev2: KeyPrefix[TP, K]
   ): TransactionDeleteRange = {
+    val toPrefixBytes = column.serializeKeyPrefix(toPrefix)
+
     TransactionDeleteRange(
       columnId = column.id,
       fromKey = column.serializeKeyPrefix(fromPrefix),
-      toKey = column.serializeKeyPrefix(toPrefix)
+      toKey = if (inclusive) KvdbUtils.strinc(toPrefixBytes) else toPrefixBytes
     )
   }
 

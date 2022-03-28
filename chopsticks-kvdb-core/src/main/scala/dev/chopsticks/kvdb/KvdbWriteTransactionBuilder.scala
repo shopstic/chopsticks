@@ -63,12 +63,13 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
   def deletePrefixRange[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K, FP, TP](
     column: CF[K, _] with CF2,
     fromPrefix: FP,
-    toPrefix: TP
+    toPrefix: TP,
+    inclusive: Boolean = false
   )(implicit
     ev1: KeyPrefix[FP, K],
     ev2: KeyPrefix[TP, K]
   ): this.type = {
-    add(factory.deletePrefixRange(column, fromPrefix, toPrefix))
+    add(factory.deletePrefixRange(column, fromPrefix, toPrefix, inclusive))
   }
 
   def deletePrefix[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K, P](column: CF[K, _] with CF2, prefix: P)(
