@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb.fdb
 
 import com.apple.foundationdb.MutationType
 import com.apple.foundationdb.tuple.ByteArrayUtil
-import dev.chopsticks.fdb.zio.ZFdbTransaction
+import dev.chopsticks.fdb.transaction.ZFdbTransaction
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.KvdbDatabaseTest
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException

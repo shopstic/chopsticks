@@ -1,4 +1,4 @@
-package dev.chopsticks.fdb.zio
+package dev.chopsticks.fdb.transaction
 
 import dev.chopsticks.fp.zio_ext.MeasuredLogging
 import dev.chopsticks.kvdb.ColumnFamily

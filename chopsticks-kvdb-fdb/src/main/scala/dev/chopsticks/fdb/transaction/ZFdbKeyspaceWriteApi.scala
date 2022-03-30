@@ -1,4 +1,4 @@
-package dev.chopsticks.fdb.zio
+package dev.chopsticks.fdb.transaction
 
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.codec.{KeyPrefix, KeyTransformer}
