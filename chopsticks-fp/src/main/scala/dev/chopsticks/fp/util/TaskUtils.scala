@@ -57,8 +57,7 @@ object TaskUtils {
                   .delay(java.time.Duration.ofSeconds(5))
                   .fork
                   .interruptible
-                _ <- task.ignore
-                _ <- loggingFib.interrupt
+                _ <- task.ignore.onExit(_ => loggingFib.interrupt)
               } yield ()
             }
         }

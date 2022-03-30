@@ -18,7 +18,7 @@ object KvdbWriteTransactionBuilder {
 final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
   import KvdbWriteTransactionBuilder._
 
-  private val factory = new KvdbWriteTransactionFactory[BCF]
+  private val factory = new KvdbOperationFactory[BCF]
   private val buffer = new ConcurrentLinkedQueue[TransactionWrite]
   private val currentVersion = new AtomicInteger(0)
 

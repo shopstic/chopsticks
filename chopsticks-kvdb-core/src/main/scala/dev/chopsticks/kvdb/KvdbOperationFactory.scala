@@ -1,10 +1,18 @@
 package dev.chopsticks.kvdb
 
+import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder._
 import dev.chopsticks.kvdb.codec.{KeyPrefix, KeyTransformer}
 import dev.chopsticks.kvdb.util.KvdbUtils
 
-final class KvdbWriteTransactionFactory[BCF[A, B] <: ColumnFamily[A, B]] {
+final class KvdbOperationFactory[BCF[A, B] <: ColumnFamily[A, B]] {
+  def get[CF <: BCF[K, _], K](column: CF, key: K): TransactionGet = {
+    TransactionGet(
+      columnId = column.id,
+      key = column.serializeKey(key)
+    )
+  }
+
   def put[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
     column: CF[K, V] with CF2,
     key: K,

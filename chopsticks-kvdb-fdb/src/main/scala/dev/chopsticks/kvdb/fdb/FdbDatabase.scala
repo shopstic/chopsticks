@@ -322,6 +322,7 @@ object FdbDatabase {
   }
 
   val COMPLETED_FUTURE: CompletableFuture[Unit] = CompletableFuture.completedFuture(())
+  private val NOOP_CALLBACK = () => ()
 }
 
 import dev.chopsticks.kvdb.fdb.FdbDatabase._
@@ -350,13 +351,35 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     )
   }
 
-  def read[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
-    TaskUtils
-      .fromCancellableCompletableFuture(
+  def uninterruptibleRead[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
+    Task
+      .fromCompletableFuture {
         dbContext.db.readAsync { tx =>
-          ops.read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
+          ops
+            .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
         }
-      )
+      }
+  }
+
+  def read[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
+    for {
+      cancelRef <- ZRef.make(NOOP_CALLBACK)
+      fib <- Task
+        .fromCompletableFuture {
+          dbContext.db.readAsync { tx =>
+            val f = ops
+              .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
+
+            rt.unsafeRun(cancelRef.set(() => {
+              val _ = f.cancel(true)
+            }))
+
+            f
+          }
+        }
+        .fork
+      ret <- fib.join.onInterrupt(cancelRef.get.map(_()) *> fib.interrupt)
+    } yield ret
   }
 
   def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[MeasuredLogging, V] = {
