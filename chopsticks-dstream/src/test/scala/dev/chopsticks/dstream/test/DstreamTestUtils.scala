@@ -12,10 +12,10 @@ import dev.chopsticks.dstream.DstreamWorker.{DstreamWorkerConfig, DstreamWorkerR
 import dev.chopsticks.dstream.{DstreamMaster, DstreamServer, DstreamServerHandler, DstreamWorker}
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
 import zio._
+import zio.clock.Clock
 import zio.test.TestAspect.PerTest
 import zio.test.environment._
 import zio.test._
@@ -42,7 +42,7 @@ object DstreamTestUtils {
 
   def setup[A: zio.Tag, R: zio.Tag](
     masterConfig: DstreamMasterConfig
-  ): ZLayer[DstreamWorker[A, R] with MeasuredLogging with AkkaEnv with DstreamMaster[
+  ): ZLayer[DstreamWorker[A, R] with IzLogging with Clock with AkkaEnv with DstreamMaster[
     A,
     A,
     R,

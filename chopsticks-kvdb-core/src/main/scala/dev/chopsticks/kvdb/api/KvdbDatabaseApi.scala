@@ -4,6 +4,7 @@ import java.util.concurrent.TimeUnit
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
@@ -29,10 +30,10 @@ import zio.{RIO, Schedule, Task, URIO, ZIO}
 
 import scala.concurrent.duration._
 import io.scalaland.chimney.dsl._
-import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.util.KvdbSerdesThreadPool
 import dev.chopsticks.stream.ZAkkaFlow.FlowToZAkkaFlow
 import pureconfig.ConfigConvert
+import zio.clock.Clock
 
 import scala.concurrent.Future
 
@@ -91,8 +92,8 @@ object KvdbDatabaseApi {
 
   def apply[BCF[A, B] <: ColumnFamily[A, B]](
     db: KvdbDatabase[BCF, _]
-  ): URIO[AkkaEnv with MeasuredLogging with KvdbSerdesThreadPool, KvdbDatabaseApi[BCF]] =
-    ZIO.runtime[AkkaEnv with MeasuredLogging with KvdbSerdesThreadPool].map { implicit rt =>
+  ): URIO[AkkaEnv with IzLogging with Clock with KvdbSerdesThreadPool, KvdbDatabaseApi[BCF]] =
+    ZIO.runtime[AkkaEnv with IzLogging with Clock with KvdbSerdesThreadPool].map { implicit rt =>
       new KvdbDatabaseApi[BCF](db, KvdbApiClientOptions.default.patchUsing(db.clientOptions))
     }
 }
@@ -101,7 +102,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
   val db: KvdbDatabase[BCF, _],
   val options: KvdbApiClientOptions
 )(implicit
-  rt: zio.Runtime[AkkaEnv with MeasuredLogging with KvdbSerdesThreadPool]
+  rt: zio.Runtime[AkkaEnv with IzLogging with Clock with KvdbSerdesThreadPool]
 ) {
   private val serdesThreadPool = rt.environment.get[KvdbSerdesThreadPool.Service]
 
@@ -125,7 +126,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
 
   def batchTransact[A, P](
     buildTransaction: Vector[A] => (List[TransactionWrite], P)
-  ): ZAkkaFlow[MeasuredLogging with AkkaEnv, Nothing, A, P, NotUsed] = {
+  ): ZAkkaFlow[IzLogging with Clock with AkkaEnv, Nothing, A, P, NotUsed] = {
     Flow[A]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
       .mapAsync(options.serdesParallelism) { batch =>
@@ -143,7 +144,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
 
   def batchTransactUnordered[A, P](
     buildTransaction: Vector[A] => (List[TransactionWrite], P)
-  ): ZAkkaFlow[MeasuredLogging with AkkaEnv, Nothing, A, P, NotUsed] = {
+  ): ZAkkaFlow[IzLogging with Clock with AkkaEnv, Nothing, A, P, NotUsed] = {
     Flow[A]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
       .mapAsyncUnordered(options.serdesParallelism) { batch =>
@@ -168,11 +169,11 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
   def statsTask: Task[Map[(String, Map[String, String]), Double]] = db.statsTask
 
   @deprecated("Use transact(...) instead", since = "2.13")
-  def transactionTask(actions: Seq[TransactionWrite]): RIO[MeasuredLogging, Seq[TransactionWrite]] = {
+  def transactionTask(actions: Seq[TransactionWrite]): RIO[IzLogging with Clock, Seq[TransactionWrite]] = {
     transact(actions)
   }
 
-  def transact(actions: Seq[TransactionWrite]): RIO[MeasuredLogging, Seq[TransactionWrite]] = {
+  def transact(actions: Seq[TransactionWrite]): RIO[IzLogging with Clock, Seq[TransactionWrite]] = {
     db.transactionTask(actions)
       .as(actions)
   }
@@ -181,7 +182,7 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
     reads: List[TransactionGet],
     condition: List[Option[KvdbPair]] => Boolean,
     actions: Seq[TransactionWrite]
-  ): RIO[MeasuredLogging, Seq[TransactionWrite]] = {
+  ): RIO[IzLogging with Clock, Seq[TransactionWrite]] = {
     db.conditionalTransactionTask(reads, condition, actions)
       .as(actions)
   }

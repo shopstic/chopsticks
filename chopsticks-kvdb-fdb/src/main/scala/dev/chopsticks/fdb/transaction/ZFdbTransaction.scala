@@ -1,8 +1,9 @@
 package dev.chopsticks.fdb.transaction
 
-import dev.chopsticks.fp.zio_ext.MeasuredLogging
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.ColumnFamily
 import dev.chopsticks.kvdb.fdb.FdbDatabase
+import zio.clock.Clock
 import zio.{Fiber, RIO, ZIO, ZRef}
 
 import scala.jdk.FutureConverters._
@@ -43,7 +44,7 @@ final class ZFdbTransaction[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
   def write[R, V](
     fn: ZFdbWriteApi[BCF] => RIO[R, V],
     name: => String = "ZFdbTransaction"
-  ): RIO[MeasuredLogging with R, V] = {
+  ): RIO[IzLogging with Clock with R, V] = {
     ZIO.runtime[R].flatMap { env =>
       backend.write(
         name,

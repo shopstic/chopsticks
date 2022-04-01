@@ -2,7 +2,7 @@ package dev.chopsticks.fp.util
 
 import java.util.concurrent.{CompletableFuture, CompletionException}
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.zio_ext._
+import zio.clock.Clock
 import zio.{RIO, Task, UIO, ZIO}
 
 import scala.concurrent.ExecutionException
@@ -29,7 +29,7 @@ object TaskUtils {
   def fromUninterruptibleCompletableFuture[A](
     name: => String,
     thunk: => CompletableFuture[A]
-  ): RIO[MeasuredLogging, A] = {
+  ): RIO[IzLogging with Clock, A] = {
     ZIO.effect(thunk).flatMap { future =>
       ZIO.effectSuspendTotalWith { (p, _) =>
         if (future.isDone) {

@@ -20,6 +20,7 @@ import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import io.prometheus.client.CollectorRegistry
 import pureconfig.ConfigConvert
 import zio._
+import zio.clock.Clock
 
 import java.util.concurrent.atomic.{AtomicReference, LongAdder}
 import scala.concurrent.duration._
@@ -74,12 +75,12 @@ object DstreamLoadTestMasterApp extends ZAkkaApp {
   private[sample] def manageServer = {
     for {
       appConfig <- TypedConfig.get[DstreamLoadTestMasterAppConfig].toManaged_
-      akkaRuntime <- ZManaged.runtime[AkkaEnv with MeasuredLogging]
+      akkaRuntime <- ZManaged.runtime[AkkaEnv with IzLogging with Clock]
       dstreamState <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
       binding <- Dstreams
         .manageServer(DstreamServerConfig(port = appConfig.port, idleTimeout = appConfig.idleTimeout)) {
           UIO {
-            implicit val rt: Runtime[AkkaEnv with MeasuredLogging] = akkaRuntime
+            implicit val rt: Runtime[AkkaEnv with IzLogging with Clock] = akkaRuntime
             implicit val as: ActorSystem = akkaRuntime.environment.get.actorSystem
 
             StreamMasterPowerApiHandler {

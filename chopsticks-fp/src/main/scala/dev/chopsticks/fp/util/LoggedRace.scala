@@ -1,8 +1,9 @@
 package dev.chopsticks.fp.util
 
 import cats.data.NonEmptyList
-import dev.chopsticks.fp.iz_logging.LogCtx
-import dev.chopsticks.fp.zio_ext.{MeasuredLogging, ZIOExtensions}
+import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
+import dev.chopsticks.fp.zio_ext.ZIOExtensions
+import zio.clock.Clock
 import zio.{IO, ZIO}
 
 object LoggedRace {
@@ -10,20 +11,24 @@ object LoggedRace {
     def add[R1 <: R, E1 >: E, A1 >: A](name: String, io: ZIO[R1, E1, A1])(implicit
       logCtx: LogCtx
     ): NonEmptyLoggedRace[R1, E1, A1] = {
-      new NonEmptyLoggedRace[R1, E1, A1](NonEmptyList.one((env: R1 with MeasuredLogging) => io.log(name).provide(env)))
+      new NonEmptyLoggedRace[R1, E1, A1](NonEmptyList.one((env: R1 with IzLogging with Clock) =>
+        io.log(name).provide(env)
+      ))
     }
   }
 
-  final class NonEmptyLoggedRace[-R, +E, +A] private[util] (queue: NonEmptyList[R with MeasuredLogging => IO[E, A]]) {
+  final class NonEmptyLoggedRace[-R, +E, +A] private[util] (
+    queue: NonEmptyList[R with IzLogging with Clock => IO[E, A]]
+  ) {
     def add[R1 <: R, E1 >: E, A1 >: A](name: String, io: ZIO[R1, E1, A1])(implicit
       logCtx: LogCtx
     ): NonEmptyLoggedRace[R1, E1, A1] = {
-      new NonEmptyLoggedRace[R1, E1, A1](((env: R1 with MeasuredLogging) => io.log(name).provide(env)) :: queue)
+      new NonEmptyLoggedRace[R1, E1, A1](((env: R1 with IzLogging with Clock) => io.log(name).provide(env)) :: queue)
     }
 
-    def run(): ZIO[R with MeasuredLogging, E, A] = {
+    def run(): ZIO[R with IzLogging with Clock, E, A] = {
       ZIO
-        .environment[R with MeasuredLogging]
+        .environment[R with IzLogging with Clock]
         .flatMap { env =>
           ZIO
             .bracket(ZIO.foreach(queue.toList)(fn => fn(env).interruptible.fork)) { fibers =>
