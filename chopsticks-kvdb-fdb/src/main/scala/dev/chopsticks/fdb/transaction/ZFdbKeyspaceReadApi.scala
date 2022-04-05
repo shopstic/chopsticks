@@ -12,7 +12,7 @@ class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V
   keyspace: CF,
   api: FdbReadApi[BCF]
 ) {
-  def rawGet(
+  def getRaw(
     constraints: ConstraintsBuilder[K]
   ): Task[Option[KvdbPair]] = {
     Task
@@ -22,7 +22,7 @@ class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V
   def get(
     constraints: ConstraintsBuilder[K]
   ): Task[Option[(K, V)]] = {
-    rawGet(constraints)
+    getRaw(constraints)
       .flatMap(maybePair => Task(maybePair.map(p => keyspace.unsafeDeserialize(p))))
   }
 
@@ -34,7 +34,7 @@ class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V
       .flatMap(maybePair => Task(maybePair.map(p => keyspace.unsafeDeserializeValue(p._2))))
   }
 
-  def rawGetRange(
+  def getRangeRaw(
     from: ConstraintsBuilder[K],
     to: ConstraintsBuilder[K],
     limit: PosInt
@@ -48,7 +48,7 @@ class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V
     to: ConstraintsBuilder[K],
     limit: PosInt
   ): Task[List[(K, V)]] = {
-    rawGetRange(from, to, limit)
+    getRangeRaw(from, to, limit)
       .flatMap(pairs => Task(pairs.map(p => keyspace.unsafeDeserialize(p))))
   }
 }
