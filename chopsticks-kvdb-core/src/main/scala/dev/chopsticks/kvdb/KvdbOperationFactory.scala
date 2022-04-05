@@ -26,6 +26,18 @@ final class KvdbOperationFactory[BCF[A, B] <: ColumnFamily[A, B]] {
     )
   }
 
+  def putRawValue[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, _], K](
+    column: CF[K, _] with CF2,
+    key: K,
+    value: Array[Byte]
+  ): TransactionPut = {
+    TransactionPut(
+      columnId = column.id,
+      key = column.serializeKey(key),
+      value = value
+    )
+  }
+
   def putValue[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](column: CF[K, V] with CF2, value: V)(implicit
     t: KeyTransformer[V, K]
   ): TransactionPut = {

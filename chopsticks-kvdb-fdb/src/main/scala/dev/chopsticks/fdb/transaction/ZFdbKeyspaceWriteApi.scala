@@ -23,6 +23,10 @@ final class ZFdbKeyspaceWriteApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V
     transact(operationFactory.put(keyspace, key, value))
   }
 
+  def putRawValue(key: K, value: Array[Byte]): Unit = {
+    transact(operationFactory.putRawValue(keyspace, key, value))
+  }
+
   def putValue(value: V)(implicit
     t: KeyTransformer[V, K]
   ): Unit = {
