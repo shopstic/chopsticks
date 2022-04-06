@@ -5,7 +5,7 @@
     hotPot.url = "github:shopstic/nix-hot-pot";
     nixpkgs.follows = "hotPot/nixpkgs";
     flakeUtils.follows = "hotPot/flakeUtils";
-    fdb.url = "github:shopstic/nix-fdb";
+    fdb.follows = "hotPot/fdb";
   };
 
   outputs = { self, nixpkgs, flakeUtils, hotPot, fdb }:
@@ -17,7 +17,7 @@
             overlays = [
               (final: prev: {
                 maven = prev.maven.override {
-                  jdk = prev.jdk11;
+                  jdk = hotPotPkgs.jdk17;
                 };
               })
             ];
@@ -33,11 +33,11 @@
           ];
 
           runJdk = pkgs.callPackage hotPot.lib.wrapJdk {
-            jdk = (import nixpkgs { system = fdbLibSystem; }).jdk11;
+            jdk = hotPot.packages."${fdbLibSystem}".jdk17;
             args = pkgs.lib.concatStringsSep " " jdkArgs;
           };
           compileJdk = pkgs.callPackage hotPot.lib.wrapJdk {
-            jdk = pkgs.jdk11;
+            jdk = hotPotPkgs.jdk17;
             args = pkgs.lib.concatStringsSep " " (jdkArgs ++ [''--run "if [[ -f ./.env ]]; then source ./.env; fi"'']);
           };
           sbt = pkgs.sbt.override {
@@ -71,12 +71,12 @@
 
           chopsticksDeps = chopsticksPkgs.callPackage ./nix/deps.nix {
             inherit sbt;
-            jdk = pkgs.jdk11;
+            jdk = hotPotPkgs.jdk17;
           };
 
           chopsticks = chopsticksPkgs.callPackage ./nix/chopsticks.nix {
             inherit sbt;
-            jdk = pkgs.jdk11;
+            jdk = hotPotPkgs.jdk17;
             inherit chopsticksDeps;
           };
         in

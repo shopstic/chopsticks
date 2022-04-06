@@ -13,9 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 object PlatformUtils {
   final private class NamedThreadFactory(name: String, daemon: Boolean) extends ThreadFactory {
-    private val parentGroup =
-      Option(System.getSecurityManager).fold(Thread.currentThread().getThreadGroup)(_.getThreadGroup)
-
+    private val parentGroup = Thread.currentThread().getThreadGroup
     private val threadGroup = new ThreadGroup(parentGroup, name)
     private val threadCount = new AtomicInteger(1)
 

@@ -6,15 +6,16 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1637044763,
-        "narHash": "sha256-eV0PVYvG1orm7EMNxsiDvTmDKA3ysF8gyGXS7+ucZe4=",
+        "lastModified": 1643388292,
+        "narHash": "sha256-fKrb8rz6zjr4un/PXITxD6DROXK9Z3Twq3gZdpPG4UY=",
         "owner": "shopstic",
         "repo": "nix-fdb",
-        "rev": "6db2a9758aedc155e814f6f231d676b188cd4977",
+        "rev": "00f0e18b0033cf0cc55d4f83b7a005e9d7dd4b27",
         "type": "github"
       },
       "original": {
         "owner": "shopstic",
+        "ref": "6.3.23",
         "repo": "nix-fdb",
         "type": "github"
       }
@@ -51,15 +52,17 @@
     },
     "hotPot": {
       "inputs": {
+        "fdb": "fdb",
         "flakeUtils": "flakeUtils_2",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_2",
+        "npmlock2nixPkg": "npmlock2nixPkg"
       },
       "locked": {
-        "lastModified": 1638805724,
-        "narHash": "sha256-kruoa49DS1n9SDZoGSx6MqCdapvlps86qUAPeIJ9FjQ=",
+        "lastModified": 1649265807,
+        "narHash": "sha256-4pHVFeQjj+VKWb13UhdpdnNSKlEVuhuGiNUrVZsvDUM=",
         "owner": "shopstic",
         "repo": "nix-hot-pot",
-        "rev": "8bb44e2d8e143d4b287d81e1fb9fc76271b56e0d",
+        "rev": "916b9e69b4a1636f0db8f80337c3911afc022881",
         "type": "github"
       },
       "original": {
@@ -70,16 +73,18 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1636416043,
-        "narHash": "sha256-Esz9X97OeAsNoJUVuqlCu2LDWcyLE24huUonhOY3JGw=",
-        "owner": "NixOS",
+        "lastModified": 1638239011,
+        "narHash": "sha256-AjhmbT4UBlJWqxY0ea8a6GU2C2HdKUREkG43oRr3TZg=",
+        "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "db6044d5debaff0749420c3553d1b89fc6c5c5f8",
+        "rev": "a7ecde854aee5c4c7cd6177f54a99d2c1ff28a31",
         "type": "github"
       },
       "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
+        "owner": "nixos",
+        "ref": "21.11",
+        "repo": "nixpkgs",
+        "type": "github"
       }
     },
     "nixpkgs_2": {
@@ -98,9 +103,29 @@
         "type": "github"
       }
     },
+    "npmlock2nixPkg": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1643278647,
+        "narHash": "sha256-gtbSzFJLil84xuE/IUI2IaNMd0ELp79vuWM9QUAUoUY=",
+        "owner": "nix-community",
+        "repo": "npmlock2nix",
+        "rev": "228988a72aa375b7632ef658e93c9edcced169eb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "ref": "master",
+        "repo": "npmlock2nix",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
-        "fdb": "fdb",
+        "fdb": [
+          "hotPot",
+          "fdb"
+        ],
         "flakeUtils": [
           "hotPot",
           "flakeUtils"
