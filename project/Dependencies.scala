@@ -3,13 +3,13 @@ import sbt._
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.8"
-  val AKKA_VERSION = "2.6.18"
+  val AKKA_VERSION = "2.6.19"
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.13"
   val IZUMI_VERSION = "1.0.10"
   val REFINED_VERSION = "0.9.28"
   val CALIBAN_VERSION = "1.3.3"
-  val STTP_VERSION = "3.3.18"
+  val STTP_VERSION = "3.5.1"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -64,7 +64,7 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.1.3"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.1.4"
   )
 
   val catsCoreDeps = Seq(
@@ -108,7 +108,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "7.0.3"
+    "org.rocksdb" % "rocksdbjni" % "7.0.4"
   )
 
   val lmdbDeps = Seq(
@@ -120,7 +120,7 @@ object Dependencies {
   )
 
   val shapelessDeps = Seq(
-    "com.chuusai" %% "shapeless" % "2.3.8"
+    "com.chuusai" %% "shapeless" % "2.3.9"
   )
 
   val scalapbRuntimeDeps = Seq(
@@ -169,7 +169,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.7.1"
+    "com.lihaoyi" %% "pprint" % "0.7.3"
   )
 
   val logstageDeps = Seq(
