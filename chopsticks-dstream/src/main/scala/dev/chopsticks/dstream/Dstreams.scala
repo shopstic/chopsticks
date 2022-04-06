@@ -12,7 +12,7 @@ import akka.util.Timeout
 import dev.chopsticks.dstream.DstreamState.WorkResult
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
-import dev.chopsticks.fp.zio_ext.{MeasuredLogging, _}
+import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.types.string.NonEmptyString
 import eu.timepit.refined.auto._
@@ -49,7 +49,7 @@ object Dstreams {
   }
 
   def manageServer[R](config: DstreamServerConfig)(makeHandler: URIO[R, HttpRequest => Future[HttpResponse]])
-    : RManaged[R with AkkaEnv with MeasuredLogging, Http.ServerBinding] = {
+    : RManaged[R with AkkaEnv with IzLogging with Clock, Http.ServerBinding] = {
     for {
       akkaSvc <- ZManaged.access[AkkaEnv](_.get)
       binding <- ZManaged
@@ -82,7 +82,7 @@ object Dstreams {
 
   def manageClientFromConfig[R, E, Client <: AkkaGrpcClient](
     config: DstreamClientConfig
-  )(make: GrpcClientSettings => ZIO[R, E, Client]): ZManaged[R with AkkaEnv with MeasuredLogging, E, Client] = {
+  )(make: GrpcClientSettings => ZIO[R, E, Client]): ZManaged[R with AkkaEnv with IzLogging with Clock, E, Client] = {
     for {
       akkaSvc <- ZManaged.access[AkkaEnv](_.get)
       clientSettings <- ZManaged.effectTotal {
@@ -97,7 +97,7 @@ object Dstreams {
 
   def manageClient[R, E, Client <: AkkaGrpcClient](
     make: ZIO[R, E, Client]
-  ): ZManaged[R with MeasuredLogging, E, Client] = {
+  ): ZManaged[R with IzLogging with Clock, E, Client] = {
     ZManaged
       .make(make) { client =>
         Task
@@ -164,7 +164,7 @@ object Dstreams {
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(
     makeSource: Req => RIO[R, Source[Res, NotUsed]]
-  ): RIO[R with MeasuredLogging, Unit] = {
+  ): RIO[R with IzLogging with Clock, Unit] = {
     ZIO
       .foreachPar((1 to config.poolSize).toList) { id =>
         work(requestBuilder.addHeader(WORKER_ID_HEADER, id.toString).addHeader(WORKER_NODE_HEADER, config.nodeId))(

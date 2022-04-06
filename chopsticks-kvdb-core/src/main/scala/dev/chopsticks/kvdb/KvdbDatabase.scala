@@ -3,7 +3,7 @@ package dev.chopsticks.kvdb
 import java.util.concurrent.TimeUnit
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl.Source
-import dev.chopsticks.fp.zio_ext.MeasuredLogging
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
@@ -18,6 +18,7 @@ import eu.timepit.refined.numeric.Greater
 import pureconfig.ConfigConvert
 import squants.information.Information
 import squants.information.InformationConversions._
+import zio.clock.Clock
 import zio.{RIO, Schedule, Task}
 
 import scala.concurrent.Future
@@ -87,6 +88,8 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def transactionBuilder(): KvdbWriteTransactionBuilder[BCF] = new KvdbWriteTransactionBuilder[BCF]
 
+  def transactionFactory(): KvdbOperationFactory[BCF] = new KvdbOperationFactory[BCF]
+
   def readTransactionBuilder(): KvdbReadTransactionBuilder[BCF] = new KvdbReadTransactionBuilder[BCF]
 
   def statsTask: Task[Map[(String, Map[String, String]), Double]]
@@ -116,23 +119,23 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed]
 
-  def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): RIO[MeasuredLogging, Unit]
+  def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): RIO[IzLogging with Clock, Unit]
 
-  def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[MeasuredLogging, Unit]
+  def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[IzLogging with Clock, Unit]
 
-  def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[MeasuredLogging, Long]
+  def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[IzLogging with Clock, Long]
 
-  def transactionTask(actions: Seq[TransactionWrite]): RIO[MeasuredLogging, Unit]
+  def transactionTask(actions: Seq[TransactionWrite]): RIO[IzLogging with Clock, Unit]
 
   def conditionalTransactionTask(
     reads: List[TransactionGet],
     condition: List[Option[KvdbPair]] => Boolean,
     actions: Seq[TransactionWrite]
-  ): RIO[MeasuredLogging, Unit]
+  ): RIO[IzLogging with Clock, Unit]
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed]
 
   def concurrentTailSource[Col <: CF](column: Col, ranges: List[KvdbKeyRange]): Source[KvdbIndexedTailBatch, NotUsed]
 
-  def dropColumnFamily[Col <: CF](column: Col): RIO[MeasuredLogging, Unit]
+  def dropColumnFamily[Col <: CF](column: Col): RIO[IzLogging with Clock, Unit]
 }

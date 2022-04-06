@@ -73,7 +73,7 @@ object LeaseSupervisor {
     def activeLeases: UIO[Seq[LeaseSession]]
     def partitionCount: PosInt
     def ownPartitions: Set[Int]
-    def transact(lease: Lease, actions: Seq[TransactionWrite]): RIO[MeasuredLogging, Seq[TransactionWrite]]
+    def transact(lease: Lease, actions: Seq[TransactionWrite]): RIO[IzLogging with Clock, Seq[TransactionWrite]]
   }
 
   sealed private[chopsticks] trait LeaseSupervisorCommand
@@ -84,7 +84,7 @@ object LeaseSupervisor {
     config: LeaseSupervisorConfig,
     fdb: FdbDatabase[BCF, _],
     leaseKeyspace: A
-  ): URLayer[AkkaEnv with MeasuredLogging with Has[KvdbDatabaseApi[BCF]], Has[Service[A]]] = {
+  ): URLayer[AkkaEnv with IzLogging with Clock with Has[KvdbDatabaseApi[BCF]], Has[Service[A]]] = {
     val managed = for {
       systemSvc <- ZManaged.access[AkkaEnv](_.get)
       clock <- ZManaged.access[Clock](_.get)

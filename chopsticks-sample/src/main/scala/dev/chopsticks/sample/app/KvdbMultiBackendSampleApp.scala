@@ -5,6 +5,7 @@ import dev.chopsticks.fp.ZAkkaApp
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.TypedConfig
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.fdb.FdbDatabase
@@ -15,6 +16,7 @@ import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import pureconfig.ConfigReader
+import zio.clock.Clock
 import zio.{ExitCode, Has, RIO, Task, URIO, ZIO}
 
 import java.time.Instant
@@ -30,7 +32,7 @@ object KvdbMultiBackendSampleAppConfig {
 }
 
 final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
-  def populate: RIO[AkkaEnv with MeasuredLogging, Int] = {
+  def populate: RIO[AkkaEnv with IzLogging with Clock, Int] = {
     Source(1 to 100)
       .flatMapConcat { i =>
         Source(1 to 100)
@@ -46,7 +48,7 @@ final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
       .interruptibleRunWith(Sink.fold(0)((s, b) => s + b.size))
   }
 
-  def scanAndCollect: RIO[AkkaEnv with MeasuredLogging, Seq[(TestKey, TestValue)]] = {
+  def scanAndCollect: RIO[AkkaEnv with IzLogging with Clock, Seq[(TestKey, TestValue)]] = {
     db
       .api
       .columnFamily(db.storage.default)

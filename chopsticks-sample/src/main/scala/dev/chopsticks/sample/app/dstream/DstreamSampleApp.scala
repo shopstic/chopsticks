@@ -21,6 +21,7 @@ import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import io.grpc.StatusRuntimeException
 import io.prometheus.client.CollectorRegistry
 import zio._
+import zio.clock.Clock
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
@@ -111,13 +112,13 @@ object DstreamSampleApp extends ZAkkaApp {
 
   private def start = {
     val managed = for {
-      akkaRuntime <- ZManaged.runtime[AkkaEnv with MeasuredLogging]
+      akkaRuntime <- ZManaged.runtime[AkkaEnv with IzLogging with Clock]
       akkaSvc = akkaRuntime.environment.get
       dstreamState <- ZManaged.access[DstreamState[Assignment, Result]](_.get)
       _ <- Dstreams
         .manageServer(DstreamServerConfig(port = 9999, idleTimeout = 30.seconds)) {
           UIO {
-            implicit val rt: Runtime[AkkaEnv with MeasuredLogging] = akkaRuntime
+            implicit val rt: Runtime[AkkaEnv with IzLogging with Clock] = akkaRuntime
             import akkaSvc.actorSystem
 
             DstreamSampleServicePowerApiHandler {

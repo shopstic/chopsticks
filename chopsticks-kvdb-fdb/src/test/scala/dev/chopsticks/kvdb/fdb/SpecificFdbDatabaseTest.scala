@@ -2,6 +2,7 @@ package dev.chopsticks.kvdb.fdb
 
 import com.apple.foundationdb.MutationType
 import com.apple.foundationdb.tuple.ByteArrayUtil
+import dev.chopsticks.fdb.transaction.ZFdbTransaction
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.KvdbDatabaseTest
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
@@ -9,7 +10,7 @@ import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestSuit
 import org.scalatest.Inside
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.{Promise, ZIO}
+import zio.{Promise, Task, UIO, ZIO, ZRef}
 
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CompletableFuture
@@ -26,13 +27,14 @@ final class SpecificFdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private lazy val withDb = createTestRunner(FdbDatabaseTest.managedDb) { effect =>
-    import zio.magic._
+  private lazy val withDb =
+    createTestRunner(FdbDatabaseTest.managedDb) { effect =>
+      import zio.magic._
 
-    effect.injectSome[ZAkkaAppEnv](
-      KvdbIoThreadPool.live
-    )
-  }
+      effect.injectSome[ZAkkaAppEnv](
+        KvdbIoThreadPool.live
+      )
+    }
 
   "system metadataVersion key" should {
     "enforce conflicts" in withDb { db =>
@@ -122,6 +124,56 @@ final class SpecificFdbDatabaseTest
           case Left(ConditionalTransactionFailedException(_)) =>
         }
         assertPair(ret, "aaaa", "bbbb")
+      }
+    }
+  }
+
+  "ZIO-based low-level transaction" should {
+    "work" in withDb { db =>
+      for {
+        transaction <- UIO(ZFdbTransaction(db))
+        _ <- transaction.write { tx =>
+          val cf = tx.keyspace(defaultCf)
+
+          for {
+            _ <- cf.get(_.is("foo")).tap(v => Task(v shouldBe empty))
+            _ <- UIO(cf.put("foo", "bar"))
+            _ <- cf.getValue(_.is("foo")).tap(v => Task(v shouldEqual Some("bar")))
+            _ <- UIO(cf.put("foo", "baz"))
+          } yield ()
+        }
+        _ <- transaction
+          .write { tx =>
+            val cf = tx.keyspace(defaultCf)
+
+            for {
+              _ <- cf.getValue(_.is("foo")).tap(v => Task(v shouldEqual Some("baz")))
+              _ <- UIO(cf.put("foo", "boo"))
+              _ <- Task.fail(new IllegalStateException("Test failure")).unit
+            } yield ()
+          }
+          .ignore
+
+        foo <- transaction.read { tx =>
+          tx.keyspace(defaultCf).getValue(_.is("foo"))
+        }
+      } yield {
+        foo shouldEqual Some("baz")
+      }
+    }
+
+    "support read interruption" in withDb { db =>
+      import zio.duration._
+      for {
+        transaction <- UIO(ZFdbTransaction(db))
+        ref <- ZRef.make(false)
+        fib <- transaction.read { tx =>
+          tx.keyspace(defaultCf).getValue(_.is("foo")).delay(5.seconds).onInterrupt(ref.set(true))
+        }.fork
+        _ <- fib.interrupt.delay(1.second)
+        innerInterrupted <- ref.get
+      } yield {
+        innerInterrupted shouldEqual true
       }
     }
   }

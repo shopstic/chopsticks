@@ -1,12 +1,14 @@
 package dev.chopsticks.fdb
 
 import com.apple.foundationdb.{Database, FDB, Transaction}
+import dev.chopsticks.fp.iz_logging.IzLogging
 import zio.blocking.{blocking, Blocking}
 import zio.{Has, Task, ZLayer, ZManaged}
 
 import scala.concurrent.Future
 import scala.jdk.FutureConverters._
 import dev.chopsticks.fp.zio_ext._
+import zio.clock.Clock
 
 package object env {
   type FdbEnv = Has[FdbEnv.Service]
@@ -23,7 +25,7 @@ package object env {
       }
     }
 
-    def live(clusterFilePath: Option[String]): ZLayer[Blocking with MeasuredLogging, Nothing, FdbEnv] = {
+    def live(clusterFilePath: Option[String]): ZLayer[Blocking with IzLogging with Clock, Nothing, FdbEnv] = {
       ZLayer.fromManaged {
         ZManaged.make {
           blocking {

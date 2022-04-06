@@ -3,7 +3,8 @@ package dev.chopsticks.kvdb
 import java.util.concurrent.ConcurrentLinkedQueue
 
 object KvdbReadTransactionBuilder {
-  final case class TransactionGet(columnId: String, key: Array[Byte])
+  sealed trait TransactionRead
+  final case class TransactionGet(columnId: String, key: Array[Byte]) extends TransactionRead
 }
 
 final class KvdbReadTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {

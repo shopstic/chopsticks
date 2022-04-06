@@ -10,8 +10,7 @@ import zio.{ExitCode, RIO, Schedule, UIO, ZIO, ZManaged}
 
 object SafeRaceFirstTestApp extends ZAkkaApp {
   override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-
-    Race(NonEmptyList
+    val app = Race(NonEmptyList
       .fromListUnsafe(List.tabulate(3) { i =>
         ZIO
           .effectSuspend(UIO(println(s"Par $i")))
@@ -31,6 +30,7 @@ object SafeRaceFirstTestApp extends ZAkkaApp {
             .onExit(e => UIO(println(s"Use exit $e")))
         }
         .unit)
+    app
       .as(ExitCode(0))
   }
 }

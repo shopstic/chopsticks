@@ -11,6 +11,7 @@ import com.apple.foundationdb.tuple.ByteArrayUtil
 import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
@@ -235,7 +236,7 @@ object FdbDatabase {
 
   def fromConfig(
     config: FdbDatabaseConfig
-  ): RManaged[Blocking with MeasuredLogging with KvdbIoThreadPool, Database] = {
+  ): RManaged[Blocking with IzLogging with Clock with KvdbIoThreadPool, Database] = {
     for {
       ioThreadPool <- ZManaged.access[KvdbIoThreadPool](_.get)
       ec = ioThreadPool.executor.asEC
@@ -282,10 +283,10 @@ object FdbDatabase {
     materialization: KvdbMaterialization[BCF, CFS] with FdbMaterialization[BCF],
     db: Database,
     config: FdbDatabaseConfig
-  ): ZManaged[AkkaEnv with Blocking with MeasuredLogging, Throwable, KvdbDatabase[BCF, CFS]] = {
+  ): ZManaged[AkkaEnv with Blocking with IzLogging with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
     for {
       ctx <- ZManaged
-        .makeInterruptible[AkkaEnv with Blocking with MeasuredLogging, Throwable, FdbContext[BCF]] {
+        .makeInterruptible[AkkaEnv with Blocking with IzLogging with Clock, Throwable, FdbContext[BCF]] {
           buildPrefixMap(db, materialization, config)
             .timeoutFail(new TimeoutException("Timed out building directory layer. Check connection to FDB?"))(
               config.initialConnectionTimeout.duration
@@ -305,7 +306,7 @@ object FdbDatabase {
             .log("Close FDB context")
             .orDie
         }
-      db <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv with MeasuredLogging].map { implicit rt =>
+      db <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv with IzLogging with Clock].map { implicit rt =>
         new FdbDatabase(materialization, config.clientOptions, ctx)
       })
     } yield db
@@ -314,7 +315,10 @@ object FdbDatabase {
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS] with FdbMaterialization[BCF],
     config: FdbDatabaseConfig
-  ): ZManaged[AkkaEnv with Blocking with MeasuredLogging with KvdbIoThreadPool, Throwable, KvdbDatabase[BCF, CFS]] = {
+  ): ZManaged[AkkaEnv with Blocking with IzLogging with Clock with KvdbIoThreadPool, Throwable, KvdbDatabase[
+    BCF,
+    CFS
+  ]] = {
     for {
       db <- fromConfig(config)
       fdbDatabase <- fromDatabase(materialization, db, config)
@@ -322,6 +326,7 @@ object FdbDatabase {
   }
 
   val COMPLETED_FUTURE: CompletableFuture[Unit] = CompletableFuture.completedFuture(())
+  private val NOOP_CALLBACK = () => ()
 }
 
 import dev.chopsticks.kvdb.fdb.FdbDatabase._
@@ -331,7 +336,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   val clientOptions: KvdbClientOptions,
   val dbContext: FdbContext[BCF],
   ops: FdbOperations[BCF] = new FdbDefaultOperations[BCF]
-)(implicit rt: zio.Runtime[AkkaEnv with MeasuredLogging])
+)(implicit rt: zio.Runtime[AkkaEnv with IzLogging with Clock])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
@@ -350,16 +355,38 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     )
   }
 
-  def read[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
-    TaskUtils
-      .fromCancellableCompletableFuture(
+  def uninterruptibleRead[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
+    Task
+      .fromCompletableFuture {
         dbContext.db.readAsync { tx =>
-          ops.read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
+          ops
+            .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
         }
-      )
+      }
   }
 
-  def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[MeasuredLogging, V] = {
+  def read[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
+    for {
+      cancelRef <- ZRef.make(NOOP_CALLBACK)
+      fib <- Task
+        .fromCompletableFuture {
+          dbContext.db.readAsync { tx =>
+            val f = ops
+              .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
+
+            rt.unsafeRun(cancelRef.set(() => {
+              val _ = f.cancel(true)
+            }))
+
+            f
+          }
+        }
+        .fork
+      ret <- fib.join.onInterrupt(cancelRef.get.map(_()) *> fib.interrupt)
+    } yield ret
+  }
+
+  def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[IzLogging with Clock, V] = {
     Task
       .bracket(UIO(dbContext.db.createTransaction())) { tx =>
         UIO(tx.close())
@@ -526,7 +553,11 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     }
   }
 
-  override def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): RIO[MeasuredLogging, Unit] = {
+  override def putTask[Col <: CF](
+    column: Col,
+    key: Array[Byte],
+    value: Array[Byte]
+  ): RIO[IzLogging with Clock, Unit] = {
     write(
       s"putTask column=${column.id}",
       api => {
@@ -536,7 +567,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     )
   }
 
-  override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[MeasuredLogging, Unit] = {
+  override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[IzLogging with Clock, Unit] = {
     write(
       s"deleteTask column=${column.id}",
       api => {
@@ -546,7 +577,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     )
   }
 
-  override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[MeasuredLogging, Long] = {
+  override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[IzLogging with Clock, Long] = {
     write(
       s"deletePrefixTask column=${column.id}",
       api => {
@@ -643,7 +674,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
   override def transactionTask(
     actions: Seq[TransactionWrite]
-  ): RIO[MeasuredLogging, Unit] = {
+  ): RIO[IzLogging with Clock, Unit] = {
     write(
       "transactionTask",
       api => {
@@ -657,7 +688,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     reads: List[TransactionGet],
     condition: List[Option[(Array[Byte], Array[Byte])]] => Boolean,
     actions: Seq[TransactionWrite]
-  ): RIO[MeasuredLogging, Unit] = {
+  ): RIO[IzLogging with Clock, Unit] = {
     write(
       "conditionalTransactionTask",
       api => {
@@ -791,7 +822,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  override def dropColumnFamily[Col <: CF](column: Col): RIO[MeasuredLogging, Unit] = {
+  override def dropColumnFamily[Col <: CF](column: Col): RIO[IzLogging with Clock, Unit] = {
     write(
       "dropColumnFamily",
       api => {

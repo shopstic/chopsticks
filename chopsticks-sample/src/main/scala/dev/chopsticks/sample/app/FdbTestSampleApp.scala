@@ -19,6 +19,7 @@ import dev.chopsticks.sample.kvdb.SampleDb.{TestKeyWithVersionstamp, TestValueWi
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import pureconfig.ConfigConvert
 import zio._
+import zio.clock.Clock
 
 import scala.concurrent.duration._
 
@@ -76,7 +77,7 @@ object FdbTestSampleApp extends ZAkkaApp {
   }
 
   def app: RIO[
-    AkkaEnv with IzLogging with MeasuredLogging with Has[SampleDb.Db] with KvdbSerdesThreadPool,
+    AkkaEnv with IzLogging with IzLogging with Clock with Has[SampleDb.Db] with KvdbSerdesThreadPool,
     Unit
   ] = for {
     db <- ZService[SampleDb.Db]

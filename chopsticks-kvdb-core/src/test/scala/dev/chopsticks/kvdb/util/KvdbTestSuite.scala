@@ -3,11 +3,13 @@ package dev.chopsticks.kvdb.util
 import better.files.File
 import dev.chopsticks.fp.ZScalatestSuite
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.BaseCf
 import org.scalatest.{Assertion, Suite}
 import zio.blocking.{blocking, Blocking}
+import zio.clock.Clock
 import zio.{RIO, Task, ZManaged}
 
 import scala.concurrent.Future
@@ -41,7 +43,7 @@ trait KvdbTestSuite extends ZScalatestSuite {
     db: TestDatabase.Db,
     column: CF,
     pairs: Seq[(K, V)]
-  ): RIO[MeasuredLogging, Unit] = {
+  ): RIO[IzLogging with Clock, Unit] = {
     val batch = pairs
       .foldLeft(db.transactionBuilder()) {
         case (tx, (k, v)) =>

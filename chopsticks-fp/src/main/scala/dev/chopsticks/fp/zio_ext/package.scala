@@ -47,25 +47,27 @@ package object zio_ext {
 
     def debugResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with MeasuredLogging, E, A] = {
+    ): ZIO[R with IzLogging with Clock, E, A] = {
       logResult(name, result, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
     def logResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with MeasuredLogging, E, A] = {
+    ): ZIO[R with IzLogging with Clock, E, A] = {
       bracketStartMeasurement(name, result, logTraceOnError)(ctx) { startTime =>
         measurementHandleInterruption(name, startTime)(io)
       }
     }
 
-    def log(name: String, logTraceOnError: Boolean = false)(implicit ctx: LogCtx): ZIO[R with MeasuredLogging, E, A] = {
+    def log(name: String, logTraceOnError: Boolean = false)(implicit
+      ctx: LogCtx
+    ): ZIO[R with IzLogging with Clock, E, A] = {
       logResult(name, _ => "completed", logTraceOnError)
     }
 
     def logPeriodically(name: String, interval: FiniteDuration, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with MeasuredLogging, E, A] = {
+    ): ZIO[R with IzLogging with Clock, E, A] = {
       val renderResult: A => String = _ => "completed"
       bracketStartMeasurement(name, renderResult, logTraceOnError)(ctx) { startTime =>
         val logTask = for {
@@ -88,7 +90,7 @@ package object zio_ext {
 
     def debug(name: String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with MeasuredLogging, E, A] = {
+    ): ZIO[R with IzLogging with Clock, E, A] = {
       log(name, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
@@ -150,7 +152,7 @@ package object zio_ext {
   implicit final class ZManagedExtensions[R >: Nothing, E <: Any, A](managed: ZManaged[R, E, A]) {
     def logResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZManaged[R with MeasuredLogging, E, A] = {
+    ): ZManaged[R with IzLogging with Clock, E, A] = {
       for {
         startTimeRef <- Ref.make[Long](0).toManaged_
         value <- managed
@@ -177,25 +179,27 @@ package object zio_ext {
 
     def debugResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZManaged[R with MeasuredLogging, E, A] = {
+    ): ZManaged[R with IzLogging with Clock, E, A] = {
       logResult(name, result, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
     def log(name: String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZManaged[R with MeasuredLogging, E, A] = {
+    ): ZManaged[R with IzLogging with Clock, E, A] = {
       logResult(name, _ => "started", logTraceOnError)
     }
 
     def debug(name: String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZManaged[R with MeasuredLogging, E, A] = {
+    ): ZManaged[R with IzLogging with Clock, E, A] = {
       log(name, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
   }
 
-  private def startMeasurement(name: String, message: String)(implicit ctx: LogCtx): URIO[MeasuredLogging, Long] = {
+  private def startMeasurement(name: String, message: String)(implicit
+    ctx: LogCtx
+  ): URIO[IzLogging with Clock, Long] = {
     for {
       time <- nanoTime
       _ <- IzLogging.loggerWithContext(ctx).map(_.withCustomContext("task" -> name).log(ctx.level)(message))

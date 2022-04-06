@@ -4,6 +4,7 @@ import java.time.Instant
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.ByteString
+import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi.KvdbApiClientOptions
@@ -22,6 +23,7 @@ import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbWriteTransactionBuil
 import dev.chopsticks.stream.AkkaStreamUtils
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
+import zio.clock.Clock
 import zio.{RIO, Task, UIO, ZIO}
 
 import scala.collection.concurrent.TrieMap
@@ -34,7 +36,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
   val cf: CF,
   val options: KvdbApiClientOptions
 )(implicit
-  rt: zio.Runtime[MeasuredLogging with KvdbSerdesThreadPool]
+  rt: zio.Runtime[IzLogging with Clock with KvdbSerdesThreadPool]
 ) {
   private val serdesThreadPool = rt.environment.get[KvdbSerdesThreadPool.Service]
 
@@ -304,21 +306,21 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
     valueSource(_.first, _.last)
   }
 
-  def putTask(key: K, value: V): RIO[MeasuredLogging, Unit] = {
+  def putTask(key: K, value: V): RIO[IzLogging with Clock, Unit] = {
     for {
       (k, v) <- Task(cf.serialize(key, value)).lock(serdesThreadPool.executor)
       _ <- db.putTask(cf, k, v)
     } yield ()
   }
 
-  def putValueTask(value: V)(implicit kt: KeyTransformer[V, K]): RIO[MeasuredLogging, Unit] = {
+  def putValueTask(value: V)(implicit kt: KeyTransformer[V, K]): RIO[IzLogging with Clock, Unit] = {
     for {
       (k, v) <- Task(cf.serialize(kt.transform(value), value)).lock(serdesThreadPool.executor)
       _ <- db.putTask(cf, k, v)
     } yield ()
   }
 
-  def deleteTask(key: K): RIO[MeasuredLogging, Unit] = {
+  def deleteTask(key: K): RIO[IzLogging with Clock, Unit] = {
     for {
       k <- Task(cf.serializeKey(key)).lock(serdesThreadPool.executor)
       _ <- db.deleteTask(cf, k)
@@ -536,7 +538,7 @@ final class KvdbColumnFamilyApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V]
       .mapConcat(identity)
   }
 
-  def drop(): RIO[MeasuredLogging, Unit] = {
+  def drop(): RIO[IzLogging with Clock, Unit] = {
     db.dropColumnFamily(cf)
   }
 }
