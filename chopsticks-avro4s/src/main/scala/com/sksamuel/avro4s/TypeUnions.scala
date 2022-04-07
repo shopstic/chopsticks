@@ -12,6 +12,9 @@ import scala.jdk.CollectionConverters._
 
 final case class AvroEvolvableUnion(default: Any) extends StaticAnnotation
 
+final case class InvalidAvroEvolvableUnionDefaultValue(message: String, cause: Throwable)
+    extends RuntimeException(message, cause)
+
 class EvolvableTypeUnionEncoder[T](
   ctx: SealedTrait[Encoder, T],
   val schemaFor: SchemaFor[T],
@@ -30,7 +33,6 @@ class EvolvableTypeUnionEncoder[T](
 
   private def encodeEvolvable(value: T): AnyRef = {
     val schema = schemaFor.schema
-    // we need an additional indirection since we may have enhanced the original magnolia-provided encoder via annotations
     val record = new GenericData.Record(schema)
 
     val (fieldName, encoded) = ctx.dispatch(value) { subtype =>
@@ -65,19 +67,29 @@ class EvolvableTypeUnionDecoder[T](
   decoderByName: Map[String, UnionDecoder[T]#SubtypeDecoder]
 ) extends Decoder[T] {
 
-  private val evolvableUnionAnnotation = findEvolvableUnionAnnotation(ctx.annotations)
+  private val evolvableUnionDefaultValue = {
+    findEvolvableUnionAnnotation(ctx.annotations).map { case AvroEvolvableUnion(default) =>
+      try {
+        ctx.dispatch(default.asInstanceOf[T])(_ => default)
+      }
+      catch {
+        case e: ClassCastException => throw InvalidAvroEvolvableUnionDefaultValue(e.getMessage, e)
+        case e: IllegalArgumentException => throw InvalidAvroEvolvableUnionDefaultValue(e.getMessage, e)
+      }
+    }
+  }
 
   override def withSchema(schemaFor: SchemaFor[T]): Decoder[T] = {
-    if (evolvableUnionAnnotation.isEmpty) {
+    if (evolvableUnionDefaultValue.isEmpty) {
       validateNewSchema(schemaFor)
     }
     TypeUnions.decoder(ctx, new DefinitionEnvironment[Decoder](), FullSchemaUpdate(schemaFor))
   }
 
   def decode(value: Any): T = {
-    evolvableUnionAnnotation match {
-      case Some(annotation) =>
-        decodeEvolvable(value, annotation.default)
+    evolvableUnionDefaultValue match {
+      case Some(defaultValue) =>
+        decodeEvolvable(value, defaultValue)
       case None =>
         decodeNative(value)
     }

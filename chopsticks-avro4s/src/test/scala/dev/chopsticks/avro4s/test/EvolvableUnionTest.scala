@@ -1,6 +1,14 @@
 package dev.chopsticks.avro4s.test
 
-import com.sksamuel.avro4s.{AvroEvolvableUnion, AvroName, AvroNamespace, Decoder, Encoder, SchemaFor}
+import com.sksamuel.avro4s.{
+  AvroEvolvableUnion,
+  AvroName,
+  AvroNamespace,
+  Decoder,
+  Encoder,
+  InvalidAvroEvolvableUnionDefaultValue,
+  SchemaFor
+}
 import org.scalatest.Assertions
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -28,6 +36,13 @@ object EvolvedBase {
 
   @AvroNamespace("dev.chopsticks.avro4s.test.EvolvableBase")
   final case class Foo(foo: String) extends EvolvedBase
+}
+
+@AvroEvolvableUnion(EvolvedBase.Unknown) // Intentionally pass an invalid default value
+sealed trait BadDefaultValueInAnnotation
+object BadDefaultValueInAnnotation {
+  final case class Foo() extends BadDefaultValueInAnnotation
+  case object Bar extends BadDefaultValueInAnnotation
 }
 
 final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matchers {
@@ -122,13 +137,22 @@ final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matc
       Decoder[EvolvableBase].decode(Encoder[EvolvableBase].encode(bar)) should equal(bar)
     }
 
-    "Decode to the specified default value if the corresponding field is not found" in {
+    "decode to the specified default value if the corresponding field is not found" in {
       Decoder[EvolvedBase].decode(Encoder[EvolvableBase].encode(EvolvableBase.Foo("foo"))) should equal(
         EvolvedBase.Foo("foo")
       )
       Decoder[EvolvedBase].decode(Encoder[EvolvableBase].encode(EvolvableBase.Bar(123))) should equal(
         EvolvedBase.Unknown
       )
+    }
+
+    "throw an exception if the supplied default value is not one of the valid subtypes" in {
+      val decoder = Decoder[BadDefaultValueInAnnotation]
+      val encoder = Encoder[BadDefaultValueInAnnotation]
+
+      assertThrows[InvalidAvroEvolvableUnionDefaultValue] {
+        decoder.decode(encoder.encode(BadDefaultValueInAnnotation.Foo()))
+      }
     }
   }
 }
