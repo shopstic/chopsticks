@@ -15,7 +15,7 @@ final case class AvroEvolvableUnion(default: Any) extends StaticAnnotation
 final case class InvalidAvroEvolvableUnionDefaultValue(message: String, cause: Throwable)
     extends RuntimeException(message, cause)
 
-class EvolvableTypeUnionEncoder[T](
+private class EvolvableTypeUnionEncoder[T](
   ctx: SealedTrait[Encoder, T],
   val schemaFor: SchemaFor[T],
   encoderBySubtype: Map[Subtype[Encoder, T], UnionEncoder[T]#SubtypeEncoder],
@@ -61,7 +61,7 @@ class EvolvableTypeUnionEncoder[T](
   }
 }
 
-class EvolvableTypeUnionDecoder[T](
+private class EvolvableTypeUnionDecoder[T](
   ctx: SealedTrait[Decoder, T],
   val schemaFor: SchemaFor[T],
   decoderByName: Map[String, UnionDecoder[T]#SubtypeDecoder]
@@ -174,11 +174,16 @@ object TypeUnions {
     truncated.replaceAll("[^a-zA-Z0-9_]", "_")
   }
 
-  private def createEvolvableUnion[T](nameExtractor: NameExtractor, subtypeSchemas: Seq[Schema]) = {
+  private def createEvolvableUnion[C[_], T](
+    ctx: SealedTrait[C, T],
+    nameExtractor: NameExtractor,
+    subtypeSchemas: Seq[Schema]
+  ) = {
     val flattened = subtypeSchemas.flatMap(schema => scala.util.Try(schema.getTypes.asScala).getOrElse(Seq(schema)))
     val (nulls, rest) = flattened.partition(_.getType == Schema.Type.NULL)
     val name = nameExtractor.name
     val namespace = nameExtractor.namespace
+    val annotations = new AnnotationExtractors(ctx.annotations)
 
     val fields = (nulls.headOption.toSeq.view ++ rest).map { s: Schema =>
       new Schema.Field(
@@ -201,7 +206,7 @@ object TypeUnions {
 
     Schema.createRecord(
       name,
-      "",
+      annotations.doc.orNull,
       namespace,
       false,
       (kindField :: coproductsField :: Nil).asJava
@@ -227,7 +232,7 @@ object TypeUnions {
         val annotations = ctx.annotations
         findAnnotation[AvroEvolvableUnion](annotations) match {
           case Some(_) =>
-            SchemaFor(createEvolvableUnion(nameExtractor, schemas), DefaultFieldMapper)
+            SchemaFor(createEvolvableUnion(ctx, nameExtractor, schemas), DefaultFieldMapper)
 
           case None =>
             SchemaFor(SchemaHelper.createSafeUnion(schemas: _*), DefaultFieldMapper)

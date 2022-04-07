@@ -1,6 +1,7 @@
 package dev.chopsticks.avro4s.test
 
 import com.sksamuel.avro4s.{
+  AvroDoc,
   AvroEvolvableUnion,
   AvroName,
   AvroNamespace,
@@ -20,6 +21,7 @@ object ClassicBase {
 }
 
 @AvroEvolvableUnion(EvolvableBase.Unknown)
+@AvroDoc("Some documentation goes here")
 sealed trait EvolvableBase
 object EvolvableBase {
   case object Unknown extends EvolvableBase
@@ -36,6 +38,14 @@ object EvolvedBase {
 
   @AvroNamespace("dev.chopsticks.avro4s.test.EvolvableBase")
   final case class Foo(foo: String) extends EvolvedBase
+}
+
+@AvroEvolvableUnion(NestingEvolvableBase.Unknown)
+sealed trait NestingEvolvableBase
+object NestingEvolvableBase {
+  case object Unknown extends NestingEvolvableBase
+  final case class Nested(foo: EvolvableBase) extends NestingEvolvableBase
+  final case class SomethingElse(bar: Int) extends NestingEvolvableBase
 }
 
 @AvroEvolvableUnion(EvolvedBase.Unknown) // Intentionally pass an invalid default value
@@ -77,64 +87,177 @@ final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matc
   "sealed traits with AvroEvolvableUnion annotation" should {
     "derive a different schema with a custom Encoder and Decoder that support schema evolution" in {
       SchemaFor[EvolvableBase].schema.toString(true) should equal("""{
-       |  "type" : "record",
-       |  "name" : "EvolvableBase",
-       |  "namespace" : "dev.chopsticks.avro4s.test",
-       |  "doc" : "",
-       |  "fields" : [ {
-       |    "name" : "kind",
-       |    "type" : "string",
-       |    "doc" : ""
-       |  }, {
-       |    "name" : "coproducts",
-       |    "type" : {
-       |      "type" : "record",
-       |      "name" : "EvolvableBase_Coproducts",
-       |      "doc" : "",
-       |      "fields" : [ {
-       |        "name" : "EvolvableBase_Bar",
-       |        "type" : [ {
-       |          "type" : "record",
-       |          "name" : "Bar",
-       |          "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
-       |          "fields" : [ {
-       |            "name" : "bar",
-       |            "type" : "int"
-       |          } ]
-       |        }, "null" ],
-       |        "doc" : ""
-       |      }, {
-       |        "name" : "EvolvableBase_Foo",
-       |        "type" : [ {
-       |          "type" : "record",
-       |          "name" : "Foo",
-       |          "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
-       |          "fields" : [ {
-       |            "name" : "foo",
-       |            "type" : "string"
-       |          } ]
-       |        }, "null" ],
-       |        "doc" : ""
-       |      }, {
-       |        "name" : "EvolvableBase_Unknown",
-       |        "type" : [ {
-       |          "type" : "record",
-       |          "name" : "Unknown",
-       |          "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
-       |          "fields" : [ ]
-       |        }, "null" ],
-       |        "doc" : ""
-       |      } ]
-       |    },
-       |    "doc" : ""
-       |  } ]
-       |}""".stripMargin)
+        |  "type" : "record",
+        |  "name" : "EvolvableBase",
+        |  "namespace" : "dev.chopsticks.avro4s.test",
+        |  "doc" : "Some documentation goes here",
+        |  "fields" : [ {
+        |    "name" : "kind",
+        |    "type" : "string",
+        |    "doc" : ""
+        |  }, {
+        |    "name" : "coproducts",
+        |    "type" : {
+        |      "type" : "record",
+        |      "name" : "EvolvableBase_Coproducts",
+        |      "doc" : "",
+        |      "fields" : [ {
+        |        "name" : "EvolvableBase_Bar",
+        |        "type" : [ {
+        |          "type" : "record",
+        |          "name" : "Bar",
+        |          "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
+        |          "fields" : [ {
+        |            "name" : "bar",
+        |            "type" : "int"
+        |          } ]
+        |        }, "null" ],
+        |        "doc" : ""
+        |      }, {
+        |        "name" : "EvolvableBase_Foo",
+        |        "type" : [ {
+        |          "type" : "record",
+        |          "name" : "Foo",
+        |          "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
+        |          "fields" : [ {
+        |            "name" : "foo",
+        |            "type" : "string"
+        |          } ]
+        |        }, "null" ],
+        |        "doc" : ""
+        |      }, {
+        |        "name" : "EvolvableBase_Unknown",
+        |        "type" : [ {
+        |          "type" : "record",
+        |          "name" : "Unknown",
+        |          "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
+        |          "fields" : [ ]
+        |        }, "null" ],
+        |        "doc" : ""
+        |      } ]
+        |    },
+        |    "doc" : ""
+        |  } ]
+        |}""".stripMargin)
 
       val foo = EvolvableBase.Foo("foo")
       val bar = EvolvableBase.Bar(123)
 
       Decoder[EvolvableBase].decode(Encoder[EvolvableBase].encode(foo)) should equal(foo)
       Decoder[EvolvableBase].decode(Encoder[EvolvableBase].encode(bar)) should equal(bar)
+    }
+
+    "derive recursively with nested evolvable unions" in {
+      SchemaFor[NestingEvolvableBase].schema.toString(true) should equal("""{
+         |  "type" : "record",
+         |  "name" : "NestingEvolvableBase",
+         |  "namespace" : "dev.chopsticks.avro4s.test",
+         |  "fields" : [ {
+         |    "name" : "kind",
+         |    "type" : "string",
+         |    "doc" : ""
+         |  }, {
+         |    "name" : "coproducts",
+         |    "type" : {
+         |      "type" : "record",
+         |      "name" : "NestingEvolvableBase_Coproducts",
+         |      "doc" : "",
+         |      "fields" : [ {
+         |        "name" : "NestingEvolvableBase_Nested",
+         |        "type" : [ {
+         |          "type" : "record",
+         |          "name" : "Nested",
+         |          "namespace" : "dev.chopsticks.avro4s.test.NestingEvolvableBase",
+         |          "fields" : [ {
+         |            "name" : "foo",
+         |            "type" : {
+         |              "type" : "record",
+         |              "name" : "EvolvableBase",
+         |              "namespace" : "dev.chopsticks.avro4s.test",
+         |              "doc" : "Some documentation goes here",
+         |              "fields" : [ {
+         |                "name" : "kind",
+         |                "type" : "string",
+         |                "doc" : ""
+         |              }, {
+         |                "name" : "coproducts",
+         |                "type" : {
+         |                  "type" : "record",
+         |                  "name" : "EvolvableBase_Coproducts",
+         |                  "doc" : "",
+         |                  "fields" : [ {
+         |                    "name" : "EvolvableBase_Bar",
+         |                    "type" : [ {
+         |                      "type" : "record",
+         |                      "name" : "Bar",
+         |                      "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
+         |                      "fields" : [ {
+         |                        "name" : "bar",
+         |                        "type" : "int"
+         |                      } ]
+         |                    }, "null" ],
+         |                    "doc" : ""
+         |                  }, {
+         |                    "name" : "EvolvableBase_Foo",
+         |                    "type" : [ {
+         |                      "type" : "record",
+         |                      "name" : "Foo",
+         |                      "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
+         |                      "fields" : [ {
+         |                        "name" : "foo",
+         |                        "type" : "string"
+         |                      } ]
+         |                    }, "null" ],
+         |                    "doc" : ""
+         |                  }, {
+         |                    "name" : "EvolvableBase_Unknown",
+         |                    "type" : [ {
+         |                      "type" : "record",
+         |                      "name" : "Unknown",
+         |                      "namespace" : "dev.chopsticks.avro4s.test.EvolvableBase",
+         |                      "fields" : [ ]
+         |                    }, "null" ],
+         |                    "doc" : ""
+         |                  } ]
+         |                },
+         |                "doc" : ""
+         |              } ]
+         |            }
+         |          } ]
+         |        }, "null" ],
+         |        "doc" : ""
+         |      }, {
+         |        "name" : "NestingEvolvableBase_SomethingElse",
+         |        "type" : [ {
+         |          "type" : "record",
+         |          "name" : "SomethingElse",
+         |          "namespace" : "dev.chopsticks.avro4s.test.NestingEvolvableBase",
+         |          "fields" : [ {
+         |            "name" : "bar",
+         |            "type" : "int"
+         |          } ]
+         |        }, "null" ],
+         |        "doc" : ""
+         |      }, {
+         |        "name" : "NestingEvolvableBase_Unknown",
+         |        "type" : [ {
+         |          "type" : "record",
+         |          "name" : "Unknown",
+         |          "namespace" : "dev.chopsticks.avro4s.test.NestingEvolvableBase",
+         |          "fields" : [ ]
+         |        }, "null" ],
+         |        "doc" : ""
+         |      } ]
+         |    },
+         |    "doc" : ""
+         |  } ]
+         |}""".stripMargin)
+
+      val foo = NestingEvolvableBase.Nested(EvolvableBase.Foo("foo"))
+      val bar = NestingEvolvableBase.SomethingElse(123)
+
+      Decoder[NestingEvolvableBase].decode(Encoder[NestingEvolvableBase].encode(foo)) should equal(foo)
+      Decoder[NestingEvolvableBase].decode(Encoder[NestingEvolvableBase].encode(bar)) should equal(bar)
     }
 
     "decode to the specified default value if the corresponding field is not found" in {
