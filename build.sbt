@@ -212,6 +212,12 @@ lazy val sample = Build
     testkit % "test->test"
   )
 
+lazy val avro4s = Build
+  .defineProject("avro4s")
+  .settings(
+    libraryDependencies ++= avro4sDeps
+  )
+
 lazy val root = (project in file("."))
   .settings(
     name := "chopsticks",
@@ -236,5 +242,6 @@ lazy val root = (project in file("."))
     metric,
     promRemoteWriter,
     zioGrpcCommon,
-    sample
+    sample,
+    avro4s
   )

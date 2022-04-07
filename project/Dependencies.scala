@@ -193,4 +193,8 @@ object Dependencies {
   val sttpDeps = Seq(
     "com.softwaremill.sttp.client3" %% "core" % STTP_VERSION
   )
+
+  val avro4sDeps = Seq(
+    "com.sksamuel.avro4s" %% "avro4s-core" % "4.0.12"
+  )
 }
