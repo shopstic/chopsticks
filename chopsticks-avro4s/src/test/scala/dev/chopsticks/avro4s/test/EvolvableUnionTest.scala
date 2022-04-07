@@ -123,8 +123,12 @@ final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matc
     }
 
     "Decode to the specified default value if the corresponding field is not found" in {
-      Decoder[EvolvedBase].decode(Encoder[EvolvableBase].encode(EvolvableBase.Foo("foo"))) should equal(EvolvedBase.Foo("foo"))
-      Decoder[EvolvedBase].decode(Encoder[EvolvableBase].encode(EvolvableBase.Bar(123))) should equal(EvolvedBase.Unknown)
+      Decoder[EvolvedBase].decode(Encoder[EvolvableBase].encode(EvolvableBase.Foo("foo"))) should equal(
+        EvolvedBase.Foo("foo")
+      )
+      Decoder[EvolvedBase].decode(Encoder[EvolvableBase].encode(EvolvableBase.Bar(123))) should equal(
+        EvolvedBase.Unknown
+      )
     }
   }
 }
