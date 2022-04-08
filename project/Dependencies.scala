@@ -198,4 +198,19 @@ object Dependencies {
     "com.sksamuel.avro4s" %% "avro4s-core" % "4.0.12",
     "com.sksamuel.avro4s" %% "avro4s-refined" % "4.0.12"
   )
+
+  val avro4sDirectDeps = {
+    val Json4sVersion = "3.6.11"
+    val RefinedVersion = "0.9.26"
+    val ShapelessVersion = "2.3.7"
+    val MagnoliaVersion = "0.17.0"
+
+    // https://github.com/sksamuel/avro4s/blob/release/4.0.x/build.sbt
+    Seq(
+      "com.propensive" %% "magnolia" % MagnoliaVersion,
+      "com.chuusai" %% "shapeless" % ShapelessVersion,
+      "org.json4s" %% "json4s-native" % Json4sVersion,
+      "eu.timepit" %% "refined" % RefinedVersion
+    )
+  }
 }

@@ -212,10 +212,28 @@ lazy val sample = Build
     testkit % "test->test"
   )
 
+lazy val avro4sShadowed = Build
+  .defineProject("avro4s-shadowed")
+  .settings(
+    libraryDependencies ++= avro4sDeps,
+    assembly / assemblyExcludedJars := {
+      val cp = (assembly / fullClasspath).value
+      cp.filterNot(_.data.getName.startsWith("avro4s-"))
+    },
+    assemblyMergeStrategy := {
+      case PathList("com", "sksamuel", "avro4s", _*) => MergeStrategy.first
+      case x =>
+        val oldStrategy = (ThisBuild / assemblyMergeStrategy).value
+        oldStrategy(x)
+    },
+    publish / skip := true
+  )
+
 lazy val avro4s = Build
   .defineProject("avro4s")
   .settings(
-    libraryDependencies ++= avro4sDeps
+    libraryDependencies ++= avro4sDirectDeps,
+    Compile / packageBin := (avro4sShadowed / assembly).value
   )
 
 lazy val root = (project in file("."))
@@ -243,5 +261,6 @@ lazy val root = (project in file("."))
     promRemoteWriter,
     zioGrpcCommon,
     sample,
+    avro4sShadowed,
     avro4s
   )
