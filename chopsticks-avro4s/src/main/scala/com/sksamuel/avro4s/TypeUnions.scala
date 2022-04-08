@@ -5,9 +5,10 @@ import com.sksamuel.avro4s.TypeUnionEntry._
 import com.sksamuel.avro4s.TypeUnions._
 import magnolia.{SealedTrait, Subtype}
 import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericContainer, GenericData, GenericRecord}
+import org.apache.avro.generic.{GenericContainer, GenericRecord}
 
 import scala.annotation.StaticAnnotation
+import scala.collection.immutable.ArraySeq
 import scala.jdk.CollectionConverters._
 
 final case class AvroEvolvableUnion(default: Any) extends StaticAnnotation
@@ -33,18 +34,19 @@ private class EvolvableTypeUnionEncoder[T](
 
   private def encodeEvolvable(value: T): AnyRef = {
     val schema = schemaFor.schema
-    val record = new GenericData.Record(schema)
 
     val (fieldName, encoded) = ctx.dispatch(value) { subtype =>
       fieldNameBySubtype(subtype) -> encoderBySubtype(subtype).encodeSubtype(value)
     }
 
-    val coproducts = new GenericData.Record(schema.getField("coproducts").schema())
-    coproducts.put(fieldName, encoded)
+    val coproductsSchema = schema.getField("coproducts").schema()
+    val coproductsFields = new Array[AnyRef](coproductsSchema.getFields.size())
+    coproductsFields(coproductsSchema.getField(fieldName).pos()) = encoded
+    val coproductsRecord = ImmutableRecord(coproductsSchema, ArraySeq.unsafeWrapArray(coproductsFields))
 
-    record.put("kind", fieldName)
-    record.put("coproducts", coproducts)
-    record
+    val recordFields = Array[AnyRef](fieldName, coproductsRecord)
+
+    ImmutableRecord(schema, ArraySeq.unsafeWrapArray(recordFields))
   }
 
   private def encodeNative(value: T): AnyRef = {
