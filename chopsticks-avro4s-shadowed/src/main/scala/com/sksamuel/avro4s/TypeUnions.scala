@@ -6,6 +6,7 @@ import com.sksamuel.avro4s.TypeUnions._
 import magnolia.{SealedTrait, Subtype}
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericContainer, GenericRecord}
+import org.apache.avro.util.Utf8
 
 import scala.annotation.StaticAnnotation
 import scala.collection.immutable.ArraySeq
@@ -101,7 +102,7 @@ private class EvolvableTypeUnionDecoder[T](
     value match {
       case container: GenericRecord =>
         container.get("kind") match {
-          case kind: String =>
+          case AvroStringMatcher(kind) =>
             container.get("coproducts") match {
               case nestedContainer: GenericRecord =>
                 nestedContainer.get(kind) match {
@@ -161,6 +162,16 @@ private class EvolvableTypeUnionDecoder[T](
 }
 
 object TypeUnions {
+
+  object AvroStringMatcher {
+    def unapply(value: AnyRef): Option[String] = {
+      value match {
+        case s: String => Some(s)
+        case s: Utf8 => Some(s.toString)
+        case _ => None
+      }
+    }
+  }
 
   def toFieldName(fullName: String, namespace: String): String = {
     val truncated =
