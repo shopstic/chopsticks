@@ -122,7 +122,7 @@ private class EvolvableTypeUnionDecoder[T](
 
               case other =>
                 throw new Avro4sDecodingException(
-                  s"Expected a 'coproducts' field to be a GenericRecord, instead got $other in $value",
+                  s"Expected a 'coproducts' field to be a GenericRecord, instead got $other (${other.getClass.getName}) in $value",
                   value,
                   this
                 )
@@ -130,7 +130,7 @@ private class EvolvableTypeUnionDecoder[T](
 
           case other =>
             throw new Avro4sDecodingException(
-              s"Expected a 'kind' field of type String, instead got $other in $value",
+              s"Expected a 'kind' field of type String, instead got $other (${other.getClass.getName}) in $value",
               value,
               this
             )
