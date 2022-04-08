@@ -160,9 +160,7 @@ private class EvolvableTypeUnionDecoder[T](
 
 object TypeUnions {
 
-  def toFieldName(schema: Schema, namespace: String): String = {
-    val fullName = schema.getFullName
-
+  def toFieldName(fullName: String, namespace: String): String = {
     val truncated =
       if (fullName.startsWith(namespace + ".")) {
         fullName.drop(namespace.length + 1)
@@ -187,7 +185,7 @@ object TypeUnions {
 
     val fields = (nulls.headOption.toSeq.view ++ rest).map { s: Schema =>
       new Schema.Field(
-        toFieldName(s, namespace),
+        toFieldName(s.getFullName, namespace),
         Schema.createUnion(s, Schema.create(Schema.Type.NULL)),
         ""
       )
@@ -253,7 +251,7 @@ object TypeUnions {
     val nameExtractor = NameExtractor(ctx.typeName, ctx.annotations)
     val namespace = nameExtractor.namespace
     val encoderBySubtype = subtypeEncoders.map(e => e.subtype -> e).toMap
-    val fieldNameBySubtype = subtypeEncoders.map(e => e.subtype -> toFieldName(e.schema, namespace)).toMap
+    val fieldNameBySubtype = subtypeEncoders.map(e => e.subtype -> toFieldName(e.schema.getFullName, namespace)).toMap
 
     val schemaFor = findEvolvableUnionAnnotation(ctx.annotations) match {
       case Some(_) => buildEvolvableSchema(ctx, nameExtractor, update, subtypeEncoders.map(_.schema))
@@ -305,7 +303,29 @@ object TypeUnions {
         val schema = schemaFor.schema
         val fieldMapper = schemaFor.fieldMapper
         val nameExtractor = NameExtractor(st.typeName, st.annotations ++ ctx.annotations)
-        val subtypeSchema = SchemaFor(SchemaHelper.extractTraitSubschema(nameExtractor.fullName, schema), fieldMapper)
+
+        val subtypeSchema = findAnnotation[AvroEvolvableUnion](ctx.annotations) match {
+          case Some(_) =>
+            val fieldName = toFieldName(nameExtractor.fullName, schema.getNamespace)
+
+            val maybeSubtypeSchema = for {
+              coproducts <- Option(schema.getField("coproducts"))
+              nullableField <- Option(coproducts.schema().getField(fieldName))
+              nullableFieldSchema = nullableField.schema()
+              types <- Option.when(nullableFieldSchema.isUnion)(nullableFieldSchema.getTypes)
+              found <- types.asScala.find(!_.isNullable)
+            } yield {
+              SchemaFor(found, fieldMapper)
+            }
+
+            maybeSubtypeSchema.getOrElse(throw new Avro4sConfigurationException(
+              s"Cannot find subtype schema for field '$fieldName' in schema: ${schema.toString(true)}"
+            ))
+
+          case None =>
+            SchemaFor(SchemaHelper.extractTraitSubschema(nameExtractor.fullName, schema), fieldMapper)
+        }
+
         FullSchemaUpdate(subtypeSchema)
       case _ => enrichedUpdate
     }

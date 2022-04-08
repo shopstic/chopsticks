@@ -85,6 +85,11 @@ final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matc
   }
 
   "sealed traits with AvroEvolvableUnion annotation" should {
+    "work with encoder and decoder withSchema method" in {
+      Encoder[EvolvableBase].withSchema(SchemaFor[EvolvableBase])
+      Decoder[EvolvableBase].withSchema(SchemaFor[EvolvableBase])
+    }
+
     "derive a different schema with a custom Encoder and Decoder that support schema evolution" in {
       SchemaFor[EvolvableBase].schema.toString(true) should equal("""{
         |  "type" : "record",
