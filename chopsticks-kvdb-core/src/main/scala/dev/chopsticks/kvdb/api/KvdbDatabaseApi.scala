@@ -127,8 +127,22 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
   def batchTransact[A, P](
     buildTransaction: Vector[A] => (List[TransactionWrite], P)
   ): ZAkkaFlow[IzLogging with Clock with AkkaEnv, Nothing, A, P, NotUsed] = {
+    batchThenTransact(buildTransaction)
+  }
+
+  def batchThenTransact[A, P](
+    buildTransaction: Vector[A] => (List[TransactionWrite], P)
+  ): ZAkkaFlow[IzLogging with Clock with AkkaEnv, Nothing, A, P, NotUsed] = {
     Flow[A]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
+      .toZAkkaFlow
+      .viaZAkkaFlow(transactBatches(buildTransaction))
+  }
+
+  def transactBatches[A, P](
+    buildTransaction: Vector[A] => (List[TransactionWrite], P)
+  ): ZAkkaFlow[IzLogging with Clock with AkkaEnv, Nothing, Vector[A], P, NotUsed] = {
+    Flow[Vector[A]]
       .mapAsync(options.serdesParallelism) { batch =>
         Future {
           buildTransaction(batch)
@@ -145,8 +159,22 @@ final class KvdbDatabaseApi[BCF[A, B] <: ColumnFamily[A, B]] private (
   def batchTransactUnordered[A, P](
     buildTransaction: Vector[A] => (List[TransactionWrite], P)
   ): ZAkkaFlow[IzLogging with Clock with AkkaEnv, Nothing, A, P, NotUsed] = {
+    batchThenTransactUnordered(buildTransaction)
+  }
+
+  def batchThenTransactUnordered[A, P](
+    buildTransaction: Vector[A] => (List[TransactionWrite], P)
+  ): ZAkkaFlow[IzLogging with Clock with AkkaEnv, Nothing, A, P, NotUsed] = {
     Flow[A]
       .via(AkkaStreamUtils.batchFlow(options.batchWriteMaxBatchSize, options.batchWriteBatchingGroupWithin))
+      .toZAkkaFlow
+      .viaZAkkaFlow(transactBatchesUnordered(buildTransaction))
+  }
+
+  def transactBatchesUnordered[A, P](
+    buildTransaction: Vector[A] => (List[TransactionWrite], P)
+  ): ZAkkaFlow[IzLogging with Clock with AkkaEnv, Nothing, Vector[A], P, NotUsed] = {
+    Flow[Vector[A]]
       .mapAsyncUnordered(options.serdesParallelism) { batch =>
         Future {
           buildTransaction(batch)
