@@ -12,10 +12,14 @@ import scala.annotation.StaticAnnotation
 import scala.collection.immutable.ArraySeq
 import scala.jdk.CollectionConverters._
 
-final case class AvroEvolvableUnion(default: Any) extends StaticAnnotation
+final case class AvroOneOf(default: Any) extends StaticAnnotation
 
-final case class InvalidAvroEvolvableUnionDefaultValue(message: String, cause: Throwable)
+final case class InvalidAvroOneOfDefaultValue(message: String, cause: Throwable)
     extends RuntimeException(message, cause)
+
+trait AvroOneOfUnknownSubtype {
+  def withSubtype(subtype: String): this.type
+}
 
 private class EvolvableTypeUnionEncoder[T](
   ctx: SealedTrait[Encoder, T],
@@ -24,7 +28,7 @@ private class EvolvableTypeUnionEncoder[T](
   fieldNameBySubtype: Map[Subtype[Encoder, T], String]
 ) extends Encoder[T] {
 
-  private val isEvolvable = findEvolvableUnionAnnotation(ctx.annotations).nonEmpty
+  private val isEvolvable = findOneOfAnnotation(ctx.annotations).nonEmpty
 
   override def withSchema(schemaFor: SchemaFor[T]): Encoder[T] = {
     if (!isEvolvable) {
@@ -33,33 +37,33 @@ private class EvolvableTypeUnionEncoder[T](
     TypeUnions.encoder(ctx, new DefinitionEnvironment[Encoder](), FullSchemaUpdate(schemaFor))
   }
 
-  private def encodeEvolvable(value: T): AnyRef = {
+  private def encodeOneOf(value: T): AnyRef = {
     val schema = schemaFor.schema
 
     val (fieldName, encoded) = ctx.dispatch(value) { subtype =>
       fieldNameBySubtype(subtype) -> encoderBySubtype(subtype).encodeSubtype(value)
     }
 
-    val coproductsSchema = schema.getField("coproducts").schema()
-    val coproductsFields = new Array[AnyRef](coproductsSchema.getFields.size())
-    coproductsFields(coproductsSchema.getField(fieldName).pos()) = encoded
-    val coproductsRecord = ImmutableRecord(coproductsSchema, ArraySeq.unsafeWrapArray(coproductsFields))
+    val oneOfRecordSchema = schema.getField(typeFieldName).schema()
+    val oneOfFields = new Array[AnyRef](oneOfRecordSchema.getFields.size())
+    oneOfFields(oneOfRecordSchema.getField(fieldName).pos()) = encoded
+    val oneOfRecord = ImmutableRecord(oneOfRecordSchema, ArraySeq.unsafeWrapArray(oneOfFields))
 
-    val recordFields = Array[AnyRef](fieldName, coproductsRecord)
+    val recordFields = Array[AnyRef](fieldName, oneOfRecord)
 
     ImmutableRecord(schema, ArraySeq.unsafeWrapArray(recordFields))
   }
 
-  private def encodeNative(value: T): AnyRef = {
+  private def encodeUnion(value: T): AnyRef = {
     ctx.dispatch(value)(subtype => encoderBySubtype(subtype).encodeSubtype(value))
   }
 
   def encode(value: T): AnyRef = {
     if (isEvolvable) {
-      encodeEvolvable(value)
+      encodeOneOf(value)
     }
     else {
-      encodeNative(value)
+      encodeUnion(value)
     }
   }
 }
@@ -70,42 +74,49 @@ private class EvolvableTypeUnionDecoder[T](
   decoderByName: Map[String, UnionDecoder[T]#SubtypeDecoder]
 ) extends Decoder[T] {
 
-  private val evolvableUnionDefaultValue = {
-    findEvolvableUnionAnnotation(ctx.annotations).map { case AvroEvolvableUnion(default) =>
+  private val maybeOneOfDefaultValue = {
+    findOneOfAnnotation(ctx.annotations).map { case AvroOneOf(default) =>
       try {
-        ctx.dispatch(default.asInstanceOf[T])(_ => default)
+        ctx.dispatch(default.asInstanceOf[T])(_ => default).asInstanceOf[T]
       }
       catch {
-        case e: ClassCastException => throw InvalidAvroEvolvableUnionDefaultValue(e.getMessage, e)
-        case e: IllegalArgumentException => throw InvalidAvroEvolvableUnionDefaultValue(e.getMessage, e)
+        case e: ClassCastException => throw InvalidAvroOneOfDefaultValue(e.getMessage, e)
+        case e: IllegalArgumentException => throw InvalidAvroOneOfDefaultValue(e.getMessage, e)
       }
     }
   }
 
   override def withSchema(schemaFor: SchemaFor[T]): Decoder[T] = {
-    if (evolvableUnionDefaultValue.isEmpty) {
+    if (maybeOneOfDefaultValue.isEmpty) {
       validateNewSchema(schemaFor)
     }
     TypeUnions.decoder(ctx, new DefinitionEnvironment[Decoder](), FullSchemaUpdate(schemaFor))
   }
 
-  def decode(value: Any): T = {
-    evolvableUnionDefaultValue match {
-      case Some(defaultValue) =>
-        decodeEvolvable(value, defaultValue)
-      case None =>
-        decodeNative(value)
+  private def createUnknownSubtypeValue(defaultValue: T, subtype: String) = {
+    defaultValue match {
+      case v: AvroOneOfUnknownSubtype => v.withSubtype(subtype)
+      case v => v
     }
   }
 
-  private def decodeEvolvable(value: Any, defaultValue: Any): T = {
+  def decode(value: Any): T = {
+    maybeOneOfDefaultValue match {
+      case Some(defaultValue) =>
+        decodeOneOf(value, defaultValue)
+      case None =>
+        decodeUnion(value)
+    }
+  }
+
+  private def decodeOneOf(value: Any, defaultValue: T): T = {
     value match {
       case container: GenericRecord =>
-        container.get("kind") match {
-          case AvroStringMatcher(kind) =>
-            container.get("coproducts") match {
-              case nestedContainer: GenericRecord =>
-                nestedContainer.get(kind) match {
+        container.get(typeFieldName) match {
+          case AvroStringMatcher(subtypeName) =>
+            container.get(oneOfFieldName) match {
+              case oneOfContainer: GenericRecord =>
+                oneOfContainer.get(subtypeName) match {
                   case subtypeContainer: GenericContainer =>
                     val schemaName = subtypeContainer.getSchema.getFullName
                     val codecOpt = decoderByName.get(schemaName)
@@ -114,11 +125,11 @@ private class EvolvableTypeUnionDecoder[T](
                       codecOpt.get.decodeSubtype(subtypeContainer)
                     }
                     else {
-                      defaultValue.asInstanceOf[T]
+                      createUnknownSubtypeValue(defaultValue, subtypeName)
                     }
 
                   case _ =>
-                    defaultValue.asInstanceOf[T]
+                    createUnknownSubtypeValue(defaultValue, subtypeName)
                 }
 
               case other =>
@@ -142,7 +153,7 @@ private class EvolvableTypeUnionDecoder[T](
     }
   }
 
-  private def decodeNative(value: Any): T = value match {
+  private def decodeUnion(value: Any): T = value match {
     case container: GenericContainer =>
       val schemaName = container.getSchema.getFullName
       val codecOpt = decoderByName.get(schemaName)
@@ -162,6 +173,12 @@ private class EvolvableTypeUnionDecoder[T](
 }
 
 object TypeUnions {
+
+  val typeFieldName = "type"
+  val typeFieldDoc = ""
+  val oneOfFieldName = "oneOf"
+  val oneOfRecordSuffix = "_OneOf"
+  val oneOfRecordDoc = ""
 
   object AvroStringMatcher {
     def unapply(value: AnyRef): Option[String] = {
@@ -185,7 +202,7 @@ object TypeUnions {
     truncated.replaceAll("[^a-zA-Z0-9_]", "_")
   }
 
-  private def createEvolvableUnion[C[_], T](
+  private def createOneOfSchema[C[_], T](
     ctx: SealedTrait[C, T],
     nameExtractor: NameExtractor,
     subtypeSchemas: Seq[Schema]
@@ -204,23 +221,23 @@ object TypeUnions {
       )
     }.toList.asJava
 
-    val coproductsRecord = Schema.createRecord(
-      s"${name}_Coproducts",
-      "",
+    val oneOfRecord = Schema.createRecord(
+      s"$name$oneOfRecordSuffix",
+      oneOfRecordDoc,
       namespace,
       false,
       fields
     )
 
-    val kindField = new Schema.Field("kind", Schema.create(Schema.Type.STRING), "")
-    val coproductsField = new Schema.Field("coproducts", coproductsRecord, "")
+    val typeField = new Schema.Field(typeFieldName, Schema.create(Schema.Type.STRING), typeFieldDoc)
+    val oneOfRecordField = new Schema.Field(oneOfFieldName, oneOfRecord, "")
 
     Schema.createRecord(
       name,
       annotations.doc.orNull,
       namespace,
       false,
-      (kindField :: coproductsField :: Nil).asJava
+      (typeField :: oneOfRecordField :: Nil).asJava
     )
   }
 
@@ -228,10 +245,10 @@ object TypeUnions {
     case t: Any if manifest.runtimeClass.isAssignableFrom(t.getClass) => t.asInstanceOf[T]
   }
 
-  def findEvolvableUnionAnnotation(annos: Seq[Any]): Option[AvroEvolvableUnion] =
-    findAnnotation[AvroEvolvableUnion](annos)
+  def findOneOfAnnotation(annos: Seq[Any]): Option[AvroOneOf] =
+    findAnnotation[AvroOneOf](annos)
 
-  private def buildEvolvableSchema[C[_], T](
+  private def buildOneOfSchema[C[_], T](
     ctx: SealedTrait[C, T],
     nameExtractor: NameExtractor,
     update: SchemaUpdate,
@@ -241,9 +258,9 @@ object TypeUnions {
       case FullSchemaUpdate(s) => s.forType
       case _ =>
         val annotations = ctx.annotations
-        findAnnotation[AvroEvolvableUnion](annotations) match {
+        findAnnotation[AvroOneOf](annotations) match {
           case Some(_) =>
-            SchemaFor(createEvolvableUnion(ctx, nameExtractor, schemas), DefaultFieldMapper)
+            SchemaFor(createOneOfSchema(ctx, nameExtractor, schemas), DefaultFieldMapper)
 
           case None =>
             SchemaFor(SchemaHelper.createSafeUnion(schemas: _*), DefaultFieldMapper)
@@ -266,8 +283,8 @@ object TypeUnions {
     val encoderBySubtype = subtypeEncoders.map(e => e.subtype -> e).toMap
     val fieldNameBySubtype = subtypeEncoders.map(e => e.subtype -> toFieldName(e.schema.getFullName, namespace)).toMap
 
-    val schemaFor = findEvolvableUnionAnnotation(ctx.annotations) match {
-      case Some(_) => buildEvolvableSchema(ctx, nameExtractor, update, subtypeEncoders.map(_.schema))
+    val schemaFor = findOneOfAnnotation(ctx.annotations) match {
+      case Some(_) => buildOneOfSchema(ctx, nameExtractor, update, subtypeEncoders.map(_.schema))
       case None => buildSchema[T](update, subtypeEncoders.map(_.schema))
     }
 
@@ -284,7 +301,7 @@ object TypeUnions {
     // recursive schema, two identical type union decoders may be created instead of one.
     val subtypeDecoders = enrichedSubtypes(ctx, update).map { case (st, u) => new UnionDecoder[T](st)(env, u) }
     val nameExtractor = NameExtractor(ctx.typeName, ctx.annotations)
-    val schemaFor = buildEvolvableSchema(ctx, nameExtractor, update, subtypeDecoders.map(_.schema))
+    val schemaFor = buildOneOfSchema(ctx, nameExtractor, update, subtypeDecoders.map(_.schema))
     val decoderByName = subtypeDecoders.map(decoder => decoder.fullName -> decoder).toMap
     new EvolvableTypeUnionDecoder[T](ctx, schemaFor, decoderByName)
   }
@@ -296,7 +313,7 @@ object TypeUnions {
   ): SchemaFor[T] = {
     val subtypeSchemas = enrichedSubtypes(ctx, update).map { case (st, u) => new UnionSchemaFor[T](st)(env, u) }
     val nameExtractor = NameExtractor(ctx.typeName, ctx.annotations)
-    buildEvolvableSchema(ctx, nameExtractor, update, subtypeSchemas.map(_.schema))
+    buildOneOfSchema(ctx, nameExtractor, update, subtypeSchemas.map(_.schema))
   }
 
   private def enrichedSubtypes[Typeclass[_], T](
@@ -317,15 +334,15 @@ object TypeUnions {
         val fieldMapper = schemaFor.fieldMapper
         val nameExtractor = NameExtractor(st.typeName, st.annotations ++ ctx.annotations)
 
-        val subtypeSchema = findAnnotation[AvroEvolvableUnion](ctx.annotations) match {
+        val subtypeSchema = findAnnotation[AvroOneOf](ctx.annotations) match {
           case Some(_) =>
             val fieldName = toFieldName(nameExtractor.fullName, schema.getNamespace)
 
             val maybeSubtypeSchema = for {
-              coproducts <- Option(schema.getField("coproducts"))
-              nullableField <- Option(coproducts.schema().getField(fieldName))
-              nullableFieldSchema = nullableField.schema()
-              types <- Option.when(nullableFieldSchema.isUnion)(nullableFieldSchema.getTypes)
+              subtype <- Option(schema.getField(typeFieldName))
+              nullableField <- Option(subtype.schema().getField(fieldName))
+              nullableSchema = nullableField.schema()
+              types <- Option.when(nullableSchema.isUnion)(nullableSchema.getTypes)
               found <- types.asScala.find(!_.isNullable)
             } yield {
               SchemaFor(found, fieldMapper)

@@ -2,63 +2,66 @@ package dev.chopsticks.avro4s.test
 
 import com.sksamuel.avro4s.{
   AvroDoc,
-  AvroEvolvableUnion,
   AvroName,
   AvroNamespace,
+  AvroOneOf,
+  AvroOneOfUnknownSubtype,
   Decoder,
   Encoder,
-  InvalidAvroEvolvableUnionDefaultValue,
+  InvalidAvroOneOfDefaultValue,
   SchemaFor
 }
 import org.scalatest.Assertions
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
-sealed trait ClassicBase
-object ClassicBase {
-  final case class Foo(foo: String) extends ClassicBase
-  final case class Bar(bar: Int) extends ClassicBase
+sealed trait UnionBase
+object UnionBase {
+  final case class Foo(foo: String) extends UnionBase
+  final case class Bar(bar: Int) extends UnionBase
 }
 
-@AvroEvolvableUnion(EvolvableBase.Unknown)
+@AvroOneOf(OneOfBase.Unknown())
 @AvroDoc("Some documentation goes here")
-sealed trait EvolvableBase
-object EvolvableBase {
-  case object Unknown extends EvolvableBase
-  final case class Foo(foo: String) extends EvolvableBase
-  final case class Bar(bar: Int) extends EvolvableBase
+sealed trait OneOfBase
+object OneOfBase {
+  final case class Unknown(subtype: Option[String] = None) extends OneOfBase with AvroOneOfUnknownSubtype {
+    override def withSubtype(subtype: String): Unknown.this.type = copy(Some(subtype))
+  }
+  final case class Foo(foo: String) extends OneOfBase
+  final case class Bar(bar: Int) extends OneOfBase
 }
 
 @AvroName("EvolvableBase")
-@AvroEvolvableUnion(EvolvedBase.Unknown)
-sealed trait EvolvedBase
-object EvolvedBase {
+@AvroOneOf(EvolvedOneOfBase.Unknown)
+sealed trait EvolvedOneOfBase
+object EvolvedOneOfBase {
   @AvroNamespace("dev.chopsticks.avro4s.test.EvolvableBase")
-  case object Unknown extends EvolvedBase
+  case object Unknown extends EvolvedOneOfBase
 
   @AvroNamespace("dev.chopsticks.avro4s.test.EvolvableBase")
-  final case class Foo(foo: String) extends EvolvedBase
+  final case class Foo(foo: String) extends EvolvedOneOfBase
 }
 
-@AvroEvolvableUnion(NestingEvolvableBase.Unknown)
-sealed trait NestingEvolvableBase
-object NestingEvolvableBase {
-  case object Unknown extends NestingEvolvableBase
-  final case class Nested(foo: EvolvableBase) extends NestingEvolvableBase
-  final case class SomethingElse(bar: Int) extends NestingEvolvableBase
+@AvroOneOf(NestingOneOfBase.Unknown)
+sealed trait NestingOneOfBase
+object NestingOneOfBase {
+  case object Unknown extends NestingOneOfBase
+  final case class Nested(foo: OneOfBase) extends NestingOneOfBase
+  final case class SomethingElse(bar: Int) extends NestingOneOfBase
 }
 
-@AvroEvolvableUnion(EvolvedBase.Unknown) // Intentionally pass an invalid default value
+@AvroOneOf(EvolvedOneOfBase.Unknown) // Intentionally pass an invalid default value
 sealed trait BadDefaultValueInAnnotation
 object BadDefaultValueInAnnotation {
   final case class Foo() extends BadDefaultValueInAnnotation
   case object Bar extends BadDefaultValueInAnnotation
 }
 
-final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matchers {
-  "sealed traits without AvroEvolvableUnion annotation" should {
+final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers {
+  "sealed traits without AvroOneOf annotation" should {
     "derive as native Avro UNIONs" in {
-      SchemaFor[ClassicBase].schema.toString(true) should equal("""[ {
+      SchemaFor[UnionBase].schema.toString(true) should equal("""[ {
           |  "type" : "record",
           |  "name" : "Bar",
           |  "namespace" : "dev.chopsticks.avro4s.test.ClassicBase",
@@ -76,22 +79,22 @@ final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matc
           |  } ]
           |} ]""".stripMargin)
 
-      val foo = ClassicBase.Foo("foo")
-      val bar = ClassicBase.Bar(123)
+      val foo = UnionBase.Foo("foo")
+      val bar = UnionBase.Bar(123)
 
-      Decoder[ClassicBase].decode(Encoder[ClassicBase].encode(foo)) should equal(foo)
-      Decoder[ClassicBase].decode(Encoder[ClassicBase].encode(bar)) should equal(bar)
+      Decoder[UnionBase].decode(Encoder[UnionBase].encode(foo)) should equal(foo)
+      Decoder[UnionBase].decode(Encoder[UnionBase].encode(bar)) should equal(bar)
     }
   }
 
-  "sealed traits with AvroEvolvableUnion annotation" should {
+  "sealed traits with AvroOneOf annotation" should {
     "work with encoder and decoder withSchema method" in {
-      Encoder[EvolvableBase].withSchema(SchemaFor[EvolvableBase])
-      Decoder[EvolvableBase].withSchema(SchemaFor[EvolvableBase])
+      Encoder[OneOfBase].withSchema(SchemaFor[OneOfBase])
+      Decoder[OneOfBase].withSchema(SchemaFor[OneOfBase])
     }
 
     "derive a different schema with a custom Encoder and Decoder that support schema evolution" in {
-      SchemaFor[EvolvableBase].schema.toString(true) should equal("""{
+      SchemaFor[OneOfBase].schema.toString(true) should equal("""{
         |  "type" : "record",
         |  "name" : "EvolvableBase",
         |  "namespace" : "dev.chopsticks.avro4s.test",
@@ -145,15 +148,15 @@ final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matc
         |  } ]
         |}""".stripMargin)
 
-      val foo = EvolvableBase.Foo("foo")
-      val bar = EvolvableBase.Bar(123)
+      val foo = OneOfBase.Foo("foo")
+      val bar = OneOfBase.Bar(123)
 
-      Decoder[EvolvableBase].decode(Encoder[EvolvableBase].encode(foo)) should equal(foo)
-      Decoder[EvolvableBase].decode(Encoder[EvolvableBase].encode(bar)) should equal(bar)
+      Decoder[OneOfBase].decode(Encoder[OneOfBase].encode(foo)) should equal(foo)
+      Decoder[OneOfBase].decode(Encoder[OneOfBase].encode(bar)) should equal(bar)
     }
 
     "derive recursively with nested evolvable unions" in {
-      SchemaFor[NestingEvolvableBase].schema.toString(true) should equal("""{
+      SchemaFor[NestingOneOfBase].schema.toString(true) should equal("""{
          |  "type" : "record",
          |  "name" : "NestingEvolvableBase",
          |  "namespace" : "dev.chopsticks.avro4s.test",
@@ -258,19 +261,19 @@ final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matc
          |  } ]
          |}""".stripMargin)
 
-      val foo = NestingEvolvableBase.Nested(EvolvableBase.Foo("foo"))
-      val bar = NestingEvolvableBase.SomethingElse(123)
+      val foo = NestingOneOfBase.Nested(OneOfBase.Foo("foo"))
+      val bar = NestingOneOfBase.SomethingElse(123)
 
-      Decoder[NestingEvolvableBase].decode(Encoder[NestingEvolvableBase].encode(foo)) should equal(foo)
-      Decoder[NestingEvolvableBase].decode(Encoder[NestingEvolvableBase].encode(bar)) should equal(bar)
+      Decoder[NestingOneOfBase].decode(Encoder[NestingOneOfBase].encode(foo)) should equal(foo)
+      Decoder[NestingOneOfBase].decode(Encoder[NestingOneOfBase].encode(bar)) should equal(bar)
     }
 
     "decode to the specified default value if the corresponding field is not found" in {
-      Decoder[EvolvedBase].decode(Encoder[EvolvableBase].encode(EvolvableBase.Foo("foo"))) should equal(
-        EvolvedBase.Foo("foo")
+      Decoder[EvolvedOneOfBase].decode(Encoder[OneOfBase].encode(OneOfBase.Foo("foo"))) should equal(
+        EvolvedOneOfBase.Foo("foo")
       )
-      Decoder[EvolvedBase].decode(Encoder[EvolvableBase].encode(EvolvableBase.Bar(123))) should equal(
-        EvolvedBase.Unknown
+      Decoder[EvolvedOneOfBase].decode(Encoder[OneOfBase].encode(OneOfBase.Bar(123))) should equal(
+        EvolvedOneOfBase.Unknown
       )
     }
 
@@ -278,7 +281,7 @@ final class EvolvableUnionTest extends AnyWordSpecLike with Assertions with Matc
       val decoder = Decoder[BadDefaultValueInAnnotation]
       val encoder = Encoder[BadDefaultValueInAnnotation]
 
-      assertThrows[InvalidAvroEvolvableUnionDefaultValue] {
+      assertThrows[InvalidAvroOneOfDefaultValue] {
         decoder.decode(encoder.encode(BadDefaultValueInAnnotation.Foo()))
       }
     }
