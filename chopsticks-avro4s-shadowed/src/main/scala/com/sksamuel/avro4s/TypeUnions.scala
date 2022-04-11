@@ -13,13 +13,10 @@ import scala.collection.immutable.ArraySeq
 import scala.jdk.CollectionConverters._
 
 final case class AvroOneOf(default: Any) extends StaticAnnotation
+final case class AvroIgnoreSubtype() extends StaticAnnotation
 
-final case class InvalidAvroOneOfDefaultValue(message: String, cause: Throwable)
+final case class InvalidAvroOneOfDefaultValue(message: String, cause: Throwable = null)
     extends RuntimeException(message, cause)
-
-trait AvroOneOfUnknownSubtype {
-  def withSubtype(subtype: String): this.type
-}
 
 private class EvolvableTypeUnionEncoder[T](
   ctx: SealedTrait[Encoder, T],
@@ -28,10 +25,10 @@ private class EvolvableTypeUnionEncoder[T](
   fieldNameBySubtype: Map[Subtype[Encoder, T], String]
 ) extends Encoder[T] {
 
-  private val isEvolvable = findOneOfAnnotation(ctx.annotations).nonEmpty
+  private val isOneOf = findOneOfAnnotation(ctx.annotations).nonEmpty
 
   override def withSchema(schemaFor: SchemaFor[T]): Encoder[T] = {
-    if (!isEvolvable) {
+    if (!isOneOf) {
       validateNewSchema(schemaFor)
     }
     TypeUnions.encoder(ctx, new DefinitionEnvironment[Encoder](), FullSchemaUpdate(schemaFor))
@@ -39,19 +36,15 @@ private class EvolvableTypeUnionEncoder[T](
 
   private def encodeOneOf(value: T): AnyRef = {
     val schema = schemaFor.schema
+    val fields = new Array[AnyRef](schema.getFields.size())
 
-    val (fieldName, encoded) = ctx.dispatch(value) { subtype =>
-      fieldNameBySubtype(subtype) -> encoderBySubtype(subtype).encodeSubtype(value)
+    ctx.dispatch(value) { subtype =>
+      if (fieldNameBySubtype.contains(subtype)) {
+        fields(schema.getField(fieldNameBySubtype(subtype)).pos()) = encoderBySubtype(subtype).encodeSubtype(value)
+      }
     }
 
-    val oneOfRecordSchema = schema.getField(typeFieldName).schema()
-    val oneOfFields = new Array[AnyRef](oneOfRecordSchema.getFields.size())
-    oneOfFields(oneOfRecordSchema.getField(fieldName).pos()) = encoded
-    val oneOfRecord = ImmutableRecord(oneOfRecordSchema, ArraySeq.unsafeWrapArray(oneOfFields))
-
-    val recordFields = Array[AnyRef](fieldName, oneOfRecord)
-
-    ImmutableRecord(schema, ArraySeq.unsafeWrapArray(recordFields))
+    ImmutableRecord(schema, ArraySeq.unsafeWrapArray(fields))
   }
 
   private def encodeUnion(value: T): AnyRef = {
@@ -59,7 +52,7 @@ private class EvolvableTypeUnionEncoder[T](
   }
 
   def encode(value: T): AnyRef = {
-    if (isEvolvable) {
+    if (isOneOf) {
       encodeOneOf(value)
     }
     else {
@@ -80,7 +73,11 @@ private class EvolvableTypeUnionDecoder[T](
         ctx.dispatch(default.asInstanceOf[T])(_ => default).asInstanceOf[T]
       }
       catch {
-        case e: ClassCastException => throw InvalidAvroOneOfDefaultValue(e.getMessage, e)
+        case _: ClassCastException =>
+          throw InvalidAvroOneOfDefaultValue(
+            s"Expected a subtype of ${ctx.typeName.full} but got value '$default' of class '${default.getClass.getName}'"
+          )
+
         case e: IllegalArgumentException => throw InvalidAvroOneOfDefaultValue(e.getMessage, e)
       }
     }
@@ -91,13 +88,6 @@ private class EvolvableTypeUnionDecoder[T](
       validateNewSchema(schemaFor)
     }
     TypeUnions.decoder(ctx, new DefinitionEnvironment[Decoder](), FullSchemaUpdate(schemaFor))
-  }
-
-  private def createUnknownSubtypeValue(defaultValue: T, subtype: String) = {
-    defaultValue match {
-      case v: AvroOneOfUnknownSubtype => v.withSubtype(subtype)
-      case v => v
-    }
   }
 
   def decode(value: Any): T = {
@@ -112,44 +102,36 @@ private class EvolvableTypeUnionDecoder[T](
   private def decodeOneOf(value: Any, defaultValue: T): T = {
     value match {
       case container: GenericRecord =>
-        container.get(typeFieldName) match {
-          case AvroStringMatcher(subtypeName) =>
-            container.get(oneOfFieldName) match {
-              case oneOfContainer: GenericRecord =>
-                oneOfContainer.get(subtypeName) match {
-                  case subtypeContainer: GenericContainer =>
-                    val schemaName = subtypeContainer.getSchema.getFullName
-                    val codecOpt = decoderByName.get(schemaName)
+        container.getSchema.getFields.asScala
+          .view
+          .map(f => f -> container.get(f.name()))
+          .find(_._2 != null) match {
+          case Some((field, found)) =>
+            found match {
+              case fieldRecord: GenericContainer =>
+                val schemaName = fieldRecord.getSchema.getFullName
+                val maybeDecoder = decoderByName.get(schemaName)
 
-                    if (codecOpt.isDefined) {
-                      codecOpt.get.decodeSubtype(subtypeContainer)
-                    }
-                    else {
-                      createUnknownSubtypeValue(defaultValue, subtypeName)
-                    }
-
-                  case _ =>
-                    createUnknownSubtypeValue(defaultValue, subtypeName)
-                }
+                maybeDecoder.fold(defaultValue)(_.decodeSubtype(fieldRecord))
 
               case other =>
                 throw new Avro4sDecodingException(
-                  s"Expected a 'coproducts' field to be a GenericRecord, instead got $other (${other.getClass.getName}) in $value",
+                  s"Expected '${field.name()}' field to be a GenericRecord, instead got $other (of class '${other.getClass.getName}') in $value",
                   value,
                   this
                 )
             }
 
-          case other =>
-            throw new Avro4sDecodingException(
-              s"Expected a 'kind' field of type String, instead got $other (${other.getClass.getName}) in $value",
-              value,
-              this
-            )
+          case None =>
+            defaultValue
         }
 
       case _ =>
-        throw new Avro4sDecodingException(s"Unsupported type $value in type union decoder", value, this)
+        throw new Avro4sDecodingException(
+          s"Unsupported type '${value.getClass.getName}' in a OneOf decoder for $value",
+          value,
+          this
+        )
     }
   }
 
@@ -173,13 +155,6 @@ private class EvolvableTypeUnionDecoder[T](
 }
 
 object TypeUnions {
-
-  val typeFieldName = "type"
-  val typeFieldDoc = ""
-  val oneOfFieldName = "oneOf"
-  val oneOfRecordSuffix = "_OneOf"
-  val oneOfRecordDoc = ""
-
   object AvroStringMatcher {
     def unapply(value: AnyRef): Option[String] = {
       value match {
@@ -221,23 +196,12 @@ object TypeUnions {
       )
     }.toList.asJava
 
-    val oneOfRecord = Schema.createRecord(
-      s"$name$oneOfRecordSuffix",
-      oneOfRecordDoc,
-      namespace,
-      false,
-      fields
-    )
-
-    val typeField = new Schema.Field(typeFieldName, Schema.create(Schema.Type.STRING), typeFieldDoc)
-    val oneOfRecordField = new Schema.Field(oneOfFieldName, oneOfRecord, "")
-
     Schema.createRecord(
       name,
       annotations.doc.orNull,
       namespace,
       false,
-      (typeField :: oneOfRecordField :: Nil).asJava
+      fields
     )
   }
 
@@ -339,8 +303,7 @@ object TypeUnions {
             val fieldName = toFieldName(nameExtractor.fullName, schema.getNamespace)
 
             val maybeSubtypeSchema = for {
-              subtype <- Option(schema.getField(typeFieldName))
-              nullableField <- Option(subtype.schema().getField(fieldName))
+              nullableField <- Option(schema.getField(fieldName))
               nullableSchema = nullableField.schema()
               types <- Option.when(nullableSchema.isUnion)(nullableSchema.getTypes)
               found <- types.asScala.find(!_.isNullable)
@@ -361,7 +324,12 @@ object TypeUnions {
     }
 
     def priority(st: Subtype[Typeclass, T]) = new AnnotationExtractors(st.annotations).sortPriority.getOrElse(0.0f)
-    val sortedSubtypes = ctx.subtypes.sortWith((l, r) => priority(l) > priority(r))
+    val sortedSubtypes = ctx
+      .subtypes
+      .filter { st =>
+        findAnnotation[AvroIgnoreSubtype](st.annotations).isEmpty
+      }
+      .sortWith((l, r) => priority(l) > priority(r))
 
     sortedSubtypes.map(st => (st, subtypeSchemaUpdate(st)))
   }
