@@ -171,10 +171,10 @@ lazy val metric = Build
 
 lazy val promRemoteWriter = Build
   .defineProject("prom-remote-writer")
-  .enablePlugins(AkkaGrpcPlugin)
+  .settings(Build.createScalapbSettings(withGrpc = false))
   .settings(
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= akkaStreamDeps ++ akkaSlf4jDeps ++ snappyDeps ++ sttpDeps ++ zioDeps
+    libraryDependencies ++= scalapbRuntimeDeps ++ akkaStreamDeps ++ akkaSlf4jDeps ++ snappyDeps ++ sttpDeps ++ zioDeps
   )
   .dependsOn(util)
 
