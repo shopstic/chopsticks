@@ -7,7 +7,7 @@ import izumi.logstage.api.IzLogger
 import izumi.logstage.api.Log.{CustomContext, LogArg}
 import izumi.logstage.api.rendering.{AnyEncoded, StrictEncoded}
 import zio.clock.Clock
-import zio.{Schedule, UIO, ULayer, URIO, URLayer, ZIO, ZLayer, ZRef}
+import zio.{Schedule, UIO, ULayer, URIO, URLayer, URManaged, ZIO, ZLayer, ZManaged, ZRef}
 
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicReference
@@ -91,6 +91,9 @@ object MetricLogger {
   trait Service {
     def periodicallyCollect[R](collect: URIO[R, ListMap[String, PeriodicValue]])(implicit logCtx: LogCtx): URIO[R, Unit]
   }
+
+  def get: URIO[MetricLogger, Service] = ZIO.access[MetricLogger](_.get)
+  def getManaged: URManaged[MetricLogger, Service] = ZManaged.access[MetricLogger](_.get)
 
   def noop: ULayer[MetricLogger] = {
     ZLayer.succeed {
