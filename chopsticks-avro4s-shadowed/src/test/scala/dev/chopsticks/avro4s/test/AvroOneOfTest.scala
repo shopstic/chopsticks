@@ -41,6 +41,9 @@ object EvolvedOneOfBase {
 
   @AvroNamespace("dev.chopsticks.avro4s.test.OneOfBase")
   final case class Foo(foo: String) extends EvolvedOneOfBase
+
+  @AvroNamespace("dev.chopsticks.avro4s.test.OneOfBase")
+  final case class Baz(baz: Double) extends EvolvedOneOfBase
 }
 
 @AvroOneOf(NestingOneOfBase.Unknown)
@@ -103,7 +106,7 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
         |  "doc" : "Some documentation goes here",
         |  "fields" : [ {
         |    "name" : "OneOfBase_Bar",
-        |    "type" : [ {
+        |    "type" : [ "null", {
         |      "type" : "record",
         |      "name" : "Bar",
         |      "namespace" : "dev.chopsticks.avro4s.test.OneOfBase",
@@ -111,11 +114,12 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
         |        "name" : "bar",
         |        "type" : "int"
         |      } ]
-        |    }, "null" ],
-        |    "doc" : ""
+        |    } ],
+        |    "doc" : "",
+        |    "default" : null
         |  }, {
         |    "name" : "OneOfBase_Foo",
-        |    "type" : [ {
+        |    "type" : [ "null", {
         |      "type" : "record",
         |      "name" : "Foo",
         |      "namespace" : "dev.chopsticks.avro4s.test.OneOfBase",
@@ -123,8 +127,9 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
         |        "name" : "foo",
         |        "type" : "string"
         |      } ]
-        |    }, "null" ],
-        |    "doc" : ""
+        |    } ],
+        |    "doc" : "",
+        |    "default" : null
         |  } ]
         |}""".stripMargin)
 
@@ -142,7 +147,7 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
          |  "namespace" : "dev.chopsticks.avro4s.test",
          |  "fields" : [ {
          |    "name" : "NestingOneOfBase_Nested",
-         |    "type" : [ {
+         |    "type" : [ "null", {
          |      "type" : "record",
          |      "name" : "Nested",
          |      "namespace" : "dev.chopsticks.avro4s.test.NestingOneOfBase",
@@ -155,7 +160,7 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
          |          "doc" : "Some documentation goes here",
          |          "fields" : [ {
          |            "name" : "OneOfBase_Bar",
-         |            "type" : [ {
+         |            "type" : [ "null", {
          |              "type" : "record",
          |              "name" : "Bar",
          |              "namespace" : "dev.chopsticks.avro4s.test.OneOfBase",
@@ -163,11 +168,12 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
          |                "name" : "bar",
          |                "type" : "int"
          |              } ]
-         |            }, "null" ],
-         |            "doc" : ""
+         |            } ],
+         |            "doc" : "",
+         |            "default" : null
          |          }, {
          |            "name" : "OneOfBase_Foo",
-         |            "type" : [ {
+         |            "type" : [ "null", {
          |              "type" : "record",
          |              "name" : "Foo",
          |              "namespace" : "dev.chopsticks.avro4s.test.OneOfBase",
@@ -175,16 +181,18 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
          |                "name" : "foo",
          |                "type" : "string"
          |              } ]
-         |            }, "null" ],
-         |            "doc" : ""
+         |            } ],
+         |            "doc" : "",
+         |            "default" : null
          |          } ]
          |        }
          |      } ]
-         |    }, "null" ],
-         |    "doc" : ""
+         |    } ],
+         |    "doc" : "",
+         |    "default" : null
          |  }, {
          |    "name" : "NestingOneOfBase_Recursive",
-         |    "type" : [ {
+         |    "type" : [ "null", {
          |      "type" : "record",
          |      "name" : "Recursive",
          |      "namespace" : "dev.chopsticks.avro4s.test.NestingOneOfBase",
@@ -192,11 +200,12 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
          |        "name" : "foo",
          |        "type" : "dev.chopsticks.avro4s.test.NestingOneOfBase"
          |      } ]
-         |    }, "null" ],
-         |    "doc" : ""
+         |    } ],
+         |    "doc" : "",
+         |    "default" : null
          |  }, {
          |    "name" : "NestingOneOfBase_SomethingElse",
-         |    "type" : [ {
+         |    "type" : [ "null", {
          |      "type" : "record",
          |      "name" : "SomethingElse",
          |      "namespace" : "dev.chopsticks.avro4s.test.NestingOneOfBase",
@@ -204,8 +213,9 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
          |        "name" : "bar",
          |        "type" : "int"
          |      } ]
-         |    }, "null" ],
-         |    "doc" : ""
+         |    } ],
+         |    "doc" : "",
+         |    "default" : null
          |  } ]
          |}""".stripMargin)
 
@@ -224,6 +234,12 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
       )
       Decoder[EvolvedOneOfBase].decode(Encoder[OneOfBase].encode(OneOfBase.Bar(123))) should equal(
         EvolvedOneOfBase.Unknown
+      )
+    }
+
+    "allow adding new subtype" in {
+      Decoder[OneOfBase].decode(Encoder[EvolvedOneOfBase].encode(EvolvedOneOfBase.Baz(12.3d))) should equal(
+        OneOfBase.Unknown
       )
     }
 

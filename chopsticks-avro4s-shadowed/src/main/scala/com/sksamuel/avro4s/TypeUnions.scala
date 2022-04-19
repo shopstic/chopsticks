@@ -1,10 +1,11 @@
 package com.sksamuel.avro4s
 
+import com.fasterxml.jackson.databind.node.NullNode
 import com.sksamuel.avro4s.SchemaUpdate.{FullSchemaUpdate, NamespaceUpdate, NoUpdate}
 import com.sksamuel.avro4s.TypeUnionEntry._
 import com.sksamuel.avro4s.TypeUnions._
 import magnolia.{SealedTrait, Subtype}
-import org.apache.avro.Schema
+import org.apache.avro.{JsonProperties, Schema}
 import org.apache.avro.generic.{GenericContainer, GenericRecord}
 import org.apache.avro.util.Utf8
 
@@ -191,8 +192,9 @@ object TypeUnions {
     val fields = (nulls.headOption.toSeq.view ++ rest).map { s: Schema =>
       new Schema.Field(
         toFieldName(s.getFullName, namespace),
-        Schema.createUnion(s, Schema.create(Schema.Type.NULL)),
-        ""
+        Schema.createUnion(Schema.create(Schema.Type.NULL), s),
+        "",
+        JsonProperties.NULL_VALUE
       )
     }.toList.asJava
 
