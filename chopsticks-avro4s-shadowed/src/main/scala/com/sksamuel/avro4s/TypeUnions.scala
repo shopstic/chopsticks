@@ -1,6 +1,5 @@
 package com.sksamuel.avro4s
 
-import com.fasterxml.jackson.databind.node.NullNode
 import com.sksamuel.avro4s.SchemaUpdate.{FullSchemaUpdate, NamespaceUpdate, NoUpdate}
 import com.sksamuel.avro4s.TypeUnionEntry._
 import com.sksamuel.avro4s.TypeUnions._
