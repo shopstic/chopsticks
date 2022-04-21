@@ -4,7 +4,7 @@ import "scalapb/scalapb.proto";
 
 package prometheus;
 
-option java_package = "dev.chopsticks.prometheus.writer.proto";
+option java_package = "dev.chopsticks.prom.proto";
 
 option (scalapb.options) = {
   no_default_values_in_constructor: true,

@@ -169,14 +169,19 @@ lazy val metric = Build
   )
   .dependsOn(fp)
 
-lazy val promRemoteWriter = Build
-  .defineProject("prom-remote-writer")
+lazy val alertmanager = Build
+  .defineProject("alertmanager")
+  .settings(
+    libraryDependencies ++= circeDeps ++ enumeratumDeps ++ enumeratumCirceDeps
+  )
+
+lazy val prometheus = Build
+  .defineProject("prometheus")
   .settings(Build.createScalapbSettings(withGrpc = false))
   .settings(
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= scalapbRuntimeDeps ++ akkaStreamDeps ++ akkaSlf4jDeps ++ snappyDeps ++ sttpDeps ++ zioDeps
+    libraryDependencies ++= scalapbRuntimeDeps
   )
-  .dependsOn(util)
 
 lazy val zioGrpcCommon = Build
   .defineProject("zio-grpc-common")
@@ -258,7 +263,8 @@ lazy val root = (project in file("."))
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
     metric,
-    promRemoteWriter,
+    alertmanager,
+    prometheus,
     zioGrpcCommon,
     sample,
     avro4sShadowed,

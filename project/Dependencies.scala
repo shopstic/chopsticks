@@ -139,6 +139,16 @@ object Dependencies {
     "com.beachape" %% "enumeratum" % "1.7.0"
   )
 
+  val enumeratumCirceDeps = Seq(
+    "com.beachape" %% "enumeratum-circe" % "1.7.0"
+  )
+
+  val circeDeps = Seq(
+    "io.circe" %% "circe-core" % "0.14.1",
+    "io.circe" %% "circe-parser" % "0.14.1",
+    "io.circe" %% "circe-generic" % "0.14.1"
+  )
+
   val refinedDeps = Seq(
     "eu.timepit" %% "refined" % REFINED_VERSION,
     "eu.timepit" %% "refined-shapeless" % REFINED_VERSION
