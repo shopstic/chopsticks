@@ -23,9 +23,9 @@ final case class AlertmanagerAlert(
   generatorURL: String,
   fingerprint: String,
   silenceURL: Option[String] = None, // Extended from Grafana only
+  valueString: Option[String] = None, // Extended from Grafana only
   dashboardURL: Option[String] = None, // Extended from Grafana only
-  panelURL: Option[String] = None, // Extended from Grafana only
-  valueString: Option[String] = None // Extended from Grafana only
+  panelURL: Option[String] = None // Extended from Grafana only
 )
 object AlertmanagerAlert {
   implicit val circeDecoder: Decoder[AlertmanagerAlert] = {

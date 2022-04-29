@@ -9,12 +9,14 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext.TaskExtensions
 import dev.chopsticks.stream.ZAkkaGraph._
+import org.reactivestreams.Publisher
 import shapeless.<:!<
-import zio.{IO, NeedsEnv, RIO, Task, URIO, ZIO}
-
+import zio.stream.ZStream
+import zio.{IO, NeedsEnv, Queue, RIO, Task, UIO, URIO, ZIO}
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
+import zio.interop.reactivestreams.Adapters.{createSubscription, demandUnfoldSink}
 
 object ZAkkaSource {
   implicit final class InterruptibleZAkkaSourceOps[-R, +V, +Mat <: KillSwitch](zSource: => ZAkkaSource[
@@ -52,6 +54,27 @@ object ZAkkaSource {
     def toZAkkaSource: UAkkaSource[V, Mat] = {
       new ZAkkaSource(_ => ZIO.succeed(source))
     }
+  }
+
+  implicit class ZStreamToZAkkaSource[R, E <: Throwable, O](stream: ZStream[R, E, O]) {
+    def toZAkkaSource: ZAkkaSource[R, Nothing, O, Future[NotUsed]] = new ZAkkaSource(scope =>
+      ZIO.runtime[R].map { runtime =>
+        Source
+          .lazySource(() => {
+            val publisher: Publisher[O] = subscriber => {
+              runtime.unsafeRunAsync_(scope.fork(for {
+                demand <- Queue.unbounded[Long]
+                _ <- UIO(subscriber.onSubscribe(createSubscription(subscriber, demand, runtime)))
+                _ <- stream
+                  .run(demandUnfoldSink(subscriber, demand))
+                  .catchAll(e => UIO(subscriber.onError(e)))
+              } yield ()))
+            }
+
+            Source.fromPublisher(publisher)
+          })
+      }
+    )
   }
 
   def interruptibleLazySource[R, V](
@@ -129,6 +152,42 @@ object ZAkkaSource {
           }.unsafeRunToFuture
         })
         .flatMapConcat(identity)
+    }
+  }
+
+  def unfoldAsyncWithScope[S, R, O](seed: S)(runTask: (S, ZAkkaScope) => RIO[R, Option[(S, O)]])
+    : ZAkkaSource[R with AkkaEnv, Nothing, O, NotUsed] = {
+    new ZAkkaSource(scope => {
+      for {
+        runtime <- ZIO.runtime[R with AkkaEnv]
+        promise <- zio.Promise.make[Nothing, Unit]
+      } yield {
+        implicit val rt: zio.Runtime[R with AkkaEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+
+        Source
+          .unfoldAsync(seed) { state =>
+            val task = for {
+              fib <- scope.fork(runTask(state, scope))
+              interruptFib <- scope.fork(promise.await *> fib.interrupt)
+              ret <- fib.join
+              _ <- interruptFib.interrupt
+            } yield ret
+
+            task.unsafeRunToFuture
+          }
+          .watchTermination() { (mat, future) =>
+            future.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            mat
+          }
+      }
+    })
+  }
+
+  def unfoldAsync[S, R, O](seed: S)(runTask: S => RIO[R, Option[(S, O)]])
+    : ZAkkaSource[R with AkkaEnv, Nothing, O, NotUsed] = {
+    unfoldAsyncWithScope(seed) { (state, _) =>
+      runTask(state)
     }
   }
 }

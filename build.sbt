@@ -68,7 +68,7 @@ lazy val fp = Build
 lazy val stream = Build
   .defineProject("stream")
   .settings(
-    libraryDependencies ++= catsCoreDeps /* ++ hamstersDeps.map(_ % Test)*/
+    libraryDependencies ++= catsCoreDeps ++ zioInteropReactivestreamsDeps /* ++ hamstersDeps.map(_ % Test)*/
   )
   .dependsOn(fp, testkit % "test->test")
 
