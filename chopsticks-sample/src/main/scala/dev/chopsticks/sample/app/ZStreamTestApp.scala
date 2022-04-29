@@ -45,7 +45,7 @@ object ZStreamTestApp extends ZAkkaApp {
     } yield ret
 
     val app = stream
-      .toZAkkaSource
+      .toZAkkaSource()
       .killSwitch
       .interruptibleRunWith(Sink.foreach { state =>
         println(s"State: $state")

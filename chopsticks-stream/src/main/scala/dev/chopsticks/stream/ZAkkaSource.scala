@@ -9,14 +9,17 @@ import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext.TaskExtensions
 import dev.chopsticks.stream.ZAkkaGraph._
+import eu.timepit.refined.types.numeric.PosInt
 import org.reactivestreams.Publisher
 import shapeless.<:!<
 import zio.stream.ZStream
 import zio.{IO, NeedsEnv, Queue, RIO, Task, UIO, URIO, ZIO}
+
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 import zio.interop.reactivestreams.Adapters.{createSubscription, demandUnfoldSink}
+import eu.timepit.refined.auto._
 
 object ZAkkaSource {
   implicit final class InterruptibleZAkkaSourceOps[-R, +V, +Mat <: KillSwitch](zSource: => ZAkkaSource[
@@ -57,7 +60,7 @@ object ZAkkaSource {
   }
 
   implicit class ZStreamToZAkkaSource[R, E <: Throwable, O](stream: ZStream[R, E, O]) {
-    def toZAkkaSource: ZAkkaSource[R, Nothing, O, Future[NotUsed]] = new ZAkkaSource(scope =>
+    def toZAkkaSource(bufferSize: PosInt = 1): ZAkkaSource[R, Nothing, O, Future[NotUsed]] = new ZAkkaSource(scope =>
       ZIO.runtime[R].map { runtime =>
         Source
           .lazySource(() => {
@@ -71,7 +74,9 @@ object ZAkkaSource {
               } yield ()))
             }
 
-            Source.fromPublisher(publisher)
+            Source
+              .fromPublisher(publisher)
+              .addAttributes(Attributes.inputBuffer(bufferSize.value, bufferSize.value))
           })
       }
     )
