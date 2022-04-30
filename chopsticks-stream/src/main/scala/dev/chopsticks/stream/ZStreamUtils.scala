@@ -15,7 +15,7 @@ object ZStreamUtils {
   def retry[R, E, V](
     effect: ZIO[R, E, V],
     retrySchedule: Schedule[Clock, Any, Duration]
-  ): ZStream[Clock with R, E, Either[FailedAttempt[E], V]] = {
+  ): ZStream[Clock with R, Nothing, Either[FailedAttempt[E], V]] = {
     val schedule: Schedule[Clock, E, ((Duration, Long), Duration)] =
       Schedule.elapsed && Schedule.count && retrySchedule
 
