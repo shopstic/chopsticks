@@ -259,6 +259,30 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
     })
   }
 
+  def foldAsync[R1 <: R, Next](zero: Next)(runTask: (Next, Out) => RIO[R1, Next])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].foldAsync(zero)(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
+  }
+
+  def foldAsyncWithScope[R1 <: R, Next](zero: Next)(runTask: (Next, Out, ZAkkaScope) => RIO[R1, Next])
+    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    new ZAkkaSource(scope => {
+      for {
+        source <- make(scope)
+        flow <- ZAkkaFlow[Out].foldAsyncWithScope(zero)(runTask).make(scope)
+      } yield {
+        source.via(flow)
+      }
+    })
+  }
+
   def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
     : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {

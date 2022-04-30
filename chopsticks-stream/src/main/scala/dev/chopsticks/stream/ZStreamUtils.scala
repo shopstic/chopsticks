@@ -29,8 +29,8 @@ object ZStreamUtils {
               .retry(schedule.tapInput((e: E) => leftQueue.offer(Left(e))).onDecision {
                 case Decision.Done(((elapsed, count), nextDelay)) =>
                   rightQueue.offer(Left(RetryState(nextDelay, count, elapsed, willContinue = false)))
-                case Decision.Continue(((elapsed, count), lastDuration), _, _) =>
-                  rightQueue.offer(Left(RetryState(lastDuration, count, elapsed, willContinue = true)))
+                case Decision.Continue(((elapsed, count), nextDelay), _, _) =>
+                  rightQueue.offer(Left(RetryState(nextDelay, count, elapsed, willContinue = true)))
               })
               .either
               .flatMap {
@@ -40,22 +40,24 @@ object ZStreamUtils {
                     .as(Chunk.empty)
               }
           )
-          .merge(ZStream
-            .fromQueue(leftQueue)
-            .zip(ZStream.fromQueue(rightQueue))
-            .map {
-              case (Left(error), Left(retryState)) =>
-                Chunk.single(Left(FailedAttempt(
-                  error = error,
-                  state = retryState
-                )))
+          .merge(
+            ZStream
+              .fromQueue(leftQueue)
+              .zip(ZStream.fromQueue(rightQueue))
+              .map {
+                case (Left(error), Left(retryState)) =>
+                  Chunk.single(Left(FailedAttempt(
+                    error = error,
+                    state = retryState
+                  )))
 
-              case (Right(v), Right(_)) =>
-                Chunk.single(Right(v))
+                case (Right(v), Right(_)) =>
+                  Chunk.single(Right(v))
 
-              case _ =>
-                Chunk.empty
-            })
+                case _ =>
+                  Chunk.empty
+              }
+          )
           .mapConcatChunk(identity)
           .takeUntil {
             case Left(failure) => !failure.state.willContinue

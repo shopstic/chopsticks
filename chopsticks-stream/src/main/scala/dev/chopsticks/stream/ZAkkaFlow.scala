@@ -68,6 +68,36 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
     })
   }
 
+  private def foldAsync_[R1 <: R, S](zero: S)(runTask: (S, Out, ZAkkaScope) => RIO[R1, S])
+    : ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+    new ZAkkaFlow(scope => {
+      for {
+        flow <- make(scope)
+        runtime <- ZIO.runtime[R1 with AkkaEnv]
+        promise <- zio.Promise.make[Nothing, Unit]
+      } yield {
+        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+
+        flow
+          .foldAsync(zero) { (state, item) =>
+            val task = for {
+              fib <- scope.fork(runTask(state, item, scope))
+              interruptFib <- scope.fork(promise.await *> fib.interrupt)
+              ret <- fib.join
+              _ <- interruptFib.interrupt
+            } yield ret
+
+            task.unsafeRunToFuture
+          }
+          .watchTermination() { (mat, future) =>
+            future.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            mat
+          }
+      }
+    })
+  }
+
   private def scanAsync_[R1 <: R, S](zero: S)(runTask: (S, Out, ZAkkaScope) => RIO[R1, S])
     : ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
     new ZAkkaFlow(scope => {
@@ -105,6 +135,15 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   def scanAsyncWithScope[R1 <: R, S](zero: S)(runTask: (S, Out, ZAkkaScope) => RIO[R1, S])
     : ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
     scanAsync_(zero)((state, item, scope) => runTask(state, item, scope))
+  }
+
+  def foldAsync[R1 <: R, S](zero: S)(runTask: (S, Out) => RIO[R1, S]): ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+    foldAsync_(zero)((state, item, _) => runTask(state, item))
+  }
+
+  def foldAsyncWithScope[R1 <: R, S](zero: S)(runTask: (S, Out, ZAkkaScope) => RIO[R1, S])
+    : ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+    foldAsync_(zero)((state, item, scope) => runTask(state, item, scope))
   }
 
   def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
