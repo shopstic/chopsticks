@@ -205,8 +205,8 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "4.0.12",
-    "com.sksamuel.avro4s" %% "avro4s-refined" % "4.0.12"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "4.0.13",
+    "com.sksamuel.avro4s" %% "avro4s-refined" % "4.0.13"
   )
 
   val avro4sDirectDeps = {
