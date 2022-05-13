@@ -197,7 +197,7 @@ lazy val sample = Build
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
     dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= janinoDeps ++ pprintDeps ++ zioMagicDeps,
+    libraryDependencies ++= janinoDeps ++ pprintDeps ++ zioMagicDeps ++ zioCacheDeps,
     publish / skip := true,
     akkaGrpcCodeGeneratorSettings += "server_power_apis",
     scalacOptions ++= Seq(

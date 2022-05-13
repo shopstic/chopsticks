@@ -190,7 +190,7 @@ object FdbDatabase {
     rootDirectoryPath: String,
     datacenterId: Option[String] = None,
     stopNetworkOnClose: Boolean = true,
-    apiVersion: Int = 620,
+    apiVersion: Int = 630,
     initialConnectionTimeout: Timeout = Timeout(5.seconds),
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
@@ -234,6 +234,16 @@ object FdbDatabase {
     }
   }
 
+  private lazy val _fdb = {
+    val fdb = FDB.selectAPIVersion(630)
+    fdb.options().setClientThreadsPerVersion(2)
+//    fdb.options().setExternalClientDirectory("/temp");
+    fdb.options().setTraceEnable("delete-me")
+    fdb.options.setKnob("min_trace_severity=1")
+    fdb.disableShutdownHook()
+    fdb
+  }
+
   def fromConfig(
     config: FdbDatabaseConfig
   ): RManaged[Blocking with IzLogging with Clock with KvdbIoThreadPool, Database] = {
@@ -259,9 +269,7 @@ object FdbDatabase {
       }
       db <- Managed.make {
         effectBlocking {
-          val fdb = FDB.selectAPIVersion(config.apiVersion)
-          fdb.disableShutdownHook()
-
+          val fdb = _fdb
           val db = clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path.toString, executor))
           config.datacenterId.foreach(dcid => db.options().setDatacenterId(dcid))
           db

@@ -7,7 +7,7 @@ object Dependencies {
   val AKKA_HTTP_VERSION = "10.2.1"
   val ZIO_VERSION = "1.0.14"
   val IZUMI_VERSION = "1.0.10"
-  val REFINED_VERSION = "0.9.28"
+  val REFINED_VERSION = "0.9.29"
   val CALIBAN_VERSION = "1.3.3"
   val STTP_VERSION = "3.5.1"
 
@@ -40,7 +40,7 @@ object Dependencies {
   )
 
   lazy val zioInteropReactivestreamsDeps = Seq(
-    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.10"
+    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.12"
   )
 
   val zioTestDeps = Seq(
@@ -51,7 +51,7 @@ object Dependencies {
   )
 
   val zioMagicDeps = Seq(
-    "io.github.kitlangton" %% "zio-magic" % "0.3.11"
+    "io.github.kitlangton" %% "zio-magic" % "0.3.12"
   )
 
   val squantsDeps = Seq(
@@ -92,7 +92,7 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.1.6"
+    "org.codehaus.janino" % "janino" % "3.1.7"
   )
 
   val scalatestDeps = Seq(
@@ -108,7 +108,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "7.0.4"
+    "org.rocksdb" % "rocksdbjni" % "7.1.2"
   )
 
   val lmdbDeps = Seq(
@@ -116,7 +116,7 @@ object Dependencies {
   )
 
   val fdbDeps = Seq(
-    "org.foundationdb" % "fdb-java" % "6.3.23"
+    "org.foundationdb" % "fdb-java" % "6.3.24"
   )
 
   val shapelessDeps = Seq(
@@ -167,7 +167,7 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "4.0.0"
+    "com.github.japgolly.microlibs" %% "utils" % "4.1.0"
   )
 
   val berkeleyDbDeps = Seq(
@@ -205,22 +205,20 @@ object Dependencies {
   )
 
   val avro4sDeps = Seq(
-    "com.sksamuel.avro4s" %% "avro4s-core" % "4.0.12",
-    "com.sksamuel.avro4s" %% "avro4s-refined" % "4.0.12"
+    "com.sksamuel.avro4s" %% "avro4s-core" % "4.0.13",
+    "com.sksamuel.avro4s" %% "avro4s-refined" % "4.0.13"
   )
 
   val avro4sDirectDeps = {
     val Json4sVersion = "3.6.11"
-    val RefinedVersion = "0.9.26"
-    val ShapelessVersion = "2.3.7"
-    val MagnoliaVersion = "0.17.0"
 
     // https://github.com/sksamuel/avro4s/blob/release/4.0.x/build.sbt
-    Seq(
-      "com.propensive" %% "magnolia" % MagnoliaVersion,
-      "com.chuusai" %% "shapeless" % ShapelessVersion,
-      "org.json4s" %% "json4s-native" % Json4sVersion,
-      "eu.timepit" %% "refined" % RefinedVersion
+    magnoliaDeps ++ refinedDeps ++ shapelessDeps ++ Seq(
+      "org.json4s" %% "json4s-native" % Json4sVersion
     )
   }
+
+  val zioCacheDeps = Seq(
+    "dev.zio" %% "zio-cache" % "0.1.1"
+  )
 }
