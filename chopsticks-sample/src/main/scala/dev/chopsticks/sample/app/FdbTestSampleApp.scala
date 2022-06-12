@@ -127,7 +127,7 @@ object FdbTestSampleApp extends ZAkkaApp {
       .interruptibleRunIgnore()
       .log("Range populate foo")
 
-    _ <- Source(1 to 100000)
+    _ <- Source(1 to 10000)
       .toZAkkaSource
       .viaZAkkaFlow(dbApi.batchTransact(batch => {
         val pairs = batch.zipWithIndex.map {
@@ -142,7 +142,7 @@ object FdbTestSampleApp extends ZAkkaApp {
       .log("Range populate bar")
 
     _ <- testKeyspace
-      .source(_ startsWith "bar", _ ltEq "bar" -> 50000)
+      .source(_ startsWith "bar", _ ltEq "bar" -> 5000)
       .toZAkkaSource
       .killSwitch
       .interruptibleRunWith(Sink.fold(0)((s, _) => s + 1))
@@ -153,7 +153,7 @@ object FdbTestSampleApp extends ZAkkaApp {
       .getKeyTask(_ lastStartsWith "bar")
       .logResult("Get last test key", _.toString)
 
-    _ <- Source((lastKey.map(_.bar).getOrElse(100000) + 1) to Int.MaxValue)
+    _ <- Source((lastKey.map(_.bar).getOrElse(10000) + 1) to Int.MaxValue)
       .throttle(1, 1.second)
       .toZAkkaSource
       .killSwitch
@@ -186,7 +186,7 @@ object FdbTestSampleApp extends ZAkkaApp {
       .log("Check versionstamp uniqueness")
 
     _ <- testKeyspace
-      .tailSource(_ gt "bar" -> 100000, _ startsWith "bar")
+      .tailSource(_ gt "bar" -> 10000, _ startsWith "bar")
       .toZAkkaSource
       .killSwitch
       .interruptibleRunWith(Sink.foreach {
