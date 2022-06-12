@@ -190,7 +190,7 @@ object FdbDatabase {
     rootDirectoryPath: String,
     datacenterId: Option[String] = None,
     stopNetworkOnClose: Boolean = true,
-    apiVersion: Int = 620,
+    apiVersion: Int = 710,
     initialConnectionTimeout: Timeout = Timeout(5.seconds),
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
