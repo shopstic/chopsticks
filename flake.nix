@@ -5,7 +5,7 @@
     hotPot.url = "github:shopstic/nix-hot-pot";
     nixpkgs.follows = "hotPot/nixpkgs";
     flakeUtils.follows = "hotPot/flakeUtils";
-    fdb.url = "github:shopstic/nix-fdb/7.1.9";
+    fdb.url = "github:shopstic/nix-fdb/7.1.11";
   };
 
   outputs = { self, nixpkgs, flakeUtils, hotPot, fdb }:
@@ -30,7 +30,11 @@
           jdkArgs = [
             "--set DYLD_LIBRARY_PATH ${fdbLib}"
             "--set LD_LIBRARY_PATH ${fdbLib}"
-            "--set JDK_JAVA_OPTIONS -DFDB_LIBRARY_PATH_FDB_JAVA=${fdbLib}/libfdb_java.${if pkgs.stdenv.isDarwin then "jnilib" else "so"}"
+            "--set FDB_NETWORK_OPTION_EXTERNAL_CLIENT_DIRECTORY ${fdbLib}"
+#            "--set FDB_NETWORK_OPTION_CLIENT_THREADS_PER_VERSION 3"
+#            "--set FDB_NETWORK_OPTION_TRACE_FORMAT json"
+#            "--set FDB_NETWORK_OPTION_TRACE_ENABLE /Users/nktpro/Downloads/fdb7"
+            ''--set JDK_JAVA_OPTIONS "-DFDB_LIBRARY_PATH_FDB_JAVA=${fdbLib}/libfdb_java.${if pkgs.stdenv.isDarwin then "jnilib" else "so"}"''
           ];
           jdk = pkgs.callPackage hotPot.lib.wrapJdk {
             jdk = pkgs.jdk11;
