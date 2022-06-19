@@ -39,6 +39,7 @@ import java.util
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
+import scala.collection.immutable.ArraySeq
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
 import scala.jdk.CollectionConverters._
@@ -234,6 +235,12 @@ object FdbDatabase {
     }
   }
 
+  private lazy val fdb: FDB = {
+    val db = FDB.selectAPIVersion(710)
+    db.disableShutdownHook()
+    db
+  }
+
   def fromConfig(
     config: FdbDatabaseConfig
   ): RManaged[Blocking with IzLogging with Clock with KvdbIoThreadPool, Database] = {
@@ -258,15 +265,25 @@ object FdbDatabase {
           ZManaged.succeed(None)
       }
       db <- Managed.make {
-        effectBlocking {
-          val fdb = FDB.selectAPIVersion(config.apiVersion)
-          fdb.disableShutdownHook()
+        ZIO.effectSuspend {
+          val clientThreadCount =
+            math.max(1, sys.env.getOrElse("FDB_NETWORK_OPTION_CLIENT_THREADS_PER_VERSION", "1").toInt)
 
-          val db = clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path.toString, executor))
-          config.datacenterId.foreach(dcid => db.options().setDatacenterId(dcid))
-          db
-        }.orDie
-          .log("Open FDB database")
+          effectBlocking {
+            val pool = ArraySeq.tabulate(clientThreadCount)(_ =>
+              clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path.toString, executor))
+            )
+
+            val db =
+              if (clientThreadCount == 1) pool.head
+              else new FdbPooledDatabase(pool)
+
+            config.datacenterId.foreach(dcid => db.options().setDatacenterId(dcid))
+
+            db
+          }.orDie
+            .log(s"Open FDB database client_thread_count=$clientThreadCount")
+        }
       } { db =>
         effectBlocking {
           db.close()
