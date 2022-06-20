@@ -269,6 +269,7 @@ lazy val root = (project in file("."))
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
     metric,
+    openApi,
     alertmanager,
     prometheus,
     zioGrpcCommon,
