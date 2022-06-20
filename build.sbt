@@ -241,6 +241,12 @@ lazy val avro4s = Build
     Compile / packageBin := (avro4sShadowed / assembly).value
   )
 
+lazy val openApi = Build
+  .defineProject("open-api")
+  .settings(
+    libraryDependencies ++= tapirDeps ++ zioSchemaDeps
+  )
+
 lazy val root = (project in file("."))
   .settings(
     name := "chopsticks",
