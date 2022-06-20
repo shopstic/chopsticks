@@ -223,4 +223,28 @@ object Dependencies {
       "eu.timepit" %% "refined" % RefinedVersion
     )
   }
+
+  lazy val tapirDeps = {
+    val tapirVersion = "0.19.4"
+    Seq(
+      "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-json-zio" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-cats" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-enumeratum" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-openapi-circe-yaml" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-refined" % tapirVersion
+    )
+  }
+
+  lazy val zioSchemaDeps = {
+    val zioSchemaOrganization = "dev.chopsticks"
+    val zioSchemaVersion = "0.1.11"
+    Seq(
+      zioSchemaOrganization %% "zio-schema" % zioSchemaVersion,
+      zioSchemaOrganization %% "zio-schema-json" % zioSchemaVersion,
+      zioSchemaOrganization %% "zio-schema-derivation" % zioSchemaVersion
+    )
+  }
 }
