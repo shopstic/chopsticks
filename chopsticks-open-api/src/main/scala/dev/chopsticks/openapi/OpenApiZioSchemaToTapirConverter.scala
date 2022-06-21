@@ -152,7 +152,6 @@ object OpenApiZioSchemaToTapirConverter {
   }
 
   private def convertCaseClass[A](annotations: Chunk[Any], fields: (ZioSchema.Field[_], A => Any)*): TapirSchema[A] = {
-    val typedAnnotations = extractAnnotations(annotations)
     val tapirFields: List[SchemaType.SProductField[A]] = fields.iterator
       .map { case (field, getField) =>
         val schema = addAnnotations(
@@ -166,8 +165,10 @@ object OpenApiZioSchemaToTapirConverter {
         )
       }
       .toList
-    val schemaName = typedAnnotations.entityName.map(name => TapirSchema.SName(name))
-    TapirSchema(SchemaType.SProduct[A](tapirFields), name = schemaName, description = typedAnnotations.description)
+    addAnnotations(
+      TapirSchema(SchemaType.SProduct[A](tapirFields)),
+      extractAnnotations(annotations)
+    )
   }
 
   private def addAnnotations[A](
