@@ -1,9 +1,5 @@
 package dev.chopsticks.openapi
 
-import cats.data.NonEmptyList
-import eu.timepit.refined.types.all.NonNegInt
-import eu.timepit.refined.types.numeric.PosInt
-import eu.timepit.refined.types.string.NonEmptyString
 import sttp.tapir.Validator
 import zio.schema.Schema
 import zio.schema.internal.SourceLocation
@@ -35,25 +31,10 @@ object OpenApiZioSchemas {
     def nonEmptyCollectionValidator[A, C[_] <: Iterable[_]]: Validator[C[A]] = Validator.minSize(1)
   }
 
-  implicit val nonEmptyStringSchema: Schema[NonEmptyString] =
-    Schema[String]
-      .validate(Validators.nonEmptyStringValidator)
-      .transformWithoutAnnotations[NonEmptyString](NonEmptyString.unsafeFrom, _.value)
-
-  implicit val posIntSchema: Schema[PosInt] =
-    Schema[Int]
-      .validate(Validators.posIntValidator)
-      .transformWithoutAnnotations[PosInt](PosInt.unsafeFrom, _.value)
-
-  implicit val nonNegIntSchema: Schema[NonNegInt] =
-    Schema[Int]
-      .validate(Validators.nonNegIntValidator)
-      .transformWithoutAnnotations[NonNegInt](NonNegInt.unsafeFrom, _.value)
-
   implicit val instantTypeSchema: InstantType = InstantType(DateTimeFormatter.ISO_INSTANT)
 
-  implicit def nonEmptyListSchema[A: Schema]: Schema[NonEmptyList[A]] =
+  implicit def nonEmptyListSchema[A: Schema]: Schema[OpenApiNonEmptyList[A]] =
     Schema[List[A]]
       .validate(Validators.nonEmptyCollectionValidator)
-      .transformWithoutAnnotations(NonEmptyList.fromListUnsafe, _.toList)
+      .transformWithoutAnnotations(OpenApiNonEmptyList(_), _.value)
 }
