@@ -1,19 +1,12 @@
 package dev.chopsticks.openapi
 
-import dev.chopsticks.openapi.OpenApiAnnotations.entityName
-import sttp.tapir.{FieldName, Schema => TapirSchema, SchemaType, Validator}
-import sttp.tapir.Schema.annotations.{description, validate}
+import dev.chopsticks.openapi.OpenApiParsedAnnotations.extractAnnotations
+import sttp.tapir.{FieldName, Schema => TapirSchema, SchemaType}
 import sttp.tapir.SchemaType.SOption
 import zio.schema.{Schema => ZioSchema, StandardType}
 import zio.Chunk
 
 object OpenApiZioSchemaToTapirConverter {
-  final private case class OpenApiParsedAnnotations[A](
-    entityName: Option[String] = None,
-    description: Option[String] = None,
-    validator: Option[Validator[A]] = None
-  )
-
   def convert[A](zioSchema: ZioSchema[A]): TapirSchema[A] = {
     //scalafmt: { maxColumn = 400, optIn.configStyleArguments = false }
     zioSchema match {
@@ -188,17 +181,6 @@ object OpenApiZioSchemaToTapirConverter {
     result
   }
 
-  private def extractAnnotations[A](annotations: Chunk[Any]): OpenApiParsedAnnotations[A] = {
-    annotations.foldLeft(OpenApiParsedAnnotations[A]()) { case (typed, annotation) =>
-      annotation match {
-        case a: entityName => typed.copy(entityName = Some(a.name))
-        case a: description => typed.copy(description = Some(a.text))
-        case a: validate[A @unchecked] => typed.copy(validator = Some(a.v))
-        case _ => typed
-      }
-    }
-  }
-
   private def primitiveConverter[A](standardType: StandardType[A], annotations: Chunk[Any]): TapirSchema[A] = {
     val schemaType: SchemaType[A] = standardType match {
       case StandardType.UnitType => SchemaType.SString()
@@ -211,8 +193,8 @@ object OpenApiZioSchemaToTapirConverter {
       case StandardType.DoubleType => SchemaType.SNumber()
       case StandardType.BinaryType => SchemaType.SBinary()
       case StandardType.CharType => SchemaType.SString()
-      case StandardType.BigIntegerType => SchemaType.SString()
-      case StandardType.BigDecimalType => SchemaType.SString()
+      case StandardType.BigIntegerType => SchemaType.SNumber()
+      case StandardType.BigDecimalType => SchemaType.SNumber()
       case StandardType.UUIDType => SchemaType.SString()
       case StandardType.DayOfWeekType => SchemaType.SInteger()
       case StandardType.DurationType => SchemaType.SString()

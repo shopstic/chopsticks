@@ -1,5 +1,9 @@
 package dev.chopsticks.openapi
 
+import cats.data.NonEmptyList
+import eu.timepit.refined.types.all.NonNegInt
+import eu.timepit.refined.types.numeric.PosInt
+import eu.timepit.refined.types.string.NonEmptyString
 import sttp.tapir.Validator
 import zio.schema.Schema
 import zio.schema.internal.SourceLocation
@@ -19,8 +23,11 @@ object OpenApiZioSchemas {
     def description(description: String): Schema[A] = {
       schema.annotate(new sttp.tapir.Schema.annotations.description(description))
     }
-    def transformWithoutAnnotations[B](f: A => B, g: B => A)(implicit loc: SourceLocation): Schema[B] =
+    def mapBoth[B](f: A => B, g: B => A)(implicit loc: SourceLocation): Schema[B] =
       Schema.Transform[A, B, SourceLocation](schema, a => Right(f(a)), b => Right(g(b)), Chunk.empty, loc)
+    def transformWithoutAnnotations[B](f: A => Either[String, B], g: B => A)(implicit loc: SourceLocation): Schema[B] =
+      Schema.Transform[A, B, SourceLocation](schema, a => f(a), b => Right(g(b)), Chunk.empty, loc)
+
   }
 
   object Validators {
@@ -31,10 +38,33 @@ object OpenApiZioSchemas {
     def nonEmptyCollectionValidator[A, C[_] <: Iterable[_]]: Validator[C[A]] = Validator.minSize(1)
   }
 
+  implicit val nonEmptyStringSchema: Schema[NonEmptyString] =
+    Schema[String]
+      .validate(Validators.nonEmptyStringValidator)
+      .transformWithoutAnnotations[NonEmptyString](NonEmptyString.from, _.value)
+
+  implicit val posIntSchema: Schema[PosInt] =
+    Schema[Int]
+      .validate(Validators.posIntValidator)
+      .transformWithoutAnnotations[PosInt](PosInt.from, _.value)
+
+  implicit val nonNegIntSchema: Schema[NonNegInt] =
+    Schema[Int]
+      .validate(Validators.nonNegIntValidator)
+      .transformWithoutAnnotations[NonNegInt](NonNegInt.from, _.value)
+
   implicit val instantTypeSchema: InstantType = InstantType(DateTimeFormatter.ISO_INSTANT)
 
-  implicit def nonEmptyListSchema[A: Schema]: Schema[OpenApiNonEmptyList[A]] =
+  implicit def nonEmptyListSchema[A: Schema]: Schema[NonEmptyList[A]] =
     Schema[List[A]]
       .validate(Validators.nonEmptyCollectionValidator)
-      .transformWithoutAnnotations(OpenApiNonEmptyList(_), _.value)
+      .transformWithoutAnnotations(
+        xs => {
+          NonEmptyList.fromList(xs) match {
+            case Some(v) => Right(v)
+            case None => Left("Provided array should have at least one element")
+          }
+        },
+        _.toList
+      )
 }
