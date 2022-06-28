@@ -3,8 +3,10 @@ package dev.chopsticks.openapi
 import dev.chopsticks.openapi.OpenApiParsedAnnotations.extractAnnotations
 import sttp.tapir.{FieldName, Schema => TapirSchema, SchemaType}
 import sttp.tapir.SchemaType.SOption
-import zio.schema.{Schema => ZioSchema, StandardType}
+import zio.schema.{FieldSet, Schema => ZioSchema, StandardType}
 import zio.Chunk
+
+import scala.collection.immutable.ListMap
 
 object OpenApiZioSchemaToTapirConverter {
   def convert[A](zioSchema: ZioSchema[A]): TapirSchema[A] = {
@@ -59,8 +61,8 @@ object OpenApiZioSchemaToTapirConverter {
       case ZioSchema.Fail(_, _) =>
         ???
 
-      case ZioSchema.GenericRecord(_, _) =>
-        ???
+      case ZioSchema.GenericRecord(fieldSet, annotations) =>
+        convertGenericRecord(fieldSet, annotations)
 
       case either @ ZioSchema.EitherSchema(_, _, _) =>
         convert(either.toEnum).as[A]
@@ -142,6 +144,26 @@ object OpenApiZioSchemaToTapirConverter {
         ???
     }
     //scalafmt: { maxColumn = 120, optIn.configStyleArguments = true }
+  }
+
+  private def convertGenericRecord(fieldSet: FieldSet, annotations: Chunk[Any]): TapirSchema[ListMap[String, _]] = {
+    val tapirFields = fieldSet.toChunk.iterator
+      .map { field =>
+        val schema = addAnnotations(
+          convert(field.schema).asInstanceOf[TapirSchema[Any]],
+          extractAnnotations(field.annotations)
+        )
+        SchemaType.SProductField(
+          _name = FieldName(field.label, field.label),
+          _schema = schema,
+          _get = (a: ListMap[String, _]) => Some(a(field.label))
+        )
+      }
+      .toList
+    addAnnotations(
+      TapirSchema(SchemaType.SProduct[ListMap[String, _]](tapirFields)),
+      extractAnnotations(annotations)
+    )
   }
 
   private def convertCaseClass[A](annotations: Chunk[Any], fields: (ZioSchema.Field[_], A => Any)*): TapirSchema[A] = {

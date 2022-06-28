@@ -1,9 +1,12 @@
 package dev.chopsticks.openapi
 
+import cats.data.{NonEmptyList, Validated}
 import dev.chopsticks.openapi.OpenApiParsedAnnotations.extractAnnotations
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, DecodingFailure, Encoder, HCursor, JsonObject}
+import io.circe.Decoder.{AccumulatingResult, Result}
+import io.circe.Encoder.AsObject
 import sttp.tapir.{ValidationError, Validator}
-import zio.schema.{Schema => ZioSchema, StandardType}
+import zio.schema.{FieldSet, Schema => ZioSchema, StandardType}
 import zio.Chunk
 
 import java.math.BigInteger
@@ -23,6 +26,9 @@ import java.time.{
 }
 import java.util.UUID
 import scala.annotation.nowarn
+import scala.collection.immutable.ListMap
+import scala.collection.mutable.ListBuffer
+import scala.language.existentials
 
 object OpenApiZioSchemaCirceConverter {
   object Decoder {
@@ -64,8 +70,8 @@ object OpenApiZioSchemaCirceConverter {
         case ZioSchema.Fail(_, _) =>
           ???
 
-        case ZioSchema.GenericRecord(_, _) =>
-          ???
+        case ZioSchema.GenericRecord(fieldSet, annotations) =>
+          genericRecordConverter(fieldSet, annotations)
 
         case either @ ZioSchema.EitherSchema(_, _, _) =>
           convert(either.toEnum).asInstanceOf[Decoder[A]]
@@ -424,6 +430,56 @@ object OpenApiZioSchemaCirceConverter {
       //scalafmt: { maxColumn = 120, optIn.configStyleArguments = true }
     }
 
+    private def genericRecordConverter(fieldSet: FieldSet, annotations: Chunk[Any]): Decoder[ListMap[String, _]] = {
+      val fieldDecoders = fieldSet.toChunk.iterator
+        .map { field =>
+          val fieldDecoder = addAnnotations(convert(field.schema), extractAnnotations(field.annotations))
+          field.label -> fieldDecoder
+        }
+        .toMap
+      val baseDecoder = new Decoder[ListMap[String, _]] {
+        override def apply(c: HCursor): Result[ListMap[String, _]] = {
+          decodeWithCursor(c, accumulate = false) match {
+            case Left(errors) => Left(errors.head)
+            case Right(value) => Right(value)
+          }
+        }
+        override def decodeAccumulating(c: HCursor): AccumulatingResult[ListMap[String, _]] = {
+          decodeWithCursor(c, accumulate = true) match {
+            case Left(errors) => Validated.Invalid(NonEmptyList.fromListUnsafe(errors))
+            case Right(value) => Validated.Valid(value)
+          }
+        }
+
+        private def decodeWithCursor(
+          c: HCursor,
+          accumulate: Boolean
+        ): Either[List[DecodingFailure], ListMap[String, _]] = {
+          val iter = fieldDecoders.iterator
+          val errors = ListBuffer.empty[DecodingFailure]
+          val builder = ListMap.newBuilder[String, Any]
+          while (iter.hasNext && (errors.isEmpty || accumulate)) {
+            val (key, decoder) = iter.next()
+            if (accumulate) {
+              decoder.tryDecodeAccumulating(c.downField(key)) match {
+                case Validated.Invalid(failures) => val _ = errors.addAll(failures.iterator)
+                case Validated.Valid(value) => val _ = builder.addOne(key -> value)
+              }
+            }
+            else {
+              decoder.tryDecode(c.downField(key)) match {
+                case Left(failure) => val _ = errors.addOne(failure)
+                case Right(value) => val _ = builder.addOne(key -> value)
+              }
+            }
+          }
+          if (errors.isEmpty) Right(builder.result())
+          else Left(errors.toList)
+        }
+      }
+      addAnnotations(baseDecoder, extractAnnotations(annotations))
+    }
+
     private def primitiveConverter[A](standardType: StandardType[A], annotations: Chunk[Any]): Decoder[A] = {
       val baseDecoder = standardType match {
         case StandardType.UnitType => io.circe.Decoder[Unit]
@@ -555,8 +611,20 @@ object OpenApiZioSchemaCirceConverter {
         case ZioSchema.Fail(_, _) =>
           ???
 
-        case ZioSchema.GenericRecord(_, _) =>
-          ???
+        case ZioSchema.GenericRecord(fieldSet, annotations) =>
+          val fieldEncoders = fieldSet.toChunk
+            .map { field =>
+              addAnnotations(convert(field.schema), extractAnnotations(field.annotations))
+            }
+          val baseEncoder = new AsObject[ListMap[String, _]] {
+            override def encodeObject(a: ListMap[String, _]): JsonObject = {
+              val record = a.iterator.zip(fieldEncoders.iterator)
+                .map { case ((k, v), encoder) => (k, encoder.asInstanceOf[Encoder[Any]](v.asInstanceOf[Any])) }
+                .toVector
+              JsonObject.fromIterable(record)
+            }
+          }
+          addAnnotations(baseEncoder, extractAnnotations(annotations))
 
         case either @ ZioSchema.EitherSchema(_, _, _) =>
           convert(either.toEnum).asInstanceOf[Encoder[A]]
