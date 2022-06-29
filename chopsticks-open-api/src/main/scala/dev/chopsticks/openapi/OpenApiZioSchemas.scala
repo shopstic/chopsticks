@@ -18,13 +18,13 @@ object OpenApiZioSchemas {
       schema.annotate(OpenApiAnnotations.entityName(name))
     }
     def validate(validator: Validator[A]): Schema[A] = {
-      schema.annotate(new sttp.tapir.Schema.annotations.validate[A](validator))
+      schema.annotate(OpenApiAnnotations.validate[A](validator))
     }
     def description(description: String): Schema[A] = {
-      schema.annotate(new sttp.tapir.Schema.annotations.description(description))
+      schema.annotate(OpenApiAnnotations.description(description))
     }
-    def default(value: A): Schema[A] = {
-      schema.annotate(new sttp.tapir.Schema.annotations.default(value))
+    def default(value: A, encodedValue: Option[Any] = None): Schema[A] = {
+      schema.annotate(OpenApiAnnotations.default(value, encodedValue))
     }
     def mapBoth[B](f: A => B, g: B => A)(implicit loc: SourceLocation): Schema[B] =
       Schema.Transform[A, B, SourceLocation](schema, a => Right(f(a)), b => Right(g(b)), Chunk.empty, loc)
