@@ -23,6 +23,9 @@ object OpenApiZioSchemas {
     def description(description: String): Schema[A] = {
       schema.annotate(new sttp.tapir.Schema.annotations.description(description))
     }
+    def default(value: A): Schema[A] = {
+      schema.annotate(new sttp.tapir.Schema.annotations.default(value))
+    }
     def mapBoth[B](f: A => B, g: B => A)(implicit loc: SourceLocation): Schema[B] =
       Schema.Transform[A, B, SourceLocation](schema, a => Right(f(a)), b => Right(g(b)), Chunk.empty, loc)
     def transformWithoutAnnotations[B](f: A => Either[String, B], g: B => A)(implicit loc: SourceLocation): Schema[B] =

@@ -519,11 +519,16 @@ object OpenApiZioSchemaCirceConverter {
       baseDecoder: Decoder[A],
       metadata: OpenApiParsedAnnotations[A]
     ): Decoder[A] = {
-      metadata.validator.fold(baseDecoder) { validator: Validator[A] =>
-        baseDecoder.ensure { a =>
+      var decoder = baseDecoder
+      decoder = metadata.default.fold(decoder) { case (default, _) =>
+        io.circe.Decoder.decodeOption[A](decoder).map(maybeValue => maybeValue.getOrElse(default))
+      }
+      decoder = metadata.validator.fold(decoder) { validator: Validator[A] =>
+        decoder.ensure { a =>
           validator(a).map(validationErrorMessage)
         }
       }
+      decoder
     }
 
     private def validationErrorMessage(validationError: ValidationError[_]): String = {
