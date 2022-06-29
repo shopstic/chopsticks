@@ -200,6 +200,9 @@ object OpenApiZioSchemaToTapirConverter {
     result = metadata.validator.fold(result) { validator =>
       result.copy(validator = validator)
     }
+    result = metadata.default.fold(result) { case (default, encodedDefault) =>
+      result.default(default, encodedDefault)
+    }
     result
   }
 
