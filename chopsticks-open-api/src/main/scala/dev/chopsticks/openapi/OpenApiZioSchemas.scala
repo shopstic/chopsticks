@@ -2,7 +2,7 @@ package dev.chopsticks.openapi
 
 import cats.data.NonEmptyList
 import eu.timepit.refined.types.all.NonNegInt
-import eu.timepit.refined.types.numeric.PosInt
+import eu.timepit.refined.types.numeric.{NonNegLong, PosInt, PosLong}
 import eu.timepit.refined.types.string.NonEmptyString
 import sttp.tapir.Validator
 import zio.schema.Schema
@@ -37,6 +37,8 @@ object OpenApiZioSchemas {
     val nonEmptyStringValidator: Validator.Primitive[String] = Validator.minLength(1)
     val posIntValidator: Validator.Primitive[Int] = Validator.min(1)
     val nonNegIntValidator: Validator.Primitive[Int] = Validator.min(0)
+    val posLongValidator: Validator.Primitive[Long] = Validator.min(1L)
+    val nonNegLongValidator: Validator.Primitive[Long] = Validator.min(0L)
 
     def nonEmptyCollectionValidator[A, C[_] <: Iterable[_]]: Validator[C[A]] = Validator.minSize(1)
   }
@@ -55,6 +57,16 @@ object OpenApiZioSchemas {
     Schema[Int]
       .validate(Validators.nonNegIntValidator)
       .transformWithoutAnnotations[NonNegInt](NonNegInt.from, _.value)
+
+  implicit val posLongSchema: Schema[PosLong] =
+    Schema[Long]
+      .validate(Validators.posLongValidator)
+      .transformWithoutAnnotations[PosLong](PosLong.from, _.value)
+
+  implicit val nonNegLongSchema: Schema[NonNegLong] =
+    Schema[Long]
+      .validate(Validators.nonNegLongValidator)
+      .transformWithoutAnnotations[NonNegLong](NonNegLong.from, _.value)
 
   implicit val instantTypeSchema: InstantType = InstantType(DateTimeFormatter.ISO_INSTANT)
 
