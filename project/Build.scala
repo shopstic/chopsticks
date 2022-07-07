@@ -15,6 +15,10 @@ object Build {
 
   val ItTagName = "dev.chopsticks.test.tags.IntegrationTest"
 
+  val resolvers = Seq(
+    "Sonatype OSS Releases" at "https://s01.oss.sonatype.org/content/repositories/releases"
+  )
+
   val javacOptions = Seq("-encoding", "UTF-8")
   val scalacOptions: Seq[String] = Seq(
     "-encoding",
