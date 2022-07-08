@@ -225,7 +225,7 @@ object Dependencies {
   }
 
   lazy val tapirDeps = {
-    val tapirVersion = "0.19.4"
+    val tapirVersion = "0.20.2"
     Seq(
       "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-json-zio" % tapirVersion,
