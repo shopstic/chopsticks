@@ -25,6 +25,8 @@ object OpenApiZioSchemaToTapirConverter {
               val sname = schemaName(name)
               val _ = cache.addOne(name -> sname)
               val result = convert
+              // to derive exactly the same schema as tapir does, uncomment the line below; however it's redundant in practice
+//              val _ = cache.remove(name)
               result
           }
         case None =>
@@ -230,7 +232,7 @@ object OpenApiZioSchemaToTapirConverter {
         result = baseSchema.copy(name = metadata.entityName.map(schemaName))
       }
       if (metadata.description.isDefined) {
-        result = baseSchema.copy(description = metadata.description)
+        result = result.copy(description = metadata.description)
       }
       result = metadata.validator.fold(result) { validator =>
         result.copy(validator = validator)
