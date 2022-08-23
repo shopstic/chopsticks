@@ -1,6 +1,6 @@
 name: Build
 
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 defaults:
   run:
@@ -9,9 +9,9 @@ defaults:
 jobs:
   build:
     name: Build
-    runs-on: [self-hosted, nix, chopsticks]
+    runs-on: [ self-hosted, nix, chopsticks, amd64-linux, medium ]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -32,9 +32,9 @@ jobs:
       - name: Compile tests
         run: sbt --client 'Test / compile'
 
-#      - name: Debug
-#        run: |
-#          trap : TERM INT; sleep infinity & wait
+      #      - name: Debug
+      #        run: |
+      #          trap : TERM INT; sleep infinity & wait
 
       - name: Test
         run: sbt --client test
