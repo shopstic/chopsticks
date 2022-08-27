@@ -123,7 +123,7 @@ object GraphQlSubscriptionSource {
         Source.single(()).via(flow)
       } {
         case Failure(e: GraphQlNonRetryableException) =>
-          actorSystem.log.error("GraphQlSubscriptionSource has failed. Restarting source.", e)
+          actorSystem.log.error("GraphQlSubscriptionSource has failed. Stopping the source.", e)
           false
         case _ => true
       }
@@ -294,7 +294,14 @@ private[graphql] class GraphQlSubscriptionBidiFlow[A](id: String, subscription: 
           private def parseResponse(parsed: GraphQlConnectionData): Either[GraphQlSubscriptionException, A] = {
             for {
               maybeData <- {
-                if (parsed.payload.errors.nonEmpty) Left(GraphQlDataErrorsException(ServerError(parsed.payload.errors)))
+                if (parsed.payload.errors.nonEmpty) {
+                  if (parsed.payload.errors.exists(_.message == "connection error")) {
+                    Left(GraphQlOtherException("Upstream server experienced connection error."))
+                  }
+                  else {
+                    Left(GraphQlDataErrorsException(ServerError(parsed.payload.errors)))
+                  }
+                }
                 else Right(parsed.payload.data)
               }
               result <- GraphQlSerDes.deserialize(subscription, maybeData).left.map(GraphQlOtherException(_))
