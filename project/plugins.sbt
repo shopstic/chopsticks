@@ -1,12 +1,12 @@
-addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.6.1")
+addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.6.3")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.4.6")
 addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.4.18")
 
 addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.6")
-addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.1.4")
+addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.1.5")
 libraryDependencies ++= Seq(
-  "com.thesamet.scalapb" %% "compilerplugin" % "0.11.10",
-  "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-codegen" % "0.5.1"
+  "com.thesamet.scalapb" %% "compilerplugin" % "0.11.11",
+  "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-codegen" % "0.5.2"
 )
 addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "1.0.2")
 addSbtPlugin("com.github.sbt" % "sbt-release" % "1.1.0")
