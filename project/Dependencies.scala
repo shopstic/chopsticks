@@ -64,7 +64,7 @@ object Dependencies {
   )
 
   val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.1.5"
+    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.1.6"
   )
 
   val catsCoreDeps = Seq(
