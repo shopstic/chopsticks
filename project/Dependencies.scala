@@ -108,7 +108,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "7.4.5"
+    "org.rocksdb" % "rocksdbjni" % "7.5.3"
   )
 
   val lmdbDeps = Seq(
