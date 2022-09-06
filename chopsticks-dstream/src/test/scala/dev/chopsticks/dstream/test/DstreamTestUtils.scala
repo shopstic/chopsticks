@@ -105,8 +105,8 @@ object DstreamTestUtils {
                 _ <- workerRequests.offer(assignment)
                 ret <- workerResponses.take
               } yield ret
-            } {
-              DstreamWorker
+            }(
+              makeRetrySchedule = DstreamWorker
                 .createRetrySchedule(
                   _,
                   DstreamWorkerRetryConfig(
@@ -115,8 +115,9 @@ object DstreamTestUtils {
                     retryMaxDelay = 1.second,
                     retryResetAfter = 5.seconds
                   )
-                )
-            }
+                ),
+              makeRepeatSchedule = (_: Int) => Schedule.identity
+            )
             .debug("worker")
             .forkDaemon
 

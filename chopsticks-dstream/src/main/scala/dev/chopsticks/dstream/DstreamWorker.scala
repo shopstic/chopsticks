@@ -43,6 +43,7 @@ object DstreamWorker {
     def run[R1, R2](
       config: DstreamWorkerConfig
     )(makeSource: (WorkerId, Assignment) => RIO[R1, Source[Result, NotUsed]])(
+      makeRepeatSchedule: Int => Schedule[R2, Any, Any],
       makeRetrySchedule: Int => Schedule[R2, Throwable, Any]
     ): RIO[R1 with R2, Unit]
   }
@@ -81,6 +82,7 @@ object DstreamWorker {
   private[dstream] def runWorkers[Assignment: zio.Tag, Result: zio.Tag](
     config: DstreamWorkerConfig,
     makeSource: (WorkerId, Assignment) => Task[Source[Result, NotUsed]],
+    repeatScheduleFactory: WorkerId => Schedule[Any, Any, Any],
     retryScheduleFactory: WorkerId => Schedule[Any, Throwable, Any]
   ) = {
     ZIO.foreachPar_(1 to config.parallelism) { workerId =>
@@ -141,7 +143,7 @@ object DstreamWorker {
             }
 
             _ <- runWorker
-              .forever
+              .repeat(repeatScheduleFactory(workerId))
               .unit
               .retry(retryScheduleFactory(workerId))
           } yield ()
@@ -161,12 +163,18 @@ object DstreamWorker {
           )(makeSource: (WorkerId, Assignment) => RIO[
             R1,
             Source[Result, NotUsed]
-          ])(makeRetrySchedule: WorkerId => Schedule[R2, Throwable, Any]): RIO[R1 with R2, Unit] = {
+          ])(
+            makeRepeatSchedule: WorkerId => Schedule[R2, Any, Any],
+            makeRetrySchedule: WorkerId => Schedule[R2, Throwable, Any]
+          ): RIO[R1 with R2, Unit] = {
             for {
               env <- ZIO.environment[R1 with R2]
               ret <- fn(
                 config,
                 (workerId, result) => makeSource(workerId, result).provide(env),
+                workerId => {
+                  makeRepeatSchedule(workerId).provide(env)
+                },
                 workerId => {
                   makeRetrySchedule(workerId).provide(env)
                 }

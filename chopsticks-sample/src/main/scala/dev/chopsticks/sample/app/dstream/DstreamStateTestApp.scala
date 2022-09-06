@@ -35,7 +35,7 @@ import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import io.prometheus.client.CollectorRegistry
-import zio.{ExitCode, RIO, UIO, ZIO, ZLayer, ZManaged}
+import zio.{ExitCode, RIO, Schedule, UIO, ZIO, ZLayer, ZManaged}
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
@@ -173,18 +173,20 @@ object DstreamStateTestApp extends ZAkkaApp {
               .map(v => Result(assignment.valueIn * 10 + v))
 //              .throttle(1, 1.second)
           }
-        } {
-          DstreamWorker
-            .createRetrySchedule(
-              _,
-              DstreamWorkerRetryConfig(
-                retryInitialDelay = 100.millis,
-                retryBackoffFactor = 2.0,
-                retryMaxDelay = 1.second,
-                retryResetAfter = 5.seconds
-              )
-            )
-        }
+        }(
+          makeRetrySchedule = (workerId: Int) =>
+            DstreamWorker
+              .createRetrySchedule(
+                workerId,
+                DstreamWorkerRetryConfig(
+                  retryInitialDelay = 100.millis,
+                  retryBackoffFactor = 2.0,
+                  retryMaxDelay = 1.second,
+                  retryResetAfter = 5.seconds
+                )
+              ),
+          makeRepeatSchedule = (_: Int) => Schedule.identity
+        )
     } yield ()
   }
 
