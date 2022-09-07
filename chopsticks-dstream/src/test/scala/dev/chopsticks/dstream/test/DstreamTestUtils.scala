@@ -40,9 +40,9 @@ object DstreamTestUtils {
       TestSink.probe[T].preMaterialize()
     }
 
-  def setup[A: zio.Tag, R: zio.Tag](
+  def setup[A: zio.Tag, R: zio.Tag, O: zio.Tag](
     masterConfig: DstreamMasterConfig
-  ): ZLayer[DstreamWorker[A, R] with IzLogging with Clock with AkkaEnv with DstreamMaster[
+  ): ZLayer[DstreamWorker[A, R, O] with IzLogging with Clock with AkkaEnv with DstreamMaster[
     A,
     A,
     R,
@@ -89,7 +89,7 @@ object DstreamTestUtils {
             .debug("master")
             .forkDaemon
 
-          worker <- ZIO.access[DstreamWorker[A, R]](_.get)
+          worker <- ZIO.access[DstreamWorker[A, R, O]](_.get)
           clientSettings <- AkkaEnv.actorSystem.map { implicit as =>
             GrpcClientSettings
               .connectToServiceAt("localhost", serverBinding.localAddress.getPort)
@@ -105,19 +105,21 @@ object DstreamTestUtils {
                 _ <- workerRequests.offer(assignment)
                 ret <- workerResponses.take
               } yield ret
-            }(
-              makeRetrySchedule = DstreamWorker
-                .createRetrySchedule(
-                  _,
-                  DstreamWorkerRetryConfig(
-                    retryInitialDelay = 100.millis,
-                    retryBackoffFactor = 2.0,
-                    retryMaxDelay = 1.second,
-                    retryResetAfter = 5.seconds
-                  )
-                ),
-              makeRepeatSchedule = (_: Int) => Schedule.identity
-            )
+            } { (workerId, task) =>
+              task
+                .forever
+                .retry(DstreamWorker
+                  .createRetrySchedule(
+                    workerId,
+                    DstreamWorkerRetryConfig(
+                      retryInitialDelay = 100.millis,
+                      retryBackoffFactor = 2.0,
+                      retryMaxDelay = 1.second,
+                      retryResetAfter = 5.seconds
+                    )
+                  ))
+            }
+            .unit
             .debug("worker")
             .forkDaemon
 

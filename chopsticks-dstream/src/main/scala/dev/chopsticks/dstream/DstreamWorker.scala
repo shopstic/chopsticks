@@ -39,13 +39,12 @@ object DstreamWorker {
     retryResetAfter: FiniteDuration
   )
 
-  trait Service[Assignment, Result] {
+  trait Service[Assignment, Result, Out] {
     def run[R1, R2](
       config: DstreamWorkerConfig
     )(makeSource: (WorkerId, Assignment) => RIO[R1, Source[Result, NotUsed]])(
-      makeRepeatSchedule: Int => Schedule[R2, Any, Any],
-      makeRetrySchedule: Int => Schedule[R2, Throwable, Any]
-    ): RIO[R1 with R2, Unit]
+      run: (Int, Task[Option[Assignment]]) => RIO[R2, Out]
+    ): RIO[R1 with R2, List[Out]]
   }
 
   val defaultRetryPolicy: PartialFunction[Throwable, Boolean] = {
@@ -79,104 +78,101 @@ object DstreamWorker {
       .unit
   }
 
-  private[dstream] def runWorkers[Assignment: zio.Tag, Result: zio.Tag](
+  private[dstream] def runWorkers[Assignment: zio.Tag, Result: zio.Tag, Out](
     config: DstreamWorkerConfig,
     makeSource: (WorkerId, Assignment) => Task[Source[Result, NotUsed]],
-    repeatScheduleFactory: WorkerId => Schedule[Any, Any, Any],
-    retryScheduleFactory: WorkerId => Schedule[Any, Throwable, Any]
-  ) = {
-    ZIO.foreachPar_(1 to config.parallelism) { workerId =>
-      ZManaged.accessManaged[DstreamWorkerMetricsManager](_.get.manage(workerId.toString))
-        .use { metrics =>
-          for {
-            createRequest <- ZIO.accessM[DstreamClient[Assignment, Result]](_.get.requestBuilder(config.clientSettings))
-
-            runWorker = ZIO.bracketExit {
-              UIO {
-                metrics.attemptsTotal.inc()
-                metrics.workerStatus.set(1)
-              }
-            } { (_, exit: Exit[Throwable, Option[Assignment]]) =>
-              UIO {
-                metrics.workerStatus.set(0)
-
-                exit match {
-                  case Exit.Success(maybeAssignment) =>
-                    if (maybeAssignment.nonEmpty) {
-                      metrics.successesTotal.inc()
-                    }
-                    else {
-                      metrics.timeoutsTotal.inc()
-                    }
-
-                  case Exit.Failure(cause) =>
-                    if (
-                      cause.failures.exists {
-                        case _: TimeoutException => true
-                        case _ => false
-                      }
-                    ) {
-                      metrics.timeoutsTotal.inc()
-                    }
-                    else {
-                      metrics.failuresTotal.inc()
-                    }
-                }
-              }
-            } { _ =>
+    run: (WorkerId, Task[Option[Assignment]]) => Task[Out]
+  ): RIO[DstreamClient[Assignment, Result] with DstreamWorkerMetricsManager with IzLogging with AkkaEnv, List[Out]] = {
+    for {
+      taskEnv <- ZIO.environment[IzLogging with AkkaEnv]
+      results <- ZIO.foreachPar((1 to config.parallelism).toList) {
+        workerId =>
+          ZManaged.accessManaged[DstreamWorkerMetricsManager](_.get.manage(workerId.toString))
+            .use { metrics =>
               for {
-                promise <- UIO(Promise[Source[Result, NotUsed]]())
-                result <- createRequest(workerId)
-                  .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
-                  .toZAkkaSource
-                  .killSwitch
-                  .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
-                  .mapAsync(1) {
-                    assignment =>
-                      makeSource(workerId, assignment)
-                        .tap(s => UIO(promise.success(s)))
-                        .zipRight(Task.fromFuture(_ => promise.future))
-                        .as(assignment)
-                  }
-                  .interruptibleRunWith(Sink.lastOption)
-              } yield result
-            }
+                createRequest <-
+                  ZIO.accessM[DstreamClient[Assignment, Result]](_.get.requestBuilder(config.clientSettings))
 
-            _ <- runWorker
-              .repeat(repeatScheduleFactory(workerId))
-              .unit
-              .retry(retryScheduleFactory(workerId))
-          } yield ()
-        }
-    }
+                runWorker = ZIO.bracketExit {
+                  UIO {
+                    metrics.attemptsTotal.inc()
+                    metrics.workerStatus.set(1)
+                  }
+                } { (_, exit: Exit[Throwable, Option[Assignment]]) =>
+                  UIO {
+                    metrics.workerStatus.set(0)
+
+                    exit match {
+                      case Exit.Success(maybeAssignment) =>
+                        if (maybeAssignment.nonEmpty) {
+                          metrics.successesTotal.inc()
+                        }
+                        else {
+                          metrics.timeoutsTotal.inc()
+                        }
+
+                      case Exit.Failure(cause) =>
+                        if (
+                          cause.failures.exists {
+                            case _: TimeoutException => true
+                            case _ => false
+                          }
+                        ) {
+                          metrics.timeoutsTotal.inc()
+                        }
+                        else {
+                          metrics.failuresTotal.inc()
+                        }
+                    }
+                  }
+                } { _ =>
+                  for {
+                    promise <- UIO(Promise[Source[Result, NotUsed]]())
+                    result <- createRequest(workerId)
+                      .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
+                      .toZAkkaSource
+                      .killSwitch
+                      .viaBuilder(_.initialTimeout(config.assignmentTimeout.duration))
+                      .mapAsync(1) {
+                        assignment =>
+                          makeSource(workerId, assignment)
+                            .tap(s => UIO(promise.success(s)))
+                            .zipRight(Task.fromFuture(_ => promise.future))
+                            .as(assignment)
+                      }
+                      .interruptibleRunWith(Sink.lastOption)
+                  } yield result
+                }
+
+                ret <- run(workerId, runWorker.provide(taskEnv))
+              } yield ret
+            }
+      }
+    } yield results
   }
 
-  def live[Assignment: zio.Tag, Result: zio.Tag]: URLayer[
+  def live[Assignment: zio.Tag, Result: zio.Tag, Out: zio.Tag]: URLayer[
     IzLogging with AkkaEnv with Clock with DstreamClient[Assignment, Result] with DstreamWorkerMetricsManager,
-    DstreamWorker[Assignment, Result]
+    DstreamWorker[Assignment, Result, Out]
   ] = {
-    ZRunnable(runWorkers[Assignment, Result] _)
-      .toLayer[Service[Assignment, Result]] { fn =>
-        new Service[Assignment, Result] {
+    ZRunnable(runWorkers[Assignment, Result, Out] _)
+      .toLayer[Service[Assignment, Result, Out]] { fn =>
+        new Service[Assignment, Result, Out] {
           override def run[R1, R2](
             config: DstreamWorkerConfig
           )(makeSource: (WorkerId, Assignment) => RIO[
             R1,
             Source[Result, NotUsed]
           ])(
-            makeRepeatSchedule: WorkerId => Schedule[R2, Any, Any],
-            makeRetrySchedule: WorkerId => Schedule[R2, Throwable, Any]
-          ): RIO[R1 with R2, Unit] = {
+            run: (WorkerId, Task[Option[Assignment]]) => RIO[R2, Out]
+          ): RIO[R1 with R2, List[Out]] = {
             for {
               env <- ZIO.environment[R1 with R2]
               ret <- fn(
                 config,
                 (workerId, result) => makeSource(workerId, result).provide(env),
-                workerId => {
-                  makeRepeatSchedule(workerId).provide(env)
-                },
-                workerId => {
-                  makeRetrySchedule(workerId).provide(env)
+                (workerId, task) => {
+                  run(workerId, task).provide(env)
                 }
               )
             } yield ret

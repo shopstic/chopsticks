@@ -1,5 +1,6 @@
 package dev.chopsticks.dstream.test
 
+import akka.NotUsed
 import dev.chopsticks.dstream.DstreamServerHandlerFactory.DstreamServerPartialHandler
 import dev.chopsticks.dstream.metric.DstreamWorkerMetrics.DstreamWorkerMetric
 import dev.chopsticks.dstream.metric.DstreamMasterMetrics.DstreamMasterMetric
@@ -84,5 +85,5 @@ trait DstreamSpecEnv {
 
   protected lazy val dstreamServerLayer = DstreamServer.live[Assignment, Result].forTest
   protected lazy val dstreamMasterLayer = DstreamMaster.live[Assignment, Assignment, Result, Assignment].forTest
-  protected lazy val dstreamWorkerLayer = DstreamWorker.live[Assignment, Result].forTest
+  protected lazy val dstreamWorkerLayer = DstreamWorker.live[Assignment, Result, NotUsed].forTest
 }
