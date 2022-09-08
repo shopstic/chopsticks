@@ -3,12 +3,17 @@ import sbt._
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.8"
+  // The last Apache 2.0 licensed Akka
   val AKKA_VERSION = "2.6.20"
   val AKKA_HTTP_VERSION = "10.2.10"
-  // past this release, ZIO 1.0.x has the "Defect in zio.Has" bug due to its izumi-reflect upgrade
+  // Past this release, ZIO 1.0.x has the "Defect in zio.Has" bug again
+  // due to its izumi-reflect upgrade
   val ZIO_VERSION = "1.0.14"
   val IZUMI_VERSION = "1.0.10"
   val REFINED_VERSION = "0.9.29"
+  // Don't upgrade circe until this fix ends up in a release
+  // https://github.com/circe/circe/issues/1972
+  val CIRCE_VERSION = "0.14.1"
   val CALIBAN_VERSION = "1.3.3"
   val STTP_VERSION = "3.7.4"
 
@@ -93,7 +98,7 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.1.7"
+    "org.codehaus.janino" % "janino" % "3.1.8"
   )
 
   val scalatestDeps = Seq(
@@ -145,9 +150,9 @@ object Dependencies {
   )
 
   val circeDeps = Seq(
-    "io.circe" %% "circe-core" % "0.14.2",
-    "io.circe" %% "circe-parser" % "0.14.2",
-    "io.circe" %% "circe-generic" % "0.14.2"
+    "io.circe" %% "circe-core" % CIRCE_VERSION,
+    "io.circe" %% "circe-parser" % CIRCE_VERSION,
+    "io.circe" %% "circe-generic" % CIRCE_VERSION
   )
 
   val refinedDeps = Seq(
