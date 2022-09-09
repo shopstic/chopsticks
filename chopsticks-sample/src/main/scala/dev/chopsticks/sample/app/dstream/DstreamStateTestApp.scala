@@ -1,15 +1,16 @@
 package dev.chopsticks.sample.app.dstream
 
+import akka.NotUsed
 import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.{Sink, Source}
-import dev.chopsticks.dstream.metric.DstreamWorkerMetrics.DstreamWorkerMetric
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
-import dev.chopsticks.dstream.metric.DstreamMasterMetrics.DstreamMasterMetric
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamServerHandlerFactory.DstreamServerPartialHandler
-import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
 import dev.chopsticks.dstream.DstreamWorker.{DstreamWorkerConfig, DstreamWorkerRetryConfig}
 import dev.chopsticks.dstream._
+import dev.chopsticks.dstream.metric.DstreamMasterMetrics.DstreamMasterMetric
+import dev.chopsticks.dstream.metric.DstreamStateMetrics.DstreamStateMetric
+import dev.chopsticks.dstream.metric.DstreamWorkerMetrics.DstreamWorkerMetric
 import dev.chopsticks.dstream.metric.{
   DstreamClientMetricsManager,
   DstreamMasterMetricsManager,
@@ -24,13 +25,7 @@ import dev.chopsticks.fp.util.LoggedRace
 import dev.chopsticks.fp.zio_ext.ZManagedExtensions
 import dev.chopsticks.metric.log.MetricLogger
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
-import dev.chopsticks.sample.app.dstream.proto.{
-  Assignment,
-  DstreamSampleService,
-  DstreamSampleServiceClient,
-  DstreamSampleServicePowerApiHandler,
-  Result
-}
+import dev.chopsticks.sample.app.dstream.proto._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
@@ -80,7 +75,7 @@ object DstreamStateTestApp extends ZAkkaApp {
 
     val dstreamServer = DstreamServer.live[Assignment, Result]
     val dstreamMaster = DstreamMaster.live[Assignment, Assignment, Result, Result]
-    val dstreamWorker = DstreamWorker.live[Assignment, Result]
+    val dstreamWorker = DstreamWorker.live[Assignment, Result, NotUsed]
     val metricLogger = MetricLogger.live()
 
     app
@@ -155,7 +150,7 @@ object DstreamStateTestApp extends ZAkkaApp {
 
   private def runWorker = {
     for {
-      worker <- ZIO.access[DstreamWorker[Assignment, Result]](_.get)
+      worker <- ZIO.access[DstreamWorker[Assignment, Result, NotUsed]](_.get)
       clientSettings <- AkkaEnv.actorSystem.map { implicit as =>
         GrpcClientSettings
           .connectToServiceAt("localhost", 9999)
@@ -173,17 +168,21 @@ object DstreamStateTestApp extends ZAkkaApp {
               .map(v => Result(assignment.valueIn * 10 + v))
 //              .throttle(1, 1.second)
           }
-        } {
-          DstreamWorker
-            .createRetrySchedule(
-              _,
-              DstreamWorkerRetryConfig(
-                retryInitialDelay = 100.millis,
-                retryBackoffFactor = 2.0,
-                retryMaxDelay = 1.second,
-                retryResetAfter = 5.seconds
-              )
-            )
+        } { (workerId, task) =>
+          task
+            .forever
+            .retry(DstreamWorker
+              .createRetrySchedule(
+                workerId,
+                DstreamWorkerRetryConfig(
+                  retryInitialDelay = 100.millis,
+                  retryBackoffFactor = 2.0,
+                  retryMaxDelay = 1.second,
+                  retryResetAfter = 5.seconds
+                )
+              ))
+            .as(NotUsed)
+
         }
     } yield ()
   }

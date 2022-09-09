@@ -9,4 +9,5 @@ object OpenApiAnnotations {
   final case class default[A](value: A, encodedValue: Option[Any] = None) extends StaticAnnotation
   final case class description(text: String) extends StaticAnnotation
   final case class validate[T](v: Validator[T]) extends StaticAnnotation
+  final case class sumTypeSerDeStrategy[A](value: OpenApiSumTypeSerDeStrategy[A]) extends StaticAnnotation
 }

@@ -1,5 +1,6 @@
 package dev.chopsticks.dstream
 
+import akka.NotUsed
 import akka.stream.scaladsl.{Keep, Source}
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
@@ -12,7 +13,6 @@ import zio.blocking.{effectBlocking, effectBlockingInterrupt}
 import zio.clock.Clock
 import zio.duration._
 import zio.magic._
-import zio.test.Assertion._
 import zio.test._
 import zio.test.environment.{testEnvironment, TestEnvironment}
 
@@ -37,12 +37,12 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
         context.masterOutputs.request(1)
       }
       workerInAssignment <- context.workerRequests.take
-      _ <- check(assert(workerInAssignment)(equalTo(assignment)))
+      _ <- check(assertTrue(workerInAssignment == assignment))
 
       _ <- context.workerResponses.offer(Source.single(Result(2)))
       masterIn <- context.masterRequests.take
       (masterInAssignment, masterInResult) = masterIn
-      _ <- check(assert(masterInAssignment)(equalTo(assignment)))
+      _ <- check(assertTrue(masterInAssignment == assignment))
 
       masterInProbe <- AkkaEnv.actorSystem.map { implicit as =>
         masterInResult.source.toMat(TestSink.probe)(Keep.right).run()
@@ -55,10 +55,10 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
       masterOutputAssignment <- effectBlockingInterrupt {
         context.masterOutputs.expectNext()
       }
-    } yield assert(masterOutputAssignment)(equalTo(assignment))
+    } yield assertTrue(masterOutputAssignment == assignment)
   }
 
-  private lazy val contextLayer = DstreamTestUtils.setup[Assignment, Result](
+  private lazy val contextLayer = DstreamTestUtils.setup[Assignment, Result, NotUsed](
     DstreamMasterConfig(serviceId = "test", parallelism = 1, ordered = true)
   ).forTest
 
