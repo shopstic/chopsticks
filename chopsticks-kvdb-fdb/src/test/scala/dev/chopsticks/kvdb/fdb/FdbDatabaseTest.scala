@@ -29,7 +29,7 @@ object FdbDatabaseTest {
   ]] = {
     for {
       logger <- IzLogging.zioLogger.toManaged_
-      rootDirectoryPath <- ZManaged.succeed(UUID.randomUUID().toString)
+      rootDirectoryPath <- ZManaged.succeed(s"chopsticks-test-${UUID.randomUUID()}")
       _ <- logger.info(s"Using $rootDirectoryPath").toManaged_
       database <- FdbDatabase.manage(
         dbMaterialization,

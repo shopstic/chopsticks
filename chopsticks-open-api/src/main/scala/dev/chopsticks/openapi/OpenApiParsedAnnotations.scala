@@ -8,7 +8,8 @@ final private[openapi] case class OpenApiParsedAnnotations[A](
   entityName: Option[String] = None,
   description: Option[String] = None,
   validator: Option[Validator[A]] = None,
-  default: Option[(A, Option[Any])] = None
+  default: Option[(A, Option[Any])] = None,
+  sumTypeSerDeStrategy: Option[OpenApiSumTypeSerDeStrategy[A]] = None
 )
 
 object OpenApiParsedAnnotations {
@@ -19,6 +20,7 @@ object OpenApiParsedAnnotations {
         case a: description => typed.copy(description = Some(a.text))
         case a: validate[A @unchecked] => typed.copy(validator = Some(a.v))
         case a: default[A @unchecked] => typed.copy(default = Some((a.value, a.encodedValue)))
+        case a: sumTypeSerDeStrategy[A @unchecked] => typed.copy(sumTypeSerDeStrategy = Some(a.value))
         case _ => typed
       }
     }
