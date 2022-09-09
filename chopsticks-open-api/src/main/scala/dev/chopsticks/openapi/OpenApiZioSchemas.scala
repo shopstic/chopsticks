@@ -26,6 +26,9 @@ object OpenApiZioSchemas {
     def default(value: A, encodedValue: Option[Any] = None): Schema[A] = {
       schema.annotate(OpenApiAnnotations.default(value, encodedValue))
     }
+    def discriminator(discriminator: OpenApiDiscriminator[A]): Schema[A] = {
+      schema.annotate(OpenApiAnnotations.sumTypeSerDeStrategy(OpenApiSumTypeSerDeStrategy.Discriminator(discriminator)))
+    }
     def mapBoth[B](f: A => B, g: B => A)(implicit loc: SourceLocation): Schema[B] =
       Schema.Transform[A, B, SourceLocation](schema, a => Right(f(a)), b => Right(g(b)), Chunk.empty, loc)
     def transformWithoutAnnotations[B](f: A => Either[String, B], g: B => A)(implicit loc: SourceLocation): Schema[B] =

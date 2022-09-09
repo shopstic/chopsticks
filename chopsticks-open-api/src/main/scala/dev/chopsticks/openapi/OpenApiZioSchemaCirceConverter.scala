@@ -522,11 +522,130 @@ object OpenApiZioSchemaCirceConverter {
               addAnnotations(baseDecoder, parsed)
             }
 
-          // e.g. enums are not yet supported
+          case ZioSchema.Enum1(c1, annotations) =>
+            convertEnum[A](annotations, c1)
+
+          case ZioSchema.Enum2(c1, c2, annotations) =>
+            convertEnum[A](annotations, c1, c2)
+
+          case ZioSchema.Enum3(c1, c2, c3, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3)
+
+          case ZioSchema.Enum4(c1, c2, c3, c4, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4)
+
+          case ZioSchema.Enum5(c1, c2, c3, c4, c5, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5)
+
+          case ZioSchema.Enum6(c1, c2, c3, c4, c5, c6, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6)
+
+          case ZioSchema.Enum7(c1, c2, c3, c4, c5, c6, c7, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7)
+
+          case ZioSchema.Enum8(c1, c2, c3, c4, c5, c6, c7, c8, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8)
+
+          case ZioSchema.Enum9(c1, c2, c3, c4, c5, c6, c7, c8, c9, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9)
+
+          case ZioSchema.Enum10(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)
+
+          case ZioSchema.Enum11(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11)
+
+          case ZioSchema.Enum12(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)
+
+          case ZioSchema.Enum13(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)
+
+          case ZioSchema.Enum14(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14)
+
+          case ZioSchema.Enum15(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15)
+
+          case ZioSchema.Enum16(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16)
+
+          case ZioSchema.Enum17(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17)
+
+          case ZioSchema.Enum18(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18)
+
+          case ZioSchema.Enum19(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
+
+          case ZioSchema.Enum20(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20)
+
+          case ZioSchema.Enum21(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)
+
+          case ZioSchema.Enum22(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22)
+
           case _ =>
             ???
         }
         //scalafmt: { maxColumn = 120, optIn.configStyleArguments = true }
+      }
+
+      private def convertEnum[A](
+        annotations: Chunk[Any],
+        cases: ZioSchema.Case[_, A]*
+      ): Decoder[A] = {
+        val enumAnnotations = extractAnnotations[A](annotations)
+        val decodersByName = cases.iterator
+          .map { c =>
+            val cAnn = extractAnnotations(c.annotations)
+            val decoder = addAnnotations(
+              convert(c.codec),
+              extractAnnotations(c.annotations)
+            ).asInstanceOf[io.circe.Decoder[Any]]
+            val entityName = cAnn.entityName.getOrElse(throw new RuntimeException(
+              s"Subtype of ${enumAnnotations.entityName.getOrElse("-")} must have entityName defined to derive an io.circe.Decoder. Received annotations: $cAnn"
+            ))
+            entityName -> decoder
+          }
+          .toMap
+        val discriminator = enumAnnotations.sumTypeSerDeStrategy
+
+        val decoder = discriminator
+          .getOrElse(throw new RuntimeException(
+            s"Discriminator must be defined to derive an io.circe.Decoder. Received annotations: $enumAnnotations"
+          )) match {
+          case OpenApiSumTypeSerDeStrategy.Discriminator(discriminator) =>
+            val diff = discriminator.mapping.values.toSet.diff(decodersByName.keySet)
+            if (diff.nonEmpty) {
+              throw new RuntimeException(
+                s"Cannot derive io.circe.Decoder for ${enumAnnotations.entityName.getOrElse("-")}, because mapping and decoders don't match. Diff=$diff."
+              )
+            }
+            new io.circe.Decoder[A] {
+              private val knownObjectTypes = discriminator.mapping.keys.toList.sorted.mkString(", ")
+              override def apply(c: HCursor): Result[A] = {
+                val discTypeCursor = c.downField(discriminator.discriminatorFieldName)
+                discTypeCursor.as[String].flatMap { value =>
+                  discriminator.mapping.get(value) match {
+                    case None =>
+                      Left(
+                        DecodingFailure(
+                          s"Unrecognized object type: ${value}. Valid object types are: $knownObjectTypes.",
+                          discTypeCursor.history
+                        )
+                      )
+                    case Some(objType) =>
+                      decodersByName(objType).apply(c).asInstanceOf[Result[A]]
+                  }
+                }
+              }
+            }
+        }
+        addAnnotations(decoder, enumAnnotations)
       }
 
       private def genericRecordConverter(fieldSet: FieldSet, annotations: Chunk[Any]): Decoder[ListMap[String, _]] = {
@@ -1187,11 +1306,122 @@ object OpenApiZioSchemaCirceConverter {
               addAnnotations(baseEncoder, parsed)
             }
 
+          case ZioSchema.Enum1(c1, annotations) =>
+            convertEnum[A](annotations, c1)
+
+          case ZioSchema.Enum2(c1, c2, annotations) =>
+            convertEnum[A](annotations, c1, c2)
+
+          case ZioSchema.Enum3(c1, c2, c3, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3)
+
+          case ZioSchema.Enum4(c1, c2, c3, c4, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4)
+
+          case ZioSchema.Enum5(c1, c2, c3, c4, c5, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5)
+
+          case ZioSchema.Enum6(c1, c2, c3, c4, c5, c6, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6)
+
+          case ZioSchema.Enum7(c1, c2, c3, c4, c5, c6, c7, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7)
+
+          case ZioSchema.Enum8(c1, c2, c3, c4, c5, c6, c7, c8, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8)
+
+          case ZioSchema.Enum9(c1, c2, c3, c4, c5, c6, c7, c8, c9, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9)
+
+          case ZioSchema.Enum10(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)
+
+          case ZioSchema.Enum11(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11)
+
+          case ZioSchema.Enum12(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)
+
+          case ZioSchema.Enum13(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)
+
+          case ZioSchema.Enum14(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14)
+
+          case ZioSchema.Enum15(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15)
+
+          case ZioSchema.Enum16(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16)
+
+          case ZioSchema.Enum17(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17)
+
+          case ZioSchema.Enum18(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18)
+
+          case ZioSchema.Enum19(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
+
+          case ZioSchema.Enum20(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20)
+
+          case ZioSchema.Enum21(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)
+
+          case ZioSchema.Enum22(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, annotations) =>
+            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22)
+
           // e.g. enums are not yet supported
           case _ =>
             ???
         }
         //scalafmt: { maxColumn = 120, optIn.configStyleArguments = true }
+      }
+
+      private def convertEnum[A](
+        annotations: Chunk[Any],
+        cases: ZioSchema.Case[_, A]*
+      ): Encoder[A] = {
+        val enumAnnotations = extractAnnotations[A](annotations)
+        val encodersByName = cases.iterator
+          .map { c =>
+            val cAnn = extractAnnotations(c.annotations)
+            val encoder = addAnnotations(
+              convert(c.codec),
+              extractAnnotations(c.annotations)
+            ).asInstanceOf[io.circe.Encoder[Any]]
+            val entityName = cAnn.entityName.getOrElse(throw new RuntimeException(
+              s"Subtype of ${enumAnnotations.entityName.getOrElse("-")} must have entityName defined to derive an io.circe.Encoder. Received annotations: $cAnn"
+            ))
+            entityName -> (encoder, c)
+          }
+          .toMap
+        val discriminator = enumAnnotations.sumTypeSerDeStrategy
+
+        val encoder = discriminator
+          .getOrElse(throw new RuntimeException(
+            s"Discriminator must be defined to derive an io.circe.Encoder. Received annotations: $enumAnnotations"
+          )) match {
+          case OpenApiSumTypeSerDeStrategy.Discriminator(discriminator) =>
+            val diff = discriminator.mapping.values.toSet.diff(encodersByName.keySet)
+            if (diff.nonEmpty) {
+              throw new RuntimeException(
+                s"Cannot derive io.circe.Encoder for ${enumAnnotations.entityName.getOrElse("-")}, because mapping and encoders don't match. Diff=$diff."
+              )
+            }
+            new io.circe.Encoder[A] {
+              override def apply(a: A): Json = {
+                val discValue = discriminator.discriminatorValue(a)
+                val (enc, c) = encodersByName(discriminator.mapping(discValue))
+                val json = enc(c.unsafeDeconstruct(a).asInstanceOf[Any])
+                json.mapObject { o =>
+                  o.add(discriminator.discriminatorFieldName, Json.fromString(discValue))
+                }
+              }
+            }
+        }
+        addAnnotations(encoder, enumAnnotations)
       }
 
       private def primitiveConverter[A](standardType: StandardType[A], annotations: Chunk[Any]): Encoder[A] = {
