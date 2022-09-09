@@ -13,7 +13,7 @@ object Dependencies {
   val REFINED_VERSION = "0.9.29"
   // Don't upgrade circe until this fix ends up in a release
   // https://github.com/circe/circe/issues/1972
-  val CIRCE_VERSION = "0.14.1"
+  val CIRCE_VERSION = "0.14.2"
   val CALIBAN_VERSION = "1.3.3"
   val STTP_VERSION = "3.7.4"
 
