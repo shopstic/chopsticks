@@ -3,10 +3,11 @@ package dev.chopsticks.openapi
 import dev.chopsticks.openapi.OpenApiParsedAnnotations.extractAnnotations
 import sttp.tapir.{FieldName, Schema => TapirSchema, SchemaType}
 import sttp.tapir.Schema.SName
-import sttp.tapir.SchemaType.{SOption, SRef}
+import sttp.tapir.SchemaType.{SDiscriminator, SOption, SRef}
 import zio.schema.{FieldSet, Schema => ZioSchema, StandardType}
 import zio.Chunk
 
+import scala.collection.compat.immutable.ArraySeq
 import scala.collection.immutable.ListMap
 
 object OpenApiZioSchemaToTapirConverter {
@@ -164,7 +165,74 @@ object OpenApiZioSchemaToTapirConverter {
         case ZioSchema.CaseClass22(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, ext16, ext17, ext18, ext19, ext20, ext21, ext22, annotations) =>
           convertCaseClass[A](annotations, f1 -> ext1, f2 -> ext2, f3 -> ext3, f4 -> ext4, f5 -> ext5, f6 -> ext6, f7 -> ext7, f8 -> ext8, f9 -> ext9, f10 -> ext10, f11 -> ext11, f12 -> ext12, f13 -> ext13, f14 -> ext14, f15 -> ext15, f16 -> ext16, f17 -> ext17, f18 -> ext18, f19 -> ext19, f20 -> ext20, f21 -> ext21, f22 -> ext22)
 
-        // e.g. enums are not yet supported
+        case ZioSchema.Enum1(c1, annotations) =>
+          convertEnum[A](annotations, c1)
+
+        case ZioSchema.Enum2(c1, c2, annotations) =>
+          convertEnum[A](annotations, c1, c2)
+
+        case ZioSchema.Enum3(c1, c2, c3, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3)
+
+        case ZioSchema.Enum4(c1, c2, c3, c4, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4)
+
+        case ZioSchema.Enum5(c1, c2, c3, c4, c5, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5)
+
+        case ZioSchema.Enum6(c1, c2, c3, c4, c5, c6, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6)
+
+        case ZioSchema.Enum7(c1, c2, c3, c4, c5, c6, c7, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7)
+
+        case ZioSchema.Enum8(c1, c2, c3, c4, c5, c6, c7, c8, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8)
+
+        case ZioSchema.Enum9(c1, c2, c3, c4, c5, c6, c7, c8, c9, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9)
+
+        case ZioSchema.Enum10(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)
+
+        case ZioSchema.Enum11(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11)
+
+        case ZioSchema.Enum12(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)
+
+        case ZioSchema.Enum13(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)
+
+        case ZioSchema.Enum14(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14)
+
+        case ZioSchema.Enum15(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15)
+
+        case ZioSchema.Enum16(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16)
+
+        case ZioSchema.Enum17(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17)
+
+        case ZioSchema.Enum18(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18)
+
+        case ZioSchema.Enum19(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
+
+        case ZioSchema.Enum20(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20)
+
+        case ZioSchema.Enum21(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)
+
+        case ZioSchema.Enum22(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, annotations) =>
+          convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22)
+
+        //        case ZioSchema.Enum2(c1, c2, annotations) =>
+//          convertEnum[A](annotations, )
         case _ =>
           ???
       }
@@ -221,6 +289,46 @@ object OpenApiZioSchemaToTapirConverter {
           caseClassAnnotations
         )
       }
+    }
+
+    private def convertEnum[A](
+      annotations: Chunk[Any],
+      cases: ZioSchema.Case[_, A]*
+    ): TapirSchema[A] = {
+      val enumAnnotations = extractAnnotations[A](annotations)
+      val schemas = cases.iterator
+        .map(c => addAnnotations(convert(c.codec), extractAnnotations(c.annotations)))
+        .to(ArraySeq)
+      addAnnotations(
+        baseSchema = TapirSchema(
+          SchemaType.SCoproduct[A](
+            schemas.toList,
+            discriminator = enumAnnotations.sumTypeSerDeStrategy.flatMap {
+              case OpenApiSumTypeSerDeStrategy.Discriminator(discriminator) =>
+                Some(SDiscriminator(
+                  FieldName(
+                    name = discriminator.discriminatorFieldName,
+                    encodedName = discriminator.discriminatorFieldName
+                  ),
+                  mapping = discriminator.mapping.view.mapValues(entityName => SRef(SName(entityName))).toMap
+                ))
+            }
+          ) { a =>
+            var i = 0
+            var result = Option.empty[TapirSchema[_]]
+            while (i < schemas.length && result.isEmpty) {
+              val c = cases(i)
+              result = c.deconstruct(a) match {
+                case Some(_) => Some(schemas(i))
+                case None => result
+              }
+              i += 1
+            }
+            result
+          }
+        ),
+        enumAnnotations
+      )
     }
 
     private def addAnnotations[A](
