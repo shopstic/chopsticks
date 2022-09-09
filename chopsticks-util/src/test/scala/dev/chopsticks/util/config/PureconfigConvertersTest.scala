@@ -56,8 +56,10 @@ final class PureconfigConvertersTest extends AnyWordSpecLike with Assertions wit
   "PureconfigFastCamelCaseNamingConvention" should {
     "tokenize words in the same way as PureConfig's CamelCase tokenizer" in {
       import org.scalacheck.Prop._
-      // we don't support handling "Σ" which contains two different lower case chars
-      val stringGen = Arbitrary.arbString.arbitrary.filterNot(value => value.contains("Σ"))
+      // we don't compare:
+      //   - "Σ" which contains two different lower case chars
+      //   - "İ" which seems to be treated by PureConfig incorrectly
+      val stringGen = Arbitrary.arbString.arbitrary.filterNot(value => value.contains("Σ") || value.contains("İ"))
       implicit val arbitraryString = Arbitrary(stringGen)
       check((s: String) => CamelCase.toTokens(s).toList == PureconfigFastCamelCaseNamingConvention.toTokens(s).toList)
     }

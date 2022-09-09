@@ -21,6 +21,7 @@ ThisBuild / description := "Essential Scala libraries for everyday use"
 ThisBuild / licenses := List("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 ThisBuild / homepage := Some(url("https://chopsticks.dev"))
 
+ThisBuild / resolvers ++= Build.resolvers
 ThisBuild / scalaVersion := SCALA_VERSION
 ThisBuild / javacOptions ++= Build.javacOptions
 ThisBuild / scalacOptions ++= Build.scalacOptions
@@ -241,6 +242,12 @@ lazy val avro4s = Build
     Compile / packageBin := (avro4sShadowed / assembly).value
   )
 
+lazy val openApi = Build
+  .defineProject("open-api")
+  .settings(
+    libraryDependencies ++= tapirDeps ++ zioSchemaDeps
+  )
+
 lazy val root = (project in file("."))
   .settings(
     name := "chopsticks",
@@ -263,6 +270,7 @@ lazy val root = (project in file("."))
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
     metric,
+    openApi,
     alertmanager,
     prometheus,
     zioGrpcCommon,
