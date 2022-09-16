@@ -43,6 +43,7 @@ import scala.collection.immutable.ArraySeq
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
 import scala.jdk.CollectionConverters._
+import scala.jdk.DurationConverters.ScalaDurationOps
 import scala.jdk.FutureConverters._
 import scala.util.Failure
 
@@ -60,6 +61,8 @@ object FdbDatabase {
         case _ => false
       }
   }
+
+  final case class FdbOperationTimeoutException(message: String) extends TimeoutException(message)
 
   final case class FdbContext[BCF[A, B] <: ColumnFamily[A, B]](
     db: Database,
@@ -380,10 +383,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
             .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
         }
       }
+      .timeoutFail(FdbOperationTimeoutException(s"Read transaction timed out"))(6.seconds.toJava)
+      .provide(rt.environment)
   }
 
   def read[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
-    for {
+    val task = for {
       cancelRef <- ZRef.make(NOOP_CALLBACK)
       fib <- Task
         .fromCompletableFuture {
@@ -401,6 +406,10 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
         .fork
       ret <- fib.join.onInterrupt(cancelRef.get.map(_()) *> fib.interrupt)
     } yield ret
+
+    task
+      .timeoutFail(FdbOperationTimeoutException("Read transaction timed out"))(6.seconds.toJava)
+      .provide(rt.environment)
   }
 
   def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[IzLogging with Clock, V] = {
@@ -426,6 +435,8 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
             }
           )
       }
+      .timeoutFail(FdbOperationTimeoutException(s"Write transaction '$name' timed out"))(6.seconds.toJava)
+      .provide(rt.environment)
       .retry(clientOptions.writeCustomRetrySchedule.getOrElse(defaultWriteRetrySchedule))
   }
 
