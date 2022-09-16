@@ -5,7 +5,7 @@
     hotPot.url = "github:shopstic/nix-hot-pot";
     nixpkgs.follows = "hotPot/nixpkgs";
     flakeUtils.follows = "hotPot/flakeUtils";
-    fdb.url = "github:shopstic/nix-fdb/7.1.21";
+    fdb.follows = "hotPot/fdbPkg";
   };
 
   outputs = { self, nixpkgs, flakeUtils, hotPot, fdb }:
@@ -82,6 +82,7 @@
           devShell = pkgs.mkShellNoCC rec {
             shellHook = ''
               ln -Tfs ${devSdks} ./.dev-sdks
+              if [[ -f ./.env ]]; then source ./.env; fi
             '';
             buildInputs = builtins.attrValues
               {
