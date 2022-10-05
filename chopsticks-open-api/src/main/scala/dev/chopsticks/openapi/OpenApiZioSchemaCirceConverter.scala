@@ -119,7 +119,7 @@ object OpenApiZioSchemaCirceConverter {
             val parsed = extractAnnotations[A](annotations)
             convertUsingCache(parsed) {
               val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct1(f1.label)(construct)(decoder1)
+              val baseDecoder = io.circe.Decoder.forProduct1(parsed.transformJsonLabel(f1.label))(construct)(decoder1)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -128,7 +128,10 @@ object OpenApiZioSchemaCirceConverter {
             convertUsingCache(parsed) {
               val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
               val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct2(f1.label, f2.label)(construct)(decoder1, decoder2)
+              val baseDecoder = io.circe.Decoder.forProduct2(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label)
+              )(construct)(decoder1, decoder2)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -138,7 +141,11 @@ object OpenApiZioSchemaCirceConverter {
               val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
               val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
               val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct3(f1.label, f2.label, f3.label)(construct)(decoder1, decoder2, decoder3)
+              val baseDecoder = io.circe.Decoder.forProduct3(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label)
+              )(construct)(decoder1, decoder2, decoder3)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -149,7 +156,12 @@ object OpenApiZioSchemaCirceConverter {
               val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
               val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
               val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct4(f1.label, f2.label, f3.label, f4.label)(construct)(decoder1, decoder2, decoder3, decoder4)
+              val baseDecoder = io.circe.Decoder.forProduct4(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -161,7 +173,13 @@ object OpenApiZioSchemaCirceConverter {
               val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
               val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
               val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct5(f1.label, f2.label, f3.label, f4.label, f5.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5)
+              val baseDecoder = io.circe.Decoder.forProduct5(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -174,7 +192,14 @@ object OpenApiZioSchemaCirceConverter {
               val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
               val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
               val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct6(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6)
+              val baseDecoder = io.circe.Decoder.forProduct6(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -188,7 +213,15 @@ object OpenApiZioSchemaCirceConverter {
               val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
               val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
               val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct7(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7)
+              val baseDecoder = io.circe.Decoder.forProduct7(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -203,7 +236,16 @@ object OpenApiZioSchemaCirceConverter {
               val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
               val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
               val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct8(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8)
+              val baseDecoder = io.circe.Decoder.forProduct8(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -219,7 +261,17 @@ object OpenApiZioSchemaCirceConverter {
               val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
               val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
               val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct9(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9)
+              val baseDecoder = io.circe.Decoder.forProduct9(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -236,7 +288,18 @@ object OpenApiZioSchemaCirceConverter {
               val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
               val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
               val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct10(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10)
+              val baseDecoder = io.circe.Decoder.forProduct10(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -254,7 +317,19 @@ object OpenApiZioSchemaCirceConverter {
               val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
               val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
               val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct11(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11)
+              val baseDecoder = io.circe.Decoder.forProduct11(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -273,7 +348,20 @@ object OpenApiZioSchemaCirceConverter {
               val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
               val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
               val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct12(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12)
+              val baseDecoder = io.circe.Decoder.forProduct12(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -293,7 +381,21 @@ object OpenApiZioSchemaCirceConverter {
               val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
               val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
               val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct13(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13)
+              val baseDecoder = io.circe.Decoder.forProduct13(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -314,7 +416,22 @@ object OpenApiZioSchemaCirceConverter {
               val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
               val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
               val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct14(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14)
+              val baseDecoder = io.circe.Decoder.forProduct14(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -336,7 +453,23 @@ object OpenApiZioSchemaCirceConverter {
               val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
               val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
               val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct15(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15)
+              val baseDecoder = io.circe.Decoder.forProduct15(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -359,7 +492,24 @@ object OpenApiZioSchemaCirceConverter {
               val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
               val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
               val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct16(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16)
+              val baseDecoder = io.circe.Decoder.forProduct16(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -383,7 +533,25 @@ object OpenApiZioSchemaCirceConverter {
               val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
               val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
               val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct17(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17)
+              val baseDecoder = io.circe.Decoder.forProduct17(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -408,7 +576,26 @@ object OpenApiZioSchemaCirceConverter {
               val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
               val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
               val decoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct18(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18)
+              val baseDecoder = io.circe.Decoder.forProduct18(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -434,7 +621,27 @@ object OpenApiZioSchemaCirceConverter {
               val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
               val decoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
               val decoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct19(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label, f19.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19)
+              val baseDecoder = io.circe.Decoder.forProduct19(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label),
+                parsed.transformJsonLabel(f19.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -461,7 +668,28 @@ object OpenApiZioSchemaCirceConverter {
               val decoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
               val decoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
               val decoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct20(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label, f19.label, f20.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20)
+              val baseDecoder = io.circe.Decoder.forProduct20(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label),
+                parsed.transformJsonLabel(f19.label),
+                parsed.transformJsonLabel(f20.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -489,7 +717,29 @@ object OpenApiZioSchemaCirceConverter {
               val decoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
               val decoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
               val decoder21 = addAnnotations(convert(f21.schema), extractAnnotations(f21.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct21(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label, f19.label, f20.label, f21.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20, decoder21)
+              val baseDecoder = io.circe.Decoder.forProduct21(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label),
+                parsed.transformJsonLabel(f19.label),
+                parsed.transformJsonLabel(f20.label),
+                parsed.transformJsonLabel(f21.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20, decoder21)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -518,7 +768,30 @@ object OpenApiZioSchemaCirceConverter {
               val decoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
               val decoder21 = addAnnotations(convert(f21.schema), extractAnnotations(f21.annotations))
               val decoder22 = addAnnotations(convert(f22.schema), extractAnnotations(f22.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct22(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label, f19.label, f20.label, f21.label, f22.label)(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20, decoder21, decoder22)
+              val baseDecoder = io.circe.Decoder.forProduct22(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label),
+                parsed.transformJsonLabel(f19.label),
+                parsed.transformJsonLabel(f20.label),
+                parsed.transformJsonLabel(f21.label),
+                parsed.transformJsonLabel(f22.label)
+              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20, decoder21, decoder22)
               addAnnotations(baseDecoder, parsed)
             }
 
@@ -654,7 +927,7 @@ object OpenApiZioSchemaCirceConverter {
           val fieldDecoders = fieldSet.toChunk.iterator
             .map { field =>
               val fieldDecoder = addAnnotations(convert(field.schema), extractAnnotations(field.annotations))
-              field.label -> fieldDecoder
+              parsed.transformJsonLabel(field.label) -> (field.label, fieldDecoder)
             }
             .toMap
           val baseDecoder = new Decoder[ListMap[String, _]] {
@@ -680,15 +953,17 @@ object OpenApiZioSchemaCirceConverter {
               val errors = ListBuffer.empty[DecodingFailure]
               val builder = ListMap.newBuilder[String, Any]
               while (iter.hasNext && (errors.isEmpty || accumulate)) {
-                val (key, decoder) = iter.next()
+                val (mappedKey, (key, decoder)) = iter.next()
                 if (accumulate) {
-                  decoder.tryDecodeAccumulating(c.downField(key)) match {
+                  val result: AccumulatingResult[Any] = decoder.tryDecodeAccumulating(c.downField(mappedKey))
+                  result match {
                     case Validated.Invalid(failures) => val _ = errors.addAll(failures.iterator)
                     case Validated.Valid(value) => val _ = builder.addOne(key -> value)
                   }
                 }
                 else {
-                  decoder.tryDecode(c.downField(key)) match {
+                  val result: Result[Any] = decoder.tryDecode(c.downField(mappedKey))
+                  result match {
                     case Left(failure) => val _ = errors.addOne(failure)
                     case Right(value) => val _ = builder.addOne(key -> value)
                   }
@@ -882,7 +1157,9 @@ object OpenApiZioSchemaCirceConverter {
               val baseEncoder = new AsObject[ListMap[String, _]] {
                 override def encodeObject(a: ListMap[String, _]): JsonObject = {
                   val record = a.iterator.zip(fieldEncoders.iterator)
-                    .map { case ((k, v), encoder) => (k, encoder.asInstanceOf[Encoder[Any]](v.asInstanceOf[Any])) }
+                    .map { case ((k, v), encoder) =>
+                      (recordAnnotations.transformJsonLabel(k), encoder.asInstanceOf[Encoder[Any]](v.asInstanceOf[Any]))
+                    }
                     .toVector
                   JsonObject.fromIterable(record)
                 }
@@ -903,7 +1180,7 @@ object OpenApiZioSchemaCirceConverter {
             val parsed = extractAnnotations[A](annotations)
             convertUsingCache(parsed) {
               val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct1(f1.label)(ext1)(encoder1)
+              val baseEncoder = io.circe.Encoder.forProduct1(parsed.transformJsonLabel(f1.label))(ext1)(encoder1)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -912,7 +1189,10 @@ object OpenApiZioSchemaCirceConverter {
             convertUsingCache(parsed) {
               val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
               val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct2(f1.label, f2.label)((a: A) => (ext1(a), ext2(a)))(encoder1, encoder2)
+              val baseEncoder = io.circe.Encoder.forProduct2(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label)
+              )((a: A) => (ext1(a), ext2(a)))(encoder1, encoder2)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -922,7 +1202,11 @@ object OpenApiZioSchemaCirceConverter {
               val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
               val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
               val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct3(f1.label, f2.label, f3.label)((a: A) => (ext1(a), ext2(a), ext3(a)))(encoder1, encoder2, encoder3)
+              val baseEncoder = io.circe.Encoder.forProduct3(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a)))(encoder1, encoder2, encoder3)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -933,7 +1217,12 @@ object OpenApiZioSchemaCirceConverter {
               val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
               val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
               val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct4(f1.label, f2.label, f3.label, f4.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a)))(encoder1, encoder2, encoder3, encoder4)
+              val baseEncoder = io.circe.Encoder.forProduct4(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a)))(encoder1, encoder2, encoder3, encoder4)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -945,7 +1234,13 @@ object OpenApiZioSchemaCirceConverter {
               val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
               val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
               val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct5(f1.label, f2.label, f3.label, f4.label, f5.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a)))(encoder1, encoder2, encoder3, encoder4, encoder5)
+              val baseEncoder = io.circe.Encoder.forProduct5(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a)))(encoder1, encoder2, encoder3, encoder4, encoder5)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -958,7 +1253,14 @@ object OpenApiZioSchemaCirceConverter {
               val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
               val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
               val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct6(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6)
+              val baseEncoder = io.circe.Encoder.forProduct6(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -972,7 +1274,15 @@ object OpenApiZioSchemaCirceConverter {
               val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
               val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
               val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct7(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7)
+              val baseEncoder = io.circe.Encoder.forProduct7(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -987,7 +1297,16 @@ object OpenApiZioSchemaCirceConverter {
               val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
               val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
               val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct8(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8)
+              val baseEncoder = io.circe.Encoder.forProduct8(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1003,7 +1322,17 @@ object OpenApiZioSchemaCirceConverter {
               val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
               val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
               val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct9(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9)
+              val baseEncoder = io.circe.Encoder.forProduct9(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1020,7 +1349,18 @@ object OpenApiZioSchemaCirceConverter {
               val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
               val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
               val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct10(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10)
+              val baseEncoder = io.circe.Encoder.forProduct10(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1038,7 +1378,19 @@ object OpenApiZioSchemaCirceConverter {
               val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
               val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
               val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct11(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11)
+              val baseEncoder = io.circe.Encoder.forProduct11(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1057,7 +1409,20 @@ object OpenApiZioSchemaCirceConverter {
               val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
               val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
               val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct12(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12)
+              val baseEncoder = io.circe.Encoder.forProduct12(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1077,7 +1442,21 @@ object OpenApiZioSchemaCirceConverter {
               val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
               val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
               val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct13(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13)
+              val baseEncoder = io.circe.Encoder.forProduct13(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1098,7 +1477,22 @@ object OpenApiZioSchemaCirceConverter {
               val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
               val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
               val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct14(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14)
+              val baseEncoder = io.circe.Encoder.forProduct14(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1120,7 +1514,23 @@ object OpenApiZioSchemaCirceConverter {
               val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
               val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
               val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct15(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15)
+              val baseEncoder = io.circe.Encoder.forProduct15(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1143,7 +1553,24 @@ object OpenApiZioSchemaCirceConverter {
               val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
               val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
               val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct16(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16)
+              val baseEncoder = io.circe.Encoder.forProduct16(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1167,7 +1594,25 @@ object OpenApiZioSchemaCirceConverter {
               val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
               val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
               val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct17(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17)
+              val baseEncoder = io.circe.Encoder.forProduct17(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1192,7 +1637,26 @@ object OpenApiZioSchemaCirceConverter {
               val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
               val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
               val encoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct18(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18)
+              val baseEncoder = io.circe.Encoder.forProduct18(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1218,7 +1682,27 @@ object OpenApiZioSchemaCirceConverter {
               val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
               val encoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
               val encoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct19(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label, f19.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19)
+              val baseEncoder = io.circe.Encoder.forProduct19(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label),
+                parsed.transformJsonLabel(f19.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1245,7 +1729,28 @@ object OpenApiZioSchemaCirceConverter {
               val encoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
               val encoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
               val encoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct20(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label, f19.label, f20.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20)
+              val baseEncoder = io.circe.Encoder.forProduct20(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label),
+                parsed.transformJsonLabel(f19.label),
+                parsed.transformJsonLabel(f20.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1273,7 +1778,29 @@ object OpenApiZioSchemaCirceConverter {
               val encoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
               val encoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
               val encoder21 = addAnnotations(convert(f21.schema), extractAnnotations(f21.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct21(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label, f19.label, f20.label, f21.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a), ext21(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20, encoder21)
+              val baseEncoder = io.circe.Encoder.forProduct21(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label),
+                parsed.transformJsonLabel(f19.label),
+                parsed.transformJsonLabel(f20.label),
+                parsed.transformJsonLabel(f21.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a), ext21(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20, encoder21)
               addAnnotations(baseEncoder, parsed)
             }
 
@@ -1302,7 +1829,30 @@ object OpenApiZioSchemaCirceConverter {
               val encoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
               val encoder21 = addAnnotations(convert(f21.schema), extractAnnotations(f21.annotations))
               val encoder22 = addAnnotations(convert(f22.schema), extractAnnotations(f22.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct22(f1.label, f2.label, f3.label, f4.label, f5.label, f6.label, f7.label, f8.label, f9.label, f10.label, f11.label, f12.label, f13.label, f14.label, f15.label, f16.label, f17.label, f18.label, f19.label, f20.label, f21.label, f22.label)((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a), ext21(a), ext22(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20, encoder21, encoder22)
+              val baseEncoder = io.circe.Encoder.forProduct22(
+                parsed.transformJsonLabel(f1.label),
+                parsed.transformJsonLabel(f2.label),
+                parsed.transformJsonLabel(f3.label),
+                parsed.transformJsonLabel(f4.label),
+                parsed.transformJsonLabel(f5.label),
+                parsed.transformJsonLabel(f6.label),
+                parsed.transformJsonLabel(f7.label),
+                parsed.transformJsonLabel(f8.label),
+                parsed.transformJsonLabel(f9.label),
+                parsed.transformJsonLabel(f10.label),
+                parsed.transformJsonLabel(f11.label),
+                parsed.transformJsonLabel(f12.label),
+                parsed.transformJsonLabel(f13.label),
+                parsed.transformJsonLabel(f14.label),
+                parsed.transformJsonLabel(f15.label),
+                parsed.transformJsonLabel(f16.label),
+                parsed.transformJsonLabel(f17.label),
+                parsed.transformJsonLabel(f18.label),
+                parsed.transformJsonLabel(f19.label),
+                parsed.transformJsonLabel(f20.label),
+                parsed.transformJsonLabel(f21.label),
+                parsed.transformJsonLabel(f22.label)
+              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a), ext21(a), ext22(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20, encoder21, encoder22)
               addAnnotations(baseEncoder, parsed)
             }
 
