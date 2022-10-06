@@ -33,6 +33,10 @@ object OpenApiZioSchemas {
       Schema.Transform[A, B, SourceLocation](schema, a => Right(f(a)), b => Right(g(b)), Chunk.empty, loc)
     def transformWithoutAnnotations[B](f: A => Either[String, B], g: B => A)(implicit loc: SourceLocation): Schema[B] =
       Schema.Transform[A, B, SourceLocation](schema, a => f(a), b => Right(g(b)), Chunk.empty, loc)
+    def withJsonFieldsCaseConverter(from: OpenApiNamingConvention, to: OpenApiNamingConvention): Schema[A] =
+      schema.annotate(OpenApiAnnotations.jsonCaseConverter(from, to))
+    def withSnakeCaseJsonFields: Schema[A] =
+      withJsonFieldsCaseConverter(OpenApiNamingConvention.OpenApiCamelCase, OpenApiNamingConvention.OpenApiSnakeCase)
 
   }
 

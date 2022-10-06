@@ -10,4 +10,6 @@ object OpenApiAnnotations {
   final case class description(text: String) extends StaticAnnotation
   final case class validate[T](v: Validator[T]) extends StaticAnnotation
   final case class sumTypeSerDeStrategy[A](value: OpenApiSumTypeSerDeStrategy[A]) extends StaticAnnotation
+  final case class jsonCaseConverter(from: OpenApiNamingConvention, to: OpenApiNamingConvention)
+      extends StaticAnnotation
 }

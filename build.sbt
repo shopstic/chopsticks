@@ -247,6 +247,7 @@ lazy val openApi = Build
   .settings(
     libraryDependencies ++= tapirDeps ++ zioSchemaDeps
   )
+  .dependsOn(util)
 
 lazy val root = (project in file("."))
   .settings(

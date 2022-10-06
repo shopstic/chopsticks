@@ -251,8 +251,9 @@ object OpenApiZioSchemaToTapirConverter {
               convert(field.schema).asInstanceOf[TapirSchema[Any]],
               extractAnnotations(field.annotations)
             )
+            val transformedLabel = recordAnnotations.transformJsonLabel(field.label)
             SchemaType.SProductField(
-              _name = FieldName(field.label, field.label),
+              _name = FieldName(transformedLabel, transformedLabel),
               _schema = schema,
               _get = (a: ListMap[String, _]) => Some(a(field.label))
             )
@@ -277,8 +278,9 @@ object OpenApiZioSchemaToTapirConverter {
               convert(field.schema).asInstanceOf[TapirSchema[Any]],
               extractAnnotations(field.annotations)
             )
+            val transformedLabel = caseClassAnnotations.transformJsonLabel(field.label)
             SchemaType.SProductField(
-              _name = FieldName(field.label, field.label),
+              _name = FieldName(transformedLabel, transformedLabel),
               _schema = schema,
               _get = (a: A) => Some(getField(a))
             )
