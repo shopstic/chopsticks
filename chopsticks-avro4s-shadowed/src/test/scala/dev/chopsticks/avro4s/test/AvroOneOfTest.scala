@@ -63,6 +63,14 @@ object BadDefaultValueInAnnotation {
   case object Bar extends BadDefaultValueInAnnotation
 }
 
+@AvroOneOf(AllCoproductsAreCaseObject.Unknown)
+sealed trait AllCoproductsAreCaseObject
+object AllCoproductsAreCaseObject {
+  final case object Unknown extends AllCoproductsAreCaseObject
+  final case object Foo extends AllCoproductsAreCaseObject
+  final case object Bar extends AllCoproductsAreCaseObject
+}
+
 final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers {
   "sealed traits without AvroOneOf annotation" should {
     "derive as native Avro UNIONs" in {
@@ -138,6 +146,45 @@ final class AvroOneOfTest extends AnyWordSpecLike with Assertions with Matchers 
 
       Decoder[OneOfBase].decode(Encoder[OneOfBase].encode(foo)) should equal(foo)
       Decoder[OneOfBase].decode(Encoder[OneOfBase].encode(bar)) should equal(bar)
+    }
+
+    "work when all coproducts are case objects" in {
+      SchemaFor[AllCoproductsAreCaseObject].schema.toString(true) should equal("""{
+       |  "type" : "record",
+       |  "name" : "AllCoproductsAreCaseObject",
+       |  "namespace" : "dev.chopsticks.avro4s.test",
+       |  "fields" : [ {
+       |    "name" : "AllCoproductsAreCaseObject_Bar",
+       |    "type" : [ "null", {
+       |      "type" : "record",
+       |      "name" : "Bar",
+       |      "namespace" : "dev.chopsticks.avro4s.test.AllCoproductsAreCaseObject",
+       |      "fields" : [ ]
+       |    } ],
+       |    "doc" : "",
+       |    "default" : null
+       |  }, {
+       |    "name" : "AllCoproductsAreCaseObject_Foo",
+       |    "type" : [ "null", {
+       |      "type" : "record",
+       |      "name" : "Foo",
+       |      "namespace" : "dev.chopsticks.avro4s.test.AllCoproductsAreCaseObject",
+       |      "fields" : [ ]
+       |    } ],
+       |    "doc" : "",
+       |    "default" : null
+       |  }, {
+       |    "name" : "AllCoproductsAreCaseObject_Unknown",
+       |    "type" : [ "null", {
+       |      "type" : "record",
+       |      "name" : "Unknown",
+       |      "namespace" : "dev.chopsticks.avro4s.test.AllCoproductsAreCaseObject",
+       |      "fields" : [ ]
+       |    } ],
+       |    "doc" : "",
+       |    "default" : null
+       |  } ]
+       |}""".stripMargin)
     }
 
     "derive recursively with nested evolvable unions" in {
