@@ -216,7 +216,7 @@ object Dependencies {
   )
 
   val avro4sDirectDeps = {
-    val Json4sVersion = "4.0.5"
+    val Json4sVersion = "4.0.6"
     val RefinedVersion = "0.9.29"
     val ShapelessVersion = "2.3.9"
     val MagnoliaVersion = "0.17.0"
