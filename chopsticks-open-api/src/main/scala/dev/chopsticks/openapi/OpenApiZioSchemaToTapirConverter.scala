@@ -383,7 +383,7 @@ object OpenApiZioSchemaToTapirConverter {
         case StandardType.PeriodType => SchemaType.SString()
         case StandardType.YearType => SchemaType.SString()
         case StandardType.YearMonthType => SchemaType.SString()
-        case StandardType.ZonedDateTimeType(_) => SchemaType.SString()
+        case StandardType.ZonedDateTimeType(_) => SchemaType.SDateTime()
         case StandardType.ZoneIdType => SchemaType.SString()
         case StandardType.ZoneOffsetType => SchemaType.SString()
       }
