@@ -31,6 +31,8 @@ import scala.collection.mutable.ListBuffer
 import scala.language.existentials
 
 object OpenApiZioSchemaCirceConverter {
+  final private case class CacheKey(entityName: String, annotationsHash: Int)
+
   object Decoder {
     def convert[A](zioSchema: ZioSchema[A]): Decoder[A] = {
       new Converter(scala.collection.mutable.Map.empty).convert(zioSchema)
@@ -46,16 +48,17 @@ object OpenApiZioSchemaCirceConverter {
       override def apply(c: HCursor): Result[A] = get(c)
     }
 
-    private class Converter(cache: scala.collection.mutable.Map[String, LazyDecoder[_]]) {
+    private class Converter(cache: scala.collection.mutable.Map[CacheKey, LazyDecoder[_]]) {
 
       private def convertUsingCache[A](annotations: OpenApiParsedAnnotations[A])(convert: => Decoder[A]): Decoder[A] = {
         annotations.entityName match {
           case Some(name) =>
-            cache.get(name) match {
+            val cacheKey = CacheKey(name, annotations.hashCode())
+            cache.get(cacheKey) match {
               case Some(value) => value.asInstanceOf[io.circe.Decoder[A]]
               case None =>
                 val lazyDec = new LazyDecoder[A]()
-                val _ = cache.addOne(name -> lazyDec)
+                val _ = cache.addOne(cacheKey -> lazyDec)
                 val result = convert
                 lazyDec.set(result)
                 result
@@ -1083,17 +1086,18 @@ object OpenApiZioSchemaCirceConverter {
       override def apply(a: A): Json = get(a)
     }
 
-    private class Converter(cache: scala.collection.mutable.Map[String, LazyEncoder[_]]) {
+    private class Converter(cache: scala.collection.mutable.Map[CacheKey, LazyEncoder[_]]) {
 
       private def convertUsingCache[A](annotations: OpenApiParsedAnnotations[A])(convert: => io.circe.Encoder[A])
         : io.circe.Encoder[A] = {
         annotations.entityName match {
           case Some(name) =>
-            cache.get(name) match {
+            val cacheKey = CacheKey(name, annotations.hashCode())
+            cache.get(cacheKey) match {
               case Some(value) => value.asInstanceOf[io.circe.Encoder[A]]
               case None =>
                 val lazyEnc = new LazyEncoder[A]()
-                val _ = cache.addOne(name -> lazyEnc)
+                val _ = cache.addOne(cacheKey -> lazyEnc)
                 val result = convert
                 lazyEnc.set(result)
                 result
