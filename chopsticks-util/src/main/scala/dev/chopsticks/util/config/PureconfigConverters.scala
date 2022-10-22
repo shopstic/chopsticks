@@ -116,7 +116,8 @@ object PureconfigConverters {
   implicit def refinedStringAsMapKeyConfigReader[F[_, _], P, V](implicit
     refType: RefType[F],
     validate: Validate[String, P],
-    typeTag: WeakTypeTag[F[String, P]]
+    typeTag: WeakTypeTag[F[String, P]],
+    configReader: ConfigReader[V]
   ): ConfigReader[Map[F[String, P], V]] = {
     pureconfig.configurable.genericMapReader { s =>
       import cats.syntax.either._
