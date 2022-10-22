@@ -112,4 +112,15 @@ object PureconfigConverters {
 
   implicit def exportReader[A]: Exported[ConfigReader[A]] = macro ExportMacros.exportDerivedReader[A]
   implicit def exportWriter[A]: Exported[ConfigWriter[A]] = macro ExportMacros.exportDerivedWriter[A]
+
+  implicit def refinedStringAsMapKeyConfigReader[F[_, _], P, V](implicit
+    refType: RefType[F],
+    validate: Validate[String, P],
+    typeTag: WeakTypeTag[F[String, P]]
+  ): ConfigReader[Map[F[String, P], V]] = {
+    pureconfig.configurable.genericMapReader { s =>
+      import cats.syntax.either._
+      refType.refine[P](s).leftMap(CannotConvert(s, typeTag.tpe.toString, _))
+    }
+  }
 }
