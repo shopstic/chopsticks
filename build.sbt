@@ -242,12 +242,16 @@ lazy val avro4s = Build
     Compile / packageBin := (avro4sShadowed / assembly).value
   )
 
-lazy val openApi = Build
-  .defineProject("open-api")
+lazy val openapi = Build
+  .defineProject("openapi")
   .settings(
     libraryDependencies ++= tapirDeps ++ zioSchemaDeps
   )
   .dependsOn(util)
+
+lazy val csv = Build
+  .defineProject("csv")
+  .dependsOn(openapi)
 
 lazy val root = (project in file("."))
   .settings(
@@ -271,7 +275,8 @@ lazy val root = (project in file("."))
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
     metric,
-    openApi,
+    openapi,
+    csv,
     alertmanager,
     prometheus,
     zioGrpcCommon,

@@ -4,7 +4,7 @@ import dev.chopsticks.openapi.OpenApiAnnotations._
 import sttp.tapir.Validator
 import zio.Chunk
 
-final private[openapi] case class OpenApiParsedAnnotations[A](
+final private[chopsticks] case class OpenApiParsedAnnotations[A](
   entityName: Option[String] = None,
   description: Option[String] = None,
   validator: Option[Validator[A]] = None,
@@ -22,7 +22,7 @@ final private[openapi] case class OpenApiParsedAnnotations[A](
 }
 
 object OpenApiParsedAnnotations {
-  private[openapi] def extractAnnotations[A](annotations: Chunk[Any]): OpenApiParsedAnnotations[A] = {
+  private[chopsticks] def extractAnnotations[A](annotations: Chunk[Any]): OpenApiParsedAnnotations[A] = {
     annotations.foldLeft(OpenApiParsedAnnotations[A]()) { case (typed, annotation) =>
       annotation match {
         case a: entityName => typed.copy(entityName = Some(a.name))
