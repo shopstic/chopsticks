@@ -193,6 +193,13 @@ lazy val zioGrpcCommon = Build
   )
   .dependsOn(util)
 
+lazy val jwt = Build
+  .defineProject("jwt")
+  .settings(
+    libraryDependencies ++= jwtCirceDeps ++ zioDeps
+  )
+  .dependsOn(util)
+
 lazy val sample = Build
   .defineProject("sample")
   .enablePlugins(AkkaGrpcPlugin)
@@ -282,5 +289,6 @@ lazy val root = (project in file("."))
     zioGrpcCommon,
     sample,
     avro4sShadowed,
-    avro4s
+    avro4s,
+    jwt
   )
