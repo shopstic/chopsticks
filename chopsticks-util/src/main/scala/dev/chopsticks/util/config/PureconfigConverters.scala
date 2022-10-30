@@ -124,4 +124,15 @@ object PureconfigConverters {
       refType.refine[P](s).leftMap(CannotConvert(s, typeTag.tpe.toString, _))
     }
   }
+
+  implicit def refinedStringAsMapKeyConfigWriter[F[_, _], P, V](implicit
+    refType: RefType[F],
+    validate: Validate[String, P],
+    typeTag: WeakTypeTag[F[String, P]],
+    configWriter: ConfigWriter[V]
+  ): ConfigWriter[Map[F[String, P], V]] = {
+    pureconfig.configurable.genericMapWriter { s =>
+      refType.unwrap(s)
+    }
+  }
 }
