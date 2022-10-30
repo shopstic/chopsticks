@@ -11,8 +11,6 @@ import sttp.tapir.SchemaType._
 
 // adjusted from Tapir's repository
 trait OpenApiTapirJsonCirce {
-  private val DefaultCirceMessage = "Attempt to decode value on failed cursor"
-
   // Json is a coproduct with unknown implementations
   implicit val schemaForCirceJson: Schema[Json] =
     Schema(
@@ -42,7 +40,7 @@ trait OpenApiTapirJsonCirce {
             case Validated.Valid(v) => Value(v)
             case Validated.Invalid(circeFailures) =>
               val jsonErrors = circeFailures.map { failure: DecodingFailure =>
-                OpenApiJsonError(json, failure.history, reformatError(failure.message))
+                OpenApiJsonError(json, failure.history, failure.message)
               }
               Error(
                 original = s,
@@ -67,13 +65,6 @@ trait OpenApiTapirJsonCirce {
 
   private def decodeAccumulating[A](json: Json)(implicit decoder: Decoder[A]): ValidatedNel[DecodingFailure, A] = {
     decoder.decodeAccumulating(json.hcursor)
-  }
-
-  private def reformatError(value: String): String = {
-    value match {
-      case DefaultCirceMessage => "Missing or invalid value"
-      case other => other
-    }
   }
 }
 

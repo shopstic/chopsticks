@@ -12,8 +12,7 @@ object Dependencies {
   val IZUMI_VERSION = "1.0.10"
   val REFINED_VERSION = "0.9.29"
   // Don't upgrade circe until this fix ends up in a release
-  // https://github.com/circe/circe/issues/1972
-  val CIRCE_VERSION = "0.14.1"
+  val CIRCE_VERSION = "0.14.3"
   val CALIBAN_VERSION = "1.3.3"
   val STTP_VERSION = "3.7.4"
 
@@ -114,7 +113,7 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "7.5.3"
+    "org.rocksdb" % "rocksdbjni" % "7.6.0"
   )
 
   val lmdbDeps = Seq(
@@ -173,7 +172,7 @@ object Dependencies {
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "4.2.0"
+    "com.github.japgolly.microlibs" %% "utils" % "4.2.1"
   )
 
   val berkeleyDbDeps = Seq(
@@ -185,7 +184,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.7.3"
+    "com.lihaoyi" %% "pprint" % "0.8.0"
   )
 
   val logstageDeps = Seq(
