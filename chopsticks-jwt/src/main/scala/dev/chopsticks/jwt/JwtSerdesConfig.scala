@@ -1,7 +1,7 @@
 package dev.chopsticks.jwt
 
 import pdi.jwt.algorithms.JwtAsymmetricAlgorithm
-import pureconfig.{ConfigConvert, ConfigReader}
+import pureconfig.ConfigConvert
 
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
 import java.util.Base64
@@ -29,8 +29,8 @@ object JwtSerdesConfig {
 
   // noinspection TypeAnnotation
   implicit lazy val configConvert = {
-    import JwtAsymmetricAlgorithm.configReader
+    import JwtAsymmetricAlgorithm._
     import dev.chopsticks.util.config.PureconfigConverters._
-    ConfigReader[JwtSerdesConfig]
+    ConfigConvert[JwtSerdesConfig]
   }
 }
