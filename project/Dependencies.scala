@@ -14,7 +14,6 @@ object Dependencies {
   // Don't upgrade circe until this fix ends up in a release
   val CIRCE_VERSION = "0.14.3"
   val CALIBAN_VERSION = "1.3.3"
-  val STTP_VERSION = "3.7.4"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -203,10 +202,6 @@ object Dependencies {
 
   val sourcecodeDeps = Seq(
     "com.lihaoyi" %% "sourcecode" % "0.3.0"
-  )
-
-  val sttpDeps = Seq(
-    "com.softwaremill.sttp.client3" %% "core" % STTP_VERSION
   )
 
   val avro4sDeps = Seq(
