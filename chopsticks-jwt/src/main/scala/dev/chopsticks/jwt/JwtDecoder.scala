@@ -3,7 +3,7 @@ package dev.chopsticks.jwt
 import io.circe.Decoder
 import pdi.jwt.JwtCirce
 import pdi.jwt.algorithms.JwtAsymmetricAlgorithm
-import pureconfig.ConfigReader
+import pureconfig.ConfigConvert
 import zio.{Tag, Task, UIO, URIO, URManaged, ZIO, ZLayer, ZManaged}
 
 import java.security.spec.X509EncodedKeySpec
@@ -16,11 +16,11 @@ final case class JwtDecoderConfig(
 
 object JwtDecoderConfig {
   // noinspection TypeAnnotation
-  implicit lazy val configReader = {
-    import JwtAsymmetricAlgorithm.pureconfigReader
-    import JwtSerdesConfig.publicKeyReader
+  implicit lazy val configConvert = {
+    import JwtAsymmetricAlgorithm._
+    import JwtSerdesConfig._
     import dev.chopsticks.util.config.PureconfigConverters._
-    ConfigReader[JwtDecoderConfig]
+    ConfigConvert[JwtDecoderConfig]
   }
 }
 

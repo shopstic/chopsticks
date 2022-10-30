@@ -1,7 +1,7 @@
 package dev.chopsticks.jwt
 
 import pdi.jwt.algorithms.JwtAsymmetricAlgorithm
-import pureconfig.ConfigReader
+import pureconfig.{ConfigConvert, ConfigReader}
 
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
 import java.util.Base64
@@ -17,17 +17,19 @@ final case class JwtSerdesConfig(
 }
 
 object JwtSerdesConfig {
-  implicit lazy val publicKeyReader: ConfigReader[X509EncodedKeySpec] =
-    ConfigReader.fromNonEmptyStringTry { base64Encoded =>
-      Try(new X509EncodedKeySpec(Base64.getDecoder.decode(base64Encoded)))
-    }
-  implicit lazy val privateKeyReader: ConfigReader[PKCS8EncodedKeySpec] =
-    ConfigReader.fromNonEmptyStringTry { base64Encoded =>
-      Try(new PKCS8EncodedKeySpec(Base64.getDecoder.decode(base64Encoded)))
-    }
+  implicit lazy val publicKeyConvert: ConfigConvert[X509EncodedKeySpec] = ConfigConvert.viaNonEmptyStringTry(
+    base64Encoded => Try(new X509EncodedKeySpec(Base64.getDecoder.decode(base64Encoded))),
+    spec => Base64.getEncoder.encodeToString(spec.getEncoded)
+  )
+
+  implicit lazy val privateKeyConvert: ConfigConvert[PKCS8EncodedKeySpec] = ConfigConvert.viaNonEmptyStringTry(
+    base64Encoded => Try(new PKCS8EncodedKeySpec(Base64.getDecoder.decode(base64Encoded))),
+    spec => Base64.getEncoder.encodeToString(spec.getEncoded)
+  )
+
   // noinspection TypeAnnotation
-  implicit lazy val configReader = {
-    import JwtAsymmetricAlgorithm.pureconfigReader
+  implicit lazy val configConvert = {
+    import JwtAsymmetricAlgorithm.configReader
     import dev.chopsticks.util.config.PureconfigConverters._
     ConfigReader[JwtSerdesConfig]
   }
