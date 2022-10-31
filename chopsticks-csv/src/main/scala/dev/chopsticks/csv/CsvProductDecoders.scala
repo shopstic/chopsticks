@@ -12,37 +12,20 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function1[A0, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0]
+                )
               )
             )
-          )
         }
       }
 
@@ -77,38 +60,21 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function2[A0, A1, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1]
+                )
               )
             )
-          )
         }
       }
 
@@ -144,39 +110,22 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function3[A0, A1, A2, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2]
+                )
               )
             )
-          )
         }
       }
 
@@ -213,40 +162,23 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function4[A0, A1, A2, A3, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3]
+                )
               )
             )
-          )
         }
       }
 
@@ -284,41 +216,24 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function5[A0, A1, A2, A3, A4, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4]
+                )
               )
             )
-          )
         }
       }
 
@@ -357,42 +272,25 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function6[A0, A1, A2, A3, A4, A5, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5]
+                )
               )
             )
-          )
         }
       }
 
@@ -432,43 +330,26 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function7[A0, A1, A2, A3, A4, A5, A6, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6]
+                )
               )
             )
-          )
         }
       }
 
@@ -509,44 +390,27 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function8[A0, A1, A2, A3, A4, A5, A6, A7, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7]
+                )
               )
             )
-          )
         }
       }
 
@@ -588,45 +452,28 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function9[A0, A1, A2, A3, A4, A5, A6, A7, A8, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8]
+                )
               )
             )
-          )
         }
       }
 
@@ -669,46 +516,29 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function10[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9]
+                )
               )
             )
-          )
         }
       }
 
@@ -752,47 +582,30 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function11[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10]
+                )
               )
             )
-          )
         }
       }
 
@@ -837,48 +650,31 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function12[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11]
+                )
               )
             )
-          )
         }
       }
 
@@ -924,49 +720,32 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function13[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12]
+                )
               )
             )
-          )
         }
       }
 
@@ -1013,50 +792,33 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function14[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13]
+                )
               )
             )
-          )
         }
       }
 
@@ -1104,51 +866,34 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function15[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13],
-                results(14).asInstanceOf[A14]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13],
+                  results(14).asInstanceOf[A14]
+                )
               )
             )
-          )
         }
       }
 
@@ -1197,52 +942,35 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function16[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13],
-                results(14).asInstanceOf[A14],
-                results(15).asInstanceOf[A15]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13],
+                  results(14).asInstanceOf[A14],
+                  results(15).asInstanceOf[A15]
+                )
               )
             )
-          )
         }
       }
 
@@ -1292,53 +1020,36 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function17[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13],
-                results(14).asInstanceOf[A14],
-                results(15).asInstanceOf[A15],
-                results(16).asInstanceOf[A16]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13],
+                  results(14).asInstanceOf[A14],
+                  results(15).asInstanceOf[A15],
+                  results(16).asInstanceOf[A16]
+                )
               )
             )
-          )
         }
       }
 
@@ -1389,54 +1100,37 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function18[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13],
-                results(14).asInstanceOf[A14],
-                results(15).asInstanceOf[A15],
-                results(16).asInstanceOf[A16],
-                results(17).asInstanceOf[A17]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13],
+                  results(14).asInstanceOf[A14],
+                  results(15).asInstanceOf[A15],
+                  results(16).asInstanceOf[A16],
+                  results(17).asInstanceOf[A17]
+                )
               )
             )
-          )
         }
       }
 
@@ -1488,55 +1182,38 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function19[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13],
-                results(14).asInstanceOf[A14],
-                results(15).asInstanceOf[A15],
-                results(16).asInstanceOf[A16],
-                results(17).asInstanceOf[A17],
-                results(18).asInstanceOf[A18]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13],
+                  results(14).asInstanceOf[A14],
+                  results(15).asInstanceOf[A15],
+                  results(16).asInstanceOf[A16],
+                  results(17).asInstanceOf[A17],
+                  results(18).asInstanceOf[A18]
+                )
               )
             )
-          )
         }
       }
 
@@ -1589,56 +1266,39 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function20[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13],
-                results(14).asInstanceOf[A14],
-                results(15).asInstanceOf[A15],
-                results(16).asInstanceOf[A16],
-                results(17).asInstanceOf[A17],
-                results(18).asInstanceOf[A18],
-                results(19).asInstanceOf[A19]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13],
+                  results(14).asInstanceOf[A14],
+                  results(15).asInstanceOf[A15],
+                  results(16).asInstanceOf[A16],
+                  results(17).asInstanceOf[A17],
+                  results(18).asInstanceOf[A18],
+                  results(19).asInstanceOf[A19]
+                )
               )
             )
-          )
         }
       }
 
@@ -1692,57 +1352,40 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function21[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13],
-                results(14).asInstanceOf[A14],
-                results(15).asInstanceOf[A15],
-                results(16).asInstanceOf[A16],
-                results(17).asInstanceOf[A17],
-                results(18).asInstanceOf[A18],
-                results(19).asInstanceOf[A19],
-                results(20).asInstanceOf[A20]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13],
+                  results(14).asInstanceOf[A14],
+                  results(15).asInstanceOf[A15],
+                  results(16).asInstanceOf[A16],
+                  results(17).asInstanceOf[A17],
+                  results(18).asInstanceOf[A18],
+                  results(19).asInstanceOf[A19],
+                  results(20).asInstanceOf[A20]
+                )
               )
             )
-          )
         }
       }
 
@@ -1797,58 +1440,41 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function22[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, Target]): CsvDecoder[Target] = {
     new CsvDecoder[Target] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], Option[Target]] = {
-        val errors = new ListBuffer[CsvDecoderError]
-        val results = new Array[Any](names.length)
-        var i = 0
-        var someCount = 0
-        while (i < names.length) {
-          val decoder = decoders(i)
-          val fieldName = names(i)
-          decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
-            case Right(Some(value)) =>
-              someCount += 1
-              results(i) = value
-            case Right(None) => results(i) = None
-            case Left(errs) => val _ = errors.addAll(errs)
-          }
-          i += 1
-        }
-        if (errors.nonEmpty) Left(errors.toList)
-        else if (someCount == 0) Right(None)
-        else if (someCount < names.length) {
-          Left(List(CsvDecoderError.notAllRequiredColumnsExist(errorColumn(options, columnName))))
-        }
-        else {
-          Right(
-            Some(
-              construct(
-                results(0).asInstanceOf[A0],
-                results(1).asInstanceOf[A1],
-                results(2).asInstanceOf[A2],
-                results(3).asInstanceOf[A3],
-                results(4).asInstanceOf[A4],
-                results(5).asInstanceOf[A5],
-                results(6).asInstanceOf[A6],
-                results(7).asInstanceOf[A7],
-                results(8).asInstanceOf[A8],
-                results(9).asInstanceOf[A9],
-                results(10).asInstanceOf[A10],
-                results(11).asInstanceOf[A11],
-                results(12).asInstanceOf[A12],
-                results(13).asInstanceOf[A13],
-                results(14).asInstanceOf[A14],
-                results(15).asInstanceOf[A15],
-                results(16).asInstanceOf[A16],
-                results(17).asInstanceOf[A17],
-                results(18).asInstanceOf[A18],
-                results(19).asInstanceOf[A19],
-                results(20).asInstanceOf[A20],
-                results(21).asInstanceOf[A21]
+        parseProductAsOption(names, decoders, row, columnName, options) match {
+          case Left(errors) => Left(errors)
+          case Right(None) => Right(None)
+          case Right(Some(results)) =>
+            Right(
+              Some(
+                construct(
+                  results(0).asInstanceOf[A0],
+                  results(1).asInstanceOf[A1],
+                  results(2).asInstanceOf[A2],
+                  results(3).asInstanceOf[A3],
+                  results(4).asInstanceOf[A4],
+                  results(5).asInstanceOf[A5],
+                  results(6).asInstanceOf[A6],
+                  results(7).asInstanceOf[A7],
+                  results(8).asInstanceOf[A8],
+                  results(9).asInstanceOf[A9],
+                  results(10).asInstanceOf[A10],
+                  results(11).asInstanceOf[A11],
+                  results(12).asInstanceOf[A12],
+                  results(13).asInstanceOf[A13],
+                  results(14).asInstanceOf[A14],
+                  results(15).asInstanceOf[A15],
+                  results(16).asInstanceOf[A16],
+                  results(17).asInstanceOf[A17],
+                  results(18).asInstanceOf[A18],
+                  results(19).asInstanceOf[A19],
+                  results(20).asInstanceOf[A20],
+                  results(21).asInstanceOf[A21]
+                )
               )
             )
-          )
         }
       }
 
@@ -1895,6 +1521,55 @@ trait CsvProductDecoders {
           )
         }
       }
+    }
+  }
+
+  private def parseProductAsOption(
+    names: ArraySeq[String],
+    decoders: ArraySeq[CsvDecoder[_]],
+    row: Map[String, String],
+    columnName: Option[String],
+    options: CsvDecoderOptions
+  ): Either[List[CsvDecoderError], Option[Array[Any]]] = {
+    val errors = new ListBuffer[CsvDecoderError]
+    val results = new Array[Any](names.length)
+    var i = 0
+    var someCount = 0
+    var optionalNoneCount = 0
+    while (i < names.length) {
+      val decoder = decoders(i)
+      val fieldName = names(i)
+      decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
+        case Right(Some(value)) =>
+          someCount += 1
+          results(i) = value
+        case Right(None) =>
+          results(i) = None
+          if (decoder.isOptional) optionalNoneCount += 1
+        case Left(errs) => val _ = errors.addAll(errs)
+      }
+      i += 1
+    }
+    if (errors.nonEmpty) Left(errors.toList)
+    else if (someCount == 0) Right(None)
+    else if (someCount + optionalNoneCount < names.length) {
+      val missingColumns = new ListBuffer[String]
+      i = 0
+      while (i < names.length) {
+        val decoder = decoders(i)
+        val fieldName = names(i)
+        val nestedField = Some(options.selectNestedField(columnName, fieldName))
+        decoder.parseAsOption(row, nestedField) match {
+          case Right(None) if !decoder.isOptional =>
+            val _ = missingColumns.addAll(CsvDecoder.errorColumn(nestedField, decoder.isPrimitive, options))
+          case _ => ()
+        }
+        i += 1
+      }
+      Left(List(CsvDecoderError.notAllRequiredColumnsExist(missingColumns.result())))
+    }
+    else {
+      Right(Some(results))
     }
   }
 

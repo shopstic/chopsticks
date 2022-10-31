@@ -4,7 +4,7 @@ final case class CsvDecoderError(message: String, columnName: Option[String]) {
   def format: String = {
     val trimmed = message.trim
     val withDot = if (trimmed.endsWith(".")) trimmed else trimmed + "."
-    withDot + (if (columnName.isDefined) s" Column(s): ${columnName.get}" else "")
+    withDot + (if (columnName.isDefined) s" Column(s): ${columnName.get.mkString(", ")}" else "")
   }
 }
 object CsvDecoderError {
@@ -13,6 +13,9 @@ object CsvDecoderError {
   }
   def notAllRequiredColumnsExist(columnName: Option[String]) = {
     CsvDecoderError("Not all required columns contain defined values.", columnName)
+  }
+  def notAllRequiredColumnsExist(columnNames: List[String]) = {
+    CsvDecoderError("Not all required columns contain defined values.", Some(columnNames.mkString(", ")))
   }
   def unrecognizedDiscriminatorType(received: String, formattedKnownTypes: String, columnName: Option[String]) = {
     CsvDecoderError(
