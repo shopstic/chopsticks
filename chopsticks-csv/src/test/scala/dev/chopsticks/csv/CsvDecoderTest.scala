@@ -3,6 +3,7 @@ package dev.chopsticks.csv
 import dev.chopsticks.csv.CsvDecoderTest.{
   CsvDecoderTestAddress,
   CsvDecoderTestAddressList,
+  CsvDecoderTestItem,
   CsvDecoderTestMessage,
   CsvDecoderTestMultimediaMessage,
   CsvDecoderTestName,
@@ -79,6 +80,12 @@ object CsvDecoderTest {
   object CsvDecoderTestMultimediaMessage extends OpenApiModel[CsvDecoderTestMultimediaMessage] {
     implicit override lazy val zioSchema: Schema[CsvDecoderTestMultimediaMessage] = DeriveSchema.gen
   }
+
+  @entityName("CsvDecoderTestItem")
+  final case class CsvDecoderTestItem(price: BigDecimal)
+  object CsvDecoderTestItem extends OpenApiModel[CsvDecoderTestItem] {
+    implicit override lazy val zioSchema: Schema[CsvDecoderTestItem] = DeriveSchema.gen
+  }
 }
 
 final class CsvDecoderTest extends AnyWordSpecLike with Assertions with Matchers {
@@ -87,6 +94,7 @@ final class CsvDecoderTest extends AnyWordSpecLike with Assertions with Matchers
   "CsvDecoder" should {
     val testPersonDecoder = CsvDecoder.derive[CsvDecoderTestPerson]()
     val testMessageDecoder = CsvDecoder.derive[CsvDecoderTestMessage]()
+    val testItemDecoder = CsvDecoder.derive[CsvDecoderTestItem]()
     "decode valid row" in {
       val row = Map(
         "age" -> "30",
@@ -216,6 +224,15 @@ final class CsvDecoderTest extends AnyWordSpecLike with Assertions with Matchers
       val expected =
         Left(List(CsvDecoderError("Unrecognized type: nonexisting. Valid object types are: multimedia, text.", None)))
       val result = testMessageDecoder.parse(row, None)
+      assert(result == expected)
+    }
+
+    "decoder big decimals" in {
+      val row = Map(
+        "price" -> "5.30"
+      )
+      val expected = Right(CsvDecoderTestItem(BigDecimal("5.30")))
+      val result = testItemDecoder.parse(row, None)
       assert(result == expected)
     }
 

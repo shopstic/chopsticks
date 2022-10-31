@@ -14,6 +14,7 @@ import scala.collection.mutable.ListBuffer
 import scala.util.control.NonFatal
 
 trait CsvDecoder[A] { self =>
+  def isOptional: Boolean
   def isPrimitive: Boolean
   def parse(row: Map[String, String], columnName: Option[String]): Either[List[CsvDecoderError], A]
   def parseAsOption(
@@ -22,6 +23,7 @@ trait CsvDecoder[A] { self =>
   ): Either[List[CsvDecoderError], Option[A]]
   final def ensure(pred: A => Boolean, message: => String, options: CsvDecoderOptions) =
     new CsvDecoder[A] {
+      override val isOptional = self.isOptional
       override val isPrimitive = self.isPrimitive
       override def parseAsOption(row: Map[String, String], columnName: Option[String]) = {
         self.parseAsOption(row, columnName) match {
@@ -40,6 +42,7 @@ trait CsvDecoder[A] { self =>
         }
     }
   final def ensure(errors: A => List[String], options: CsvDecoderOptions) = new CsvDecoder[A] {
+    override val isOptional = self.isOptional
     override val isPrimitive = self.isPrimitive
     override def parseAsOption(
       row: Map[String, String],
@@ -68,6 +71,7 @@ trait CsvDecoder[A] { self =>
       }
   }
   final def map[B](f: A => B): CsvDecoder[B] = new CsvDecoder[B] {
+    override val isOptional = self.isOptional
     override val isPrimitive = self.isPrimitive
     override def parseAsOption(
       row: Map[String, String],
@@ -80,6 +84,7 @@ trait CsvDecoder[A] { self =>
     }
   }
   final def emap[B](f: A => Either[String, B]): CsvDecoder[B] = new CsvDecoder[B] {
+    override val isOptional = self.isOptional
     override val isPrimitive = self.isPrimitive
     override def parseAsOption(
       row: Map[String, String],
@@ -107,9 +112,11 @@ trait CsvDecoder[A] { self =>
     }
   }
 
-  protected def errorColumn(options: CsvDecoderOptions, columnName: Option[String]): Option[String] = {
-    if (this.isPrimitive) columnName
-    else Some(options.selectNestedField(columnName, "*"))
+  protected def errorColumn(
+    options: CsvDecoderOptions,
+    columnName: Option[String]
+  ): Option[String] = {
+    CsvDecoder.errorColumn(columnName, this.isPrimitive, options)
   }
 }
 
@@ -120,6 +127,15 @@ object CsvDecoder extends CsvProductDecoders {
     schema: Schema[A]
   ): CsvDecoder[A] = {
     new Converter(options).convert(schema)
+  }
+
+  private[csv] def errorColumn(
+    columnName: Option[String],
+    isPrimitive: Boolean,
+    options: CsvDecoderOptions
+  ): Option[String] = {
+    if (isPrimitive) columnName
+    else Some(options.selectNestedField(columnName, "*"))
   }
 
   private val unitDecoder: CsvDecoder[Unit] = createPrimitive {
@@ -162,6 +178,14 @@ object CsvDecoder extends CsvProductDecoders {
     createFromThrowing(Instant.parse, s"Cannot parse timestamp; it must be in ISO-8601 format.")
   }
 
+  private val bigDecimalDecoder: CsvDecoder[java.math.BigDecimal] = {
+    createFromThrowing(BigDecimal.apply(_).underlying(), s"Cannot parse BigDecimal number.")
+  }
+
+  private val bigIntDecoder: CsvDecoder[java.math.BigInteger] = {
+    createFromThrowing(BigInt.apply(_).underlying(), s"Cannot parse BigInteger number.")
+  }
+
   private val localDateDecoder: CsvDecoder[LocalDate] = {
     createFromThrowing(LocalDate.parse, s"Cannot parse date; it must be in ISO-8601 format (i.e. 'yyyy-MM-dd').")
   }
@@ -172,6 +196,7 @@ object CsvDecoder extends CsvProductDecoders {
 
   private def decodeOption[A](d: CsvDecoder[A]): CsvDecoder[Option[A]] =
     new CsvDecoder[Option[A]] {
+      override val isOptional = true
       override val isPrimitive = d.isPrimitive
       override def parseAsOption(
         row: Map[String, String],
@@ -193,6 +218,7 @@ object CsvDecoder extends CsvProductDecoders {
     maxElems: Int
   ): CsvDecoder[Chunk[A]] =
     new CsvDecoder[Chunk[A]] {
+      override val isOptional = false
       override val isPrimitive = false
       override def parseAsOption(
         row: Map[String, String],
@@ -257,6 +283,7 @@ object CsvDecoder extends CsvProductDecoders {
 
   private def createPrimitive[A](f: (String, Option[String]) => Either[List[CsvDecoderError], A]) =
     new CsvDecoder[A] {
+      override val isOptional = false
       override val isPrimitive = true
       override def parseAsOption(
         row: Map[String, String],
@@ -878,7 +905,7 @@ object CsvDecoder extends CsvProductDecoders {
           }
           new CsvDecoder[A] {
             private val knownObjectTypes = discriminator.mapping.keys.toList.sorted.mkString(", ")
-
+            override val isOptional = false
             override val isPrimitive = false
 
             override def parse(
@@ -942,6 +969,7 @@ object CsvDecoder extends CsvProductDecoders {
         }
         .toMap
       val baseDecoder = new CsvDecoder[ListMap[String, _]] {
+        override val isOptional = false
         override val isPrimitive = false
         override def parseAsOption(
           row: Map[String, String],
@@ -1008,8 +1036,8 @@ object CsvDecoder extends CsvProductDecoders {
         case StandardType.BinaryType => notSupported("BinaryType")
         case StandardType.CharType => notSupported("CharType")
         case StandardType.UUIDType => uuidDecoder
-        case StandardType.BigDecimalType => notSupported("BigDecimalType")
-        case StandardType.BigIntegerType => notSupported("BigIntegerType")
+        case StandardType.BigDecimalType => bigDecimalDecoder
+        case StandardType.BigIntegerType => bigIntDecoder
         case StandardType.DayOfWeekType => notSupported("DayOfWeekType")
         case StandardType.MonthType => notSupported("MonthType")
         case StandardType.MonthDayType => notSupported("MonthDayType")
