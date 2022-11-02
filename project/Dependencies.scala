@@ -13,7 +13,7 @@ object Dependencies {
   val REFINED_VERSION = "0.9.29"
   // Don't upgrade circe until this fix ends up in a release
   val CIRCE_VERSION = "0.14.3"
-  val CALIBAN_VERSION = "1.3.3"
+  val CALIBAN_VERSION = "1.4.3"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
