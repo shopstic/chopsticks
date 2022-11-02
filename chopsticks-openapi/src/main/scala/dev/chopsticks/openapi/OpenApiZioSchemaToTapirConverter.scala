@@ -15,16 +15,33 @@ object OpenApiZioSchemaToTapirConverter {
     new Converter(scala.collection.mutable.Map.empty).convert(zioSchema)
   }
 
-  private class Converter(cache: scala.collection.mutable.Map[String, SName]) {
+  final case class CacheValue(schemaName: SName, description: Option[String], default: Option[(Any, Option[Any])])
+
+  private class Converter(cache: scala.collection.mutable.Map[String, CacheValue]) {
     private def convertUsingCache[A](annotations: OpenApiParsedAnnotations[A])(convert: => TapirSchema[A])
       : TapirSchema[A] = {
       annotations.entityName match {
         case Some(name) =>
           cache.get(name) match {
-            case Some(sname) => TapirSchema(SRef(sname))
+            case Some(value) =>
+              if (value.description != annotations.description) {
+                throw new IllegalArgumentException(
+                  s"There exists two schemas with the same name [$name], but different descriptions. " +
+                    s"1st description: [${value.description.getOrElse("")}] " +
+                    s"2nd description: [${annotations.description.getOrElse("")}]"
+                )
+              }
+              if (value.default != annotations.default) {
+                throw new IllegalArgumentException(
+                  s"There exists two schemas with the same name [$name], but different default values. " +
+                    s"1st default: [${value.default}] " +
+                    s"2nd default: [${annotations.default}]"
+                )
+              }
+              TapirSchema(schemaType = SRef(value.schemaName))
             case None =>
               val sname = schemaName(name)
-              val _ = cache.addOne(name -> sname)
+              val _ = cache.addOne(name -> CacheValue(sname, annotations.description, annotations.default))
               val result = convert
               // to derive exactly the same schema as tapir does, uncomment the line below; however it's redundant in practice
 //              val _ = cache.remove(name)
@@ -251,8 +268,9 @@ object OpenApiZioSchemaToTapirConverter {
               convert(field.schema).asInstanceOf[TapirSchema[Any]],
               extractAnnotations(field.annotations)
             )
+            val transformedLabel = recordAnnotations.transformJsonLabel(field.label)
             SchemaType.SProductField(
-              _name = FieldName(field.label, field.label),
+              _name = FieldName(transformedLabel, transformedLabel),
               _schema = schema,
               _get = (a: ListMap[String, _]) => Some(a(field.label))
             )
@@ -277,8 +295,9 @@ object OpenApiZioSchemaToTapirConverter {
               convert(field.schema).asInstanceOf[TapirSchema[Any]],
               extractAnnotations(field.annotations)
             )
+            val transformedLabel = caseClassAnnotations.transformJsonLabel(field.label)
             SchemaType.SProductField(
-              _name = FieldName(field.label, field.label),
+              _name = FieldName(transformedLabel, transformedLabel),
               _schema = schema,
               _get = (a: A) => Some(getField(a))
             )
@@ -381,7 +400,7 @@ object OpenApiZioSchemaToTapirConverter {
         case StandardType.PeriodType => SchemaType.SString()
         case StandardType.YearType => SchemaType.SString()
         case StandardType.YearMonthType => SchemaType.SString()
-        case StandardType.ZonedDateTimeType(_) => SchemaType.SString()
+        case StandardType.ZonedDateTimeType(_) => SchemaType.SDateTime()
         case StandardType.ZoneIdType => SchemaType.SString()
         case StandardType.ZoneOffsetType => SchemaType.SString()
       }

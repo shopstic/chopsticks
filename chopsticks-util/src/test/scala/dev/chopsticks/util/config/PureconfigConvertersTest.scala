@@ -14,10 +14,21 @@ object PureconfigConvertersTest {
   final case class StringValueClass(foo: String) extends AnyVal
   final case class NonEmptyStringCaseClass(foo: NonEmptyString)
   final case class MoreThanOneFieldCaseClass(foo: NonEmptyString, bar: Boolean)
+  final case class NonEmptyStringAsMapKeys(map: Map[NonEmptyString, Int])
 }
 
 final class PureconfigConvertersTest extends AnyWordSpecLike with Assertions with Matchers with Checkers {
   import PureconfigConvertersTest._
+
+  "derive NonEmptyString as Map keys" in {
+    val converter = {
+      import PureconfigConverters._
+      ConfigConvert[NonEmptyStringAsMapKeys]
+    }
+
+    val value = NonEmptyStringAsMapKeys(Map(NonEmptyString.unsafeFrom("123") -> 123))
+    converter.from(converter.to(value)) should be(Right(value))
+  }
 
   "deriveFlat" should {
     "work with a value class having a single field" in {
