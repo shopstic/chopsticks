@@ -158,9 +158,11 @@ final class CsvDecoderTest extends AnyWordSpecLike with Assertions with Matchers
         "address_1_city" -> "NY",
         "address_1_street" -> "1st"
       )
-      val expected = Left(List(CsvDecoderError("Cannot parse number.", Some("age"))))
+      val error = CsvDecoderError("Cannot parse number.", Some("age"))
+      val expected = Left(List(error))
       val result = testPersonDecoder.parse(row, None)
       assert(result == expected)
+      assert(error.format == "Cannot parse number. Column(s): age")
     }
 
     "fail decoding if value of a column fails validation" in {
