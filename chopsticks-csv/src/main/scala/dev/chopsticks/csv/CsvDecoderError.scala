@@ -4,7 +4,7 @@ final case class CsvDecoderError(message: String, columnName: Option[String]) {
   def format: String = {
     val trimmed = message.trim
     val withDot = if (trimmed.endsWith(".")) trimmed else trimmed + "."
-    withDot + (if (columnName.isDefined) s" Column(s): ${columnName.get.mkString(", ")}" else "")
+    withDot + (if (columnName.isDefined) s" Column(s): ${columnName.get}" else "")
   }
 }
 object CsvDecoderError {
