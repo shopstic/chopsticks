@@ -21,6 +21,7 @@ object ZAkkaSourceUnfoldAsyncTestApp extends ZAkkaApp {
       .interruptibleRunWith(Sink.foreach { v =>
         println(s"v=$v")
       })
+      .unit
       .race(ZIO.unit.delay(5.seconds))
       .as(ExitCode(0))
   }

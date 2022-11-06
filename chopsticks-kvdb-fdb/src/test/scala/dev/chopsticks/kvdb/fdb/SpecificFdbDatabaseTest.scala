@@ -26,6 +26,7 @@ final class SpecificFdbDatabaseTest
   private val dbMat = FdbDatabaseTest.dbMaterialization
 
   private lazy val defaultCf = dbMat.plain
+  private lazy val counterCf = dbMat.counter
 
   private lazy val withDb =
     createTestRunner(FdbDatabaseTest.managedDb) { effect =>
@@ -174,6 +175,30 @@ final class SpecificFdbDatabaseTest
         innerInterrupted <- ref.get
       } yield {
         innerInterrupted shouldEqual true
+      }
+    }
+  }
+
+  "add mutation" should {
+    "work with Long value" in withDb { db =>
+      for {
+        transaction <- UIO(ZFdbTransaction(db))
+        _ <- transaction.write { tx =>
+          Task {
+            val cf = tx.keyspace(counterCf)
+
+            cf.put("foo", Long.MaxValue - 1)
+            cf.mutateAdd("foo", 1)
+          }
+        }
+        currentPair <- transaction
+          .read { tx =>
+            val cf = tx.keyspace(counterCf)
+
+            cf.get(_ is "foo")
+          }
+      } yield {
+        currentPair shouldEqual Some("foo" -> Long.MaxValue)
       }
     }
   }

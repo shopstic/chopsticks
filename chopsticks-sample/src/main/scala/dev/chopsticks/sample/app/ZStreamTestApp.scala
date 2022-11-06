@@ -50,6 +50,7 @@ object ZStreamTestApp extends ZAkkaApp {
       .interruptibleRunWith(Sink.foreach { state =>
         println(s"State: $state")
       })
+      .unit
 
     app
       .race(ZIO.unit.delay(7.seconds))

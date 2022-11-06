@@ -1,6 +1,8 @@
 package dev.chopsticks.openapi
 
+import dev.chopsticks.util.config.PureconfigFastCamelCaseNamingConvention
 import io.circe.{Decoder, Encoder}
+import pureconfig.SnakeCase
 import sttp.tapir.{Schema => TapirSchema}
 import zio.schema.{Schema => ZioSchema}
 
@@ -29,4 +31,20 @@ trait OpenApiDiscriminator[A] {
   def discriminatorFieldName: String
   def mapping: Map[DiscriminatorValue, SubTypeName]
   def discriminatorValue(obj: A): DiscriminatorValue
+}
+
+trait OpenApiNamingConvention {
+  def toTokens(value: String): Seq[String]
+  def fromTokens(tokens: Seq[String]): String
+}
+object OpenApiNamingConvention {
+  final case object OpenApiCamelCase extends OpenApiNamingConvention {
+    override def toTokens(value: String): Seq[String] = PureconfigFastCamelCaseNamingConvention.toTokens(value)
+    override def fromTokens(tokens: Seq[String]): String = PureconfigFastCamelCaseNamingConvention.fromTokens(tokens)
+  }
+
+  final case object OpenApiSnakeCase extends OpenApiNamingConvention {
+    override def toTokens(value: String): Seq[String] = SnakeCase.toTokens(value)
+    override def fromTokens(tokens: Seq[String]): String = SnakeCase.fromTokens(tokens)
+  }
 }

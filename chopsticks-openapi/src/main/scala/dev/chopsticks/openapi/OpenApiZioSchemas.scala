@@ -5,14 +5,11 @@ import eu.timepit.refined.types.all.NonNegInt
 import eu.timepit.refined.types.numeric.{NonNegLong, PosInt, PosLong}
 import eu.timepit.refined.types.string.NonEmptyString
 import sttp.tapir.Validator
-import zio.schema.Schema
+import zio.schema.{DefaultJavaTimeSchemas, Schema}
 import zio.schema.internal.SourceLocation
 import zio.Chunk
-import zio.schema.StandardType.InstantType
 
-import java.time.format.DateTimeFormatter
-
-object OpenApiZioSchemas {
+object OpenApiZioSchemas extends DefaultJavaTimeSchemas {
   implicit class ZioSchemaOps[A](val schema: Schema[A]) extends AnyVal {
     def named(name: String): Schema[A] = {
       schema.annotate(OpenApiAnnotations.entityName(name))
@@ -33,6 +30,10 @@ object OpenApiZioSchemas {
       Schema.Transform[A, B, SourceLocation](schema, a => Right(f(a)), b => Right(g(b)), Chunk.empty, loc)
     def transformWithoutAnnotations[B](f: A => Either[String, B], g: B => A)(implicit loc: SourceLocation): Schema[B] =
       Schema.Transform[A, B, SourceLocation](schema, a => f(a), b => Right(g(b)), Chunk.empty, loc)
+    def withJsonFieldsCaseConverter(from: OpenApiNamingConvention, to: OpenApiNamingConvention): Schema[A] =
+      schema.annotate(OpenApiAnnotations.jsonCaseConverter(from, to))
+    def withSnakeCaseJsonFields: Schema[A] =
+      withJsonFieldsCaseConverter(OpenApiNamingConvention.OpenApiCamelCase, OpenApiNamingConvention.OpenApiSnakeCase)
 
   }
 
@@ -70,8 +71,6 @@ object OpenApiZioSchemas {
     Schema[Long]
       .validate(Validators.nonNegLongValidator)
       .transformWithoutAnnotations[NonNegLong](NonNegLong.from, _.value)
-
-  implicit val instantTypeSchema: InstantType = InstantType(DateTimeFormatter.ISO_INSTANT)
 
   implicit def nonEmptyListSchema[A: Schema]: Schema[NonEmptyList[A]] =
     Schema[List[A]]

@@ -10,6 +10,7 @@ import pureconfig.ConfigReader
 import zio.{RLayer, Task, URIO, ZIO}
 
 import scala.jdk.CollectionConverters._
+import scala.util.matching.Regex
 
 object TypedConfig {
   trait Service[Cfg] {
@@ -21,7 +22,7 @@ object TypedConfig {
   def live[Cfg: ConfigReader: zio.Tag](
     configNamespace: String = "app",
     logLevel: Log.Level = Log.Level.Info,
-    maskedKeys: Set[String] = Set.empty
+    maskedKeys: Set[Regex] = Set.empty
   ): RLayer[IzLogging with HoconConfig, TypedConfig[Cfg]] = {
     val effect = for {
       hoconConfig <- HoconConfig.get
@@ -41,8 +42,8 @@ object TypedConfig {
                 val key = entry.getKey
 
                 val renderedValue =
-                  if (maskedKeys.contains(key)) {
-                    "*********"
+                  if (maskedKeys.exists(_.matches(key))) {
+                    "<redacted secret>"
                   }
                   else {
                     value match {

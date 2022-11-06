@@ -37,7 +37,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.time.Instant
 import java.util
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.immutable.ArraySeq
 import scala.concurrent.duration._
@@ -375,10 +375,12 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   def uninterruptibleRead[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
     Task
       .fromCompletableFuture {
-        dbContext.db.readAsync { tx =>
-          ops
-            .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
-        }
+        dbContext.db
+          .readAsync { tx =>
+            ops
+              .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
+          }
+          .orTimeout(6, TimeUnit.SECONDS)
       }
   }
 
@@ -387,16 +389,18 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       cancelRef <- ZRef.make(NOOP_CALLBACK)
       fib <- Task
         .fromCompletableFuture {
-          dbContext.db.readAsync { tx =>
-            val f = ops
-              .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
+          dbContext.db
+            .readAsync { tx =>
+              val f = ops
+                .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
 
-            rt.unsafeRun(cancelRef.set(() => {
-              val _ = f.cancel(true)
-            }))
+              rt.unsafeRun(cancelRef.set(() => {
+                val _ = f.cancel(true)
+              }))
 
-            f
-          }
+              f
+            }
+            .orTimeout(6, TimeUnit.SECONDS)
         }
         .fork
       ret <- fib.join.onInterrupt(cancelRef.get.map(_()) *> fib.interrupt)
@@ -423,6 +427,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                 )
                 .thenCompose(v => tx.commit().thenApply(_ => v))
                 .whenComplete((_, _) => tx.close())
+                .orTimeout(6, TimeUnit.SECONDS)
             }
           )
       }

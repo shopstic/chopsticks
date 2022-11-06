@@ -14,6 +14,7 @@ import dev.chopsticks.kvdb.util.KvdbCloseSignal
 import dev.chopsticks.stream.GraphStageWithActorLogic
 import squants.information.Information
 
+import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 
 object FdbIterateSourceStage {
@@ -87,15 +88,17 @@ object FdbIterateSourceStage {
           }
           else {
             if (accumulatedBatchSize == 0) {
-              val _ = hasNextFuture.whenComplete { (hasNext, exception) =>
-                if (exception eq null) {
-                  if (hasNext) actor ! IteratorNext(iterator.next())
-                  else actor ! IteratorComplete
+              val _ = hasNextFuture
+                .orTimeout(6, TimeUnit.SECONDS)
+                .whenComplete { (hasNext, exception) =>
+                  if (exception eq null) {
+                    if (hasNext) actor ! IteratorNext(iterator.next())
+                    else actor ! IteratorComplete
+                  }
+                  else {
+                    actor ! IteratorFailure(exception)
+                  }
                 }
-                else {
-                  actor ! IteratorFailure(exception)
-                }
-              }
             }
 
             false
