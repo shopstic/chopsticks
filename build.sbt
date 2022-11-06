@@ -161,6 +161,10 @@ lazy val kvdbCodecProtobufValue = Build
   )
   .dependsOn(kvdbCore)
 
+lazy val kvdbCodecPrimitiveValue = Build
+  .defineProject("kvdb-codec-primitive-value")
+  .dependsOn(kvdbCore)
+
 lazy val metric = Build
   .defineProject("metric")
   .settings(
@@ -281,6 +285,7 @@ lazy val root = (project in file("."))
     kvdbCodecBerkeleydbKey,
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
+    kvdbCodecPrimitiveValue,
     metric,
     openapi,
     csv,
