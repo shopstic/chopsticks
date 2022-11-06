@@ -10,7 +10,7 @@ object Dependencies {
   // due to its izumi-reflect upgrade
   val ZIO_VERSION = "1.0.14"
   val IZUMI_VERSION = "1.0.10"
-  val REFINED_VERSION = "0.10.1"
+  val REFINED_VERSION = "0.9.29"
   // Don't upgrade circe until this fix ends up in a release
   // https://github.com/circe/circe/issues/1972
   val CIRCE_VERSION = "0.14.1"
@@ -217,7 +217,7 @@ object Dependencies {
 
   val avro4sDirectDeps = {
     val Json4sVersion = "4.0.5"
-    val RefinedVersion = "0.10.1"
+    val RefinedVersion = "0.9.29"
     val ShapelessVersion = "2.3.9"
     val MagnoliaVersion = "0.17.0"
 
