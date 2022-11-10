@@ -248,6 +248,6 @@ object Dependencies {
   }
 
   val jwtCirceDeps = Seq(
-    "com.github.jwt-scala" %% "jwt-circe" % "9.1.1"
+    "com.github.jwt-scala" %% "jwt-circe" % "9.1.2"
   )
 }
