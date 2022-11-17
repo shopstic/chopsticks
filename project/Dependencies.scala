@@ -95,7 +95,7 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.1.8"
+    "org.codehaus.janino" % "janino" % "3.1.9"
   )
 
   val scalatestDeps = Seq(
