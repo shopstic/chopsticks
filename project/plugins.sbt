@@ -1,6 +1,6 @@
 addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.6.3")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.4.6")
-addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.4.21")
+addSbtPlugin("org.wartremover" % "sbt-wartremover" % "3.0.8")
 
 addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.6")
 addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.1.6")
