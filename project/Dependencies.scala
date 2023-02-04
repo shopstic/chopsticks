@@ -115,7 +115,7 @@ object Dependencies {
   )
 
   val lmdbDeps = Seq(
-    "org.lmdbjava" % "lmdbjava" % "0.8.2"
+    "org.lmdbjava" % "lmdbjava" % "0.8.3"
   )
 
   val fdbDeps = Seq(
