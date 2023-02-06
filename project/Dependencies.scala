@@ -8,7 +8,7 @@ object Dependencies {
   val AKKA_HTTP_VERSION = "10.2.10"
   // Past this release, ZIO 1.0.x has the "Defect in zio.Has" bug again
   // due to its izumi-reflect upgrade
-  val ZIO_VERSION = "1.0.14"
+  val ZIO_VERSION = "1.0.18"
   val IZUMI_VERSION = "1.0.10"
   val REFINED_VERSION = "0.9.29"
   val CIRCE_VERSION = "0.14.3"
