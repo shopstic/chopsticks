@@ -2,7 +2,6 @@ package dev.chopsticks.stream
 
 import zio.Schedule.Decision
 import zio.{Chunk, Schedule, ZIO}
-import zio.clock.Clock
 import zio.stream.ZStream
 
 import java.time.Duration
@@ -14,23 +13,25 @@ object ZStreamUtils {
 
   def retry[R, E, V](
     effect: ZIO[R, E, V],
-    retrySchedule: Schedule[Clock, Any, Duration]
-  ): ZStream[Clock with R, Nothing, Either[FailedAttempt[E], V]] = {
-    val schedule: Schedule[Clock, E, ((Duration, Long), Duration)] =
+    retrySchedule: Schedule[Any, Any, Duration]
+  ): ZStream[R, Nothing, Either[FailedAttempt[E], V]] = {
+    val schedule =
       Schedule.elapsed && Schedule.count && retrySchedule
 
     for {
-      leftQueue <- ZStream.fromEffect(zio.Queue.unbounded[Either[E, V]])
-      rightQueue <- ZStream.fromEffect(zio.Queue.unbounded[Either[RetryState, V]])
+      leftQueue <- ZStream.fromZIO(zio.Queue.unbounded[Either[E, V]])
+      rightQueue <- ZStream.fromZIO(zio.Queue.unbounded[Either[RetryState, V]])
       ret <- {
         ZStream
-          .fromEffect(
+          .fromZIO(
             effect
               .retry(schedule.tapInput((e: E) => leftQueue.offer(Left(e))).onDecision {
-                case Decision.Done(((elapsed, count), nextDelay)) =>
-                  rightQueue.offer(Left(RetryState(nextDelay, count, elapsed, willContinue = false)))
-                case Decision.Continue(((elapsed, count), nextDelay), _, _) =>
-                  rightQueue.offer(Left(RetryState(nextDelay, count, elapsed, willContinue = true)))
+                case (_, (elapsed, count, nextDelay), decision) =>
+                  val willContinue =
+                    decision match
+                      case Decision.Done => false
+                      case Decision.Continue(_) => true
+                  rightQueue.offer(Left(RetryState(nextDelay, count, elapsed, willContinue)))
               })
               .either
               .flatMap {

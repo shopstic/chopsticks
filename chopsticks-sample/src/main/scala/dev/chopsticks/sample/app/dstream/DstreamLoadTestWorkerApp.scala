@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.sample.app.dstream
 
 import akka.grpc.GrpcClientSettings
@@ -146,3 +147,4 @@ object DstreamLoadTestWorkerApp extends ZAkkaApp {
   }
 
 }
+ */

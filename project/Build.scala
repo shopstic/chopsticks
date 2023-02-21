@@ -2,7 +2,6 @@ import com.jsuereth.sbtpgp.PgpKeys
 import com.timushev.sbt.updates.UpdatesPlugin.autoImport._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
 import protocbridge.Target
-import wartremover.WartRemover.autoImport._
 import sbt.{Def, _}
 import sbt.Keys._
 import sbtprotoc.ProtocPlugin.autoImport.PB
@@ -24,19 +23,19 @@ object Build {
     "-encoding",
     "utf-8",
     "-explaintypes", // Explain type errors in more detail.
-    "-Xcheckinit", // Wrap field accessors to throw an exception on uninitialized access.
-    "-Wdead-code", // Warn when dead code is identified.
-    "-Wextra-implicit", // Warn when more than one implicit parameter section is defined.
-    "-Wnumeric-widen", // Warn when numerics are widened.
-    "-Wvalue-discard", // Warn when non-Unit expression results are unused.
-    "-Wunused:_", // Warn unused
-    "-Wmacros:after",
-    "-Xlint:-byname-implicit,_", // Enable all linting options except lint-byname-implicit
-    "-Wconf:any:wv",
-    "-Wconf:src=akka-grpc/.*:silent",
-    "-Wconf:src=src_managed/.*:silent",
-    "-Ypatmat-exhaust-depth",
-    "40"
+    "-Wunused:imports" // Warn unused
+//    "-Xcheckinit", // Wrap field accessors to throw an exception on uninitialized access.
+//    "-Wdead-code", // Warn when dead code is identified.
+//    "-Wextra-implicit", // Warn when more than one implicit parameter section is defined.
+//    "-Wnumeric-widen", // Warn when numerics are widened.
+//    "-Wvalue-discard", // Warn when non-Unit expression results are unused.
+//    "-Wunused:_", // Warn unused
+//    "-Wmacros:after",
+//    "-Xlint:-byname-implicit,_" // Enable all linting options except lint-byname-implicit
+//    "-Wconf:any:wv",
+//    "-Wconf:src=src_managed/.*:silent"
+//    "-Ypatmat-exhaust-depth",
+//    "40"
   )
 
   lazy val cq = taskKey[Unit]("Code quality")
@@ -67,21 +66,21 @@ object Build {
           (Test / scalafmt).value
           (Compile / scalafmtSbt).value
         },
-        Compile / compile / wartremoverErrors ++= Seq(
-          //          Wart.Any,
-          Wart.AnyVal,
-          Wart.JavaSerializable,
-          Wart.FinalCaseClass,
-          Wart.FinalVal,
-          Wart.JavaConversions,
-          Wart.LeakingSealed,
-          Wart.NonUnitStatements
-//          Wart.Product
-        ),
-        wartremoverExcluded += sourceManaged.value,
-        wartremoverExcluded += baseDirectory.value / "target" / "scala-2.13" / "akka-grpc",
-        dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
-        libraryDependencies ++= Dependencies.scalatestDeps
+//        Compile / compile / wartremoverErrors ++= Seq(
+//          //          Wart.Any,
+//          Wart.AnyVal,
+//          Wart.JavaSerializable,
+//          Wart.FinalCaseClass,
+//          Wart.FinalVal,
+//          Wart.JavaConversions,
+//          Wart.LeakingSealed,
+//          Wart.NonUnitStatements
+////          Wart.Product
+//        ),
+//        wartremoverExcluded += sourceManaged.value,
+//        wartremoverExcluded += baseDirectory.value / "target" / "scala-2.13" / "akka-grpc",
+        dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
+//        libraryDependencies ++= Dependencies.scalatestDeps
 //        ossPublishSettings
       )
   }

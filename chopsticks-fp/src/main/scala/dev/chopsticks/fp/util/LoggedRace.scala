@@ -1,38 +1,41 @@
 package dev.chopsticks.fp.util
 
-import cats.data.NonEmptyList
-import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
-import dev.chopsticks.fp.zio_ext.ZIOExtensions
-import zio.clock.Clock
-import zio.{IO, ZIO}
+import dev.chopsticks.fp.zio_ext.*
+import zio.{IO, Trace, ZEnvironment, ZIO}
+import zio.prelude.NonEmptyList
 
 object LoggedRace {
   final class EmptyLoggedRace[-R, +E, +A] private[util] {
-    def add[R1 <: R, E1 >: E, A1 >: A](name: String, io: ZIO[R1, E1, A1])(implicit
-      logCtx: LogCtx
+    def add[R1 <: R, E1 >: E, A1 >: A](name: String, io: ZIO[R1, E1, A1])(using
+      trace: Trace
     ): NonEmptyLoggedRace[R1, E1, A1] = {
-      new NonEmptyLoggedRace[R1, E1, A1](NonEmptyList.one((env: R1 with IzLogging with Clock) =>
-        io.log(name).provide(env)
+      new NonEmptyLoggedRace[R1, E1, A1](NonEmptyList.single(env =>
+        io.log(name).provideEnvironment(env)(trace)
       ))
     }
   }
 
   final class NonEmptyLoggedRace[-R, +E, +A] private[util] (
-    queue: NonEmptyList[R with IzLogging with Clock => IO[E, A]]
+    queue: NonEmptyList[ZEnvironment[R] => IO[E, A]]
   ) {
-    def add[R1 <: R, E1 >: E, A1 >: A](name: String, io: ZIO[R1, E1, A1])(implicit
-      logCtx: LogCtx
+    def add[R1 <: R, E1 >: E, A1 >: A](name: String, io: ZIO[R1, E1, A1])(using
+      trace: Trace
     ): NonEmptyLoggedRace[R1, E1, A1] = {
-      new NonEmptyLoggedRace[R1, E1, A1](((env: R1 with IzLogging with Clock) => io.log(name).provide(env)) :: queue)
+      new NonEmptyLoggedRace[R1, E1, A1](
+        NonEmptyList.cons(
+          (env: ZEnvironment[R1]) => io.log(name).provideEnvironment(env),
+          queue
+        )
+      )
     }
 
-    def run(): ZIO[R with IzLogging with Clock, E, A] = {
+    def run(): ZIO[R, E, A] = {
       ZIO
-        .environment[R with IzLogging with Clock]
+        .environment[R]
         .flatMap { env =>
           ZIO
-            .bracket(ZIO.foreach(queue.toList)(fn => fn(env).interruptible.fork)) { fibers =>
-              ZIO.foreachPar_(fibers)(_.interrupt)
+            .acquireReleaseWith(ZIO.foreach(queue.toList)(fn => fn(env).interruptible.fork)) { fibers =>
+              ZIO.foreachParDiscard(fibers)(_.interrupt)
             } {
               case head :: tail :: Nil =>
                 head.join.raceFirst(tail.join)

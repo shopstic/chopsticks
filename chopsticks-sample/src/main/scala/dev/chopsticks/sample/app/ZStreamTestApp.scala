@@ -1,11 +1,7 @@
+/*
 package dev.chopsticks.sample.app
 
-import akka.stream.scaladsl.Sink
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
-import dev.chopsticks.stream.ZAkkaSource.ZStreamToZAkkaSource
-import zio.clock.Clock
-import zio.duration._
+import zio.Duration.*
 import zio.stream.ZStream
 import zio.{Chunk, ExitCode, RIO, Schedule, UIO, ZIO}
 
@@ -58,3 +54,4 @@ object ZStreamTestApp extends ZAkkaApp {
       .as(ExitCode(0))
   }
 }
+ */

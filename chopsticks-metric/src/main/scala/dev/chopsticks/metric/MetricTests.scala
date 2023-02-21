@@ -15,7 +15,7 @@ import dev.chopsticks.metric.MetricRegistry.MetricGroup
 import dev.chopsticks.metric.prom.PromMetricRegistry
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.TextFormat
-import zio.{Has, URLayer, ZIO, ZLayer}
+import zio.{Scope, URLayer, Unsafe, ZIO, ZLayer}
 
 import java.time.Instant
 
@@ -26,12 +26,11 @@ object MetricTests {
   object Foo {
     sealed trait Metric extends MetricGroup
     object SequentialWritesTotal extends CounterConfig(LabelNames of WritesPerTx) with Metric
-    def createCounter(factory: MetricRegistry.Service[Metric], labels: LabelValues[WritesPerTx.type]): MetricCounter = {
+    def createCounter(factory: MetricRegistry[Metric], labels: LabelValues[WritesPerTx.type]): MetricCounter =
       factory.counterWithLabels(
         Foo.SequentialWritesTotal,
         labels
       )
-    }
   }
 
   object Bar {
@@ -47,12 +46,11 @@ object MetricTests {
     object NoLabelTest extends NoLabelCounterConfig with Metric
   }
 
-  def app
-    : URLayer[MetricRegistry[Baz.Metric] with MetricRegistry[Bar.Metric] with MetricRegistry[Foo.Metric], Has[Unit]] = {
+  def app: URLayer[MetricRegistry[Baz.Metric] with MetricRegistry[Bar.Metric] with MetricRegistry[Foo.Metric], Unit] = {
     val effect = for {
-      fooMetrics <- ZIO.access[MetricRegistry[Foo.Metric]](_.get)
-      barMetrics <- ZIO.access[MetricRegistry[Bar.Metric]](_.get)
-      bazMetrics <- ZIO.access[MetricRegistry[Baz.Metric]](_.get)
+      fooMetrics <- ZIO.service[MetricRegistry[Foo.Metric]]
+      barMetrics <- ZIO.service[MetricRegistry[Bar.Metric]]
+      bazMetrics <- ZIO.service[MetricRegistry[Baz.Metric]]
     } yield {
       val labelValues = LabelValues of WritesPerTx -> "123" and TxParallelism -> "456"
 
@@ -99,22 +97,25 @@ object MetricTests {
       println(writer.toString)
     }
 
-    ZLayer.fromEffect(effect)
+    ZLayer.fromZIO(effect)
   }
 
   def main(args: Array[String]): Unit = {
-    val layer = ZLayer.succeed(CollectorRegistry.defaultRegistry) >>> (
-      PromMetricRegistry.live[Foo.Metric]("foo") ++
-        PromMetricRegistry.live[Bar.Metric]("bar") ++
-        PromMetricRegistry.live[Baz.Metric]("baz")
-    )
-
-    val _ = zio.Runtime.default.unsafeRunSync(
-      app
-        .build
-        .provideLayer(layer)
-        .useNow
-    )
+    val _ = Unsafe.unsafe { implicit unsafe =>
+      zio.Runtime.default.unsafe.run(
+        ZIO.scoped.apply {
+          app
+            .build
+            .provideSome[Scope](
+              ZLayer.succeed(CollectorRegistry.defaultRegistry),
+              PromMetricRegistry.live[Foo.Metric]("foo"),
+              PromMetricRegistry.live[Bar.Metric]("bar"),
+              PromMetricRegistry.live[Baz.Metric]("baz")
+            )
+            .map(_.get)
+        }
+      )
+    }
 
     val writer = new CharArrayWriter()
     TextFormat.write004(writer, CollectorRegistry.defaultRegistry.metricFamilySamples())

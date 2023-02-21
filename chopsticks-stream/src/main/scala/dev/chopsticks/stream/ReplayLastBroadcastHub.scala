@@ -1,3 +1,4 @@
+/*
 /* Forked and modified from https://github.com/akka/akka/blob/2dde4b6b512d10d1db37764ab13e46cea8f49429/akka-stream/src/main/scala/akka/stream/scaladsl/Hub.scala */
 package dev.chopsticks.stream
 
@@ -71,22 +72,22 @@ final class ReplayLastBroadcastHub[T] private (bufferSize: Int)
     @volatile private[this] var tail = Int.MaxValue
     private[this] var head = Int.MaxValue
     /*
-     * An Array with a published tail ("latest message") and a privately maintained head ("earliest buffered message").
-     * Elements are published by simply putting them into the array and bumping the tail. If necessary, certain
-     * consumers are sent a wakeup message through an AsyncCallback.
-     */
+ * An Array with a published tail ("latest message") and a privately maintained head ("earliest buffered message").
+ * Elements are published by simply putting them into the array and bumping the tail. If necessary, certain
+ * consumers are sent a wakeup message through an AsyncCallback.
+ */
     private[this] val queue = new Array[AnyRef](bufferSize)
     /* This is basically a classic Bucket Queue: https://en.wikipedia.org/wiki/Bucket_queue
-     * (in fact, this is the variant described in the Optimizations section, where the given set
-     * of priorities always fall to a range
-     *
-     * This wheel tracks the position of Consumers relative to the slowest ones. Every slot
-     * contains a list of Consumers being known at that location (this might be out of date!).
-     * Consumers from time to time send Advance messages to indicate that they have progressed
-     * by reading from the broadcast queue. Consumers that are blocked (due to reaching tail) request
-     * a wakeup and update their position at the same time.
-     *
-     */
+ * (in fact, this is the variant described in the Optimizations section, where the given set
+ * of priorities always fall to a range
+ *
+ * This wheel tracks the position of Consumers relative to the slowest ones. Every slot
+ * contains a list of Consumers being known at that location (this might be out of date!).
+ * Consumers from time to time send Advance messages to indicate that they have progressed
+ * by reading from the broadcast queue. Consumers that are blocked (due to reaching tail) request
+ * a wakeup and update their position at the same time.
+ *
+ */
     private[this] val consumerWheel = Array.fill[List[Consumer]](bufferSize * 2)(Nil)
     private[this] var activeConsumers = 0
 
@@ -180,11 +181,11 @@ final class ReplayLastBroadcastHub[T] private (bufferSize: Int)
     }
 
     /*
-     * This method removes a consumer with a given ID from the known offset and returns it.
-     *
-     * NB: You cannot remove a consumer without knowing its last offset! Consumers on the Source side always must
-     * track this so this can be a fast operation.
-     */
+ * This method removes a consumer with a given ID from the known offset and returns it.
+ *
+ * NB: You cannot remove a consumer without knowing its last offset! Consumers on the Source side always must
+ * track this so this can be a fast operation.
+ */
     private def findAndRemoveConsumer(id: Long, offset: Int): Consumer = {
       // TODO: Try to eliminate modulo division somehow...
       val wheelSlot = offset & WheelMask
@@ -204,9 +205,9 @@ final class ReplayLastBroadcastHub[T] private (bufferSize: Int)
     }
 
     /*
-     * After removing a Consumer from a wheel slot (because it cancelled, or we moved it because it advanced)
-     * we need to check if it was blocking us from advancing (being the slowest).
-     */
+ * After removing a Consumer from a wheel slot (because it cancelled, or we moved it because it advanced)
+ * we need to check if it was blocking us from advancing (being the slowest).
+ */
     private def checkUnblock(offsetOfConsumerRemoved: Int): Unit = {
       if (unblockIfPossible(offsetOfConsumerRemoved)) {
         if (isClosed(in)) complete()
@@ -234,9 +235,9 @@ final class ReplayLastBroadcastHub[T] private (bufferSize: Int)
     }
 
     /*
-     * Send a wakeup signal to all the Consumers at a certain wheel index. Note, this needs the actual index,
-     * which is offset modulo (bufferSize + 1).
-     */
+ * Send a wakeup signal to all the Consumers at a certain wheel index. Note, this needs the actual index,
+ * which is offset modulo (bufferSize + 1).
+ */
     private def wakeupIdx(idx: Int): Unit = {
       val itr = consumerWheel(idx).iterator
       while (itr.hasNext) itr.next().callback.invoke(Wakeup)
@@ -319,11 +320,11 @@ final class ReplayLastBroadcastHub[T] private (bufferSize: Int)
           private[this] var hubCallback: AsyncCallback[HubEvent] = _
 
           /*
-           * We need to track our last offset that we published to the Hub. The reason is, that for efficiency reasons,
-           * the Hub can only look up and move/remove Consumers with known wheel slots. This means that no extra hash-map
-           * is needed, but it also means that we need to keep track of both our current offset, and the last one that
-           * we published.
-           */
+ * We need to track our last offset that we published to the Hub. The reason is, that for efficiency reasons,
+ * the Hub can only look up and move/remove Consumers with known wheel slots. This means that no extra hash-map
+ * is needed, but it also means that we need to keep track of both our current offset, and the last one that
+ * we published.
+ */
           private[this] var previousPublishedOffset = 0
           private[this] var offset = 0
           private[this] var initialElement: T = null.asInstanceOf[T]
@@ -355,12 +356,12 @@ final class ReplayLastBroadcastHub[T] private (bufferSize: Int)
             }
 
             /*
-             * Note that there is a potential race here. First we add ourselves to the pending registrations, then
-             * we send RegistrationPending. However, another downstream might have triggered our registration by its
-             * own RegistrationPending message, since we are in the list already.
-             * This means we might receive an onCommand(Initialize(offset)) *before* onHubReady fires so it is important
-             * to only serve elements after both offsetInitialized = true and hubCallback is not null.
-             */
+ * Note that there is a potential race here. First we add ourselves to the pending registrations, then
+ * we send RegistrationPending. However, another downstream might have triggered our registration by its
+ * own RegistrationPending message, since we are in the list already.
+ * This means we might receive an onCommand(Initialize(offset)) *before* onHubReady fires so it is important
+ * to only serve elements after both offsetInitialized = true and hubCallback is not null.
+ */
             register()
 
           }
@@ -424,3 +425,4 @@ final class ReplayLastBroadcastHub[T] private (bufferSize: Int)
     (logic, Source.fromGraph(source))
   }
 }
+ */

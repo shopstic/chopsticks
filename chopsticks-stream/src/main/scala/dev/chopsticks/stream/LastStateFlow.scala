@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.stream
 
 import akka.Done
@@ -63,3 +64,4 @@ final class LastStateFlow[E, S, R] private (seed: => S, next: (S, E) => S, resul
     (logic, matValue.future)
   }
 }
+ */

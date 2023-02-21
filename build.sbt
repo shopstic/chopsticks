@@ -37,232 +37,165 @@ ThisBuild / Test / javaOptions ++= Seq(
 //ThisBuild / Build.ITest / fork := Build.forkTests
 //ThisBuild / Build.ITest / javaOptions += "-Xmx1g"
 
-ThisBuild / PB.protocVersion := "3.17.3"
+ThisBuild / PB.protocVersion := "3.21.11"
 ThisBuild / versionScheme := Some("semver-spec")
 
 lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 
+lazy val schema = Build
+  .defineProject("schema")
+  .settings(
+    libraryDependencies ++= Dependencies.schemaDeps
+  )
+
 lazy val util = Build
   .defineProject("util")
   .settings(
-    libraryDependencies ++= akkaSlf4jDeps ++ squantsDeps ++ loggingDeps ++
-      pureconfigDeps ++ microlibsDeps ++ prometheusClientDeps ++ refinedDeps
+    libraryDependencies ++= utilDeps
+//      akkaSlf4jDeps ++ squantsDeps ++ loggingDeps ++
+//      pureconfigDeps ++ microlibsDeps ++ prometheusClientDeps ++ refinedDeps
   )
 
 lazy val testkit = Build
   .defineProject("testkit")
   .settings(
-    libraryDependencies ++= akkaTestDeps ++ scalatestDeps ++ janinoDeps ++ zioTestDeps,
-    Compile / packageBin / mappings ~= { _.filter(_._1.name != "logback-test.xml") }
+    libraryDependencies ++= testkitDeps
   )
   .dependsOn(fp, util)
 
 lazy val fp = Build
   .defineProject("fp")
   .settings(
-    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ logstageDeps ++ sourcecodeDeps ++ pprintDeps ++ zioMagicDeps.map(
-      _ % "test"
-    )
+    libraryDependencies ++= fpDeps
   )
   .dependsOn(util)
 
 lazy val stream = Build
   .defineProject("stream")
   .settings(
-    libraryDependencies ++= catsCoreDeps ++ zioInteropReactivestreamsDeps /* ++ hamstersDeps.map(_ % Test)*/
+    libraryDependencies ++= streamDeps
   )
   .dependsOn(fp, testkit % "test->test")
 
-lazy val dstream = Build
-  .defineProject("dstream")
-  .enablePlugins(AkkaGrpcPlugin)
+//lazy val dstream = Build
+//  .defineProject("dstream")
+//  .enablePlugins(AkkaGrpcPlugin)
+//  .settings(
+//    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
+//    libraryDependencies ++= akkaGrpcRuntimeDeps ++ enumeratumDeps ++ (zioMagicDeps ++ akkaTestDeps ++ zioTestDeps).map(
+//      _ % "test"
+//    ),
+//    akkaGrpcCodeGeneratorSettings += "server_power_apis",
+//    testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
+//  )
+//  .dependsOn(metric, stream)
+//
+lazy val kvdb = Build
+  .defineProject("kvdb")
   .settings(
-    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= akkaGrpcRuntimeDeps ++ enumeratumDeps ++ (zioMagicDeps ++ akkaTestDeps ++ zioTestDeps).map(
-      _ % "test"
-    ),
-    akkaGrpcCodeGeneratorSettings += "server_power_apis",
-    testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
-  )
-  .dependsOn(metric, stream)
-
-lazy val kvdbCore = Build
-  .defineProject("kvdb-core")
-  .settings(
-    libraryDependencies ++= shapelessDeps ++ scalapbRuntimeDeps ++ chimneyDeps ++
-      kittensDeps ++ betterFilesDeps ++ zioMagicDeps.map(_ % "test"),
+    libraryDependencies ++= kvdbDeps,
     Compile / PB.targets := Seq(
       scalapb
         .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value
     )
-//    scalacOptions ++= Seq(
-//      s"-P:silencer:sourceRoots=${(Compile / sourceManaged).value.getCanonicalPath}",
-//      "-P:silencer:pathFilters=dev/chopsticks/kvdb/proto"
-//    )
   )
-  .dependsOn(util, fp, stream, testkit % "test->test")
+  .dependsOn(util, fp, schema, stream, testkit % "test->test")
 
-lazy val kvdbLmdb = Build
-  .defineProject("kvdb-lmdb")
-  .settings(
-    libraryDependencies ++= lmdbDeps
-  )
-  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
-
-lazy val kvdbRocksdb = Build
-  .defineProject("kvdb-rocksdb")
-  .settings(
-    libraryDependencies ++= rocksdbDeps
-  )
-  .dependsOn(kvdbCore % "compile->compile;test->test", testkit % "test->test")
-
-lazy val kvdbFdb = Build
-  .defineProject("kvdb-fdb")
-  .settings(
-    libraryDependencies ++= fdbDeps ++ zioInteropReactivestreamsDeps
-  )
-  .dependsOn(
-    kvdbCore % "compile->compile;test->test",
-    kvdbCodecFdbKey % "compile->compile;test->test",
-    testkit % "test->test"
-  )
-
-lazy val graphql = Build
-  .defineProject("graphql")
-  .settings(
-    libraryDependencies ++= calibanDeps
-  )
-  .dependsOn(fp, stream)
-
-lazy val kvdbCodecFdbKey = Build
-  .defineProject("kvdb-codec-fdb-key")
-  .settings(
-    libraryDependencies ++= fdbDeps ++ magnoliaDeps ++ enumeratumDeps
-  )
-  .dependsOn(kvdbCore, testkit % "test->test")
-
-lazy val kvdbCodecBerkeleydbKey = Build
-  .defineProject("kvdb-codec-berkeleydb-key")
-  .settings(
-    libraryDependencies ++= berkeleyDbDeps ++ magnoliaDeps ++ enumeratumDeps
-  )
-  .dependsOn(kvdbCore, testkit % "test->test")
-
-lazy val kvdbCodecProtobufValue = Build
-  .defineProject("kvdb-codec-protobuf-value")
-  .settings(
-    Test / PB.targets := Seq(
-      scalapb
-        .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Test / sourceManaged).value
-    ),
-    Test / scalacOptions ++= Seq(
-      s"-Wconf:src=${(Test / sourceManaged).value.getCanonicalPath}/.*&cat=unused-imports:s"
-    )
-  )
-  .dependsOn(kvdbCore)
-
-lazy val kvdbCodecPrimitiveValue = Build
-  .defineProject("kvdb-codec-primitive-value")
-  .dependsOn(kvdbCore)
+//lazy val graphql = Build
+//  .defineProject("graphql")
+//  .settings(
+//    libraryDependencies ++= calibanDeps
+//  )
+//  .dependsOn(fp, stream)
+//
 
 lazy val metric = Build
   .defineProject("metric")
   .settings(
-    libraryDependencies ++= prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps ++ akkaStreamDeps ++ scalatestDeps.map(
-      _ % "test"
-    )
+    libraryDependencies ++= metricDeps
+//      prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps ++ akkaStreamDeps ++ scalatestDeps.map(
+//      _ % "test"
+//    )
   )
   .dependsOn(fp)
 
-lazy val alertmanager = Build
-  .defineProject("alertmanager")
-  .settings(
-    libraryDependencies ++= circeDeps ++ enumeratumDeps ++ enumeratumCirceDeps
-  )
+//lazy val alertmanager = Build
+//  .defineProject("alertmanager")
+//  .settings(
+//    libraryDependencies ++= circeDeps ++ enumeratumDeps ++ enumeratumCirceDeps
+//  )
 
-lazy val prometheus = Build
-  .defineProject("prometheus")
-  .settings(Build.createScalapbSettings(withGrpc = false))
-  .settings(
-    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= scalapbRuntimeDeps
-  )
+//lazy val prometheus = Build
+//  .defineProject("prometheus")
+//  .settings(Build.createScalapbSettings(withGrpc = false))
+//  .settings(
+//    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
+//    libraryDependencies ++= scalapbRuntimeDeps
+//  )
 
-lazy val zioGrpcCommon = Build
-  .defineProject("zio-grpc-common")
-  .settings(Build.createScalapbSettings(withGrpc = true))
-  .settings(
-    Compile / PB.targets += scalapb.zio_grpc.ZioCodeGenerator -> (Compile / sourceManaged).value,
-    libraryDependencies ++= scalapbRuntimeDeps ++ scalapbRuntimeGrpcDeps
-  )
-  .dependsOn(util)
+//lazy val zioGrpcCommon = Build
+//  .defineProject("zio-grpc-common")
+//  .settings(Build.createScalapbSettings(withGrpc = true))
+//  .settings(
+//    Compile / PB.targets += scalapb.zio_grpc.ZioCodeGenerator -> (Compile / sourceManaged).value,
+//    libraryDependencies ++= scalapbRuntimeDeps ++ scalapbRuntimeGrpcDeps
+//  )
+//  .dependsOn(util)
 
-lazy val jwt = Build
-  .defineProject("jwt")
-  .settings(
-    libraryDependencies ++= jwtCirceDeps ++ zioDeps
-  )
-  .dependsOn(util)
+//lazy val jwt = Build
+//  .defineProject("jwt")
+//  .settings(
+//    libraryDependencies ++= jwtCirceDeps ++ zioDeps
+//  )
+//  .dependsOn(util)
 
 lazy val sample = Build
   .defineProject("sample")
-  .enablePlugins(AkkaGrpcPlugin)
   .settings(
-    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= janinoDeps ++ pprintDeps ++ zioMagicDeps,
     publish / skip := true,
-    akkaGrpcCodeGeneratorSettings += "server_power_apis",
-    scalacOptions ++= Seq(
-      s"-Wconf:src=${(Compile / sourceManaged).value.getCanonicalPath}/dev/chopsticks/sample/app/proto/.*&cat=deprecation:s"
-    ),
     testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
   )
   .dependsOn(
-    kvdbLmdb,
-    kvdbRocksdb,
-    kvdbCodecBerkeleydbKey,
-    kvdbCodecProtobufValue,
-    kvdbCodecFdbKey,
+    kvdb,
     metric,
-    kvdbFdb,
-    dstream,
+//    dstream,
     testkit % "test->test"
   )
 
-lazy val avro4sShadowed = Build
-  .defineProject("avro4s-shadowed")
-  .settings(
-    libraryDependencies ++= avro4sDeps,
-    assembly / assemblyExcludedJars := {
-      val cp = (assembly / fullClasspath).value
-      cp.filterNot(_.data.getName.startsWith("avro4s-"))
-    },
-    assemblyMergeStrategy := {
-      case PathList("com", "sksamuel", "avro4s", _*) => MergeStrategy.first
-      case x =>
-        val oldStrategy = (ThisBuild / assemblyMergeStrategy).value
-        oldStrategy(x)
-    },
-    publish / skip := true
-  )
+//lazy val avro4sShadowed = Build
+//  .defineProject("avro4s-shadowed")
+//  .settings(
+//    libraryDependencies ++= avro4sDeps,
+//    assembly / assemblyExcludedJars := {
+//      val cp = (assembly / fullClasspath).value
+//      cp.filterNot(_.data.getName.startsWith("avro4s-"))
+//    },
+//    assemblyMergeStrategy := {
+//      case PathList("com", "sksamuel", "avro4s", _*) => MergeStrategy.first
+//      case x =>
+//        val oldStrategy = (ThisBuild / assemblyMergeStrategy).value
+//        oldStrategy(x)
+//    },
+//    publish / skip := true
+//  )
 
-lazy val avro4s = Build
-  .defineProject("avro4s")
-  .settings(
-    libraryDependencies ++= avro4sDirectDeps,
-    Compile / packageBin := (avro4sShadowed / assembly).value
-  )
+//lazy val avro4s = Build
+//  .defineProject("avro4s")
+//  .settings(
+//    libraryDependencies ++= avro4sDirectDeps,
+//    Compile / packageBin := (avro4sShadowed / assembly).value
+//  )
 
-lazy val openapi = Build
-  .defineProject("openapi")
-  .settings(
-    libraryDependencies ++= tapirDeps ++ zioSchemaDeps
-  )
-  .dependsOn(util)
+//lazy val openapi = Build
+//  .defineProject("openapi")
+//  .settings(
+//    libraryDependencies ++= tapirDeps ++ zioSchemaDeps
+//  )
+//  .dependsOn(util)
 
-lazy val csv = Build
-  .defineProject("csv")
-  .dependsOn(openapi)
+//lazy val csv = Build
+//  .defineProject("csv")
+//  .dependsOn(openapi)
 
 lazy val root = (project in file("."))
   .settings(
@@ -272,28 +205,22 @@ lazy val root = (project in file("."))
 //    Build.ossPublishSettings
   )
   .aggregate(
+    schema,
     util,
     testkit,
     fp,
-    dstream,
+//    dstream,
     stream,
-    graphql,
-    kvdbCore,
-    kvdbLmdb,
-    kvdbRocksdb,
-    kvdbFdb,
-    kvdbCodecBerkeleydbKey,
-    kvdbCodecFdbKey,
-    kvdbCodecProtobufValue,
-    kvdbCodecPrimitiveValue,
+//    graphql,
+    kvdb,
     metric,
-    openapi,
-    csv,
-    alertmanager,
-    prometheus,
-    zioGrpcCommon,
-    sample,
-    avro4sShadowed,
-    avro4s,
-    jwt
+//    openapi,
+//    csv,
+//    alertmanager,
+//    prometheus,
+//    zioGrpcCommon,
+    sample
+//    avro4sShadowed,
+//    avro4s,
+//    jwt
   )

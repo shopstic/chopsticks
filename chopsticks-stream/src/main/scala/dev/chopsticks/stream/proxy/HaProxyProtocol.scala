@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.stream.proxy
 
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
@@ -350,3 +351,4 @@ final class HaProxyDecodingFlow
     (logic, proxyMessagePromise.future)
   }
 }
+ */

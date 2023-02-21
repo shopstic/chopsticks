@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.stream
 
 import akka.stream._
@@ -143,3 +144,4 @@ final class MultiMergeSorted[T] private (
 
   override def toString: String = "MultiMergeSorted"
 }
+ */

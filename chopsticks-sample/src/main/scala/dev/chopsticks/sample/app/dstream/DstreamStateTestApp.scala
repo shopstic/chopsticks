@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.sample.app.dstream
 
 import akka.NotUsed
@@ -218,3 +219,4 @@ object DstreamStateTestApp extends ZAkkaApp {
       }
   }
 }
+ */

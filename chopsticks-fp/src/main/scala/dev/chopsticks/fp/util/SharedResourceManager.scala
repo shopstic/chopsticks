@@ -3,12 +3,11 @@ package dev.chopsticks.fp.util
 import zio._
 import zio.stm.{STM, TMap}
 
+trait SharedResourceManager[-R, Id, Res] {
+  def activeSet: UIO[Set[Res]]
+  def manage(id: Id): ZIO[R with Scope, Nothing, Res]
+}
 object SharedResourceManager {
-  trait Service[-R, Id, Res] {
-    def activeSet: UIO[Set[Res]]
-    def manage(id: Id): ZManaged[R, Nothing, Res]
-  }
-
   sealed trait BusyState
   private case object BusyCreatingState extends BusyState
   private case object BusyDestroyingState extends BusyState
@@ -25,29 +24,29 @@ object SharedResourceManager {
   }
 
   def live[R: zio.Tag, Id: zio.Tag, Res: zio.Tag]
-    : RLayer[SharedResourceFactory[R, Id, Res], SharedResourceManager[R, Id, Res]] = {
-    val managedTmap: UManaged[TMap[Id, Either[BusyState, SharedResource[Res]]]] = ZManaged
-      .make {
+    : URLayer[SharedResourceFactory[R, Id, Res], SharedResourceManager[R, Id, Res]] = {
+    val managedTmap: URIO[Scope, TMap[Id, Either[BusyState, SharedResource[Res]]]] = ZIO
+      .acquireRelease {
         TMap.empty[Id, Either[BusyState, SharedResource[Res]]].commit
       } { tmap =>
         for {
           resources <- tmap.toMap.flatMap { map =>
-            STM.foreach_(map.keys) { k =>
+            STM.foreachDiscard(map.keys) { k =>
               tmap.delete(k)
             } *> STM.succeed(map.values.collect {
               case Right(r) =>
                 r
             }.toList)
           }.commit
-          _ <- ZIO.foreach_(resources)(_.release)
+          _ <- ZIO.foreachDiscard(resources)(_.release)
         } yield tmap
       }
 
-    val managed: ZManaged[SharedResourceFactory[R, Id, Res], Nothing, Service[R, Id, Res]] = for {
+    val managed: ZIO[SharedResourceFactory[R, Id, Res] with Scope, Nothing, SharedResourceManager[R, Id, Res]] = for {
       tmap <- managedTmap
-      factory <- ZManaged.access[SharedResourceFactory[R, Id, Res]](_.get)
+      factory <- ZIO.service[SharedResourceFactory[R, Id, Res]]
     } yield {
-      new Service[R, Id, Res] {
+      new SharedResourceManager[R, Id, Res] {
 
         override def activeSet: UIO[Set[Res]] = {
           tmap.values
@@ -59,8 +58,8 @@ object SharedResourceManager {
             .commit
         }
 
-        override def manage(id: Id): ZManaged[R, Nothing, Res] = {
-          ZManaged.make {
+        override def manage(id: Id): ZIO[R with Scope, Nothing, Res] = {
+          ZIO.acquireRelease {
             for {
               maybeResource <- tmap.get(id)
                 .flatMap {
@@ -80,16 +79,11 @@ object SharedResourceManager {
 
                 case None =>
                   for {
-                    relMap <- ZManaged.ReleaseMap.make
-                    res <- factory.manage(id).zio.provideSome[R]((_, relMap)).map(_._2)
-                    _ <- tmap.put(
-                      id,
-                      Right(SharedResource(
-                        res,
-                        1,
-                        relMap.releaseAll(zio.Exit.Success(()), ExecutionStrategy.Sequential).unit
-                      ))
-                    ).commit
+                    closeableScope <- Scope.makeWith(ExecutionStrategy.Sequential)
+                    res <- factory.manage(id).provideSomeLayer[R](ZLayer.succeed(closeableScope))
+                    _ <- tmap
+                      .put(id, Right(SharedResource(res, 1, closeableScope.close(zio.Exit.unit))))
+                      .commit
                   } yield res
               }
             } yield resource
@@ -120,6 +114,6 @@ object SharedResourceManager {
       }
     }
 
-    managed.toLayer
+    ZLayer.fromZIO(ZIO.scoped(managed))
   }
 }

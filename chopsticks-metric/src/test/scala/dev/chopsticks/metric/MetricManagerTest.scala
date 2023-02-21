@@ -19,7 +19,7 @@ object MetricManagerTest {
   final case class MetricsConfig(foo: String, bar: Boolean)
 
   object MetricsFactory extends MetricServiceFactory[FooMetric, MetricsConfig, Metrics] {
-    override def create(registry: MetricRegistry.Service[FooMetric], config: MetricsConfig): Metrics = {
+    override def create(registry: MetricRegistry[FooMetric], config: MetricsConfig): Metrics = {
       val labels = LabelValues.of(fooLabel -> config.foo).and(barLabel -> config.bar.toString)
       new Metrics {
         override val fooCounter: MetricCounter = registry.counterWithLabels(FooTotal, labels)

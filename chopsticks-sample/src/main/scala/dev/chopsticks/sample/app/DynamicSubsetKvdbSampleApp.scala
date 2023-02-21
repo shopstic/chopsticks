@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.sample.app
 
 import dev.chopsticks.fp.ZAkkaApp
@@ -79,3 +80,4 @@ object DynamicSubsetKvdbSampleApp extends ZAkkaApp {
       .as(ExitCode(0))
   }
 }
+ */

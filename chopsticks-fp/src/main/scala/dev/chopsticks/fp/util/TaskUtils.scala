@@ -1,92 +1,89 @@
 package dev.chopsticks.fp.util
 
 import java.util.concurrent.{CompletableFuture, CompletionException}
-import dev.chopsticks.fp.iz_logging.IzLogging
-import zio.clock.Clock
-import zio.{RIO, Task, UIO, ZIO}
+import zio.{Task, ZIO, ZIOAspect}
 
 import scala.concurrent.ExecutionException
 
-object TaskUtils {
-  private def catchFromGet(isFatal: Throwable => Boolean): PartialFunction[Throwable, Task[Nothing]] = {
+object TaskUtils:
+  private def catchFromGet(isFatal: Throwable => Boolean): PartialFunction[Throwable, Task[Nothing]] =
     case e: CompletionException =>
-      Task.fail(e.getCause)
+      ZIO.fail(e.getCause)
     case e: ExecutionException =>
-      Task.fail(e.getCause)
+      ZIO.fail(e.getCause)
     case _: InterruptedException =>
-      Task.interrupt
+      ZIO.interrupt
     case e if !isFatal(e) =>
-      Task.fail(e)
-  }
+      ZIO.fail(e)
 
-  private def unwrapDone[A](isFatal: Throwable => Boolean)(f: CompletableFuture[A]): Task[A] = {
-    try {
-      succeedNowTask(f.get())
-    }
+  private def unwrapDone[A](isFatal: Throwable => Boolean)(f: CompletableFuture[A]): Task[A] =
+    try succeedNowTask(f.get())
     catch catchFromGet(isFatal)
-  }
 
   def fromUninterruptibleCompletableFuture[A](
     name: => String,
     thunk: => CompletableFuture[A]
-  ): RIO[IzLogging with Clock, A] = {
-    ZIO.effect(thunk).flatMap { future =>
-      ZIO.effectSuspendTotalWith { (p, _) =>
-        if (future.isDone) {
-          unwrapDone(p.fatal)(future)
-        }
-        else {
-          val task = Task
-            .effectAsync { (cb: Task[A] => Unit) =>
-              val _ = future.whenComplete { (v, e) =>
-                if (e == null) {
-                  cb(Task.succeed(v))
-                }
-                else {
-                  cb(catchFromGet(p.fatal).lift(e).getOrElse(Task.die(e)))
-                }
-              }
-            }
-
-          task
-            .onInterrupt {
-              for {
-                loggingFib <- IzLogging
-                  .zioLogger
-                  .flatMap(_.warn(s"$name is uninterruptible and has not completed after 5 seconds!"))
-                  .delay(java.time.Duration.ofSeconds(5))
-                  .fork
-                  .interruptible
-                _ <- task.ignore.onExit(_ => loggingFib.interrupt)
-              } yield ()
-            }
-        }
-      }
-    }
-  }
-
-  def fromCancellableCompletableFuture[A](thunk: => CompletableFuture[A]): Task[A] =
-    Task.effect(thunk).flatMap { future =>
-      Task.effectSuspendTotalWith { (p, _) =>
-        Task.effectAsyncInterrupt[A] { cb =>
+  ): Task[A] =
+    ZIO.attempt(thunk).flatMap { future =>
+      ZIO.isFatal.flatMap { isFatal =>
+        ZIO.suspendSucceed {
           if (future.isDone) {
-            Right(unwrapDone(p.fatal)(future))
+            unwrapDone(isFatal)(future)
           }
           else {
-            val _ = future.whenComplete { (v, e) =>
-              if (e == null) {
-                cb(Task.succeed(v))
+            val task = ZIO
+              .async { (cb: Task[A] => Unit) =>
+                val _ = future.whenComplete { (v, e) =>
+                  if (e == null) {
+                    cb(ZIO.succeed(v))
+                  }
+                  else {
+                    cb(catchFromGet(isFatal).lift(e).getOrElse(ZIO.die(e)))
+                  }
+                }
               }
-              else {
-                cb(catchFromGet(p.fatal).lift(e).getOrElse(Task.die(e)))
-              }
-            }
 
-            Left(UIO(future.cancel(true)) *> ZIO.fromCompletableFuture(future).ignore)
+            task
+              .onInterrupt {
+                for {
+                  loggingFib <- ZIO
+                    .logWarning(s"$name is uninterruptible and has not completed after 5 seconds!")
+                    .delay(java.time.Duration.ofSeconds(5))
+                    .fork
+                    .interruptible @@ ZIOAspect.annotated("name", name)
+                  _ <- task.ignore.onExit(_ => loggingFib.interrupt)
+                } yield ()
+              }
           }
         }
       }
     }
 
-  private def succeedNowTask[A](value: A): Task[A] = Task.succeed(value)
-}
+  def fromCancellableCompletableFuture[A](thunk: => CompletableFuture[A]): Task[A] =
+    ZIO.attempt(thunk).flatMap { future =>
+      ZIO.isFatal.flatMap { isFatal =>
+        ZIO.suspendSucceed {
+          ZIO.asyncInterrupt { cb =>
+            if (future.isDone) {
+              Right(unwrapDone(isFatal)(future))
+            }
+            else {
+              val _ = future.whenComplete { (v, e) =>
+                if (e == null) {
+                  cb(ZIO.succeed(v))
+                }
+                else {
+                  cb(catchFromGet(isFatal).lift(e).getOrElse(ZIO.die(e)))
+                }
+              }
+
+              Left(ZIO.succeed(future.cancel(true)) *> ZIO.fromCompletableFuture(future).ignore)
+            }
+          }
+        }
+      }
+    }
+
+  private def succeedNowTask[A](value: A): Task[A] = ZIO.succeed(value)
+
+end TaskUtils

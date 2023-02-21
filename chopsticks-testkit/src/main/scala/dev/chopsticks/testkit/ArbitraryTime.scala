@@ -14,7 +14,7 @@ object ArbitraryTime {
 
   lazy val uniformDuration: Gen[Duration] = Gen.choose(Long.MinValue, Long.MaxValue) map { n => Duration.ofNanos(n) }
 
-  lazy val uniformLocalDateTime: Gen[LocalDateTime] = uniformDuration map { n: Duration =>
+  lazy val uniformLocalDateTime: Gen[LocalDateTime] = uniformDuration map { (n: Duration) =>
     LocalDateTime.of(1970, Month.JANUARY, 1, 0, 0, 0, 0).plus(n)
   }
 

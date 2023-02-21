@@ -1,57 +1,59 @@
 package dev.chopsticks.metric
 
-import akka.stream.scaladsl.{Flow, Source}
+import zio.stream.*
 
 object MetricStreamOps {
-  implicit class AkkaStreamSourceMetricOps[+Elem, +Mat](source: Source[Elem, Mat]) {
-    def metricCounter(metric: MetricCounter): Source[Elem, Mat] = {
-      source
-        .map { v =>
-          metric.inc()
-          v
-        }
-    }
 
-    def metricCounter[N](metric: MetricCounter, toNumeric: Elem => N)(implicit num: Numeric[N]): Source[Elem, Mat] = {
-      source
-        .map { v =>
-          metric.inc(num.toDouble(toNumeric(v)))
-          v
-        }
-    }
+  extension [Env, Err, Out](stream: ZStream[Env, Err, Out]) {
+    def metricCounter(metric: MetricCounter): ZStream[Env, Err, Out] =
+      stream.mapChunks { xs =>
+        metric.inc(xs.size)
+        xs
+      }
 
-    def metricGauge[N](metric: MetricGauge, toValue: Elem => N)(implicit num: Numeric[N]): Source[Elem, Mat] = {
-      source
-        .map { v =>
-          metric.set(num.toDouble(toValue(v)))
-          v
+    def metricCounter[N](metric: MetricCounter, toNumeric: Out => N)(implicit num: Numeric[N]): ZStream[Env, Err, Out] =
+      stream
+        .mapChunks { xs =>
+          val total = xs.foldLeft(0d)((acc, x) => acc + num.toDouble(toNumeric(x)))
+          metric.inc(total)
+          xs
         }
-    }
+
+    def metricGauge[N](metric: MetricGauge, toValue: Out => N)(implicit num: Numeric[N]): ZStream[Env, Err, Out] =
+      stream
+        .mapChunks { xs =>
+          if (xs.nonEmpty) {
+            metric.set(num.toDouble(toValue(xs.last)))
+          }
+          xs
+        }
   }
 
-  implicit class AkkaStreamFlowMetricOps[-In, +Out, +Mat](flow: Flow[In, Out, Mat]) {
-    def metricCounter(metric: MetricCounter): Flow[In, Out, Mat] = {
-      flow
-        .map { v =>
-          metric.inc()
-          v
+  extension [Env, Err, In, Out](pipeline: ZPipeline[Env, Err, In, Out]) {
+    def metricCounter(metric: MetricCounter): ZPipeline[Env, Err, In, Out] =
+      pipeline
+        .mapChunks { xs =>
+          metric.inc(xs.size)
+          xs
         }
-    }
 
-    def metricCounter[N](metric: MetricCounter, toNumeric: Out => N)(implicit num: Numeric[N]): Flow[In, Out, Mat] = {
-      flow
-        .map { v =>
-          metric.inc(num.toDouble(toNumeric(v)))
-          v
+    def metricCounter[N](metric: MetricCounter, toNumeric: Out => N)(implicit
+      num: Numeric[N]
+    ): ZPipeline[Env, Err, In, Out] =
+      pipeline
+        .mapChunks { xs =>
+          val total = xs.foldLeft(0d)((acc, x) => acc + num.toDouble(toNumeric(x)))
+          metric.inc(total)
+          xs
         }
-    }
 
-    def metricGauge[N](metric: MetricGauge, toValue: Out => N)(implicit num: Numeric[N]): Flow[In, Out, Mat] = {
-      flow
-        .map { v =>
-          metric.set(num.toDouble(toValue(v)))
-          v
+    def metricGauge[N](metric: MetricGauge, toValue: Out => N)(implicit num: Numeric[N]): ZPipeline[Env, Err, In, Out] =
+      pipeline
+        .mapChunks { xs =>
+          if (xs.nonEmpty) {
+            metric.set(num.toDouble(toValue(xs.last)))
+          }
+          xs
         }
-    }
   }
 }

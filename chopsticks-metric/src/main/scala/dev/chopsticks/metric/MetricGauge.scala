@@ -1,7 +1,6 @@
 package dev.chopsticks.metric
 
 import zio.ZIO
-import zio.clock.Clock
 
 trait MetricGauge {
   def inc(value: Double): Unit
@@ -20,7 +19,7 @@ trait MetricGauge {
   def set(value: Long): Unit = set(value.toDouble)
   def set(value: Int): Unit = set(value.toDouble)
 
-  def timeM[R, E, A](f: ZIO[R, E, A]): ZIO[R with Clock, E, A] = {
+  def timeM[R, E, A](f: ZIO[R, E, A]): ZIO[R, E, A] = {
     f.timed.map {
       case (d, v) =>
         set(d.toNanos)

@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.sample.app
 
 import akka.stream.KillSwitches
@@ -138,3 +139,4 @@ object FdbWatchTestApp extends ZAkkaApp {
       .as(ExitCode(0))
   }
 }
+ */

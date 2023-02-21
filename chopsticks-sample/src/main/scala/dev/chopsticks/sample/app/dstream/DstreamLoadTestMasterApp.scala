@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.sample.app.dstream
 
 import akka.actor.ActorSystem
@@ -151,3 +152,4 @@ object DstreamLoadTestMasterApp extends ZAkkaApp {
   }
 
 }
+ */

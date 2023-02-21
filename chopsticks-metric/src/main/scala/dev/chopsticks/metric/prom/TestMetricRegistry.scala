@@ -1,9 +1,9 @@
 package dev.chopsticks.metric.prom
 
-import dev.chopsticks.metric.MetricConfigs._
+import dev.chopsticks.metric.MetricConfigs.*
 import dev.chopsticks.metric.MetricRegistry.MetricGroup
-import dev.chopsticks.metric._
-import dev.chopsticks.metric.prom.PromMetrics._
+import dev.chopsticks.metric.*
+import dev.chopsticks.metric.prom.PromMetrics.*
 import io.prometheus.client.{Counter, Gauge, Histogram, Summary}
 import zio.{ULayer, ZLayer}
 
@@ -15,7 +15,7 @@ object TestMetricRegistry {
   }
 }
 
-final class TestMetricRegistry[C <: MetricGroup] extends MetricRegistry.Service[C] {
+final class TestMetricRegistry[C <: MetricGroup] extends MetricRegistry[C] {
   override def counter(config: CounterConfig[NoLabel] with C): MetricCounter = {
     new PromCounter(
       Counter

@@ -1,36 +1,41 @@
 package dev.chopsticks.sample.app
 
-import cats.data.NonEmptyList
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp.util.Race
-import dev.chopsticks.fp.zio_ext.ZIOExtensions
-import zio.duration._
-import zio.{ExitCode, RIO, Schedule, UIO, ZIO, ZManaged}
+import dev.chopsticks.fp.zio_ext.*
+import zio.{Duration, ExitCode, RIO, Schedule, Scope, ZIO, ZIOAppArgs}
+import zio.prelude.NonEmptyList
 
-object SafeRaceFirstTestApp extends ZAkkaApp {
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    val app = Race(NonEmptyList
-      .fromListUnsafe(List.tabulate(3) { i =>
-        ZIO
-          .effectSuspend(UIO(println(s"Par $i")))
-          .repeat(Schedule.fixed(1.second).whileOutput(_ < 5))
-          .unit
-          .onInterrupt(_ =>
-            UIO(println(s"Par $i interrupting")) *> UIO(println(s"Par $i interrupted")).delay(3.seconds)
-          )
-      }))
+object SafeRaceFirstTestApp extends zio.ZIOAppDefault {
+  override def run: RIO[Environment with ZIOAppArgs with Scope, ExitCode] = {
+    val app = Race
+      .apply(
+        NonEmptyList.fromIterable(makeEffect(0), (1 to 2).map(makeEffect))
+      )
       .run()
-      .interruptibleRace(ZManaged
-        .make(UIO(println("acquire"))) { _ =>
-          UIO(println("release"))
-        }
-        .use { _ =>
-          ZIO.effectSuspend(UIO(println("In use"))).repeat(Schedule.fixed(1.second).whileOutput(_ < 3))
-            .onExit(e => UIO(println(s"Use exit $e")))
-        }
-        .unit)
+      .interruptibleRace(
+        ZIO
+          .acquireRelease(ZIO.succeed(println("acquire"))) { _ =>
+            ZIO.succeed(println("release"))
+          }
+          .zipRight {
+            ZIO
+              .suspend(ZIO.succeed(println("In use")))
+              .repeat(Schedule.fixed(Duration.fromSeconds(1L)).whileOutput(_ < 3))
+              .onExit(e => ZIO.succeed(println(s"Use exit $e")))
+          }
+          .unit
+      )
     app
       .as(ExitCode(0))
   }
+
+  private def makeEffect(i: Int) =
+    ZIO
+      .suspend(ZIO.succeed(println(s"Par $i")))
+      .repeat(Schedule.fixed(Duration.fromSeconds(1L)).whileOutput(_ < 5))
+      .unit
+      .onInterrupt(_ =>
+        ZIO.succeed(println(s"Par $i interrupting")) *>
+          ZIO.succeed(println(s"Par $i interrupted")).delay(Duration.fromSeconds(3L))
+      )
 }

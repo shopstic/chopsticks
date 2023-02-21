@@ -1,3 +1,4 @@
+/*
 package dev.chopsticks.sample.app.dstream
 
 import akka.grpc.GrpcClientSettings
@@ -170,3 +171,4 @@ object DstreamSampleApp extends ZAkkaApp {
     managed.use(identity)
   }
 }
+ */

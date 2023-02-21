@@ -1,13 +1,13 @@
 package dev.chopsticks.metric.prom
 
 import java.util.concurrent.ConcurrentLinkedQueue
-import dev.chopsticks.metric.MetricConfigs._
 import dev.chopsticks.metric.MetricReference.MetricReferenceValue
 import dev.chopsticks.metric.MetricRegistry.MetricGroup
-import dev.chopsticks.metric._
-import dev.chopsticks.metric.prom.PromMetrics._
-import io.prometheus.client._
-import zio.{Has, UIO, ULayer, URLayer, ZLayer, ZManaged}
+import dev.chopsticks.metric.*
+import dev.chopsticks.metric.MetricConfigs.*
+import dev.chopsticks.metric.prom.PromMetrics.*
+import io.prometheus.client.*
+import zio.{ULayer, URLayer, ZIO, ZLayer}
 
 import scala.collection.mutable
 
@@ -28,30 +28,29 @@ object PromMetricRegistry {
     ZLayer.succeed(registry) >>> live[C](prefix)
   }
 
-  def live[C <: MetricGroup: zio.Tag](prefix: String): URLayer[Has[CollectorRegistry], MetricRegistry[C]] = {
+  def live[C <: MetricGroup: zio.Tag](prefix: String): URLayer[CollectorRegistry, MetricRegistry[C]] = {
     val managed = for {
-      collector <- ZManaged.service[CollectorRegistry]
-      registry <- ZManaged.make {
-        UIO(new PromMetricRegistry[C](prefix, collector))
+      collector <- ZIO.service[CollectorRegistry]
+      registry <- ZIO.acquireRelease {
+        ZIO.succeed(new PromMetricRegistry[C](prefix, collector))
       } { registry =>
-        UIO(registry.removeAll())
+        ZIO.succeed(registry.removeAll())
       }
     } yield registry
-
-    managed.toLayer
+    ZLayer.scoped(managed)
   }
 }
 
 final class PromMetricRegistry[C <: MetricGroup](
   prefix: String,
   registry: CollectorRegistry
-) extends MetricRegistry.Service[C] {
+) extends MetricRegistry[C] {
   import PromMetricRegistry._
 
   private val cleanUpQueue = new ConcurrentLinkedQueue[() => Unit]()
 
   private[prom] def removeAll(): Unit = {
-    import scala.jdk.CollectionConverters._
+    import scala.jdk.CollectionConverters.*
     cleanUpQueue.iterator().asScala.foreach(_())
   }
 

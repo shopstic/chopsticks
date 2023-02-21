@@ -1,15 +1,9 @@
 package dev.chopsticks.sample.util
 
-import akka.Done
-import akka.stream.scaladsl.{Sink, Source}
-import dev.chopsticks.fp.akka_env.AkkaEnv
-import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
-import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
-import zio.clock.Clock
-import zio.{RIO, ZIO}
+import zio.{Duration, UIO, ZIO}
+import zio.stream.ZStream
 
 import scala.collection.immutable.ListMap
-import scala.concurrent.duration.{Duration, FiniteDuration}
 
 object MiscUtils {
   def printKey(bs: Array[Byte]): String = {
@@ -20,42 +14,26 @@ object MiscUtils {
       .mkString("")
   }
 
-  def logRates(interval: FiniteDuration)(collect: => ListMap[String, Double])(implicit
-    logCtx: LogCtx
-  ): RIO[AkkaEnv with IzLogging with Clock, Done] = {
+  def logRates(interval: Duration)(collect: => ListMap[String, Double]): UIO[Unit] = {
     for {
-      logger <- ZIO.access[IzLogging](_.get.logger)
-      ret <- Source
-        .tick(Duration.Zero, interval, ())
-        .map { _ => collect }
-        .statefulMapConcat(() => {
-          var priorSnapshot = ListMap.empty[String, Double]
-
-          snap => {
-            if (priorSnapshot.isEmpty) {
-              priorSnapshot = snap
-              Nil
+      ret <- ZStream
+        .tick(interval)
+        .as(collect)
+        .mapAccum(ListMap.empty[String, Double]) { (priorSnapshot, snap) =>
+          if (priorSnapshot.isEmpty) (snap, None)
+          else {
+            val elapsed = priorSnapshot.map {
+              case (pk, pv) =>
+                pk -> (snap(pk) - pv)
             }
-            else {
-              val elapsed = priorSnapshot.map {
-                case (pk, pv) =>
-                  pk -> (snap(pk) - pv)
-              }
-              priorSnapshot = snap
-              List(elapsed)
-            }
+            (snap, Some(elapsed))
           }
-        })
-        .toZAkkaSource
-        .killSwitch
-        .interruptibleRunWith(Sink.foreach { elapsed =>
-          logger.info(s"${elapsed
-            .map {
-              case (k, v) =>
-                s"$k=$v"
-            }
-            .mkString(" ") -> "snapshot" -> null}")
-        })
+        }
+        .collect { case Some(elapsed) => elapsed }
+        .runForeach { elapsed =>
+          val result = elapsed.map { case (k, v) => s"$k=$v" }.mkString(" ")
+          ZIO.logInfo(result)
+        }
     } yield ret
   }
 }
