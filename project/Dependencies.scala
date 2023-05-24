@@ -33,6 +33,8 @@ object Dependencies {
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
   val zioCoreDeps = Seq(
+    // Override izumi-reflect to 2.3.7 which solves the dreaded "Defect in zio.Has" bug again
+    "dev.zio" %% "izumi-reflect" % "2.3.7",
     "dev.zio" %% "zio" % ZIO_VERSION
   )
 
@@ -72,10 +74,6 @@ object Dependencies {
     "org.typelevel" %% "cats-core" % "2.8.0"
   )
 
-  val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "2.3.2"
-  )
-
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
     .map(p => "com.github.pureconfig" %% p % "0.17.4")
 
@@ -113,7 +111,7 @@ object Dependencies {
   )
 
   val lmdbDeps = Seq(
-    "org.lmdbjava" % "lmdbjava" % "0.8.2"
+    "org.lmdbjava" % "lmdbjava" % "0.8.3"
   )
 
   val fdbDeps = Seq(

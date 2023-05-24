@@ -152,8 +152,7 @@ final class FdbIterateSourceStage(
             self ! DownstreamPull
           }
           override def onDownstreamFinish(cause: Throwable): Unit = {
-            setKeepGoing(true)
-            self ! DownstreamFinish
+            completeStage()
           }
         }
       )
@@ -164,7 +163,7 @@ final class FdbIterateSourceStage(
           case DownstreamPull =>
             val _ = batchEmitter.batchAndEmit(None)
 
-          case DownstreamFinish | IteratorComplete =>
+          case IteratorComplete =>
             completeStage()
 
           case IteratorNext(kv) =>

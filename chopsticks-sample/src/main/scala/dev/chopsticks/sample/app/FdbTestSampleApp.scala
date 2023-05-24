@@ -1,12 +1,13 @@
 package dev.chopsticks.sample.app
 
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.{Keep, Sink, Source}
 import com.apple.foundationdb.tuple.Versionstamp
 import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
 import dev.chopsticks.fp._
 import dev.chopsticks.fp.akka_env.AkkaEnv
 import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
+import dev.chopsticks.fp.util.LoggedRace
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
 import dev.chopsticks.kvdb.codec.ValueSerdes
@@ -153,24 +154,6 @@ object FdbTestSampleApp extends ZAkkaApp {
       .getKeyTask(_ lastStartsWith "bar")
       .logResult("Get last test key", _.toString)
 
-    _ <- Source((lastKey.map(_.bar).getOrElse(10000) + 1) to Int.MaxValue)
-      .throttle(1, 1.second)
-      .toZAkkaSource
-      .killSwitch
-      .viaZAkkaFlow(
-        dbApi.batchTransact(batch => {
-          val pairs = batch.zipWithIndex.map {
-            case (i, index) =>
-              TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
-          }
-
-          testKeyspace.batchPut(pairs).result -> pairs
-        })
-      )
-      .interruptibleRunIgnore()
-      .log("Append")
-      .fork
-
     _ <- testKeyspace
       .source(_ ^= "bar", _ ^= "bar")
       .map(_._1)
@@ -185,15 +168,52 @@ object FdbTestSampleApp extends ZAkkaApp {
       })
       .log("Check versionstamp uniqueness")
 
-    _ <- testKeyspace
-      .tailSource(_ gt "bar" -> 10000, _ startsWith "bar")
-      .toZAkkaSource
-      .killSwitch
-      .interruptibleRunWith(Sink.foreach {
-        case (k, v) =>
-          println(s"Tail got: k=$k v=$v")
-      })
-      .log("Tail")
+    _ <- LoggedRace()
+      .add(
+        "Append",
+        Source((lastKey.map(_.bar).getOrElse(10000) + 1) to Int.MaxValue)
+          .toZAkkaSource
+          .killSwitch
+          .viaZAkkaFlow(
+            dbApi.batchTransact(batch => {
+              val pairs = batch.zipWithIndex.map {
+                case (i, index) =>
+                  TestKeyWithVersionstamp("bar", i, Versionstamp.incomplete(index)) -> s"bar$i"
+              }
+
+              testKeyspace.batchPut(pairs).result -> pairs
+            })
+          )
+          .interruptibleRunIgnore()
+          .unit
+      )
+      .add(
+        "Tail",
+        testKeyspace
+          .tailSource(_ gt "bar" -> 10000, _ startsWith "bar")
+          .toZAkkaSource
+          .killSwitch
+          .viaBuilder(_.conflate(Keep.right).throttle(1, 1.second))
+          .interruptibleRunWith(Sink.foreach {
+            case (k, v) =>
+              println(s"Tail got: k=$k v=$v")
+          })
+          .unit
+      )
+      .add(
+        "Range scan",
+        testKeyspace
+          .source(_ gt "bar" -> 10000, _ lt "bar" -> 11000)
+          .toZAkkaSource
+          .killSwitch
+          .viaBuilder(_.map(_ => 1))
+          .interruptibleRunWith(Sink.fold(0)((s, v: Int) => s + v))
+          .logResult("Scan", count => s"Counted $count")
+          .repeat(Schedule.forever)
+          .unit
+      )
+      .run()
+
 //      stats <- dbApi.statsTask
 //      _ <- ZLogger.info(
 //        stats.toVector
