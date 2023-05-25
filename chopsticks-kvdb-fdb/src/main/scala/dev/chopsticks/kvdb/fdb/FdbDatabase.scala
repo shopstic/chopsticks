@@ -45,6 +45,7 @@ import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
 import scala.util.Failure
+import scala.util.control.NonFatal
 
 object FdbDatabase {
   val defaultWriteRetrySchedule: Schedule[Any, Throwable, Any] = {
@@ -647,12 +648,20 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
                     dbContext.strinc(column)
                   )
                   val tx = if (firstRun) initialTx else dbContext.db.createTransaction()
-                  val closeTx = () => tx.close()
-                  val iterator = ops.iterate(
-                    new FdbReadApi[BCF](tx, dbContext),
-                    _.tx.snapshot().getRange(startKeySelector, endKeySelector).iterator()
-                  )
-                  iterator -> closeTx
+
+                  try {
+                    val closeTx = () => tx.close()
+                    val iterator = ops.iterate(
+                      new FdbReadApi[BCF](tx, dbContext),
+                      _.tx.snapshot().getRange(startKeySelector, endKeySelector).iterator()
+                    )
+                    iterator -> closeTx
+                  }
+                  catch {
+                    case NonFatal(e) =>
+                      tx.close()
+                      throw e
+                  }
                 }
 
                 Source
@@ -764,23 +773,31 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
             val fromOperator = fromHead.operator
             val fromOperand = fromHead.operand.toByteArray
             val tx = dbContext.db.createTransaction()
-            val api = new FdbReadApi[BCF](tx, dbContext)
 
-            val startKeySelector = fromOperator match {
-              case Operator.EQUAL =>
-                KeySelector.firstGreaterOrEqual(fromOperand)
-              case _ =>
-                api.nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
+            try {
+              val api = new FdbReadApi[BCF](tx, dbContext)
+
+              val startKeySelector = fromOperator match {
+                case Operator.EQUAL =>
+                  KeySelector.firstGreaterOrEqual(fromOperand)
+                case _ =>
+                  api.nonEqualFromConstraintToKeySelector(fromOperator, fromOperand)
+              }
+
+              val toHead = newRange.to.head
+              val endKeySelector =
+                api.toConstraintToKeySelector(toHead.operator, toHead.operand.toByteArray, dbContext.strinc(column))
+
+              val closeTx = () => tx.close()
+              val iterator = ops.iterate(api, _.tx.snapshot().getRange(startKeySelector, endKeySelector).iterator())
+
+              iterator -> closeTx
             }
-
-            val toHead = newRange.to.head
-            val endKeySelector =
-              api.toConstraintToKeySelector(toHead.operator, toHead.operand.toByteArray, dbContext.strinc(column))
-
-            val closeTx = () => tx.close()
-            val iterator = ops.iterate(api, _.tx.snapshot().getRange(startKeySelector, endKeySelector).iterator())
-
-            iterator -> closeTx
+            catch {
+              case NonFatal(e) =>
+                tx.close()
+                throw e
+            }
           }
 
           val keyValidator = keySatisfies(_: Array[Byte], toConstraints)

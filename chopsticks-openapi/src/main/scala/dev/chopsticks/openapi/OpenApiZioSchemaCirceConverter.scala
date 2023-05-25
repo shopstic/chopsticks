@@ -5,7 +5,7 @@ import dev.chopsticks.openapi.OpenApiParsedAnnotations.extractAnnotations
 import io.circe.{Decoder, DecodingFailure, Encoder, HCursor, Json, JsonObject}
 import io.circe.Decoder.{AccumulatingResult, Result}
 import io.circe.Encoder.AsObject
-import sttp.tapir.{ValidationError, Validator}
+import sttp.tapir.Validator
 import zio.schema.{FieldSet, Schema => ZioSchema, StandardType}
 import zio.Chunk
 
@@ -31,6 +31,8 @@ import scala.collection.mutable.ListBuffer
 import scala.language.existentials
 
 object OpenApiZioSchemaCirceConverter {
+  final private case class CacheKey(entityName: String, annotationsHash: Int)
+
   object Decoder {
     def convert[A](zioSchema: ZioSchema[A]): Decoder[A] = {
       new Converter(scala.collection.mutable.Map.empty).convert(zioSchema)
@@ -46,16 +48,17 @@ object OpenApiZioSchemaCirceConverter {
       override def apply(c: HCursor): Result[A] = get(c)
     }
 
-    private class Converter(cache: scala.collection.mutable.Map[String, LazyDecoder[_]]) {
+    private class Converter(cache: scala.collection.mutable.Map[CacheKey, LazyDecoder[_]]) {
 
       private def convertUsingCache[A](annotations: OpenApiParsedAnnotations[A])(convert: => Decoder[A]): Decoder[A] = {
         annotations.entityName match {
           case Some(name) =>
-            cache.get(name) match {
+            val cacheKey = CacheKey(name, annotations.hashCode())
+            cache.get(cacheKey) match {
               case Some(value) => value.asInstanceOf[io.circe.Decoder[A]]
               case None =>
                 val lazyDec = new LazyDecoder[A]()
-                val _ = cache.addOne(name -> lazyDec)
+                val _ = cache.addOne(cacheKey -> lazyDec)
                 val result = convert
                 lazyDec.set(result)
                 result
@@ -1022,49 +1025,12 @@ object OpenApiZioSchemaCirceConverter {
         }
         decoder = metadata.validator.fold(decoder) { validator: Validator[A] =>
           decoder.ensure { a =>
-            validator(a).map(validationErrorMessage)
+            validator(a).map(OpenApiValidation.errorMessage)
           }
         }
         decoder
       }
 
-      private def validationErrorMessage(validationError: ValidationError[_]): String = {
-        validationError match {
-          case primitive: ValidationError.Primitive[_] =>
-            primitive.validator match {
-              case v: Validator.Min[_] =>
-                s"Value must be greater${if (v.exclusive) "" else " or equal"} than ${v.value}. Received: ${validationError.invalidValue}."
-              case v: Validator.Max[_] =>
-                s"Value must be smaller${if (v.exclusive) "" else " or equal"} than ${v.value}. Received: ${validationError.invalidValue}."
-              case pattern: Validator.Pattern[_] =>
-                s"Value must match the pattern: ${pattern.value}. Received: '${validationError.invalidValue}'."
-              case v: Validator.MinLength[_] =>
-                val value = validationError.invalidValue.toString
-                if (value.isEmpty) {
-                  s"Length of the value must be greater or equal than ${v.value}. Received empty value."
-                }
-                else {
-                  s"Length of the value must be greater or equal than ${v.value}. Received: '${validationError.invalidValue}'."
-                }
-              case v: Validator.MaxLength[_] =>
-                val value = validationError.invalidValue.toString
-                val truncated = value.take(v.value + 1)
-                val charsLeft = value.length - truncated.length
-                val formatted =
-                  if (charsLeft <= 0) value
-                  else s"""$truncated[truncated to ${truncated.length}](+$charsLeft more)""""
-                s"Length of the value must be smaller or equal than ${v.value}. Received: '$formatted'."
-              case v: Validator.MinSize[_, _] =>
-                s"Size of the provided array must be greater or equal than ${v.value}. Received array of size ${validationError.invalidValue.asInstanceOf[Iterable[_]].size}."
-              case v: Validator.MaxSize[_, _] =>
-                s"Size of the provided array must be smaller or equal than ${v.value}. Received array of size ${validationError.invalidValue.asInstanceOf[Iterable[_]].size}."
-              case e: Validator.Enumeration[_] =>
-                s"Value must be one of: ${e.possibleValues.mkString(", ")}. Received: '${validationError.invalidValue}'."
-            }
-          case custom: ValidationError.Custom[_] =>
-            custom.message
-        }
-      }
     }
   }
 
@@ -1083,17 +1049,18 @@ object OpenApiZioSchemaCirceConverter {
       override def apply(a: A): Json = get(a)
     }
 
-    private class Converter(cache: scala.collection.mutable.Map[String, LazyEncoder[_]]) {
+    private class Converter(cache: scala.collection.mutable.Map[CacheKey, LazyEncoder[_]]) {
 
       private def convertUsingCache[A](annotations: OpenApiParsedAnnotations[A])(convert: => io.circe.Encoder[A])
         : io.circe.Encoder[A] = {
         annotations.entityName match {
           case Some(name) =>
-            cache.get(name) match {
+            val cacheKey = CacheKey(name, annotations.hashCode())
+            cache.get(cacheKey) match {
               case Some(value) => value.asInstanceOf[io.circe.Encoder[A]]
               case None =>
                 val lazyEnc = new LazyEncoder[A]()
-                val _ = cache.addOne(name -> lazyEnc)
+                val _ = cache.addOne(cacheKey -> lazyEnc)
                 val result = convert
                 lazyEnc.set(result)
                 result
@@ -1922,7 +1889,6 @@ object OpenApiZioSchemaCirceConverter {
           case ZioSchema.Enum22(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, annotations) =>
             convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22)
 
-          // e.g. enums are not yet supported
           case _ =>
             ???
         }

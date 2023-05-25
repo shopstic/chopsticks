@@ -90,7 +90,7 @@ lazy val kvdbCore = Build
   .defineProject("kvdb-core")
   .settings(
     libraryDependencies ++= shapelessDeps ++ scalapbRuntimeDeps ++ chimneyDeps ++
-      kittensDeps ++ betterFilesDeps ++ zioMagicDeps.map(_ % "test"),
+      betterFilesDeps ++ zioMagicDeps.map(_ % "test"),
     Compile / PB.targets := Seq(
       scalapb
         .gen(flatPackage = true, singleLineToProtoString = true, lenses = false) -> (Compile / sourceManaged).value
@@ -161,6 +161,10 @@ lazy val kvdbCodecProtobufValue = Build
   )
   .dependsOn(kvdbCore)
 
+lazy val kvdbCodecPrimitiveValue = Build
+  .defineProject("kvdb-codec-primitive-value")
+  .dependsOn(kvdbCore)
+
 lazy val metric = Build
   .defineProject("metric")
   .settings(
@@ -190,6 +194,13 @@ lazy val zioGrpcCommon = Build
   .settings(
     Compile / PB.targets += scalapb.zio_grpc.ZioCodeGenerator -> (Compile / sourceManaged).value,
     libraryDependencies ++= scalapbRuntimeDeps ++ scalapbRuntimeGrpcDeps
+  )
+  .dependsOn(util)
+
+lazy val jwt = Build
+  .defineProject("jwt")
+  .settings(
+    libraryDependencies ++= jwtCirceDeps ++ zioDeps
   )
   .dependsOn(util)
 
@@ -242,12 +253,16 @@ lazy val avro4s = Build
     Compile / packageBin := (avro4sShadowed / assembly).value
   )
 
-lazy val openApi = Build
-  .defineProject("open-api")
+lazy val openapi = Build
+  .defineProject("openapi")
   .settings(
     libraryDependencies ++= tapirDeps ++ zioSchemaDeps
   )
   .dependsOn(util)
+
+lazy val csv = Build
+  .defineProject("csv")
+  .dependsOn(openapi)
 
 lazy val root = (project in file("."))
   .settings(
@@ -270,12 +285,15 @@ lazy val root = (project in file("."))
     kvdbCodecBerkeleydbKey,
     kvdbCodecFdbKey,
     kvdbCodecProtobufValue,
+    kvdbCodecPrimitiveValue,
     metric,
-    openApi,
+    openapi,
+    csv,
     alertmanager,
     prometheus,
     zioGrpcCommon,
     sample,
     avro4sShadowed,
-    avro4s
+    avro4s,
+    jwt
   )

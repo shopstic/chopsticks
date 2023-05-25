@@ -2,20 +2,15 @@ import sbt._
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
-  val SCALA_VERSION = "2.13.8"
+  val SCALA_VERSION = "2.13.10"
   // The last Apache 2.0 licensed Akka
   val AKKA_VERSION = "2.6.20"
   val AKKA_HTTP_VERSION = "10.2.10"
-  // Past this release, ZIO 1.0.x has the "Defect in zio.Has" bug again
-  // due to its izumi-reflect upgrade
-  val ZIO_VERSION = "1.0.14"
+  val ZIO_VERSION = "1.0.18"
   val IZUMI_VERSION = "1.0.10"
   val REFINED_VERSION = "0.9.29"
-  // Don't upgrade circe until this fix ends up in a release
-  // https://github.com/circe/circe/issues/1972
-  val CIRCE_VERSION = "0.14.1"
+  val CIRCE_VERSION = "0.14.3"
   val CALIBAN_VERSION = "1.3.3"
-  val STTP_VERSION = "3.7.4"
 
   val akkaSlf4jDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
@@ -38,6 +33,8 @@ object Dependencies {
   val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
 
   val zioCoreDeps = Seq(
+    // Override izumi-reflect to 2.3.7 which solves the dreaded "Defect in zio.Has" bug again
+    "dev.zio" %% "izumi-reflect" % "2.3.7",
     "dev.zio" %% "zio" % ZIO_VERSION
   )
 
@@ -77,12 +74,8 @@ object Dependencies {
     "org.typelevel" %% "cats-core" % "2.8.0"
   )
 
-  val kittensDeps = Seq(
-    "org.typelevel" %% "kittens" % "2.3.2"
-  )
-
   val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.17.1")
+    .map(p => "com.github.pureconfig" %% p % "0.17.4")
 
   val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
     .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
@@ -98,7 +91,7 @@ object Dependencies {
   )
 
   val janinoDeps = Seq(
-    "org.codehaus.janino" % "janino" % "3.1.8"
+    "org.codehaus.janino" % "janino" % "3.1.9"
   )
 
   val scalatestDeps = Seq(
@@ -114,11 +107,11 @@ object Dependencies {
   )
 
   val rocksdbDeps = Seq(
-    "org.rocksdb" % "rocksdbjni" % "7.5.3"
+    "org.rocksdb" % "rocksdbjni" % "7.10.2"
   )
 
   val lmdbDeps = Seq(
-    "org.lmdbjava" % "lmdbjava" % "0.8.2"
+    "org.lmdbjava" % "lmdbjava" % "0.8.3"
   )
 
   val fdbDeps = Seq(
@@ -161,19 +154,19 @@ object Dependencies {
   )
 
   val chimneyDeps = Seq(
-    "io.scalaland" %% "chimney" % "0.6.2"
+    "io.scalaland" %% "chimney" % "0.7.1"
   )
 
   val snappyDeps = Seq(
-    "org.xerial.snappy" % "snappy-java" % "1.1.8.4"
+    "org.xerial.snappy" % "snappy-java" % "1.1.9.1"
   )
 
   val betterFilesDeps = Seq(
-    "com.github.pathikrit" %% "better-files" % "3.9.1"
+    "com.github.pathikrit" %% "better-files" % "3.9.2"
   )
 
   val microlibsDeps = Seq(
-    "com.github.japgolly.microlibs" %% "utils" % "4.2.0"
+    "com.github.japgolly.microlibs" %% "utils" % "4.2.1"
   )
 
   val berkeleyDbDeps = Seq(
@@ -185,7 +178,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.7.3"
+    "com.lihaoyi" %% "pprint" % "0.8.1"
   )
 
   val logstageDeps = Seq(
@@ -204,10 +197,6 @@ object Dependencies {
 
   val sourcecodeDeps = Seq(
     "com.lihaoyi" %% "sourcecode" % "0.3.0"
-  )
-
-  val sttpDeps = Seq(
-    "com.softwaremill.sttp.client3" %% "core" % STTP_VERSION
   )
 
   val avro4sDeps = Seq(
@@ -253,4 +242,8 @@ object Dependencies {
       zioSchemaOrganization %% "zio-schema-derivation" % zioSchemaVersion
     )
   }
+
+  val jwtCirceDeps = Seq(
+    "com.github.jwt-scala" %% "jwt-circe" % "9.1.1"
+  )
 }
