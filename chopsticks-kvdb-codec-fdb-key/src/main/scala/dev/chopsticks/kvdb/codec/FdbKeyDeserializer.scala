@@ -2,7 +2,6 @@ package dev.chopsticks.kvdb.codec
 
 import java.time._
 import java.util.UUID
-
 import com.apple.foundationdb.tuple.Versionstamp
 import dev.chopsticks.kvdb.codec.KeyDeserializer.{DecodingFailure, GenericKeyDeserializationException}
 import dev.chopsticks.kvdb.util.KvdbSerdesUtils
@@ -12,6 +11,7 @@ import eu.timepit.refined.api.{RefType, Validate}
 import magnolia._
 import scalapb.{GeneratedEnum, GeneratedEnumCompanion}
 import shapeless.Typeable
+import shapeless.Typeable.ValueTypeable
 
 import scala.annotation.implicitNotFound
 import scala.collection.immutable.ArraySeq
@@ -48,7 +48,9 @@ object FdbKeyDeserializer {
       }
     }
 
-  implicit val byteArrayKeyDecoder: FdbKeyDeserializer[Array[Byte]] = createTry(_.getBytes)
+  implicit val byteArrayKeyDecoder: FdbKeyDeserializer[Array[Byte]] = {
+    createTry(_.getBytes)(ValueTypeable[Array[Byte], Array[Byte]](classOf[Array[Byte]], "Array[Byte]"))
+  }
   implicit val stringFdbKeyDecoder: FdbKeyDeserializer[String] = createTry(_.getString)
   implicit val intFdbKeyDecoder: FdbKeyDeserializer[Int] = createTry(_.getBigInteger.intValueExact())
   implicit val longFdbKeyDecoder: FdbKeyDeserializer[Long] = createTry(_.getBigInteger.longValueExact())

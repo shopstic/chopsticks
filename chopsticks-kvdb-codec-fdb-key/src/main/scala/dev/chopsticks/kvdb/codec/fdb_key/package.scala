@@ -2,7 +2,6 @@ package dev.chopsticks.kvdb.codec
 
 import java.time.{Instant, LocalDate, LocalTime, YearMonth}
 import java.util.UUID
-
 import com.apple.foundationdb.tuple.{ByteArrayUtil, Tuple}
 import dev.chopsticks.kvdb.codec.KeyDeserializer.GenericKeyDeserializationException
 import eu.timepit.refined.types.string.NonEmptyString
@@ -10,7 +9,8 @@ import eu.timepit.refined.types.string.NonEmptyString
 import scala.util.control.NonFatal
 import eu.timepit.refined.shapeless.typeable._
 import eu.timepit.refined.types.numeric.{PosInt, PosLong}
-import shapeless.HNil
+import shapeless.{HNil, Typeable}
+import shapeless.Typeable.ValueTypeable
 
 //noinspection TypeAnnotation
 package object fdb_key {
@@ -65,7 +65,11 @@ package object fdb_key {
       }
   }
 
-  implicit lazy val byteArraySerdes = KeySerdes[Array[Byte]]
+  implicit lazy val byteArraySerdes = {
+    implicit val typeable: Typeable[Array[Byte]] =
+      ValueTypeable[Array[Byte], Array[Byte]](classOf[Array[Byte]], "Array[Byte]")
+    KeySerdes[Array[Byte]]
+  }
   implicit lazy val stringKeySerdes = KeySerdes[String]
   implicit lazy val booleanKeySerdes = KeySerdes[Boolean]
   implicit lazy val byteKeySerdes = KeySerdes[Byte]
