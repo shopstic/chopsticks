@@ -48,6 +48,7 @@ object FdbKeyDeserializer {
       }
     }
 
+  implicit val byteArrayKeyDecoder: FdbKeyDeserializer[Array[Byte]] = createTry(_.getBytes)
   implicit val stringFdbKeyDecoder: FdbKeyDeserializer[String] = createTry(_.getString)
   implicit val intFdbKeyDecoder: FdbKeyDeserializer[Int] = createTry(_.getBigInteger.intValueExact())
   implicit val longFdbKeyDecoder: FdbKeyDeserializer[Long] = createTry(_.getBigInteger.longValueExact())
