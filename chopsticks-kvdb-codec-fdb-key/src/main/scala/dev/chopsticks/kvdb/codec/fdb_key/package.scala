@@ -65,6 +65,7 @@ package object fdb_key {
       }
   }
 
+  implicit lazy val byteArraySerdes = KeySerdes[Array[Byte]]
   implicit lazy val stringKeySerdes = KeySerdes[String]
   implicit lazy val booleanKeySerdes = KeySerdes[Boolean]
   implicit lazy val byteKeySerdes = KeySerdes[Byte]
