@@ -39,8 +39,12 @@ object FdbKeySerializer {
   implicit val doubleFdbKeyEncoder: PredefinedFdbKeySerializer[Double] = define((o, v) => o.add(v))
   implicit val floatFdbKeyEncoder: PredefinedFdbKeySerializer[Float] = define((o, v) => o.add(v))
 
+  implicit val byteArrayFdbKeyEncoder: PredefinedFdbKeySerializer[Array[Byte]] =
+    define((o, v) => o.add(v))
+
   implicit val byteArraySeqFdbKeyEncoder: PredefinedFdbKeySerializer[ArraySeq[Byte]] =
     define((o, v) => o.add(v.unsafeArray.asInstanceOf[Array[Byte]]))
+
   implicit val ldFdbKeyEncoder: PredefinedFdbKeySerializer[LocalDate] =
     define((o, v) => longFdbKeyEncoder.serialize(o, v.toEpochDay))
   implicit val instantFdbKeyEncoder: PredefinedFdbKeySerializer[Instant] = define { (o, v) =>
