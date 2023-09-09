@@ -1,5 +1,5 @@
 addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.6.3")
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.0")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.2")
 addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.4.21")
 
 addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.6")
