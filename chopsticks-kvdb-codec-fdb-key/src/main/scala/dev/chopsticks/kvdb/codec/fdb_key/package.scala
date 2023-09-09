@@ -46,7 +46,7 @@ package object fdb_key {
       {
         val reader =
           try {
-            Right(new FdbTupleReader(Tuple.fromBytes(bytes)))
+            Right(FdbTupleReader(Tuple.fromBytes(bytes)))
           }
           catch {
             case NonFatal(e) =>
