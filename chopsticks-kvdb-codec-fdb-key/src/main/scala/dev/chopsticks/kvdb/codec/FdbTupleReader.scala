@@ -10,9 +10,9 @@ import com.apple.foundationdb.tuple.{Tuple, Versionstamp}
   *   Tuple
   */
 final case class FdbTupleReader(tuple: Tuple) {
-  private var currentIndex = 0
+  var currentIndex: Int = 0
 
-  private def advanceIndex(): Int = {
+  def advanceIndex(): Int = {
     val index = currentIndex
     currentIndex = currentIndex + 1
     index
