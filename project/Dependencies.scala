@@ -2,7 +2,7 @@ import sbt._
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
-  val SCALA_VERSION = "2.13.10"
+  val SCALA_VERSION = "2.13.12"
   // The last Apache 2.0 licensed Akka
   val AKKA_VERSION = "2.6.20"
   val AKKA_HTTP_VERSION = "10.2.10"
