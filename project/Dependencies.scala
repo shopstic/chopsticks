@@ -196,7 +196,7 @@ object Dependencies {
       .map(c => (c % CALIBAN_VERSION).exclude("com.typesafe.akka", "akka-serialization-jackson_2.13"))
 
   val sourcecodeDeps = Seq(
-    "com.lihaoyi" %% "sourcecode" % "0.3.0"
+    "com.lihaoyi" %% "sourcecode" % "0.3.1"
   )
 
   val avro4sDeps = Seq(
