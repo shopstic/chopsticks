@@ -32,7 +32,7 @@ object RetryStateTestApp extends ZAkkaApp {
     }
 
     val app = ZStreamUtils
-      .retry(task, schedule)
+      .retry(task, schedule, ZIO.never)
       .toZAkkaSource()
       .killSwitch
       .interruptibleRunWith(Sink.foreach { output =>
