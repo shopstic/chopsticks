@@ -11,7 +11,7 @@ jobs:
     name: Build
     runs-on: [ self-hosted, nix, chopsticks, amd64-linux, medium ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
