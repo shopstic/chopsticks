@@ -38,6 +38,18 @@ object OpenApiZioSchemaCirceConverter {
       new Converter(scala.collection.mutable.Map.empty).convert(zioSchema)
     }
 
+    // allows non-empty objects and arrays to be decoded as Unit
+    implicit final private val decodeUnit: Decoder[Unit] = new Decoder[Unit] {
+      final def apply(c: HCursor): Result[Unit] = c.value.fold(
+        jsonNull = Right(()),
+        jsonBoolean = _ => Left(DecodingFailure("Unit", c.history)),
+        jsonNumber = _ => Left(DecodingFailure("Unit", c.history)),
+        jsonString = _ => Left(DecodingFailure("Unit", c.history)),
+        jsonArray = _ => Right(()),
+        jsonObject = _ => Right(())
+      )
+    }
+
     final private[openapi] class LazyDecoder[A]() extends io.circe.Decoder[A] {
       private var _decoder: io.circe.Decoder[A] = _
       private[Decoder] def set(encoder: io.circe.Decoder[A]): Unit =
@@ -982,7 +994,7 @@ object OpenApiZioSchemaCirceConverter {
 
       private def primitiveConverter[A](standardType: StandardType[A], annotations: Chunk[Any]): Decoder[A] = {
         val baseDecoder = standardType match {
-          case StandardType.UnitType => io.circe.Decoder[Unit]
+          case StandardType.UnitType => decodeUnit
           case StandardType.StringType => io.circe.Decoder[String]
           case StandardType.BoolType => io.circe.Decoder[Boolean]
           case StandardType.ShortType => io.circe.Decoder[Short]

@@ -374,7 +374,7 @@ object OpenApiZioSchemaToTapirConverter {
 
     private def primitiveConverter[A](standardType: StandardType[A], annotations: Chunk[Any]): TapirSchema[A] = {
       val schemaType: SchemaType[A] = standardType match {
-        case StandardType.UnitType => SchemaType.SString()
+        case StandardType.UnitType => SchemaType.SProduct(List.empty)
         case StandardType.StringType => SchemaType.SString()
         case StandardType.BoolType => SchemaType.SBoolean()
         case StandardType.ShortType => SchemaType.SInteger()
