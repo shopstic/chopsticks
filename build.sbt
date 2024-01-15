@@ -262,6 +262,9 @@ lazy val openapi = Build
 
 lazy val csv = Build
   .defineProject("csv")
+  .settings(
+    libraryDependencies ++= commonsText
+  )
   .dependsOn(openapi)
 
 lazy val root = (project in file("."))

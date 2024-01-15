@@ -7,7 +7,7 @@ trait CsvProductDecoders {
   // scalafmt: { maxColumn = 800, optIn.configStyleArguments = false }
 
   final def forProduct1[Target, A0](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function1[A0, Target]): CsvDecoder[Target] = {
@@ -36,7 +36,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -55,7 +55,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct2[Target, A0, A1](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function2[A0, A1, Target]): CsvDecoder[Target] = {
@@ -85,7 +85,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -105,7 +105,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct3[Target, A0, A1, A2](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function3[A0, A1, A2, Target]): CsvDecoder[Target] = {
@@ -136,7 +136,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -157,7 +157,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct4[Target, A0, A1, A2, A3](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function4[A0, A1, A2, A3, Target]): CsvDecoder[Target] = {
@@ -189,7 +189,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -211,7 +211,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct5[Target, A0, A1, A2, A3, A4](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function5[A0, A1, A2, A3, A4, Target]): CsvDecoder[Target] = {
@@ -244,7 +244,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -267,7 +267,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct6[Target, A0, A1, A2, A3, A4, A5](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function6[A0, A1, A2, A3, A4, A5, Target]): CsvDecoder[Target] = {
@@ -301,7 +301,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -325,7 +325,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct7[Target, A0, A1, A2, A3, A4, A5, A6](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function7[A0, A1, A2, A3, A4, A5, A6, Target]): CsvDecoder[Target] = {
@@ -360,7 +360,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -385,7 +385,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct8[Target, A0, A1, A2, A3, A4, A5, A6, A7](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function8[A0, A1, A2, A3, A4, A5, A6, A7, Target]): CsvDecoder[Target] = {
@@ -421,7 +421,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -447,7 +447,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct9[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function9[A0, A1, A2, A3, A4, A5, A6, A7, A8, Target]): CsvDecoder[Target] = {
@@ -484,7 +484,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -511,7 +511,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct10[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function10[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, Target]): CsvDecoder[Target] = {
@@ -549,7 +549,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -577,7 +577,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct11[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function11[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, Target]): CsvDecoder[Target] = {
@@ -616,7 +616,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -645,7 +645,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct12[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function12[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, Target]): CsvDecoder[Target] = {
@@ -685,7 +685,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -715,7 +715,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct13[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function13[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, Target]): CsvDecoder[Target] = {
@@ -756,7 +756,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -787,7 +787,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct14[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function14[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, Target]): CsvDecoder[Target] = {
@@ -829,7 +829,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -861,7 +861,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct15[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function15[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, Target]): CsvDecoder[Target] = {
@@ -904,7 +904,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -937,7 +937,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct16[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function16[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, Target]): CsvDecoder[Target] = {
@@ -981,7 +981,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -1015,7 +1015,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct17[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function17[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, Target]): CsvDecoder[Target] = {
@@ -1060,7 +1060,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -1095,7 +1095,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct18[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function18[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, Target]): CsvDecoder[Target] = {
@@ -1141,7 +1141,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -1177,7 +1177,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct19[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function19[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, Target]): CsvDecoder[Target] = {
@@ -1224,7 +1224,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -1261,7 +1261,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct20[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function20[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, Target]): CsvDecoder[Target] = {
@@ -1309,7 +1309,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -1347,7 +1347,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct21[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function21[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, Target]): CsvDecoder[Target] = {
@@ -1396,7 +1396,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -1435,7 +1435,7 @@ trait CsvProductDecoders {
   }
 
   final def forProduct22[Target, A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     names: ArraySeq[String],
     decoders: ArraySeq[CsvDecoder[_]]
   )(construct: scala.Function22[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, Target]): CsvDecoder[Target] = {
@@ -1485,7 +1485,7 @@ trait CsvProductDecoders {
         while (i < names.length) {
           val decoder = decoders(i)
           val fieldName = names(i)
-          decoder.parse(row, Some(options.selectNestedField(columnName, fieldName))) match {
+          decoder.parse(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
             case Right(value) => val _ = results(i) = value
             case Left(errs) => val _ = errors.addAll(errs)
           }
@@ -1529,7 +1529,7 @@ trait CsvProductDecoders {
     decoders: ArraySeq[CsvDecoder[_]],
     row: Map[String, String],
     columnName: Option[String],
-    options: CsvDecoderOptions
+    options: CsvCodecOptions
   ): Either[List[CsvDecoderError], Option[Array[Any]]] = {
     val errors = new ListBuffer[CsvDecoderError]
     val results = new Array[Any](names.length)
@@ -1539,7 +1539,7 @@ trait CsvProductDecoders {
     while (i < names.length) {
       val decoder = decoders(i)
       val fieldName = names(i)
-      decoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldName))) match {
+      decoder.parseAsOption(row, Some(options.nestedFieldLabel(columnName, fieldName))) match {
         case Right(Some(value)) =>
           someCount += 1
           results(i) = value
@@ -1558,7 +1558,7 @@ trait CsvProductDecoders {
       while (i < names.length) {
         val decoder = decoders(i)
         val fieldName = names(i)
-        val nestedField = Some(options.selectNestedField(columnName, fieldName))
+        val nestedField = Some(options.nestedFieldLabel(columnName, fieldName))
         decoder.parseAsOption(row, nestedField) match {
           case Right(None) if !decoder.isOptional =>
             val _ = missingColumns.addAll(CsvDecoder.errorColumn(nestedField, decoder.isPrimitive, options))

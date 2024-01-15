@@ -3,23 +3,23 @@ package dev.chopsticks.csv
 import dev.chopsticks.util.config.PureconfigFastCamelCaseNamingConvention
 import pureconfig.SnakeCase
 
-final case class CsvDecoderOptions(
+final case class CsvCodecOptions(
   maxSeqSize: Int,
-  selectNestedField: (Option[String], String) => String,
-  selectNestedArrayField: (Option[String], Int) => String
+  nestedFieldLabel: (Option[String], String) => String,
+  nestedArrayFieldLabel: (Option[String], Int) => String
 )
 
-object CsvDecoderOptions {
+object CsvCodecOptions {
   val default = {
     val toSnakeCase: String => String =
       value => SnakeCase.fromTokens(PureconfigFastCamelCaseNamingConvention.toTokens(value))
-    CsvDecoderOptions(
+    CsvCodecOptions(
       maxSeqSize = 10,
-      selectNestedField = {
+      nestedFieldLabel = {
         case (None, fieldName) => toSnakeCase(fieldName)
         case (Some(prefix), fieldName) => prefix + "_" + toSnakeCase(fieldName)
       },
-      selectNestedArrayField = {
+      nestedArrayFieldLabel = {
         case (Some(prefix), index) => prefix + "_" + (index + 1).toString
         case (None, index) => (index + 1).toString
       }

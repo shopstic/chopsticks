@@ -21,7 +21,7 @@ trait CsvDecoder[A] { self =>
     row: Map[String, String],
     columnName: Option[String]
   ): Either[List[CsvDecoderError], Option[A]]
-  final def ensure(pred: A => Boolean, message: => String, options: CsvDecoderOptions) =
+  final def ensure(pred: A => Boolean, message: => String, options: CsvCodecOptions) =
     new CsvDecoder[A] {
       override val isOptional = self.isOptional
       override val isPrimitive = self.isPrimitive
@@ -41,7 +41,7 @@ trait CsvDecoder[A] { self =>
           case l @ Left(_) => l
         }
     }
-  final def ensure(errors: A => List[String], options: CsvDecoderOptions) = new CsvDecoder[A] {
+  final def ensure(errors: A => List[String], options: CsvCodecOptions) = new CsvDecoder[A] {
     override val isOptional = self.isOptional
     override val isPrimitive = self.isPrimitive
     override def parseAsOption(
@@ -113,7 +113,7 @@ trait CsvDecoder[A] { self =>
   }
 
   protected def errorColumn(
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     columnName: Option[String]
   ): Option[String] = {
     CsvDecoder.errorColumn(columnName, this.isPrimitive, options)
@@ -123,7 +123,7 @@ trait CsvDecoder[A] { self =>
 object CsvDecoder extends CsvProductDecoders {
   import dev.chopsticks.openapi.OpenApiParsedAnnotations._
 
-  def derive[A](options: CsvDecoderOptions = CsvDecoderOptions.default)(implicit
+  def derive[A](options: CsvCodecOptions = CsvCodecOptions.default)(implicit
     schema: Schema[A]
   ): CsvDecoder[A] = {
     new Converter(options).convert(schema)
@@ -132,10 +132,10 @@ object CsvDecoder extends CsvProductDecoders {
   private[csv] def errorColumn(
     columnName: Option[String],
     isPrimitive: Boolean,
-    options: CsvDecoderOptions
+    options: CsvCodecOptions
   ): Option[String] = {
     if (isPrimitive) columnName
-    else Some(options.selectNestedField(columnName, "*"))
+    else Some(options.nestedFieldLabel(columnName, "*"))
   }
 
   private val unitDecoder: CsvDecoder[Unit] = createPrimitive {
@@ -213,7 +213,7 @@ object CsvDecoder extends CsvProductDecoders {
     }
 
   private def decodeChunkWithPositionSuffix[A](
-    options: CsvDecoderOptions,
+    options: CsvCodecOptions,
     d: CsvDecoder[A],
     maxElems: Int
   ): CsvDecoder[Chunk[A]] =
@@ -247,7 +247,7 @@ object CsvDecoder extends CsvProductDecoders {
         var i = 0
         var continue = true
         while (i < maxElems && continue) {
-          val colName = options.selectNestedArrayField(column, i)
+          val colName = options.nestedArrayFieldLabel(column, i)
           if (i == 0 && parseFirstElem) {
             d.parse(row, Some(colName)) match {
               case Right(value) => val _ = seq += value
@@ -316,7 +316,7 @@ object CsvDecoder extends CsvProductDecoders {
   private def columnNotProvided =
     new RuntimeException(s"Error in CsvDecoder, column was not provided for a primitive value.")
 
-  private class Converter(options: CsvDecoderOptions) {
+  private class Converter(options: CsvCodecOptions) {
     // scalafmt: { maxColumn = 800, optIn.configStyleArguments = false }
     def convert[A](schema: Schema[A] /*, modifiers: Any => Any*/ ): CsvDecoder[A] =
       schema match {
@@ -913,7 +913,7 @@ object CsvDecoder extends CsvProductDecoders {
               columnName: Option[String]
             ): Either[List[CsvDecoderError], A] = {
               val discriminatorColumnName =
-                Some(options.selectNestedField(columnName, discriminator.discriminatorFieldName))
+                Some(options.nestedFieldLabel(columnName, discriminator.discriminatorFieldName))
               val eitherType = stringDecoder.parse(row, discriminatorColumnName)
               eitherType match {
                 case Left(errors) => Left(errors)
@@ -932,7 +932,7 @@ object CsvDecoder extends CsvProductDecoders {
               columnName: Option[String]
             ): Either[List[CsvDecoderError], Option[A]] = {
               val discriminatorColumnName =
-                Some(options.selectNestedField(columnName, discriminator.discriminatorFieldName))
+                Some(options.nestedFieldLabel(columnName, discriminator.discriminatorFieldName))
               val eitherOptionType = stringDecoder.parseAsOption(row, discriminatorColumnName)
               eitherOptionType match {
                 case Left(errors) => Left(errors)
@@ -981,7 +981,7 @@ object CsvDecoder extends CsvProductDecoders {
           var someCount = 0
 
           for ((fieldLabel, fieldDecoder) <- fieldDecoders) {
-            fieldDecoder.parseAsOption(row, Some(options.selectNestedField(columnName, fieldLabel))) match {
+            fieldDecoder.parseAsOption(row, Some(options.nestedFieldLabel(columnName, fieldLabel))) match {
               case Right(Some(value)) =>
                 someCount += 1
                 values.addOne((fieldLabel, value))
@@ -1007,7 +1007,7 @@ object CsvDecoder extends CsvProductDecoders {
           val values = ListMap.newBuilder[String, Any]
 
           for ((fieldLabel, fieldDecoder) <- fieldDecoders) {
-            fieldDecoder.parse(row, Some(options.selectNestedField(column, fieldLabel))) match {
+            fieldDecoder.parse(row, Some(options.nestedFieldLabel(column, fieldLabel))) match {
               case Right(value) => values.addOne((fieldLabel, value))
               case Left(errs) => errors.addAll(errs)
             }
