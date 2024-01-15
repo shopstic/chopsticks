@@ -219,6 +219,8 @@ object Dependencies {
     )
   }
 
+  val commonsText = Seq("org.apache.commons" % "commons-text" % "1.11.0")
+
   lazy val tapirDeps = {
     val tapirVersion = "0.19.4"
     Seq(
