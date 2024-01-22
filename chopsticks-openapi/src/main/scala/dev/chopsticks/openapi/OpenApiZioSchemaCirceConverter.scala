@@ -1005,7 +1005,7 @@ object OpenApiZioSchemaCirceConverter {
           case StandardType.BinaryType => ???
           case StandardType.CharType => io.circe.Decoder[String]
           case StandardType.BigIntegerType => io.circe.Decoder[BigInteger]
-          case StandardType.BigDecimalType => io.circe.Decoder[BigDecimal]
+          case StandardType.BigDecimalType => io.circe.Decoder[java.math.BigDecimal]
           case StandardType.UUIDType => io.circe.Decoder[UUID]
           case StandardType.DayOfWeekType => io.circe.Decoder[Int] // todo add validation
           case StandardType.DurationType => io.circe.Decoder[String]
@@ -1965,7 +1965,7 @@ object OpenApiZioSchemaCirceConverter {
           case StandardType.BinaryType => ???
           case StandardType.CharType => io.circe.Encoder[String]
           case StandardType.BigIntegerType => io.circe.Encoder[BigInteger]
-          case StandardType.BigDecimalType => io.circe.Encoder[BigDecimal]
+          case StandardType.BigDecimalType => io.circe.Encoder[java.math.BigDecimal]
           case StandardType.UUIDType => io.circe.Encoder[UUID]
           case StandardType.DayOfWeekType => io.circe.Encoder[Int] // todo add validation
           case StandardType.DurationType => io.circe.Encoder[String]
