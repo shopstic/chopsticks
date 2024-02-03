@@ -6,7 +6,19 @@ import zio.schema.{FieldSet, Schema, StandardType}
 import zio.Chunk
 import zio.schema.Schema.Primitive
 
-import java.time.{Instant, LocalDate}
+import java.time.{
+  DayOfWeek,
+  Duration,
+  Instant,
+  LocalDate,
+  LocalDateTime,
+  LocalTime,
+  OffsetDateTime,
+  OffsetTime,
+  ZoneId,
+  ZoneOffset,
+  ZonedDateTime
+}
 import java.util.UUID
 import scala.collection.compat.immutable.ArraySeq
 import scala.collection.immutable.ListMap
@@ -172,10 +184,80 @@ object CsvDecoder extends CsvProductDecoders {
     }
   }
 
+  private val floatDecoder: CsvDecoder[Float] = createPrimitive { case (value, col) =>
+    value.toFloatOption match {
+      case Some(n) => Right(n)
+      case None => Left(List(CsvDecoderError(s"Cannot parse number.", col)))
+    }
+  }
+
+  private val doubleDecoder: CsvDecoder[Double] = createPrimitive { case (value, col) =>
+    value.toDoubleOption match {
+      case Some(n) => Right(n)
+      case None => Left(List(CsvDecoderError(s"Cannot parse number.", col)))
+    }
+  }
+
+  private val charDecoder: CsvDecoder[Char] = createPrimitive { case (value, col) =>
+    if (value.length == 1) Right(value.charAt(0))
+    else Left(List(CsvDecoderError(s"Cannot parse char. Got string with length ${value.length} instead.", col)))
+  }
+
   private val stringDecoder: CsvDecoder[String] = createPrimitivePure(identity)
 
   private val instantDecoder: CsvDecoder[Instant] = {
     createFromThrowing(Instant.parse, s"Cannot parse timestamp; it must be in ISO-8601 format.")
+  }
+
+  private val dayOfWeekDecoder: CsvDecoder[DayOfWeek] = {
+    createFromThrowing(
+      DayOfWeek.valueOf, {
+        val expected = DayOfWeek.values().iterator.map(_.toString).mkString(", ")
+        s"Cannot parse day of week. Expected one of: $expected."
+      }
+    )
+  }
+
+  private val durationDecoder: CsvDecoder[Duration] = {
+    createFromThrowing(
+      Duration.parse,
+      s"Cannot parse duration; it must be in ISO-8601 format."
+    )
+  }
+
+  private val localTimeDecoder: CsvDecoder[LocalTime] = {
+    createFromThrowing(
+      LocalTime.parse,
+      s"""Cannot parse local time; expected text such as "10:15:00"."""
+    )
+  }
+
+  private val localDateTimeDecoder: CsvDecoder[LocalDateTime] = {
+    createFromThrowing(
+      LocalDateTime.parse,
+      s"""Cannot parse local date time; expected text such as "2020-12-03T10:15:30"."""
+    )
+  }
+
+  private val offsetTimeDecoder: CsvDecoder[OffsetTime] = {
+    createFromThrowing(
+      OffsetTime.parse,
+      s"""Cannot parse offset time; expected text such as "10:15:30+01:00"."""
+    )
+  }
+
+  private val offsetDateTimeDecoder: CsvDecoder[OffsetDateTime] = {
+    createFromThrowing(
+      OffsetDateTime.parse,
+      s"""Cannot parse offset date time; expected text such as "2020-12-03T10:15:30+01:00"."""
+    )
+  }
+
+  private val zonedDateTimeDecoder: CsvDecoder[ZonedDateTime] = {
+    createFromThrowing(
+      ZonedDateTime.parse,
+      s"""Cannot parse zoned date time; expected text such as "2020-12-03T10:15:30+01:00[Europe/Paris]"."""
+    )
   }
 
   private val bigDecimalDecoder: CsvDecoder[java.math.BigDecimal] = {
@@ -192,6 +274,14 @@ object CsvDecoder extends CsvProductDecoders {
 
   private val uuidDecoder: CsvDecoder[UUID] = {
     createFromThrowing(UUID.fromString, s"Cannot parse UUID.")
+  }
+
+  private val zoneIdDecoder: CsvDecoder[ZoneId] = {
+    createFromThrowing(str => ZoneId.of(str), s"Cannot parse ZoneId.")
+  }
+
+  private val zoneOffsetDecoder: CsvDecoder[ZoneOffset] = {
+    createFromThrowing(str => ZoneOffset.of(str), s"Cannot parse ZoneOffset.")
   }
 
   private def decodeOption[A](d: CsvDecoder[A]): CsvDecoder[Option[A]] =
@@ -1031,29 +1121,29 @@ object CsvDecoder extends CsvProductDecoders {
         case StandardType.ShortType => shortDecoder
         case StandardType.IntType => intDecoder
         case StandardType.LongType => longDecoder
-        case StandardType.FloatType => notSupported("FloatType")
-        case StandardType.DoubleType => notSupported("DoubleType")
+        case StandardType.FloatType => floatDecoder
+        case StandardType.DoubleType => doubleDecoder
         case StandardType.BinaryType => notSupported("BinaryType")
-        case StandardType.CharType => notSupported("CharType")
+        case StandardType.CharType => charDecoder
         case StandardType.UUIDType => uuidDecoder
         case StandardType.BigDecimalType => bigDecimalDecoder
         case StandardType.BigIntegerType => bigIntDecoder
-        case StandardType.DayOfWeekType => notSupported("DayOfWeekType")
+        case StandardType.DayOfWeekType => dayOfWeekDecoder
         case StandardType.MonthType => notSupported("MonthType")
         case StandardType.MonthDayType => notSupported("MonthDayType")
         case StandardType.PeriodType => notSupported("PeriodType")
         case StandardType.YearType => notSupported("YearType")
         case StandardType.YearMonthType => notSupported("YearMonthType")
-        case StandardType.ZoneIdType => notSupported("ZoneIdType")
-        case StandardType.ZoneOffsetType => notSupported("ZoneOffsetType")
-        case StandardType.DurationType => notSupported("DurationType")
+        case StandardType.ZoneIdType => zoneIdDecoder
+        case StandardType.ZoneOffsetType => zoneOffsetDecoder
+        case StandardType.DurationType => durationDecoder
         case StandardType.InstantType(_) => instantDecoder
         case StandardType.LocalDateType(_) => localDateDecoder
-        case StandardType.LocalTimeType(_) => notSupported("LocalTimeType")
-        case StandardType.LocalDateTimeType(_) => notSupported("LocalDateTimeType")
-        case StandardType.OffsetTimeType(_) => notSupported("OffsetTimeType")
-        case StandardType.OffsetDateTimeType(_) => notSupported("OffsetDateTimeType")
-        case StandardType.ZonedDateTimeType(_) => notSupported("ZonedDateTimeType")
+        case StandardType.LocalTimeType(_) => localTimeDecoder
+        case StandardType.LocalDateTimeType(_) => localDateTimeDecoder
+        case StandardType.OffsetTimeType(_) => offsetTimeDecoder
+        case StandardType.OffsetDateTimeType(_) => offsetDateTimeDecoder
+        case StandardType.ZonedDateTimeType(_) => zonedDateTimeDecoder
       }
       addAnnotations(baseDecoder.asInstanceOf[CsvDecoder[A]], extractAnnotations(annotations))
     }
