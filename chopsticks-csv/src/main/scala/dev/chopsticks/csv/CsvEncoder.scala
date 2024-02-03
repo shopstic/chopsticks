@@ -6,7 +6,19 @@ import zio.schema.{Schema, StandardType}
 import zio.{Chunk, ChunkBuilder}
 import zio.schema.Schema.Primitive
 
-import java.time.{Instant, LocalDate}
+import java.time.{
+  DayOfWeek,
+  Duration,
+  Instant,
+  LocalDate,
+  LocalDateTime,
+  LocalTime,
+  OffsetDateTime,
+  OffsetTime,
+  ZoneId,
+  ZoneOffset,
+  ZonedDateTime
+}
 import java.util.UUID
 import scala.annotation.nowarn
 import scala.collection.immutable.ListMap
@@ -150,12 +162,28 @@ object CsvEncoder {
     }
   }
 
+  private val floatEncoder: CsvEncoder[Float] = new CsvEncoder[Float] {
+    override def encode(value: Float, columnName: Option[String], acc: mutable.LinkedHashMap[String, String]) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val doubleEncoder: CsvEncoder[Double] = new CsvEncoder[Double] {
+    override def encode(value: Double, columnName: Option[String], acc: mutable.LinkedHashMap[String, String]) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
   private val stringEncoder: CsvEncoder[String] = new CsvEncoder[String] {
     override def encode(value: String, columnName: Option[String], acc: mutable.LinkedHashMap[String, String]) = {
       val _ = acc.put(columnName.getOrElse(""), value)
       acc
     }
   }
+
+  private val charEncoder: CsvEncoder[Char] = stringEncoder.contramap[Char](_.toString)
 
   private val instantEncoder: CsvEncoder[Instant] = new CsvEncoder[Instant] {
     override def encode(value: Instant, columnName: Option[String], acc: mutable.LinkedHashMap[String, String]) = {
@@ -195,6 +223,93 @@ object CsvEncoder {
 
   private val uuidEncoder: CsvEncoder[UUID] = new CsvEncoder[UUID] {
     override def encode(value: UUID, columnName: Option[String], acc: mutable.LinkedHashMap[String, String]) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val dayOfWeekEncoder: CsvEncoder[DayOfWeek] = new CsvEncoder[DayOfWeek] {
+    override def encode(value: DayOfWeek, columnName: Option[String], acc: mutable.LinkedHashMap[String, String]) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val durationEncoder: CsvEncoder[Duration] = new CsvEncoder[Duration] {
+    override def encode(value: Duration, columnName: Option[String], acc: mutable.LinkedHashMap[String, String]) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val localTimeEncoder: CsvEncoder[LocalTime] = new CsvEncoder[LocalTime] {
+    override def encode(value: LocalTime, columnName: Option[String], acc: mutable.LinkedHashMap[String, String]) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val localDateTimeEncoder: CsvEncoder[LocalDateTime] = new CsvEncoder[LocalDateTime] {
+    override def encode(
+      value: LocalDateTime,
+      columnName: Option[String],
+      acc: mutable.LinkedHashMap[String, String]
+    ) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val offsetTimeEncoder: CsvEncoder[OffsetTime] = new CsvEncoder[OffsetTime] {
+    override def encode(
+      value: OffsetTime,
+      columnName: Option[String],
+      acc: mutable.LinkedHashMap[String, String]
+    ) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val offsetDateTimeEncoder: CsvEncoder[OffsetDateTime] = new CsvEncoder[OffsetDateTime] {
+    override def encode(
+      value: OffsetDateTime,
+      columnName: Option[String],
+      acc: mutable.LinkedHashMap[String, String]
+    ) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val zonedDateTimeEncoder: CsvEncoder[ZonedDateTime] = new CsvEncoder[ZonedDateTime] {
+    override def encode(
+      value: ZonedDateTime,
+      columnName: Option[String],
+      acc: mutable.LinkedHashMap[String, String]
+    ) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val zoneIdEncoder: CsvEncoder[ZoneId] = new CsvEncoder[ZoneId] {
+    override def encode(
+      value: ZoneId,
+      columnName: Option[String],
+      acc: mutable.LinkedHashMap[String, String]
+    ) = {
+      val _ = acc.put(columnName.getOrElse(""), value.toString)
+      acc
+    }
+  }
+
+  private val zoneOffsetEncoder: CsvEncoder[ZoneOffset] = new CsvEncoder[ZoneOffset] {
+    override def encode(
+      value: ZoneOffset,
+      columnName: Option[String],
+      acc: mutable.LinkedHashMap[String, String]
+    ) = {
       val _ = acc.put(columnName.getOrElse(""), value.toString)
       acc
     }
@@ -1203,29 +1318,29 @@ object CsvEncoder {
         case StandardType.ShortType => shortEncoder
         case StandardType.IntType => intEncoder
         case StandardType.LongType => longEncoder
-        case StandardType.FloatType => notSupported("FloatType")
-        case StandardType.DoubleType => notSupported("DoubleType")
+        case StandardType.FloatType => floatEncoder
+        case StandardType.DoubleType => doubleEncoder
         case StandardType.BinaryType => notSupported("BinaryType")
-        case StandardType.CharType => notSupported("CharType")
+        case StandardType.CharType => charEncoder
         case StandardType.UUIDType => uuidEncoder
         case StandardType.BigDecimalType => bigDecimalEncoder
         case StandardType.BigIntegerType => bigIntEncoder
-        case StandardType.DayOfWeekType => notSupported("DayOfWeekType")
+        case StandardType.DayOfWeekType => dayOfWeekEncoder
         case StandardType.MonthType => notSupported("MonthType")
         case StandardType.MonthDayType => notSupported("MonthDayType")
         case StandardType.PeriodType => notSupported("PeriodType")
         case StandardType.YearType => notSupported("YearType")
         case StandardType.YearMonthType => notSupported("YearMonthType")
-        case StandardType.ZoneIdType => notSupported("ZoneIdType")
-        case StandardType.ZoneOffsetType => notSupported("ZoneOffsetType")
-        case StandardType.DurationType => notSupported("DurationType")
+        case StandardType.ZoneIdType => zoneIdEncoder
+        case StandardType.ZoneOffsetType => zoneOffsetEncoder
+        case StandardType.DurationType => durationEncoder
         case StandardType.InstantType(_) => instantEncoder
         case StandardType.LocalDateType(_) => localDateEncoder
-        case StandardType.LocalTimeType(_) => notSupported("LocalTimeType")
-        case StandardType.LocalDateTimeType(_) => notSupported("LocalDateTimeType")
-        case StandardType.OffsetTimeType(_) => notSupported("OffsetTimeType")
-        case StandardType.OffsetDateTimeType(_) => notSupported("OffsetDateTimeType")
-        case StandardType.ZonedDateTimeType(_) => notSupported("ZonedDateTimeType")
+        case StandardType.LocalTimeType(_) => localTimeEncoder
+        case StandardType.LocalDateTimeType(_) => localDateTimeEncoder
+        case StandardType.OffsetTimeType(_) => offsetTimeEncoder
+        case StandardType.OffsetDateTimeType(_) => offsetDateTimeEncoder
+        case StandardType.ZonedDateTimeType(_) => zonedDateTimeEncoder
       }
       addAnnotations(baseEncoder.asInstanceOf[CsvEncoder[A]], extractAnnotations(annotations))
     }
@@ -1240,7 +1355,7 @@ object CsvEncoder {
 
     private def notSupported(value: String) = {
       throw new IllegalArgumentException(
-        s"Cannot convert ZIO-Schema to CSV Decoder, because $value is currently not supported."
+        s"Cannot convert ZIO-Schema to CSV Encoder, because $value is currently not supported."
       )
     }
   }
