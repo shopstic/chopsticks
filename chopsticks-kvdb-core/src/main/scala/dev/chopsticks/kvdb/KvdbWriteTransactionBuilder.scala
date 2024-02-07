@@ -13,6 +13,10 @@ object KvdbWriteTransactionBuilder {
       extends TransactionWrite
   final case class TransactionMutateAdd(columnId: String, key: Array[Byte], value: Array[Byte])
       extends TransactionWrite
+  final case class TransactionMutateMin(columnId: String, key: Array[Byte], value: Array[Byte])
+      extends TransactionWrite
+  final case class TransactionMutateMax(columnId: String, key: Array[Byte], value: Array[Byte])
+      extends TransactionWrite
 }
 
 final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
@@ -84,6 +88,22 @@ final class KvdbWriteTransactionBuilder[BCF[A, B] <: ColumnFamily[A, B]] {
     value: V
   ): this.type = {
     add(factory.mutateAdd(column, key, value))
+  }
+
+  def mutateMin[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
+    column: CF[K, V] with CF2,
+    key: K,
+    value: V
+  ): this.type = {
+    add(factory.mutateMin(column, key, value))
+  }
+
+  def mutateMax[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
+    column: CF[K, V] with CF2,
+    key: K,
+    value: V
+  ): this.type = {
+    add(factory.mutateMax(column, key, value))
   }
 
   def nextVersion: Int = currentVersion.getAndIncrement()

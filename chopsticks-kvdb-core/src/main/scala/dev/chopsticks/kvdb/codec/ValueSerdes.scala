@@ -3,7 +3,15 @@ package dev.chopsticks.kvdb.codec
 import dev.chopsticks.kvdb.codec.ValueDeserializer.{GenericValueDeserializationException, ValueDeserializationResult}
 import cats.syntax.either._
 
-trait ValueSerdes[T] extends ValueSerializer[T] with ValueDeserializer[T]
+trait ValueSerdes[T] extends ValueSerializer[T] with ValueDeserializer[T] {
+  def bimap[A](to: T => A)(from: A => T): ValueSerdes[A] = {
+    val that = this
+    new ValueSerdes[A] {
+      override def deserialize(bytes: Array[Byte]): ValueDeserializationResult[A] = that.deserialize(bytes).map(to)
+      override def serialize(value: A): Array[Byte] = that.serialize(from(value))
+    }
+  }
+}
 
 object ValueSerdes {
   def apply[T](implicit f: ValueSerdes[T]): ValueSerdes[T] = f
@@ -39,5 +47,6 @@ object ValueSerdes {
 
   implicit val byteArrayValueSerdes: ValueSerdes[Array[Byte]] =
     ValueSerdes.create[Array[Byte]](identity, bytes => Right(bytes))
+
   implicit val unitValueSerdes: ValueSerdes[Unit] = ValueSerdes.create[Unit](_ => Array.emptyByteArray, _ => Right(()))
 }

@@ -804,8 +804,9 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
       case TransactionDeleteRange(columnId, fromKey, toKey) =>
         val _ =
           doDeleteRange(txn, refs.getKvdbi(columnFamilyWithId(columnId).get), fromKey, toKey)
-      case _: TransactionMutateAdd =>
-        ???
+      case _: TransactionMutateAdd => ???
+      case _: TransactionMutateMin => ???
+      case _: TransactionMutateMax => ???
     }
   }
 

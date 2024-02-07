@@ -81,6 +81,12 @@ final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
 
       case TransactionMutateAdd(columnId, key, value) =>
         tx.mutate(MutationType.ADD, dbContext.prefixKey(columnId, key), value)
+
+      case TransactionMutateMin(columnId, key, value) =>
+        tx.mutate(MutationType.MIN, dbContext.prefixKey(columnId, key), value)
+
+      case TransactionMutateMax(columnId, key, value) =>
+        tx.mutate(MutationType.MAX, dbContext.prefixKey(columnId, key), value)
     }
   }
 }

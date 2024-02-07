@@ -13,6 +13,7 @@ import org.scalatest.wordspec.AsyncWordSpecLike
 import zio.{Promise, Task, UIO, ZIO, ZRef}
 
 import java.nio.charset.StandardCharsets
+import java.time.YearMonth
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicLong
 
@@ -27,6 +28,7 @@ final class SpecificFdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
   private lazy val counterCf = dbMat.counter
+  private lazy val minCf = dbMat.min
 
   private lazy val withDb =
     createTestRunner(FdbDatabaseTest.managedDb) { effect =>
@@ -199,6 +201,66 @@ final class SpecificFdbDatabaseTest
           }
       } yield {
         currentPair shouldEqual Some("foo" -> Long.MaxValue)
+      }
+    }
+  }
+
+  "min mutation" should {
+    "work with YearMonth value" in withDb { db =>
+      for {
+        transaction <- UIO(ZFdbTransaction(db))
+        _ <- transaction.write { tx =>
+          Task {
+            val cf = tx.keyspace(minCf)
+
+            cf.mutateMin("foo", YearMonth.of(2024, 9))
+            cf.put("bar", YearMonth.of(2024, 6))
+            cf.mutateMin("bar", YearMonth.of(2024, 8))
+          }
+        }
+        currentFoo <- transaction
+          .read { tx =>
+            val cf = tx.keyspace(minCf)
+            cf.get(_ is "foo")
+          }
+        currentBar <- transaction
+          .read { tx =>
+            val cf = tx.keyspace(minCf)
+            cf.get(_ is "bar")
+          }
+      } yield {
+        currentFoo shouldEqual Some("foo" -> YearMonth.of(2024, 9))
+        currentBar shouldEqual Some("bar" -> YearMonth.of(2024, 6))
+      }
+    }
+  }
+
+  "max mutation" should {
+    "work with YearMonth value" in withDb { db =>
+      for {
+        transaction <- UIO(ZFdbTransaction(db))
+        _ <- transaction.write { tx =>
+          Task {
+            val cf = tx.keyspace(minCf)
+
+            cf.mutateMax("foo", YearMonth.of(2024, 9))
+            cf.put("bar", YearMonth.of(2024, 6))
+            cf.mutateMax("bar", YearMonth.of(2024, 8))
+          }
+        }
+        currentFoo <- transaction
+          .read { tx =>
+            val cf = tx.keyspace(minCf)
+            cf.get(_ is "foo")
+          }
+        currentBar <- transaction
+          .read { tx =>
+            val cf = tx.keyspace(minCf)
+            cf.get(_ is "bar")
+          }
+      } yield {
+        currentFoo shouldEqual Some("foo" -> YearMonth.of(2024, 9))
+        currentBar shouldEqual Some("bar" -> YearMonth.of(2024, 8))
       }
     }
   }

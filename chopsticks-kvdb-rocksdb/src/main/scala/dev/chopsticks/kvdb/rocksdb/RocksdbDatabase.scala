@@ -763,8 +763,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
               toKey
             )
 
-          case _: TransactionMutateAdd =>
-            ???
+          case _: TransactionMutateAdd => ???
+          case _: TransactionMutateMin => ???
+          case _: TransactionMutateMax => ???
         }
 
         val writeOptions = newWriteOptions()
@@ -829,6 +830,8 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
               )
 
             case _: TransactionMutateAdd => ???
+            case _: TransactionMutateMin => ???
+            case _: TransactionMutateMax => ???
           }
 
           try {

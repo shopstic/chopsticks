@@ -65,4 +65,12 @@ final class ZFdbKeyspaceWriteApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V
   def mutateAdd(key: K, value: V): Unit = {
     transact(operationFactory.mutateAdd(keyspace, key, value))
   }
+
+  def mutateMin(key: K, value: V): Unit = {
+    transact(operationFactory.mutateMin(keyspace, key, value))
+  }
+
+  def mutateMax(key: K, value: V): Unit = {
+    transact(operationFactory.mutateMax(keyspace, key, value))
+  }
 }

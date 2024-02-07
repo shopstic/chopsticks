@@ -116,4 +116,30 @@ final class KvdbOperationFactory[BCF[A, B] <: ColumnFamily[A, B]] {
       value = v
     )
   }
+
+  def mutateMin[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
+    column: CF[K, V] with CF2,
+    key: K,
+    value: V
+  ): TransactionMutateMin = {
+    val (k, v) = column.serialize(key, value)
+    TransactionMutateMin(
+      columnId = column.id,
+      key = k,
+      value = v
+    )
+  }
+
+  def mutateMax[CF[A, B] <: ColumnFamily[A, B], CF2 <: BCF[K, V], K, V](
+    column: CF[K, V] with CF2,
+    key: K,
+    value: V
+  ): TransactionMutateMax = {
+    val (k, v) = column.serialize(key, value)
+    TransactionMutateMax(
+      columnId = column.id,
+      key = k,
+      value = v
+    )
+  }
 }
