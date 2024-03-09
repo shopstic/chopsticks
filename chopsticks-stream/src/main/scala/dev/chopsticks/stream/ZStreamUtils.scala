@@ -57,7 +57,7 @@ object ZStreamUtils {
         io
       }
       // handle interruption
-      _ <- ZStream.fromEffect {
+      fib <- ZStream.fromEffect {
         completionSignal
           .zipRight {
             for {
@@ -152,6 +152,7 @@ object ZStreamUtils {
           .collect {
             case Result.Outcome(result) => result
           }
+          .ensuring(fib.interrupt)
       }
     } yield ret
   }
