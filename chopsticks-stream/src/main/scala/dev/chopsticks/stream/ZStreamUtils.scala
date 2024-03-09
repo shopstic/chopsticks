@@ -66,6 +66,7 @@ object ZStreamUtils {
               _ <- enqueueInterruption.unless(updatedState.isRunning)
             } yield ()
           }
+          .interruptAllChildren
           .fork
       }
       ret <- {
