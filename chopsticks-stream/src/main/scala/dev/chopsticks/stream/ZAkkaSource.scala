@@ -175,8 +175,7 @@ object ZAkkaSource {
             val task = for {
               fib <- scope.fork(runTask(state, scope))
               interruptFib <- scope.fork(promise.await *> fib.interrupt)
-              ret <- fib.join
-              _ <- interruptFib.interrupt
+              ret <- fib.join.ensuring(interruptFib.interrupt)
             } yield ret
 
             task.unsafeRunToFuture

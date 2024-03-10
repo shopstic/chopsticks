@@ -53,8 +53,7 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
             val task = for {
               fib <- scope.fork(runTask(item, scope))
               interruptFib <- scope.fork(promise.await *> fib.interrupt)
-              ret <- fib.join
-              _ <- interruptFib.interrupt
+              ret <- fib.join.ensuring(interruptFib.interrupt)
             } yield ret
 
             task.unsafeRunToFuture
@@ -84,8 +83,7 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
             val task = for {
               fib <- scope.fork(runTask(state, item, scope))
               interruptFib <- scope.fork(promise.await *> fib.interrupt)
-              ret <- fib.join
-              _ <- interruptFib.interrupt
+              ret <- fib.join.ensuring(interruptFib.interrupt)
             } yield ret
 
             task.unsafeRunToFuture
@@ -114,8 +112,7 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
             val task = for {
               fib <- scope.fork(runTask(state, item, scope))
               interruptFib <- scope.fork(promise.await *> fib.interrupt)
-              ret <- fib.join
-              _ <- interruptFib.interrupt
+              ret <- fib.join.ensuring(interruptFib.interrupt)
             } yield ret
 
             task.unsafeRunToFuture
