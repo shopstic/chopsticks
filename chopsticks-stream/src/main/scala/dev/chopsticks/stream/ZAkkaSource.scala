@@ -13,7 +13,7 @@ import eu.timepit.refined.types.numeric.PosInt
 import org.reactivestreams.Publisher
 import shapeless.<:!<
 import zio.stream.ZStream
-import zio.{IO, NeedsEnv, Queue, RIO, Task, UIO, URIO, ZIO}
+import zio.{Exit, IO, NeedsEnv, Queue, RIO, Task, UIO, URIO, ZIO}
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -70,7 +70,11 @@ object ZAkkaSource {
                 _ <- UIO(subscriber.onSubscribe(createSubscription(subscriber, demand, runtime)))
                 _ <- stream
                   .run(demandUnfoldSink(subscriber, demand))
-                  .catchAll(e => UIO(subscriber.onError(e)))
+                  .race(demand.awaitShutdown)
+                  .onExit {
+                    case Exit.Success(_) => UIO(subscriber.onComplete())
+                    case Exit.Failure(cause) => UIO(subscriber.onError(cause.squash))
+                  }
               } yield ()))
             }
 
