@@ -1,8 +1,8 @@
 package dev.chopsticks.kvdb
 
 import java.util.concurrent.TimeUnit
-import akka.{Done, NotUsed}
-import akka.stream.scaladsl.Source
+import org.apache.pekko.{Done, NotUsed}
+import org.apache.pekko.stream.scaladsl.Source
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder.TransactionWrite
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
@@ -18,7 +18,6 @@ import eu.timepit.refined.numeric.Greater
 import pureconfig.ConfigConvert
 import squants.information.Information
 import squants.information.InformationConversions._
-import zio.clock.Clock
 import zio.{RIO, Schedule, Task}
 
 import scala.concurrent.Future
@@ -119,23 +118,23 @@ trait KvdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] {
 
   def iterateSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbBatch, NotUsed]
 
-  def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): RIO[IzLogging with Clock, Unit]
+  def putTask[Col <: CF](column: Col, key: Array[Byte], value: Array[Byte]): RIO[IzLogging, Unit]
 
-  def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[IzLogging with Clock, Unit]
+  def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[IzLogging, Unit]
 
-  def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[IzLogging with Clock, Long]
+  def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[IzLogging, Long]
 
-  def transactionTask(actions: Seq[TransactionWrite]): RIO[IzLogging with Clock, Unit]
+  def transactionTask(actions: Seq[TransactionWrite]): RIO[IzLogging, Unit]
 
   def conditionalTransactionTask(
     reads: List[TransactionGet],
     condition: List[Option[KvdbPair]] => Boolean,
     actions: Seq[TransactionWrite]
-  ): RIO[IzLogging with Clock, Unit]
+  ): RIO[IzLogging, Unit]
 
   def tailSource[Col <: CF](column: Col, range: KvdbKeyRange): Source[KvdbTailBatch, NotUsed]
 
   def concurrentTailSource[Col <: CF](column: Col, ranges: List[KvdbKeyRange]): Source[KvdbIndexedTailBatch, NotUsed]
 
-  def dropColumnFamily[Col <: CF](column: Col): RIO[IzLogging with Clock, Unit]
+  def dropColumnFamily[Col <: CF](column: Col): RIO[IzLogging, Unit]
 }

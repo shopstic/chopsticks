@@ -1,64 +1,78 @@
-package dev.chopsticks.fp
-
-import zio.{Has, URLayer, ZManaged}
-
-final class ZManageable1[A, R, E, V](fn: A => ZManaged[R, E, V]) {
-  def toLayer[S: zio.Tag](serviceFactory: (A => ZManaged[Any, E, V]) => S): URLayer[R, Has[S]] = {
-    ZManaged
-      .access[R](env => {
-        val newFn = (arg: A) => fn(arg).provide(env)
-        serviceFactory(newFn)
-      })
-      .toLayer
-  }
-
-  def toManaged[S]: ZManaged[R, E, A => ZManaged[Any, E, V]] = {
-    ZManaged
-      .access[R](env => {
-        (arg: A) => fn(arg).provide(env)
-      })
-  }
-}
-
-final class ZManageable2[A1, A2, R, E, V](fn: (A1, A2) => ZManaged[R, E, V]) {
-  def toLayer[S: zio.Tag](serviceFactory: ((A1, A2) => ZManaged[Any, E, V]) => S): URLayer[R, Has[S]] = {
-    ZManaged
-      .access[R](env => {
-        val newFn = (arg1: A1, arg2: A2) => fn(arg1, arg2).provide(env)
-        serviceFactory(newFn)
-      })
-      .toLayer
-  }
-
-  def toZManaged: ZManaged[R, E, (A1, A2) => ZManaged[Any, E, V]] = {
-    ZManaged
-      .access[R](env => {
-        (arg1: A1, arg2: A2) => fn(arg1, arg2).provide(env)
-      })
-  }
-}
-
-final class ZManageable3[A1, A2, A3, R, E, V](fn: (A1, A2, A3) => ZManaged[R, E, V]) {
-  def toLayer[S: zio.Tag](serviceFactory: ((A1, A2, A3) => ZManaged[Any, E, V]) => S): URLayer[R, Has[S]] = {
-    ZManaged
-      .access[R](env => {
-        val newFn = (arg1: A1, arg2: A2, arg3: A3) => fn(arg1, arg2, arg3).provide(env)
-        serviceFactory(newFn)
-      })
-      .toLayer
-  }
-
-  def toZManaged: ZManaged[R, E, (A1, A2, A3) => ZManaged[Any, E, V]] = {
-    ZManaged
-      .access[R](env => {
-        (arg1: A1, arg2: A2, arg3: A3) => fn(arg1, arg2, arg3).provide(env)
-      })
-  }
-}
-
-object ZManageable {
-  def apply[A, R, E, V](fn: A => ZManaged[R, E, V]): ZManageable1[A, R, E, V] = new ZManageable1(fn)
-  def apply[A1, A2, R, E, V](fn: (A1, A2) => ZManaged[R, E, V]): ZManageable2[A1, A2, R, E, V] = new ZManageable2(fn)
-  def apply[A1, A2, A3, R, E, V](fn: (A1, A2, A3) => ZManaged[R, E, V]): ZManageable3[A1, A2, A3, R, E, V] =
-    new ZManageable3(fn)
-}
+//package dev.chopsticks.fp
+//
+//import zio.{Scope, Tag, URLayer, ZEnvironment, ZIO, ZLayer}
+//
+////final class ZManageable1[A, R: Tag, E, V](fn: A => ZIO[R with Scope, E, V]) {
+////  def toLayer[S: zio.Tag](serviceFactory: (A => ZIO[Scope, E, V]) => S): URLayer[R, S] = {
+////    ZLayer.scoped {
+////      for {
+////        env <- ZIO.environment[R]
+////      } yield {
+////        val newFn = (arg: A) => fn(arg).provideSome[Scope](ZLayer.succeed(env.get))
+////        serviceFactory(newFn)
+////      }
+////    }
+////    ZManaged
+////      .access[R](env => {
+////        val newFn = (arg: A) => fn(arg).provide(env)
+////        serviceFactory(newFn)
+////      })
+////      .toLayer
+////  }
+//
+////  def toManaged[S: Tag]: ZManaged[R, E, A => ZIO[Any with Scope, E, V]] = {
+////    ZManaged.environment[R].map { env =>
+////      (arg: A) => fn(arg).provideEnvironment(ZEnvironment(env))
+////    }
+////  }
+//
+////  def toManaged[S]: ZManaged[R, E, A => ZManaged[Any, E, V]] = {
+////    ZManaged
+////      .access[R](env => {
+////        (arg: A) => fn(arg).provide(env)
+////      })
+////  }
+////  }
+//
+////final class ZManageable2[A1, A2, R, E, V](fn: (A1, A2) => ZManaged[R, E, V]) {
+////  def toLayer[S: zio.Tag](serviceFactory: ((A1, A2) => ZManaged[Any, E, V]) => S): URLayer[R, Has[S]] = {
+////    ZManaged
+////      .access[R](env => {
+////        val newFn = (arg1: A1, arg2: A2) => fn(arg1, arg2).provide(env)
+////        serviceFactory(newFn)
+////      })
+////      .toLayer
+////  }
+////
+////  def toZManaged: ZManaged[R, E, (A1, A2) => ZManaged[Any, E, V]] = {
+////    ZManaged
+////      .access[R](env => {
+////        (arg1: A1, arg2: A2) => fn(arg1, arg2).provide(env)
+////      })
+////  }
+////}
+////
+////final class ZManageable3[A1, A2, A3, R, E, V](fn: (A1, A2, A3) => ZManaged[R, E, V]) {
+////  def toLayer[S: zio.Tag](serviceFactory: ((A1, A2, A3) => ZManaged[Any, E, V]) => S): URLayer[R, Has[S]] = {
+////    ZManaged
+////      .access[R](env => {
+////        val newFn = (arg1: A1, arg2: A2, arg3: A3) => fn(arg1, arg2, arg3).provide(env)
+////        serviceFactory(newFn)
+////      })
+////      .toLayer
+////  }
+////
+////  def toZManaged: ZManaged[R, E, (A1, A2, A3) => ZManaged[Any, E, V]] = {
+////    ZManaged
+////      .access[R](env => {
+////        (arg1: A1, arg2: A2, arg3: A3) => fn(arg1, arg2, arg3).provide(env)
+////      })
+////  }
+////}
+//
+////object ZManageable {
+////  def apply[A, R: Tag, E, V](fn: A => ZIO[R with Scope, E, V]): ZManageable1[A, R, E, V] = new ZManageable1(fn)
+//////  def apply[A1, A2, R, E, V](fn: (A1, A2) => ZManaged[R, E, V]): ZManageable2[A1, A2, R, E, V] = new ZManageable2(fn)
+//////  def apply[A1, A2, A3, R, E, V](fn: (A1, A2, A3) => ZManaged[R, E, V]): ZManageable3[A1, A2, A3, R, E, V] =
+//////    new ZManageable3(fn)
+////}

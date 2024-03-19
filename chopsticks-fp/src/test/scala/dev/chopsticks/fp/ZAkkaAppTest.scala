@@ -1,17 +1,16 @@
 package dev.chopsticks.fp
 
 import com.typesafe.config.ConfigRenderOptions
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.fp.config.HoconConfig
-import zio.{ExitCode, RIO}
+import zio.RIO
 
-object ZAkkaAppTest extends ZAkkaApp {
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+object ZAkkaAppTest extends ZPekkoApp {
+  override def run: RIO[ZAkkaAppEnv, Any] = {
     HoconConfig
       .get
       .flatMap { cfg =>
-        zio.console.putStrLn(cfg.root().render(ConfigRenderOptions.defaults()))
+        zio.Console.printLine(cfg.root().render(ConfigRenderOptions.defaults()))
       }
-      .as(ExitCode(0))
   }
 }

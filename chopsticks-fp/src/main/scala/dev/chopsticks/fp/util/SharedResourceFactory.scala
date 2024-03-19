@@ -1,9 +1,7 @@
 package dev.chopsticks.fp.util
 
-import zio.ZManaged
+import zio.{Scope, ZIO}
 
-object SharedResourceFactory {
-  trait Service[R, Id, Res] {
-    def manage(id: Id): ZManaged[R, Nothing, Res]
-  }
+trait SharedResourceFactory[R, Id, Res] {
+  def manage(id: Id): ZIO[Scope with R, Nothing, Res]
 }

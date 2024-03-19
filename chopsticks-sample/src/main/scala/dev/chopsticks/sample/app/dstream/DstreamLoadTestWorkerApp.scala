@@ -1,11 +1,11 @@
 package dev.chopsticks.sample.app.dstream
 
-import akka.grpc.GrpcClientSettings
-import akka.stream.scaladsl.{Keep, Source}
+import org.apache.pekko.grpc.GrpcClientSettings
+import org.apache.pekko.stream.scaladsl.{Keep, Source}
 import dev.chopsticks.dstream.Dstreams
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.ZPekkoApp
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
 import dev.chopsticks.sample.app.dstream.proto.load_test._
@@ -46,61 +46,55 @@ object DstreamLoadTestWorkerAppConfig {
   }
 }
 
-object DstreamLoadTestWorkerApp extends ZAkkaApp {
+object DstreamLoadTestWorkerApp extends ZPekkoApp {
   final case object RandomFailureTestException
       extends RuntimeException("Failed randomly for testing...")
       with NoStackTrace
 
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    import zio.magic._
-
+  override def run: RIO[ZAkkaAppEnv with Scope, Any] = {
     app
-      .injectSome[ZAkkaAppEnv](
+      .provideSome[ZAkkaAppEnv with Scope](
         TypedConfig.live[DstreamLoadTestWorkerAppConfig]()
       )
-      .as(ExitCode(0))
   }
   //noinspection TypeAnnotation
   def app = {
-    val managed = for {
-      appConfig <- TypedConfig.get[DstreamLoadTestWorkerAppConfig].toManaged_
-    } yield {
-      for {
-        _ <- ZIO.foreachPar_(1 to appConfig.workers.resolvedCount) { i =>
-          val willCrash = UIO(Math.random() < appConfig.workers.crashProbability)
-          val willFail = UIO(Math.random() < appConfig.workers.failureProbability)
-          willCrash
-            .zip(willFail)
-            .flatMap { case (crash, fail) =>
-              runWorker(appConfig.serverPort, i, crash, fail)
-                .foldM(
-                  {
-                    case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
-                      ZIO.fail(e)
-                    case e =>
-                      ZIO.left(e)
-                  },
-                  r => ZIO.right(r)
-                )
-            }
-            .repeat(Schedule.fixed(appConfig.workers.retryInterval.toJava))
-        }
-      } yield ()
-    }
-
-    managed.use(identity)
+    for {
+      appConfig <- TypedConfig.get[DstreamLoadTestWorkerAppConfig]
+      _ <- ZIO.foreachParDiscard(1 to appConfig.workers.resolvedCount) { i =>
+        val willCrash = ZIO.succeed(Math.random() < appConfig.workers.crashProbability)
+        val willFail = ZIO.succeed(Math.random() < appConfig.workers.failureProbability)
+        willCrash
+          .zip(willFail)
+          .flatMap { case (crash, fail) =>
+            runWorker(appConfig.serverPort, i, crash, fail)
+              .foldZIO(
+                {
+                  case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
+                    ZIO.fail(e)
+                  case e =>
+                    ZIO.left(e)
+                },
+                r => ZIO.right(r)
+              )
+          }
+          .repeat(Schedule.fixed(appConfig.workers.retryInterval.toJava))
+      }
+    } yield ()
   }
 
   private[sample] def manageClient(port: Int) = {
     Dstreams
-      .manageClient(ZIO.access[AkkaEnv](_.get).map { env =>
-        import env.actorSystem
-        StreamMasterClient(
-          GrpcClientSettings
-            .connectToServiceAt("localhost", port)
-            .withTls(false)
-        )
-      })
+      .manageClient(
+        ZIO.serviceWith[PekkoEnv] { env =>
+          import env.actorSystem
+          StreamMasterClient(
+            GrpcClientSettings
+              .connectToServiceAt("localhost", port)
+              .withTls(false)
+          )
+        }
+      )
   }
 
   private[sample] def runWorker(
@@ -112,12 +106,12 @@ object DstreamLoadTestWorkerApp extends ZAkkaApp {
     val workerId = s"worker-$i"
 
     manageClient(port)
-      .use { client =>
+      .flatMap { client =>
         Dstreams
           .work(client.doWork().addHeader(Dstreams.WORKER_ID_HEADER, workerId)) { assignment =>
             for {
-              akkaService <- ZIO.access[AkkaEnv](_.get)
-              (futureDone, source) <- Task {
+              akkaService <- ZIO.service[PekkoEnv]
+              streamResult <- ZIO.attempt {
                 import akkaService.actorSystem
                 Source(1 to assignment.iteration)
                   .map { iteration =>
@@ -135,7 +129,8 @@ object DstreamLoadTestWorkerApp extends ZAkkaApp {
                   .watchTermination()(Keep.right)
                   .preMaterialize()
               }
-              _ <- Task
+              (futureDone, source) = streamResult
+              _ <- ZIO
                 .fromFuture(_ => futureDone)
                 .log(s"$workerId processing $assignment", logTraceOnError = false)
                 .forkDaemon

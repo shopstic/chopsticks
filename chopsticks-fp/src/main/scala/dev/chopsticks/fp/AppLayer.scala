@@ -3,11 +3,13 @@ package dev.chopsticks.fp
 import zio._
 
 object AppLayer {
-  type AppEnv = Has[Task[Unit]]
+  type AppEnv = Task[Unit]
 
   def apply[R](rio: RIO[R, Unit]): URLayer[R, AppEnv] = {
-    ZLayer.requires[R].map { env =>
-      Has(rio.provide(env))
+    ZLayer {
+      ZIO.environment[R].map(env =>
+        rio.provideEnvironment(env)
+      )
     }
   }
 }

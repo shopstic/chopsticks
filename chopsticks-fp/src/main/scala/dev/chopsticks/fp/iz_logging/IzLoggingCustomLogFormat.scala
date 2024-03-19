@@ -169,7 +169,7 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
 
             // TODO: we may try to use codec here
             builder
-              .append(t.value.stackTrace)
+              .append(t.value.stacktraceString)
               .toString()
         }
         .mkString("\n", "\n", "")
@@ -221,7 +221,7 @@ object IzLoggingCustomLogFormat extends LogFormatImpl {
         catch {
           case f: Throwable =>
             import IzThrowable._
-            val message = s"[${argValue.getClass.getName}#toString failed]\n${f.stackTrace} "
+            val message = s"[${argValue.getClass.getName}#toString failed]\n${f.stacktraceString} "
             wrapped(withColors, Console.RED, message)
         }
     }

@@ -1,13 +1,13 @@
 package dev.chopsticks.graphql.subscription
 
 import java.util.concurrent.TimeoutException
-import akka.actor.ActorSystem
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.Uri
-import akka.http.scaladsl.model.ws.{Message, TextMessage, WebSocketRequest}
-import akka.stream.scaladsl.{BidiFlow, Flow, Keep, RestartSource, Sink, Source}
-import akka.stream.stage._
-import akka.stream._
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.model.Uri
+import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage, WebSocketRequest}
+import org.apache.pekko.stream.scaladsl.{BidiFlow, Flow, Keep, RestartSource, Sink, Source}
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.stream._
 import caliban.client.CalibanClientError.ServerError
 import caliban.client.Operations.RootSubscription
 import caliban.client.SelectionBuilder
@@ -21,7 +21,10 @@ import dev.chopsticks.graphql.subscription.GraphQlSubscriptionExchangeModel.Grap
   GraphQlSubscriptionConnectionInit,
   GraphQlSubscriptionStart
 }
-import dev.chopsticks.graphql.subscription.GraphQlSubscriptionExchangeModel.GraphQlSubscriptionProtocolServerMessage
+import dev.chopsticks.graphql.subscription.GraphQlSubscriptionExchangeModel.{
+  GraphQlSubscriptionProtocolClientMessage,
+  GraphQlSubscriptionProtocolServerMessage
+}
 import dev.chopsticks.graphql.subscription.GraphQlSubscriptionExchangeModel.GraphQlSubscriptionProtocolServerMessage.GraphQlConnectionData
 import dev.chopsticks.stream.GraphStageWithActorLogic
 import io.circe.Printer
@@ -133,8 +136,6 @@ object GraphQlSubscriptionSource {
 
 private[graphql] class GraphQlSubscriptionBidiFlow[A](id: String, subscription: SelectionBuilder[RootSubscription, A])
     extends GraphStage[BidiShape[Unit, Message, Message, A]] {
-  import io.circe.parser._
-  import io.circe.syntax._
 
   private val stageName = "GraphQlSubscriptionBidiFlow"
   private val messagesIn = Inlet[Message](s"$stageName.messages.in")
@@ -188,12 +189,13 @@ private[graphql] class GraphQlSubscriptionBidiFlow[A](id: String, subscription: 
           }
         }
         def onConnectionPushStrictMessage(strict: TextMessage.Strict): Unit = {
-          decode[GraphQlSubscriptionProtocolServerMessage](strict.text) match {
-            case Left(failure) =>
+          import com.github.plokhotnyuk.jsoniter_scala.core._
+          Try(readFromString[GraphQlSubscriptionProtocolServerMessage](strict.text)) match {
+            case Failure(e) =>
               val exception =
-                new RuntimeException(s"$stageName in state $this failed during decoding message", failure)
+                new RuntimeException(s"$stageName in state $this failed during decoding message", e)
               logic.failStage(exception)
-            case Right(message) => onConnectionPushMessage(message)
+            case Success(message) => onConnectionPushMessage(message)
           }
         }
         def onConnectionPushMessage(message: GraphQlSubscriptionProtocolServerMessage): Unit
@@ -206,9 +208,14 @@ private[graphql] class GraphQlSubscriptionBidiFlow[A](id: String, subscription: 
 
       object Behavior {
 
-        case object Uninitialized extends Behavior {
+        final case object Uninitialized extends Behavior {
           override def onConnectionPull(): Unit = {
-            logic.push(messagesOut, TextMessage.Strict(GraphQlSubscriptionConnectionInit().asJson.noSpaces))
+            logic.push(
+              messagesOut,
+              TextMessage.Strict(
+                GraphQlSubscriptionProtocolClientMessage.serialize(GraphQlSubscriptionConnectionInit())
+              )
+            )
             this.transition(PendingInitialization())
           }
           override def onConnectionPushMessage(message: GraphQlSubscriptionProtocolServerMessage): Unit = {
@@ -254,11 +261,8 @@ private[graphql] class GraphQlSubscriptionBidiFlow[A](id: String, subscription: 
           dataMessage match {
             case Some(x) => onConnectionPushMessage(x)
             case None =>
-              val withoutNullsPrinter = Printer.noSpaces.copy(dropNullValues = true)
               val message = TextMessage.Strict(
-                GraphQlSubscriptionStart(id, subscription)
-                  .asJson
-                  .printWith(withoutNullsPrinter)
+                GraphQlSubscriptionProtocolClientMessage.serialize(GraphQlSubscriptionStart(id, subscription))
               )
               logic.push(messagesOut, message)
               logic.pull(messagesIn)

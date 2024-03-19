@@ -4,7 +4,7 @@ import io.circe.Decoder
 import pdi.jwt.JwtCirce
 import pdi.jwt.algorithms.JwtAsymmetricAlgorithm
 import pureconfig.ConfigConvert
-import zio.{Tag, Task, UIO, URIO, URManaged, ZIO, ZLayer, ZManaged}
+import zio.{Tag, URIO, ZIO, ZLayer}
 
 import java.security.spec.X509EncodedKeySpec
 import scala.util.Try
@@ -24,20 +24,19 @@ object JwtDecoderConfig {
   }
 }
 
-object JwtDecoder {
-  def getManaged[C: Tag]: URManaged[JwtDecoder[C], Service[C]] = ZManaged.access[JwtDecoder[C]](_.get)
-  def get[C: Tag]: URIO[JwtDecoder[C], Service[C]] = ZIO.access[JwtDecoder[C]](_.get)
+trait JwtDecoder[C] {
+  def decode(token: String): Try[JwtClaim[C]]
+}
 
-  trait Service[C] {
-    def decode(token: String): Try[JwtClaim[C]]
-  }
+object JwtDecoder {
+  def get[C: Tag]: URIO[JwtDecoder[C], JwtDecoder[C]] = ZIO.service[JwtDecoder[C]]
 
   def live[C: Decoder: Tag](config: JwtDecoderConfig): ZLayer[Any, Throwable, JwtDecoder[C]] = {
     val effect = for {
-      keyFactory <- UIO { JwtAsymmetricAlgorithm.createKeyFactory(config.algorithm) }
-      publicKey <- Task(keyFactory.generatePublic(config.publicKey))
+      keyFactory <- ZIO.succeed { JwtAsymmetricAlgorithm.createKeyFactory(config.algorithm) }
+      publicKey <- ZIO.attempt(keyFactory.generatePublic(config.publicKey))
     } yield {
-      new Service[C] {
+      new JwtDecoder[C] {
         override def decode(token: String): Try[JwtClaim[C]] = {
           JwtCirce
             .decode(token, publicKey, Seq(config.algorithm))
@@ -61,6 +60,6 @@ object JwtDecoder {
       }
     }
 
-    effect.toLayer
+    ZLayer.scoped(effect)
   }
 }

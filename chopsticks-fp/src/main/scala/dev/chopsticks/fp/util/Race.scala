@@ -1,28 +1,28 @@
 package dev.chopsticks.fp.util
 
 import cats.data.NonEmptyList
-import zio.{IO, ZIO}
+import zio.{IO, ZEnvironment, ZIO}
 
 object Race {
   final class EmptyRace[-R, +E, +A]() {
     def add[R1 <: R, E1 >: E, A1 >: A](head: ZIO[R1, E1, A1], tail: ZIO[R1, E1, A1]*): NonEmptyRace[R1, E1, A1] = {
       tail
         .foldLeft(
-          new NonEmptyRace[R1, E1, A1](NonEmptyList.one((env: R1) => head.provide(env)))
+          new NonEmptyRace[R1, E1, A1](NonEmptyList.one((env: ZEnvironment[R1]) => head.provideEnvironment(env)))
         ) { (race, next) =>
           race.add(next)
         }
     }
   }
 
-  final class NonEmptyRace[-R, +E, +A] private[util] (queue: NonEmptyList[R => IO[E, A]]) {
+  final class NonEmptyRace[-R, +E, +A] private[util] (queue: NonEmptyList[ZEnvironment[R] => IO[E, A]]) {
     def add[R1 <: R, E1 >: E, A1 >: A](
       head: ZIO[R1, E1, A1],
       tail: ZIO[R1, E1, A1]*
     ): NonEmptyRace[R1, E1, A1] = {
       tail
         .foldLeft(
-          new NonEmptyRace[R1, E1, A1](queue.prepend((env: R1) => head.provide(env)))
+          new NonEmptyRace[R1, E1, A1](queue.prepend((env: ZEnvironment[R1]) => head.provideEnvironment(env)))
         ) { (race, next) =>
           race.add(next)
         }
@@ -33,8 +33,8 @@ object Race {
         .environment[R]
         .flatMap { env =>
           ZIO
-            .bracket(ZIO.foreach(queue.toList)(fn => fn(env).interruptible.fork)) { fibers =>
-              ZIO.foreachPar_(fibers)(_.interrupt)
+            .acquireReleaseWith(ZIO.foreach(queue.toList)(fn => fn(env).interruptible.fork)) { fibers =>
+              ZIO.foreachParDiscard(fibers)(_.interrupt)
             } {
               case head :: tail :: Nil =>
                 head.join.raceFirst(tail.join)

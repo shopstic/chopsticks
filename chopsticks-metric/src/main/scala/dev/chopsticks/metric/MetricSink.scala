@@ -1,7 +1,7 @@
 package dev.chopsticks.metric
 
-import akka.Done
-import akka.stream.scaladsl.Sink
+import org.apache.pekko.Done
+import org.apache.pekko.stream.scaladsl.Sink
 
 import scala.concurrent.Future
 

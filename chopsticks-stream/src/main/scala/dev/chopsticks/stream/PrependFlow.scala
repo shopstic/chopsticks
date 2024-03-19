@@ -1,7 +1,7 @@
 package dev.chopsticks.stream
 
-import akka.stream.stage._
-import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.stream.{Attributes, FlowShape, Inlet, Outlet}
 
 object PrependFlow {
   def apply[V](initialValue: => V): PrependFlow[V] = new PrependFlow[V](initialValue)

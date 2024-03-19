@@ -1,10 +1,10 @@
 /* Forked and modified from https://github.com/akka/akka/blob/2dde4b6b512d10d1db37764ab13e46cea8f49429/akka-stream/src/main/scala/akka/stream/scaladsl/Hub.scala */
 package dev.chopsticks.stream
 
-import akka.NotUsed
-import akka.stream.{Attributes, Inlet, Outlet, SinkShape, SourceShape, StreamDetachedException}
-import akka.stream.scaladsl.{Sink, Source}
-import akka.stream.stage.{
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.{Attributes, Inlet, Outlet, SinkShape, SourceShape, StreamDetachedException}
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.stream.stage.{
   AsyncCallback,
   GraphStage,
   GraphStageLogic,

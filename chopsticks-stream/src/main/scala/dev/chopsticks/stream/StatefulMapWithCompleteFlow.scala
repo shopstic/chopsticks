@@ -1,7 +1,7 @@
 package dev.chopsticks.stream
-import akka.stream.ActorAttributes.SupervisionStrategy
-import akka.stream._
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
+import org.apache.pekko.stream.ActorAttributes.SupervisionStrategy
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 
 import scala.util.control.NonFatal
 

@@ -1,48 +1,51 @@
 package dev.chopsticks.dstream
 
-import akka.NotUsed
-import akka.grpc.scaladsl.{ServerReflection, ServiceHandler}
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.stream.KillSwitches
-import akka.stream.scaladsl.{Keep, Source}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.grpc.scaladsl.{ServerReflection, ServiceHandler}
+import org.apache.pekko.http.scaladsl.model.{HttpRequest, HttpResponse}
+import org.apache.pekko.stream.KillSwitches
+import org.apache.pekko.stream.scaladsl.{Keep, Source}
 import dev.chopsticks.dstream.DstreamServerHandlerFactory.DstreamServerPartialHandler
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import grpc.health.v1.{Health, HealthHandler}
-import zio.{UIO, URLayer, ZIO, ZLayer}
+import zio.{UIO, URLayer, Unsafe, ZIO, ZLayer}
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
+trait DstreamServerHandler[Assignment, Result] {
+  def create: UIO[HttpRequest => Future[HttpResponse]]
+}
+
 object DstreamServerHandler {
-  trait Service[Assignment, Result] {
-    def create: UIO[HttpRequest => Future[HttpResponse]]
-  }
 
   def live[Assignment: zio.Tag, Result: zio.Tag]: URLayer[
-    DstreamServerHandlerFactory[Assignment, Result] with DstreamState[Assignment, Result] with AkkaEnv,
+    DstreamServerHandlerFactory[Assignment, Result] with DstreamState[Assignment, Result] with PekkoEnv,
     DstreamServerHandler[Assignment, Result]
   ] = {
     val effect: ZIO[
-      DstreamServerHandlerFactory[Assignment, Result] with DstreamState[Assignment, Result] with AkkaEnv,
+      DstreamServerHandlerFactory[Assignment, Result] with DstreamState[Assignment, Result] with PekkoEnv,
       Nothing,
-      Service[Assignment, Result]
+      DstreamServerHandler[Assignment, Result]
     ] = for {
-      akkaSvc <- ZIO.access[AkkaEnv](_.get)
-      akkaRuntime <- ZIO.runtime[AkkaEnv]
-      stateSvc <- ZIO.access[DstreamState[Assignment, Result]](_.get)
-      handlerFactory <- ZIO.access[DstreamServerHandlerFactory[Assignment, Result]](_.get)
+      pekkoSvc <- ZIO.service[PekkoEnv]
+      pekkoRuntime <- ZIO.runtime[PekkoEnv]
+      stateSvc <- ZIO.service[DstreamState[Assignment, Result]]
+      handlerFactory <- ZIO.service[DstreamServerHandlerFactory[Assignment, Result]]
     } yield {
-      new Service[Assignment, Result] {
+      new DstreamServerHandler[Assignment, Result] {
         override def create: UIO[HttpRequest => Future[HttpResponse]] = {
           handlerFactory
             .create { (in, metadata) =>
-              import akkaSvc.{actorSystem, dispatcher}
+              import pekkoSvc.{actorSystem, dispatcher}
 
               val (ks, resultSource) = in
                 .viaMat(KillSwitches.single)(Keep.right)
                 .preMaterialize()
 
-              val assignmentFutureSource = akkaRuntime.unsafeRunToFuture(stateSvc.enqueueWorker(resultSource, metadata))
+              val assignmentFutureSource = Unsafe.unsafe { implicit unsafe =>
+                pekkoRuntime.unsafe.runToFuture(stateSvc.enqueueWorker(resultSource, metadata))
+              }
 
               Source
                 .futureSource(assignmentFutureSource)
@@ -62,7 +65,7 @@ object DstreamServerHandler {
                 }
             }
             .map { case DstreamServerPartialHandler(handler, serviceDescription) =>
-              import akkaSvc.actorSystem
+              import pekkoSvc.actorSystem
 
               ServiceHandler.concatOrNotFound(
                 handler,
@@ -74,6 +77,6 @@ object DstreamServerHandler {
       }
     }
 
-    ZLayer.fromEffect(effect)
+    ZLayer(effect)
   }
 }

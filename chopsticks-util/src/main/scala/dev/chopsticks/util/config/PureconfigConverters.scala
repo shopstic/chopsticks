@@ -2,10 +2,10 @@ package dev.chopsticks.util.config
 
 import java.time.format.DateTimeFormatter
 import java.time.{Duration => JavaDuration, LocalDate, LocalDateTime, LocalTime}
-import akka.actor.ActorPath
-import akka.util.{ByteString, Timeout}
 import com.typesafe.config.ConfigValue
 import eu.timepit.refined.api.{RefType, Validate}
+import org.apache.pekko.actor.ActorPath
+import org.apache.pekko.util.{ByteString, Timeout}
 import pureconfig.ConfigConvert.{viaNonEmptyString, viaNonEmptyStringTry, viaString}
 import pureconfig.ConfigReader.Result
 import pureconfig.ConvertHelpers.catchReadError

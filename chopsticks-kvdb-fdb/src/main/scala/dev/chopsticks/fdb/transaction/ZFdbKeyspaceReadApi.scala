@@ -6,7 +6,7 @@ import dev.chopsticks.kvdb.codec.KeyConstraints.ConstraintsBuilder
 import dev.chopsticks.kvdb.fdb.FdbReadApi
 import dev.chopsticks.kvdb.util.KvdbAliases.KvdbPair
 import eu.timepit.refined.types.numeric.PosInt
-import zio.Task
+import zio.{Task, ZIO}
 
 class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V](
   keyspace: CF,
@@ -15,7 +15,7 @@ class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V
   def getRaw(
     constraints: ConstraintsBuilder[K]
   ): Task[Option[KvdbPair]] = {
-    Task
+    ZIO
       .fromCompletionStage(api.get(keyspace, KeyConstraints.build(constraints)(keyspace.keySerdes).constraints))
   }
 
@@ -23,15 +23,15 @@ class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V
     constraints: ConstraintsBuilder[K]
   ): Task[Option[(K, V)]] = {
     getRaw(constraints)
-      .flatMap(maybePair => Task(maybePair.map(p => keyspace.unsafeDeserialize(p))))
+      .flatMap(maybePair => ZIO.attempt(maybePair.map(p => keyspace.unsafeDeserialize(p))))
   }
 
   def getValue(
     constraints: ConstraintsBuilder[K]
   ): Task[Option[V]] = {
-    Task
+    ZIO
       .fromCompletionStage(api.get(keyspace, KeyConstraints.build(constraints)(keyspace.keySerdes).constraints))
-      .flatMap(maybePair => Task(maybePair.map(p => keyspace.unsafeDeserializeValue(p._2))))
+      .flatMap(maybePair => ZIO.attempt(maybePair.map(p => keyspace.unsafeDeserializeValue(p._2))))
   }
 
   def getRangeRaw(
@@ -39,7 +39,7 @@ class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V
     to: ConstraintsBuilder[K],
     limit: PosInt
   ): Task[List[KvdbPair]] = {
-    Task
+    ZIO
       .fromCompletionStage(api.getRange(keyspace, KeyConstraints.range(from, to, limit.value)(keyspace.keySerdes)))
   }
 
@@ -49,6 +49,6 @@ class ZFdbKeyspaceReadApi[BCF[A, B] <: ColumnFamily[A, B], CF <: BCF[K, V], K, V
     limit: PosInt
   ): Task[List[(K, V)]] = {
     getRangeRaw(from, to, limit)
-      .flatMap(pairs => Task(pairs.map(p => keyspace.unsafeDeserialize(p))))
+      .flatMap(pairs => ZIO.attempt(pairs.map(p => keyspace.unsafeDeserialize(p))))
   }
 }

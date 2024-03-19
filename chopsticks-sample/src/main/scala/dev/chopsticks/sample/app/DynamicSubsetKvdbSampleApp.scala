@@ -1,7 +1,7 @@
 package dev.chopsticks.sample.app
 
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
 import dev.chopsticks.kvdb.api.KvdbDatabaseApi
@@ -15,7 +15,7 @@ import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition.{BaseCf, CfSet
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.types.string.NonEmptyString
 import pureconfig.ConfigConvert
-import zio.{ExitCode, RIO, ZIO}
+import zio.{RIO, ZIO, ZLayer}
 
 final case class DynamicSubsetKvdbSampleAppConfig(subsetIds: Set[NonEmptyString], rocksdb: RocksdbDatabaseConfig)
 
@@ -29,12 +29,12 @@ abstract class DynamicKvdbStorage extends KvdbMaterialization[BaseCf, CfSet] wit
 
 final case class DynamicKvdbService(api: KvdbDatabaseApi[BaseCf], storage: DynamicKvdbStorage)
 
-object DynamicSubsetKvdbSampleApp extends ZAkkaApp {
+object DynamicSubsetKvdbSampleApp extends ZPekkoApp {
   //noinspection TypeAnnotation
   def app = {
     for {
       dbService <- ZIO.service[DynamicKvdbService]
-      _ <- ZIO.foreach_(dbService.storage.columnFamilySet.value) { cf =>
+      _ <- ZIO.foreachDiscard(dbService.storage.columnFamilySet.value) { cf =>
         dbService
           .api
           .columnFamily(cf)
@@ -50,11 +50,11 @@ object DynamicSubsetKvdbSampleApp extends ZAkkaApp {
     } yield ()
   }
 
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+  override def run: RIO[ZAkkaAppEnv, Any] = {
     import MultiBackendSampleDb.Backends.rocksdbStorage
 
     val rocksdbManaged = for {
-      appConfig <- TypedConfig.get[DynamicSubsetKvdbSampleAppConfig].toManaged_
+      appConfig <- TypedConfig.get[DynamicSubsetKvdbSampleAppConfig]
       subsetIds = appConfig.subsetIds.map(_.value)
       storage = new DynamicKvdbStorage {
         override val columnFamilySet: ColumnFamilySet[BaseCf, CfSet] =
@@ -64,18 +64,15 @@ object DynamicSubsetKvdbSampleApp extends ZAkkaApp {
         override val defaultColumnFamily: MultiBackendSampleDb.Definition.BaseCf[_, _] = rocksdbStorage.default
       }
       backend <- RocksdbDatabase.manage(storage, appConfig.rocksdb)
-      api <- KvdbDatabaseApi(backend).toManaged_
+      api <- KvdbDatabaseApi(backend)
     } yield DynamicKvdbService(api, storage)
 
-    import zio.magic._
-
     app
-      .injectSome[ZAkkaAppEnv](
+      .provideSome[ZAkkaAppEnv](
         TypedConfig.live[DynamicSubsetKvdbSampleAppConfig](),
-        rocksdbManaged.toLayer,
+        ZLayer.scoped(rocksdbManaged),
         KvdbIoThreadPool.live,
-        KvdbSerdesThreadPool.fromDefaultAkkaDispatcher()
+        KvdbSerdesThreadPool.fromDefaultPekkoDispatcher()
       )
-      .as(ExitCode(0))
   }
 }

@@ -2,7 +2,7 @@ package dev.chopsticks.kvdb.util
 
 import java.util.concurrent.atomic.AtomicReference
 
-import akka.{Done, NotUsed}
+import org.apache.pekko.{Done, NotUsed}
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.{Future, Promise}

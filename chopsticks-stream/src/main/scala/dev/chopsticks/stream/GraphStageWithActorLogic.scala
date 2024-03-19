@@ -1,7 +1,7 @@
 package dev.chopsticks.stream
 
-import akka.actor.ActorRef
-import akka.stream.stage.{GraphStageLogic, StageLogging}
+import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.stream.stage.{GraphStageLogic, StageLogging}
 
 trait GraphStageWithActorLogic extends StageLogging {
   this: GraphStageLogic =>

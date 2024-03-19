@@ -1,8 +1,8 @@
 package dev.chopsticks.fp.iz_logging
 
-import akka.stream.RestartSettings
+import org.apache.pekko.stream.RestartSettings
 import com.typesafe.config.Config
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.config.HoconConfig
 import dev.chopsticks.util.config.PureconfigLoader
 import izumi.fundamentals.platform.time.IzTimeSafe
@@ -12,22 +12,23 @@ import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
 import izumi.logstage.api.rendering.logunits.Styler.TrimType
 import izumi.logstage.api.rendering.logunits.{Extractor, Renderer, Styler}
 import izumi.logstage.api.rendering.{RenderingOptions, StringRenderingPolicy}
-import izumi.logstage.sink.QueueingSink
 import izumi.logstage.sink.file.models.{FileRotation, FileSinkConfig}
 import izumi.logstage.sink.file.{FileServiceImpl, FileSink}
 import logstage._
-import zio._
+import zio.{RIO, RLayer, URIO, ZIO, ZLayer}
+
+import scala.concurrent.duration.DurationInt
+
+trait IzLogging {
+  def logger: IzLogger
+  def loggerWithCtx(ctx: LogCtx): IzLogger
+  def zioLogger: LogIO3[ZIO]
+  def zioLoggerWithCtx(ctx: LogCtx): LogIO3[ZIO]
+  def logLevel: Log.Level
+}
 
 object IzLogging {
-  trait Service {
-    def logger: IzLogger
-    def loggerWithCtx(ctx: LogCtx): IzLogger
-    def zioLogger: LogIO3[ZIO]
-    def zioLoggerWithCtx(ctx: LogCtx): LogIO3[ZIO]
-    def logLevel: Log.Level
-  }
-
-  final case class LiveService(logger: IzLogger, zioLogger: LogIO3[ZIO], logLevel: Log.Level) extends Service {
+  final case class LiveService(logger: IzLogger, zioLogger: LogIO3[ZIO], logLevel: Log.Level) extends IzLogging {
     override def loggerWithCtx(ctx: LogCtx): IzLogger =
       logger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
         .withCustomContext(CustomContext(ctx.logArgs))
@@ -36,17 +37,28 @@ object IzLogging {
       zioLogger(IzLoggingCustomRenderers.LocationCtxKey -> ctx.sourceLocation)
   }
 
-  def logger: URIO[IzLogging, IzLogger] = ZIO.access[IzLogging](_.get.logger)
-  def loggerWithContext(ctx: LogCtx): URIO[IzLogging, IzLogger] = ZIO.access[IzLogging](_.get.loggerWithCtx(ctx))
+  def logger: URIO[IzLogging, IzLogger] = ZIO.serviceWith[IzLogging](_.logger)
+  def loggerWithContext(ctx: LogCtx): URIO[IzLogging, IzLogger] = ZIO.serviceWith[IzLogging](_.loggerWithCtx(ctx))
   def zioLoggerWithContext(ctx: LogCtx): URIO[IzLogging, LogIO3[ZIO]] =
-    ZIO.access[IzLogging](_.get.zioLoggerWithCtx(ctx))
-  def zioLogger: URIO[IzLogging, LogIO3[ZIO]] = ZIO.access[IzLogging](_.get.zioLogger)
+    ZIO.serviceWith[IzLogging](_.zioLoggerWithCtx(ctx))
+  def zioLogger: URIO[IzLogging, LogIO3[ZIO]] = ZIO.serviceWith[IzLogging](_.zioLogger)
 
   def unsafeCreate(
     config: IzLoggingConfig,
-    routerFactory: IzLoggingRouter.Service,
-    akkaSvc: AkkaEnv.Service
+    routerFactory: IzLoggingRouter,
+    pekkoSvc: PekkoEnv
   ): LiveService = {
+    val useLogBuffer = config.sinks.values
+      .iterator
+      .collect { case sinkConfig if sinkConfig.enabled => sinkConfig }
+      .collectFirst { sinkConfig =>
+        sinkConfig.destination match {
+          case _: IzLoggingFileDestination => true
+          case _ => false
+        }
+      }
+      .getOrElse(false)
+
     val sinks = config.sinks.values.collect {
       case sinkConfig if sinkConfig.enabled =>
         val renderingPolicy = sinkConfig.format match {
@@ -72,10 +84,7 @@ object IzLogging {
                 ) {
               override def recoverOnFail(e: String): Unit = Console.err.println(e)
             }
-
-            val queueingSink = new QueueingSink(jsonFileSink)
-            queueingSink.start()
-            queueingSink
+            jsonFileSink
 
           case IzLoggingTcpDestination(host, port, bufferSize) =>
             val tcpFlowRestartSettings = {
@@ -89,13 +98,20 @@ object IzLogging {
               renderingPolicy = renderingPolicy,
               bufferSize = bufferSize,
               tcpFlowRestartSettings = tcpFlowRestartSettings,
-              akkaSvc = akkaSvc
+              pekkoSvc = pekkoSvc
             )
         }
     }.toList
 
+    val buffer =
+      if (!useLogBuffer) LogQueue.Immediate
+      else {
+        val buffer = new ThreadingLogQueue(50.millis, 128)
+        buffer.start()
+        buffer
+      }
     val logger =
-      IzLogger(routerFactory.create(config.level, sinks))(IzLoggingCustomRenderers.LoggerTypeCtxKey -> "iz")
+      IzLogger(routerFactory.create(config.level, sinks, buffer))(IzLoggingCustomRenderers.LoggerTypeCtxKey -> "iz")
     val zioLogger = LogZIO.withDynamicContext(logger)(ZIO.succeed(CustomContext.empty))
 
     // configure slf4j to use LogStage router
@@ -107,42 +123,42 @@ object IzLogging {
     PureconfigLoader.unsafeLoad[IzLoggingConfig](hoconConfig, configNamespace)
   }
 
-  def create(config: IzLoggingConfig): RIO[AkkaEnv with IzLoggingRouter, LiveService] = {
+  def create(config: IzLoggingConfig): RIO[PekkoEnv with IzLoggingRouter, LiveService] = {
     for {
-      izLoggingRouterSvc <- ZIO.access[IzLoggingRouter](_.get)
-      akkaSvc <- ZIO.access[AkkaEnv](_.get)
-      svc <- Task {
+      izLoggingRouterSvc <- ZIO.service[IzLoggingRouter]
+      akkaSvc <- ZIO.service[PekkoEnv]
+      svc <- ZIO.attempt {
         unsafeCreate(config, izLoggingRouterSvc, akkaSvc)
       }
     } yield svc
   }
 
-  def live(config: IzLoggingConfig): RLayer[AkkaEnv with IzLoggingRouter, IzLogging] = {
-    val managed = ZManaged.make {
+  def live(config: IzLoggingConfig): RLayer[PekkoEnv with IzLoggingRouter, IzLogging] = {
+    val managed = ZIO.acquireRelease {
       create(config)
     } { service =>
-      UIO(service.logger.router.close())
+      ZIO.succeed(service.logger.router.close())
     }
 
-    managed.toLayer
+    ZLayer.scoped(managed)
   }
 
-  def live(hoconConfig: Config): RLayer[AkkaEnv with IzLoggingRouter, IzLogging] = {
+  def live(hoconConfig: Config): RLayer[PekkoEnv with IzLoggingRouter, IzLogging] = {
     val effect = for {
-      config <- Task(unsafeLoadConfig(hoconConfig))
+      config <- ZIO.attempt(unsafeLoadConfig(hoconConfig))
       service <- create(config)
     } yield service
 
-    effect.toLayer
+    ZLayer(effect)
   }
 
-  def live(): RLayer[AkkaEnv with IzLoggingRouter with HoconConfig, IzLogging] = {
+  def live(): RLayer[PekkoEnv with IzLoggingRouter with HoconConfig, IzLogging] = {
     val managed = for {
-      hoconConfig <- HoconConfig.get.toManaged_
-      service <- live(hoconConfig).build
+      hoconConfig <- HoconConfig.get
+      service <- live(hoconConfig).build.map(_.get)
     } yield service
 
-    ZLayer.fromManagedMany(managed)
+    ZLayer.scoped(managed)
   }
 }
 

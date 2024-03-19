@@ -1,10 +1,16 @@
 package dev.chopsticks.stream
 
-import akka.NotUsed
-import akka.stream.scaladsl.BidiFlow
-import akka.stream.{Attributes, BidiShape, Inlet, Outlet}
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler, TimerGraphStageLogicWithLogging}
-import akka.util.Timeout
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.scaladsl.BidiFlow
+import org.apache.pekko.stream.{Attributes, BidiShape, Inlet, Outlet}
+import org.apache.pekko.stream.stage.{
+  GraphStage,
+  GraphStageLogic,
+  InHandler,
+  OutHandler,
+  TimerGraphStageLogicWithLogging
+}
+import org.apache.pekko.util.Timeout
 import eu.timepit.refined.types.numeric.PosInt
 import pureconfig.ConfigConvert
 

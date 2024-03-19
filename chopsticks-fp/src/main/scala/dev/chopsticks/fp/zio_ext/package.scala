@@ -6,27 +6,30 @@ import dev.chopsticks.util.implicits.SquantsImplicits._
 import logstage.Log
 import squants.time.Nanoseconds
 import zio._
-import zio.clock.Clock
-import zio.duration._
 
 import scala.concurrent.Future
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.implicitConversions
 
 package object zio_ext {
-  private val nanoTime = ZIO.accessM[Clock](_.get.nanoTime)
+  private val nanoTime = ZIO.clock.flatMap(_.nanoTime)
 
-  implicit def scalaToZioDuration(d: Duration): zio.duration.Duration =
-    zio.duration.Duration.fromScala(d)
+  implicit def scalaToZioDuration(d: Duration): zio.Duration =
+    zio.Duration.fromScala(d)
 
-  type MeasuredLogging = IzLogging with Clock
+  type MeasuredLogging = IzLogging
 
   implicit final class TaskExtensions[R >: Nothing, E <: Throwable, A](io: ZIO[R, E, A]) {
     def unsafeRunToFuture(implicit rt: Runtime[R]): Future[A] = {
       val promise = scala.concurrent.Promise[A]()
-      rt.unsafeRunAsync(io) {
-        case Exit.Success(value) => val _ = promise.success(value)
-        case Exit.Failure(cause) => promise.failure(cause.squashTrace)
+      Unsafe.unsafe { implicit unsafe =>
+        rt.unsafe
+          .fork(io)
+          .unsafe
+          .addObserver {
+            case Exit.Success(value) => val _ = promise.success(value)
+            case Exit.Failure(cause) => val _ = promise.failure(cause.squashTrace)
+          }
       }
       promise.future
     }
@@ -40,20 +43,20 @@ package object zio_ext {
     def interruptAllChildrenPar: ZIO[R, E, A] = {
       io.ensuringChildren(fibs => {
         ZIO.fiberId.flatMap { fs =>
-          ZIO.foreachPar_(fibs)(_.interruptAs(fs))
+          ZIO.foreachParDiscard(fibs)(_.interruptAs(fs))
         }
       })
     }
 
     def debugResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with IzLogging with Clock, E, A] = {
+    ): ZIO[R with IzLogging, E, A] = {
       logResult(name, result, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
     def logResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with IzLogging with Clock, E, A] = {
+    ): ZIO[R with IzLogging, E, A] = {
       bracketStartMeasurement(name, result, logTraceOnError)(ctx) { startTime =>
         measurementHandleInterruption(name, startTime)(io)
       }
@@ -61,13 +64,13 @@ package object zio_ext {
 
     def log(name: String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with IzLogging with Clock, E, A] = {
+    ): ZIO[R with IzLogging, E, A] = {
       logResult(name, _ => "completed", logTraceOnError)
     }
 
     def logPeriodically(name: String, interval: FiniteDuration, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with IzLogging with Clock, E, A] = {
+    ): ZIO[R with IzLogging, E, A] = {
       val renderResult: A => String = _ => "completed"
       bracketStartMeasurement(name, renderResult, logTraceOnError)(ctx) { startTime =>
         val logTask = for {
@@ -90,21 +93,21 @@ package object zio_ext {
 
     def debug(name: String, logTraceOnError: Boolean = false)(implicit
       ctx: LogCtx
-    ): ZIO[R with IzLogging with Clock, E, A] = {
+    ): ZIO[R with IzLogging, E, A] = {
       log(name, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
     }
 
     def retryForever[R1 <: R](
       retryPolicy: Schedule[R1, Any, Any],
       repeatSchedule: Schedule[R1, Any, Any],
-      retryResetMinDuration: zio.duration.Duration
-    ): ZIO[R1 with Clock, Nothing, Unit] = {
+      retryResetMinDuration: zio.Duration
+    ): ZIO[R1, Nothing, Unit] = {
       io.either.timed
         .flatMap {
           case (elapsed, result) =>
             result match {
-              case Right(_) => ZIO.succeed(())
-              case Left(_) if elapsed > retryResetMinDuration => ZIO.succeed(())
+              case Right(_) => ZIO.unit
+              case Left(_) if elapsed > retryResetMinDuration => ZIO.unit
               case Left(ex) => ZIO.fail(ex)
             }
         }
@@ -116,7 +119,7 @@ package object zio_ext {
     private def bracketStartMeasurement(name: String, renderResult: A => String, logTraceOnError: Boolean)(implicit
       ctx: LogCtx
     ) = {
-      ZIO.bracketExit(startMeasurement(name, "started"))((startTime: Long, exit: Exit[E, A]) =>
+      ZIO.acquireReleaseExitWith(startMeasurement(name, "started"))((startTime: Long, exit: Exit[E, A]) =>
         logElapsedTime(
           name = name,
           startTimeNanos = startTime,
@@ -131,7 +134,7 @@ package object zio_ext {
       ctx: LogCtx
     ) = {
       ZIO
-        .bracketExit(io.interruptible.fork) { (fib, exit: Exit[Any, Any]) =>
+        .acquireReleaseExitWith(io.interruptible.fork) { (fib, exit: Exit[Any, Any]) =>
           val log = for {
             elapse <- nanoTime.map(endTime => endTime - startTime)
             elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
@@ -142,64 +145,16 @@ package object zio_ext {
             }
           } yield ()
 
-          log.when(exit.interrupted) *> fib.interrupt
+          log.when(exit.isInterrupted) *> fib.interrupt
         } { fib =>
           fib.join
         }
     }
   }
 
-  implicit final class ZManagedExtensions[R >: Nothing, E <: Any, A](managed: ZManaged[R, E, A]) {
-    def logResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
-      ctx: LogCtx
-    ): ZManaged[R with IzLogging with Clock, E, A] = {
-      for {
-        startTimeRef <- Ref.make[Long](0).toManaged_
-        value <- managed
-          .flatMap { value =>
-            for {
-              startTime <- ZManaged.fromEffect(startMeasurement(name, result(value)))
-              _ <- startTimeRef.set(startTime).toManaged_
-            } yield value
-          }
-          .onExit { exit =>
-            for {
-              startTime <- startTimeRef.get
-              _ <- logElapsedTime(
-                name = name,
-                startTimeNanos = startTime,
-                exit = exit,
-                renderResult = (_: A) => "completed",
-                logTraceOnError = logTraceOnError
-              )
-            } yield ()
-          }
-      } yield value
-    }
-
-    def debugResult(name: String, result: A => String, logTraceOnError: Boolean = false)(implicit
-      ctx: LogCtx
-    ): ZManaged[R with IzLogging with Clock, E, A] = {
-      logResult(name, result, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
-    }
-
-    def log(name: String, logTraceOnError: Boolean = false)(implicit
-      ctx: LogCtx
-    ): ZManaged[R with IzLogging with Clock, E, A] = {
-      logResult(name, _ => "started", logTraceOnError)
-    }
-
-    def debug(name: String, logTraceOnError: Boolean = false)(implicit
-      ctx: LogCtx
-    ): ZManaged[R with IzLogging with Clock, E, A] = {
-      log(name, logTraceOnError)(ctx.copy(level = Log.Level.Debug))
-    }
-
-  }
-
   private def startMeasurement(name: String, message: String)(implicit
     ctx: LogCtx
-  ): URIO[IzLogging with Clock, Long] = {
+  ): URIO[IzLogging, Long] = {
     for {
       time <- nanoTime
       _ <- IzLogging.loggerWithContext(ctx).map(_.withCustomContext("task" -> name).log(ctx.level)(message))
@@ -218,9 +173,9 @@ package object zio_ext {
       elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
       errorLevel = if (ctx.level.compareTo(Log.Level.Info) >= 0) Log.Level.Error else ctx.level
       logger <- IzLogging.loggerWithContext(ctx).map(_.withCustomContext("task" -> name, "elapsed" -> elapsed))
-      _ <- UIO {
+      _ <- ZIO.succeed {
         exit.toEither match {
-          case Left(FiberFailure(cause)) if cause.interrupted =>
+          case Left(FiberFailure(cause)) if cause.isInterrupted =>
             logger.log(ctx.level)(s"interrupted")
 
           case Left(exception @ FiberFailure(cause)) =>

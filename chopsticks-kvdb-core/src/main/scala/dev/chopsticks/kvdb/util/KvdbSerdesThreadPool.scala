@@ -1,35 +1,33 @@
 package dev.chopsticks.kvdb.util
 
-import dev.chopsticks.fp.akka_env.AkkaEnv
-import zio.URLayer
-import zio.internal.Executor
+import dev.chopsticks.fp.pekko_env.PekkoEnv
+import zio.{Executor, URLayer, ZLayer}
 
 import scala.concurrent.ExecutionContextExecutor
 
+trait KvdbSerdesThreadPool {
+  def executionContext: ExecutionContextExecutor
+  def executor: Executor
+}
+
 object KvdbSerdesThreadPool {
-  private val DefaultYieldOpCount = 512
 
-  trait Service {
-    def executionContext: ExecutionContextExecutor
-    def executor: Executor
+  def fromDefaultPekkoDispatcher(): URLayer[PekkoEnv, KvdbSerdesThreadPool] = {
+    fromPekkoDispatcher("pekko.actor.default-dispatcher")
   }
 
-  def fromDefaultAkkaDispatcher(yieldOpCount: Int = DefaultYieldOpCount): URLayer[AkkaEnv, KvdbSerdesThreadPool] = {
-    fromAkkaDispatcher("akka.actor.default-dispatcher", yieldOpCount)
-  }
-
-  def fromAkkaDispatcher(
-    id: String,
-    yieldOpCount: Int = DefaultYieldOpCount
-  ): URLayer[AkkaEnv, KvdbSerdesThreadPool] = {
-    AkkaEnv
+  def fromPekkoDispatcher(
+    id: String
+  ): URLayer[PekkoEnv, KvdbSerdesThreadPool] = {
+    val effect = PekkoEnv
       .actorSystem
       .map { actorSystem =>
-        new Service {
+        new KvdbSerdesThreadPool {
           override val executionContext: ExecutionContextExecutor = actorSystem.dispatchers.lookup(id)
-          override val executor: Executor = zio.internal.Executor.fromExecutionContext(yieldOpCount)(executionContext)
+          override val executor: Executor = zio.Executor.fromExecutionContext(executionContext)
         }
       }
-      .toLayer
+
+    ZLayer(effect)
   }
 }

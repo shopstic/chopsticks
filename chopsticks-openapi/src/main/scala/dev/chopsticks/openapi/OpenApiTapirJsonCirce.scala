@@ -21,7 +21,7 @@ trait OpenApiTapirJsonCirce {
   implicit val schemaForCirceJsonObject: Schema[JsonObject] = Schema(SProduct(Nil), Some(SName("io.circe.JsonObject")))
 
   def jsonBody[T: Encoder: Decoder: Schema: OpenApiErrorCollectingMode]: EndpointIO.Body[String, T] =
-    anyFromUtf8StringBody(circeCodec[T])
+    stringBodyUtf8AnyFormat(circeCodec[T])
 
   implicit def circeCodec[T: Encoder: Decoder: Schema: OpenApiErrorCollectingMode]: JsonCodec[T] = {
     // todo override schema and always use Validator.pass? (Validation happens in circe)

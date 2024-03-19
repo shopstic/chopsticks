@@ -1,12 +1,12 @@
 package dev.chopsticks.kvdb.lmdb
 
-import akka.stream.Attributes
-import akka.stream.scaladsl.{Merge, Sink, Source}
-import akka.{Done, NotUsed}
+import org.apache.pekko.stream.Attributes
+import org.apache.pekko.stream.scaladsl.{Merge, Sink, Source}
+import org.apache.pekko.{Done, NotUsed}
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
@@ -24,14 +24,13 @@ import eu.timepit.refined.types.string.NonEmptyString
 import org.lmdbjava._
 import pureconfig.ConfigConvert
 import squants.information.Information
-import zio.clock.Clock
-import zio.internal.Executor
-import zio.{Schedule, Task, ZIO, ZManaged}
+import zio.{durationInt, Executor, Schedule, Scope, Task, ZIO}
 
 import java.nio.ByteBuffer
 import java.nio.ByteBuffer.allocateDirect
 import java.util.concurrent.atomic.{AtomicBoolean, LongAdder}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
+import scala.annotation.nowarn
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
 import scala.util.control.{ControlThrowable, NonFatal}
@@ -67,33 +66,36 @@ object LmdbDatabase extends StrictLogging {
     lazy val writeExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val isClosed = new AtomicBoolean(false)
 
-    def close(): ZIO[Clock, Throwable, Unit] = {
-      import zio.duration._
-
+    @nowarn("cat=lint-infer-any")
+    def close(): ZIO[Any, Throwable, Unit] = {
       val task = for {
-        _ <- Task(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
-          Task.fail(ClosedException).unless(isClosed)
+        _ <- ZIO.attempt(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
+          ZIO.fail(ClosedException).unless(isClosed)
         }
-        _ <- Task {
-          writeExecutor.shutdown()
-          writeExecutor.awaitTermination(10, TimeUnit.SECONDS)
-        }.lock(ioExecutor)
-        _ <- Task(dbCloseSignal.tryComplete(Failure(ClosedException)))
-        _ <- Task(dbCloseSignal.hasNoListeners)
+        _ <- ZIO
+          .attempt {
+            writeExecutor.shutdown()
+            writeExecutor.awaitTermination(10, TimeUnit.SECONDS)
+          }
+          .onExecutor(ioExecutor)
+        _ <- ZIO.attempt(dbCloseSignal.tryComplete(Failure(ClosedException)))
+        _ <- ZIO.attempt(dbCloseSignal.hasNoListeners)
           .repeat(Schedule.fixed(100.millis).untilInput[Boolean](identity))
-        _ <- Task {
-          dbiMap.foreach(_._2.close())
-          env.close()
-        }.lock(ioExecutor)
+        _ <- ZIO
+          .attempt {
+            dbiMap.foreach(_._2.close())
+            env.close()
+          }
+          .onExecutor(ioExecutor)
       } yield ()
 
       task
     }
 
     def obtain(): ZIO[Any, Throwable, LmdbContext[BaseCol]] = {
-      Task(isClosed.get)
+      ZIO.attempt(isClosed.get)
         .flatMap { isClosed =>
-          if (isClosed) Task.fail(ClosedException)
+          if (isClosed) ZIO.fail(ClosedException)
           else ZIO.succeed(this)
         }
     }
@@ -127,40 +129,42 @@ object LmdbDatabase extends StrictLogging {
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS],
     config: LmdbDatabaseConfig
-  ): ZManaged[AkkaEnv with KvdbIoThreadPool with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
+  ): ZIO[PekkoEnv with KvdbIoThreadPool with Scope, Throwable, KvdbDatabase[BCF, CFS]] = {
     KvdbMaterialization.validate(materialization) match {
-      case Left(ex) => ZManaged.fail(ex)
+      case Left(ex) => ZIO.fail(ex)
       case Right(mat) =>
         for {
-          ioExecutor <- ZManaged.access[KvdbIoThreadPool](_.get.executor)
-          refs <- ZManaged
-            .make {
-              Task {
-                import better.files.Dsl._
-                import better.files._
+          ioExecutor <- ZIO.serviceWith[KvdbIoThreadPool](_.executor)
+          refs <- ZIO
+            .acquireRelease {
+              ZIO
+                .attempt {
+                  import better.files.Dsl._
+                  import better.files._
 
-                val file = File(config.path)
-                val _ = mkdirs(file)
-                val extraFlags = {
-                  if (config.noSync) Vector(EnvFlags.MDB_NOSYNC, EnvFlags.MDB_NOMETASYNC)
-                  else Vector.empty
+                  val file = File(config.path)
+                  val _ = mkdirs(file)
+                  val extraFlags = {
+                    if (config.noSync) Vector(EnvFlags.MDB_NOSYNC, EnvFlags.MDB_NOMETASYNC)
+                    else Vector.empty
+                  }
+
+                  val flags = Vector(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD) ++ extraFlags
+                  val env = Env.create
+                    .setMapSize(config.maxSize.toBytes.toLong)
+                    .setMaxDbs(materialization.columnFamilySet.value.size)
+                    .setMaxReaders(4096)
+                    .open(file.toJava, flags: _*)
+
+                  val columnRefs: Map[BCF[_, _], Dbi[ByteBuffer]] = materialization.columnFamilySet.value.map { col =>
+                    (col, env.openDbi(col.id, DbiFlags.MDB_CREATE))
+                  }.toMap
+
+                  LmdbContext[BCF[_, _]](env, columnRefs, ioExecutor, config.ioDispatcher)
                 }
-
-                val flags = Vector(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD) ++ extraFlags
-                val env = Env.create
-                  .setMapSize(config.maxSize.toBytes.toLong)
-                  .setMaxDbs(materialization.columnFamilySet.value.size)
-                  .setMaxReaders(4096)
-                  .open(file.toJava, flags: _*)
-
-                val columnRefs: Map[BCF[_, _], Dbi[ByteBuffer]] = materialization.columnFamilySet.value.map { col =>
-                  (col, env.openDbi(col.id, DbiFlags.MDB_CREATE))
-                }.toMap
-
-                LmdbContext[BCF[_, _]](env, columnRefs, ioExecutor, config.ioDispatcher)
-              }.lock(ioExecutor)
+                .onExecutor(ioExecutor)
             } { refs => refs.close().orDie }
-          rt <- ZIO.runtime[AkkaEnv].toManaged_
+          rt <- ZIO.runtime[PekkoEnv]
         } yield {
           new LmdbDatabase[BCF, CFS](mat, config.clientOptions, refs)(rt)
         }
@@ -174,7 +178,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   val clientOptions: KvdbClientOptions,
   dbContext: LmdbDatabase.LmdbContext[BCF[_, _]]
 )(implicit
-  rt: zio.Runtime[AkkaEnv]
+  rt: zio.Runtime[PekkoEnv]
 ) extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
   import LmdbDatabase._
@@ -182,7 +186,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   type Refs = LmdbContext[CF]
 
   private lazy val writeEc = ExecutionContext.fromExecutor(dbContext.writeExecutor)
-  private lazy val writeZioExecutor = Executor.fromExecutionContext(Int.MaxValue)(writeEc)
+  private lazy val writeZioExecutor = Executor.fromExecutionContext(writeEc)
   private lazy val readZioExecutor = dbContext.ioExecutor
 
   val activeTxnCounter = new LongAdder
@@ -329,11 +333,11 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   }
 
   private def writeTask[R](task: Task[R]): Task[R] = {
-    task.lock(writeZioExecutor)
+    task.onExecutor(writeZioExecutor)
   }
 
   private def readTask[R](task: Task[R]): Task[R] = {
-    task.lock(readZioExecutor)
+    task.onExecutor(readZioExecutor)
   }
 
   private val reuseablePutKeyBuffer = allocateDirect(511)
@@ -476,13 +480,13 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
 
   override def getRangeTask[Col <: CF](column: Col, range: KvdbKeyRange): Task[List[KvdbPair]] = {
     if (range.limit < 1) {
-      Task.fail(
+      ZIO.fail(
         InvalidKvdbArgumentException(s"range.limit of '${range.limit}' is invalid, must be a positive integer")
       )
     }
     else {
       // TODO: Optimize with a better implementation tailored to range scanning with a known limit
-      Task.fromFuture { _ =>
+      ZIO.fromFuture { _ =>
         val akkaService = rt.environment.get
         import akkaService.actorSystem
 
@@ -554,7 +558,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): Task[Unit] = {
     writeTask(for {
       refs <- obtainContext
-      _ <- Task {
+      _ <- ZIO.attempt {
         val txn = createTxn(refs.env, forWrite = true)
 
         try {
@@ -570,7 +574,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): Task[Long] = {
     writeTask(for {
       refs <- obtainContext
-      count <- Task {
+      count <- ZIO.attempt {
         val txn = createTxn(refs.env, forWrite = true)
 
         try {
@@ -814,7 +818,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   override def transactionTask(actions: Seq[TransactionWrite]): Task[Unit] = {
     writeTask(for {
       refs <- obtainContext
-      _ <- Task {
+      _ <- ZIO.attempt {
         val txn: Txn[ByteBuffer] = createTxn(refs.env, forWrite = true)
 
         try {
@@ -856,10 +860,10 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
         if (okToWrite) {
           doTransaction(refs, txn, actions)
           txn.commit()
-          Task.succeed(())
+          ZIO.unit
         }
         else {
-          Task.fail(ConditionalTransactionFailedException("Condition returns false"))
+          ZIO.fail(ConditionalTransactionFailedException("Condition returns false"))
         }
       }
       finally closeTxn(txn)
@@ -869,7 +873,7 @@ final class LmdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] pri
   override def dropColumnFamily[Col <: CF](column: Col): Task[Unit] = {
     writeTask(for {
       refs <- obtainContext
-      _ <- Task {
+      _ <- ZIO.attempt {
         val txn = createTxn(refs.env, forWrite = true)
 
         try {

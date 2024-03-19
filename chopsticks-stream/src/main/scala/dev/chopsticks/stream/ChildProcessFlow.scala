@@ -2,12 +2,12 @@ package dev.chopsticks.stream
 
 import java.io.File
 
-import akka.actor.Status
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Terminated, Timers}
-import akka.pattern.ask
-import akka.stream.IOResult
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
-import akka.util.{ByteString, Timeout}
+import org.apache.pekko.actor.Status
+import org.apache.pekko.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Terminated, Timers}
+import org.apache.pekko.pattern.ask
+import org.apache.pekko.stream.IOResult
+import org.apache.pekko.stream.scaladsl.{Flow, Keep, Sink, Source}
+import org.apache.pekko.util.{ByteString, Timeout}
 import cats.Applicative
 
 import scala.concurrent.Future
@@ -21,7 +21,7 @@ object ChildProcessFlow {
     command: Vector[String],
     workingDir: String = System.getProperty("user.dir"),
     environment: Map[String, String] = Map.empty,
-    blockingDispatcherConfigKey: String = "akka.stream.default-blocking-io-dispatcher",
+    blockingDispatcherConfigKey: String = "pekko.stream.default-blocking-io-dispatcher",
     destroyTimeout: Timeout = Timeout(30.seconds),
     startTimeout: Timeout = Timeout(5.seconds)
   )

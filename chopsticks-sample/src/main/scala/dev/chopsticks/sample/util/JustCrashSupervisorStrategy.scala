@@ -1,6 +1,6 @@
 package dev.chopsticks.sample.util
 
-import akka.actor.{OneForOneStrategy, SupervisorStrategy, SupervisorStrategyConfigurator}
+import org.apache.pekko.actor.{OneForOneStrategy, SupervisorStrategy, SupervisorStrategyConfigurator}
 
 final class JustCrashSupervisorStrategy extends SupervisorStrategyConfigurator {
   override def create(): SupervisorStrategy =

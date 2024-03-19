@@ -1,7 +1,7 @@
 package dev.chopsticks.testkit
 
-import akka.actor.ActorSystem
-import akka.testkit.TestKitBase
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.testkit.TestKitBase
 import com.typesafe.config.{Config, ConfigFactory}
 import pureconfig.{KebabCase, PascalCase}
 
@@ -9,8 +9,8 @@ trait AkkaTestKit extends TestKitBase {
   lazy val typesafeConfig: Config = {
     val cfg = ConfigFactory.load()
     assert(
-      cfg.getBoolean("akka.stream.materializer.debug.fuzzing-mode"),
-      "akka.stream.materializer.debug.fuzzing-mode is not 'on' for testing, config loading is not working properly?"
+      cfg.getBoolean("pekko.stream.materializer.debug.fuzzing-mode"),
+      "pekko.stream.materializer.debug.fuzzing-mode is not 'on' for testing, config loading is not working properly?"
     )
     cfg
   }

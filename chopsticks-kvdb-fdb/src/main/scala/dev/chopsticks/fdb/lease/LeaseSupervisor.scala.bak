@@ -1,10 +1,10 @@
 package dev.chopsticks.fdb.lease
 
-import akka.NotUsed
-import akka.stream.OverflowStrategy
-import akka.stream.scaladsl.{Keep, Source}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.OverflowStrategy
+import org.apache.pekko.stream.scaladsl.{Keep, Source}
 import com.apple.foundationdb.{ReadTransaction, Transaction}
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.akka_env.PekkoEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext._
@@ -84,12 +84,12 @@ object LeaseSupervisor {
     config: LeaseSupervisorConfig,
     fdb: FdbDatabase[BCF, _],
     leaseKeyspace: A
-  ): URLayer[AkkaEnv with IzLogging with Clock with Has[KvdbDatabaseApi[BCF]], Has[Service[A]]] = {
+  ): URLayer[PekkoEnv with IzLogging with Clock with Has[KvdbDatabaseApi[BCF]], Has[Service[A]]] = {
     val managed = for {
-      systemSvc <- ZManaged.access[AkkaEnv](_.get)
+      systemSvc <- ZManaged.access[PekkoEnv](_.get)
       clock <- ZManaged.access[Clock](_.get)
       dbApi <- ZManaged.access[Has[KvdbDatabaseApi[BCF]]](_.get)
-      runtime <- ZIO.runtime[AkkaEnv with IzLogging].toManaged_
+      runtime <- ZIO.runtime[PekkoEnv with IzLogging].toManaged_
       currentLeases <- Ref.make(ArraySeq.empty[LeaseSupervisorSession]).toManaged { sessionsRef =>
         val io = for {
           sessions <- sessionsRef.get

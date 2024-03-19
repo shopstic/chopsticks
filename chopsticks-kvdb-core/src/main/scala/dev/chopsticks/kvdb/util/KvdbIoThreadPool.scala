@@ -1,31 +1,32 @@
 package dev.chopsticks.kvdb.util
 
-import dev.chopsticks.fp.akka_env.AkkaEnv
-import zio.URLayer
-import zio.internal.Executor
+import dev.chopsticks.fp.pekko_env.PekkoEnv
+import zio.{Executor, URLayer, ZLayer}
 
 import scala.concurrent.ExecutionContextExecutor
 
+trait KvdbIoThreadPool {
+  def executionContext: ExecutionContextExecutor
+  def executor: Executor
+}
+
 object KvdbIoThreadPool {
-  trait Service {
-    def executionContext: ExecutionContextExecutor
-    def executor: Executor
+
+  def live: URLayer[PekkoEnv, KvdbIoThreadPool] = {
+    fromPekkoDispatcher("dev.chopsticks.kvdb.io-dispatcher")
   }
 
-  def live: URLayer[AkkaEnv, KvdbIoThreadPool] = {
-    fromAkkaDispatcher("dev.chopsticks.kvdb.io-dispatcher")
-  }
-
-  def fromAkkaDispatcher(id: String): URLayer[AkkaEnv, KvdbIoThreadPool] = {
-    AkkaEnv
+  def fromPekkoDispatcher(id: String): URLayer[PekkoEnv, KvdbIoThreadPool] = {
+    val effect = PekkoEnv
       .actorSystem
       .map { actorSystem =>
-        new Service {
+        new KvdbIoThreadPool {
           override val executionContext: ExecutionContextExecutor = actorSystem.dispatchers.lookup(id)
           override val executor: Executor =
-            zio.internal.Executor.fromExecutionContext(Int.MaxValue)(executionContext)
+            zio.Executor.fromExecutionContext(executionContext)
         }
       }
-      .toLayer
+
+    ZLayer(effect)
   }
 }

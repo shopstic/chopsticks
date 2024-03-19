@@ -1,8 +1,8 @@
 package dev.chopsticks.kvdb.util
 
-import akka.stream.KillSwitches.KillableGraphStageLogic
-import akka.stream.{ActorAttributes, Attributes, Outlet, SourceShape}
-import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
+import org.apache.pekko.stream.KillSwitches.KillableGraphStageLogic
+import org.apache.pekko.stream.{ActorAttributes, Attributes, Outlet, SourceShape}
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, OutHandler, StageLogging}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbBatch, KvdbPair}
 import squants.information.Information
 

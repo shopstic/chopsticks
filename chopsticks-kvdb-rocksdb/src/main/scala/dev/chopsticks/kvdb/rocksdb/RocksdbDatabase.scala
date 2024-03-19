@@ -1,12 +1,12 @@
 package dev.chopsticks.kvdb.rocksdb
 
-import akka.stream.Attributes
-import akka.stream.scaladsl.{Merge, Sink, Source}
-import akka.{Done, NotUsed}
+import org.apache.pekko.stream.Attributes
+import org.apache.pekko.stream.scaladsl.{Merge, Sink, Source}
+import org.apache.pekko.{Done, NotUsed}
 import cats.syntax.show._
 import com.google.protobuf.{ByteString => ProtoByteString}
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.kvdb.KvdbDatabase.{keySatisfies, KvdbClientOptions}
 import dev.chopsticks.kvdb.KvdbReadTransactionBuilder.TransactionGet
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder._
@@ -22,9 +22,7 @@ import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import eu.timepit.refined.types.string.NonEmptyString
 import org.rocksdb._
 import pureconfig.ConfigConvert
-import zio.blocking.Blocking
-import zio.clock.Clock
-import zio.{Task, ZIO, ZManaged}
+import zio.{Scope, Task, Unsafe, ZIO}
 
 import java.nio.charset.StandardCharsets.UTF_8
 import scala.concurrent.Future
@@ -53,14 +51,14 @@ object RocksdbDatabase extends StrictLogging {
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
     config: RocksdbDatabaseConfig
-  ): ZManaged[AkkaEnv with KvdbIoThreadPool with Blocking with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
+  ): ZIO[PekkoEnv with KvdbIoThreadPool with Scope, Throwable, KvdbDatabase[BCF, CFS]] = {
     RocksdbMaterialization.validate(materialization) match {
-      case Left(ex) => ZManaged.fail(ex)
+      case Left(ex) => ZIO.fail(ex)
       case Right(_) =>
         for {
-          ioExecutor <- ZManaged.access[KvdbIoThreadPool](_.get.executor)
+          ioExecutor <- ZIO.serviceWith[KvdbIoThreadPool](_.executor)
           context <- RocksdbDatabaseManager[BCF, CFS](materialization, ioExecutor, config).managedContext
-          rt <- ZIO.runtime[AkkaEnv].toManaged_
+          rt <- ZIO.runtime[PekkoEnv]
         } yield {
           new RocksdbDatabase[BCF, CFS](materialization, config.clientOptions, context)(rt)
         }
@@ -72,7 +70,7 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   val materialization: KvdbMaterialization[BCF, CFS] with RocksdbMaterialization[BCF, CFS],
   val clientOptions: KvdbClientOptions,
   dbContext: RocksdbContext[BCF[_, _]]
-)(implicit rt: zio.Runtime[AkkaEnv])
+)(implicit rt: zio.Runtime[PekkoEnv])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
   import RocksdbDatabase._
@@ -102,13 +100,13 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
   private val dbCloseSignal = new KvdbCloseSignal
 
   private def ioTask[T](task: Task[T]): Task[T] = {
-    task.lock(dbContext.ioExecutor)
+    task.onExecutor(dbContext.ioExecutor)
   }
 
   def references: Task[RocksdbContext[CF]] = dbContext.obtain()
 
   def compactTask(): Task[Unit] = references.flatMap { refs =>
-    ioTask(Task {
+    ioTask(ZIO.attempt {
       refs.columnHandleMap.values.foreach { col => refs.db.compactRange(col) }
     })
   }
@@ -344,13 +342,13 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
   override def getRangeTask[Col <: CF](column: Col, range: KvdbKeyRange): Task[List[KvdbPair]] = {
     if (range.limit < 1) {
-      Task.fail(
+      ZIO.fail(
         InvalidKvdbArgumentException(s"range.limit of '${range.limit}' is invalid, must be a positive integer")
       )
     }
     else {
       // TODO: Optimize with a better implementation tailored to range scanning with a known limit
-      Task.fromFuture { _ =>
+      ZIO.fromFuture { _ =>
         val akkaService = rt.environment.get
         import akkaService.actorSystem
 
@@ -592,7 +590,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
                 )
           }
 
-        rt.unsafeRunToFuture(task)
+        Unsafe.unsafe { implicit unsafe =>
+          rt.unsafe.runToFuture(task)
+        }
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -715,7 +715,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
               }
           }
 
-        rt.unsafeRunToFuture(task)
+        Unsafe.unsafe { implicit unsafe =>
+          rt.unsafe.runToFuture(task)
+        }
       })
       .flatMapConcat(identity)
       .addAttributes(Attributes.inputBuffer(1, 1))
@@ -738,7 +740,9 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
             }
           }
 
-        rt.unsafeRunToFuture(task)
+        Unsafe.unsafe { implicit unsafe =>
+          rt.unsafe.runToFuture(task)
+        }
       })
       .flatMapConcat(identity)
   }
@@ -836,17 +840,17 @@ final class RocksdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] 
 
           try {
             tx.commit()
-            Task.succeed(())
+            ZIO.unit
           }
           catch {
             case ex: RocksDBException if ex.getStatus.getCode == org.rocksdb.Status.Code.Busy =>
-              Task.fail(ConditionalTransactionFailedException("Writes conflicted"))
+              ZIO.fail(ConditionalTransactionFailedException("Writes conflicted"))
             case NonFatal(ex) =>
-              Task.fail(ConditionalTransactionFailedException(s"Commit failed with ${ex.getMessage}"))
+              ZIO.fail(ConditionalTransactionFailedException(s"Commit failed with ${ex.getMessage}"))
           }
         }
         else {
-          Task.fail(ConditionalTransactionFailedException("Condition returns false"))
+          ZIO.fail(ConditionalTransactionFailedException("Condition returns false"))
         }
       }
       finally {

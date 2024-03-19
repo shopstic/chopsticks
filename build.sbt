@@ -45,14 +45,14 @@ lazy val integrationTestSettings = inConfig(Build.ITest)(Defaults.testTasks)
 lazy val util = Build
   .defineProject("util")
   .settings(
-    libraryDependencies ++= akkaSlf4jDeps ++ squantsDeps ++ loggingDeps ++
+    libraryDependencies ++= pekkoSlf4jDeps ++ squantsDeps ++ loggingDeps ++
       pureconfigDeps ++ microlibsDeps ++ prometheusClientDeps ++ refinedDeps
   )
 
 lazy val testkit = Build
   .defineProject("testkit")
   .settings(
-    libraryDependencies ++= akkaTestDeps ++ scalatestDeps ++ janinoDeps ++ zioTestDeps,
+    libraryDependencies ++= pekkoTestDeps ++ scalatestDeps ++ janinoDeps ++ zioTestDeps,
     Compile / packageBin / mappings ~= { _.filter(_._1.name != "logback-test.xml") }
   )
   .dependsOn(fp, util)
@@ -60,9 +60,11 @@ lazy val testkit = Build
 lazy val fp = Build
   .defineProject("fp")
   .settings(
-    libraryDependencies ++= akkaStreamDeps ++ zioDeps ++ logstageDeps ++ sourcecodeDeps ++ pprintDeps ++ zioMagicDeps.map(
+    libraryDependencies ++= pekkoStreamDeps ++ zioDeps ++ logstageDeps ++ sourcecodeDeps ++ pprintDeps ++ zioMagicDeps.map(
       _ % "test"
-    )
+    ),
+    // todo remove it after bumping logstage dependencies
+    dependencyOverrides ++= circeDeps
   )
   .dependsOn(util)
 
@@ -75,13 +77,13 @@ lazy val stream = Build
 
 lazy val dstream = Build
   .defineProject("dstream")
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(PekkoGrpcPlugin)
   .settings(
-    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
-    libraryDependencies ++= akkaGrpcRuntimeDeps ++ enumeratumDeps ++ (zioMagicDeps ++ akkaTestDeps ++ zioTestDeps).map(
+    dependencyOverrides ++= pekkoDiscoveryOverrideDeps,
+    libraryDependencies ++= pekkoGrpcRuntimeDeps ++ enumeratumDeps ++ (zioMagicDeps ++ pekkoTestDeps ++ zioTestDeps).map(
       _ % "test"
     ),
-    akkaGrpcCodeGeneratorSettings += "server_power_apis",
+    pekkoGrpcCodeGeneratorSettings += "server_power_apis",
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
   )
   .dependsOn(metric, stream)
@@ -130,7 +132,7 @@ lazy val kvdbFdb = Build
 lazy val graphql = Build
   .defineProject("graphql")
   .settings(
-    libraryDependencies ++= calibanDeps
+    libraryDependencies ++= calibanDeps ++ circeDeps ++ jsoniterDeps
   )
   .dependsOn(fp, stream)
 
@@ -168,7 +170,7 @@ lazy val kvdbCodecPrimitiveValue = Build
 lazy val metric = Build
   .defineProject("metric")
   .settings(
-    libraryDependencies ++= prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps ++ akkaStreamDeps ++ scalatestDeps.map(
+    libraryDependencies ++= prometheusClientDeps ++ pureconfigDeps ++ zioCoreDeps ++ pekkoStreamDeps ++ scalatestDeps.map(
       _ % "test"
     )
   )
@@ -184,7 +186,7 @@ lazy val prometheus = Build
   .defineProject("prometheus")
   .settings(Build.createScalapbSettings(withGrpc = false))
   .settings(
-    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
+    dependencyOverrides ++= pekkoDiscoveryOverrideDeps,
     libraryDependencies ++= scalapbRuntimeDeps
   )
 
@@ -206,12 +208,12 @@ lazy val jwt = Build
 
 lazy val sample = Build
   .defineProject("sample")
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(PekkoGrpcPlugin)
   .settings(
-    dependencyOverrides ++= akkaDiscoveryOverrideDeps,
+    dependencyOverrides ++= pekkoDiscoveryOverrideDeps,
     libraryDependencies ++= janinoDeps ++ pprintDeps ++ zioMagicDeps,
     publish / skip := true,
-    akkaGrpcCodeGeneratorSettings += "server_power_apis",
+    pekkoGrpcCodeGeneratorSettings += "server_power_apis",
     scalacOptions ++= Seq(
       s"-Wconf:src=${(Compile / sourceManaged).value.getCanonicalPath}/dev/chopsticks/sample/app/proto/.*&cat=deprecation:s"
     ),
@@ -256,7 +258,7 @@ lazy val avro4s = Build
 lazy val openapi = Build
   .defineProject("openapi")
   .settings(
-    libraryDependencies ++= tapirDeps ++ zioSchemaDeps
+    libraryDependencies ++= circeDeps ++ tapirDeps ++ zioSchemaDeps
   )
   .dependsOn(util)
 
@@ -272,7 +274,6 @@ lazy val root = (project in file("."))
     name := "chopsticks",
     publish / skip := true,
     dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
-//    Build.ossPublishSettings
   )
   .aggregate(
     util,

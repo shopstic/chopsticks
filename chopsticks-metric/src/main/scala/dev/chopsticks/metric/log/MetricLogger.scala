@@ -1,13 +1,12 @@
 package dev.chopsticks.metric.log
 
-import dev.chopsticks.fp.ZRunnable
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.metric.{MetricCounter, MetricGauge, MetricReference}
+import dev.chopsticks.metric.log.MetricLogger.PeriodicValue
 import izumi.logstage.api.IzLogger
 import izumi.logstage.api.Log.{CustomContext, LogArg}
 import izumi.logstage.api.rendering.{AnyEncoded, StrictEncoded}
-import zio.clock.Clock
-import zio.{Schedule, UIO, ULayer, URIO, URLayer, URManaged, ZIO, ZLayer, ZManaged, ZRef}
+import zio.{Ref, Schedule, UIO, ULayer, URIO, URLayer, ZIO, ZLayer}
 
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicReference
@@ -15,6 +14,10 @@ import scala.annotation.nowarn
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters._
+
+trait MetricLogger {
+  def periodicallyCollect[R](collect: URIO[R, ListMap[String, PeriodicValue]])(implicit logCtx: LogCtx): URIO[R, Unit]
+}
 
 object MetricLogger {
   sealed trait PeriodicValue extends Product with Serializable
@@ -88,16 +91,11 @@ object MetricLogger {
     )
   }
 
-  trait Service {
-    def periodicallyCollect[R](collect: URIO[R, ListMap[String, PeriodicValue]])(implicit logCtx: LogCtx): URIO[R, Unit]
-  }
-
-  def get: URIO[MetricLogger, Service] = ZIO.access[MetricLogger](_.get)
-  def getManaged: URManaged[MetricLogger, Service] = ZManaged.access[MetricLogger](_.get)
+  def get: URIO[MetricLogger, MetricLogger] = ZIO.service[MetricLogger]
 
   def noop: ULayer[MetricLogger] = {
     ZLayer.succeed {
-      new Service {
+      new MetricLogger {
         override def periodicallyCollect[R](collect: URIO[R, ListMap[String, PeriodicValue]])(implicit
           logCtx: LogCtx
         ): URIO[R, Unit] = {
@@ -110,67 +108,61 @@ object MetricLogger {
   def periodicallyCollect[R](collect: URIO[R, ListMap[String, PeriodicValue]])(implicit
     logCtx: LogCtx
   ): URIO[R with MetricLogger, Unit] = {
-    ZIO.access[MetricLogger](_.get).flatMap(_.periodicallyCollect(collect))
+    ZIO.service[MetricLogger].flatMap(_.periodicallyCollect(collect))
   }
 
   def live(
     interval: FiniteDuration = 1.second,
     log: (IzLogger, ListMap[String, AnyEncoded]) => UIO[Unit] = defaultLog
-  ): URLayer[Clock with IzLogging, MetricLogger] = {
-    def run(collect: UIO[ListMap[String, PeriodicValue]], logCtx: LogCtx) = {
+  ): URLayer[IzLogging, MetricLogger] = {
+    val effect =
       for {
-        logger <- IzLogging.loggerWithContext(logCtx)
-        priorSnapRef <- ZRef.make(ListMap.empty[String, PeriodicValue])
-        collectAndAccumulate = {
-          for {
-            snapshot <- collect
-            output <- priorSnapRef.modify { priorSnapshot =>
-              val next = snapshot.map {
-                case (k, PeriodicSnapshot(v)) =>
-                  (k, StrictEncoded.to(v))
-
-                case (k, PeriodicRate(values)) =>
-                  val rate = values.foldLeft(0d) {
-                    case (acc, (mk, mv)) =>
-                      val priorValue = priorSnapshot.get(k) match {
-                        case Some(PeriodicRate(priorValues)) => priorValues.getOrElse(mk, 0d)
-                        case _ => 0d
-                      }
-                      acc + mv - priorValue
-                  }
-                  (k, StrictEncoded.to(rate))
-              }
-              (next, snapshot)
-            }
-          } yield output
-        }
-        _ <- {
-          collectAndAccumulate
-            .tap(log(logger, _))
-            .repeat(Schedule.spaced(interval.toJava))
-            .unit
-        }
-      } yield ()
-    }
-
-    val runnable = ZRunnable(run _)
-
-    runnable.toLayer { fn =>
-      new Service {
+        izLogging <- ZIO.service[IzLogging]
+      } yield new MetricLogger {
         override def periodicallyCollect[R](collect: URIO[R, ListMap[String, PeriodicValue]])(implicit
           logCtx: LogCtx
-        ): URIO[R, Unit] = {
+        ) = {
           for {
-            env <- ZIO.environment[R]
-            _ <- fn(collect.provide(env), logCtx)
+            priorSnapRef <- Ref.make(ListMap.empty[String, PeriodicValue])
+            logger = izLogging.loggerWithCtx(logCtx)
+            collectAndAccumulate = {
+              for {
+                snapshot <- collect
+                output <- priorSnapRef.modify { priorSnapshot =>
+                  val next = snapshot.map {
+                    case (k, PeriodicSnapshot(v)) =>
+                      (k, StrictEncoded.to(v))
+
+                    case (k, PeriodicRate(values)) =>
+                      val rate = values.foldLeft(0d) {
+                        case (acc, (mk, mv)) =>
+                          val priorValue = priorSnapshot.get(k) match {
+                            case Some(PeriodicRate(priorValues)) => priorValues.getOrElse(mk, 0d)
+                            case _ => 0d
+                          }
+                          acc + mv - priorValue
+                      }
+                      (k, StrictEncoded.to(rate))
+                  }
+                  (next, snapshot)
+                }
+              } yield output
+            }
+            _ <- {
+              collectAndAccumulate
+                .tap(log(logger, _))
+                .repeat(Schedule.spaced(interval.toJava))
+                .unit
+            }
           } yield ()
         }
       }
-    }
+
+    ZLayer(effect)
   }
 
   private def defaultLog(logger: IzLogger, pairs: ListMap[String, AnyEncoded]): UIO[Unit] = {
-    UIO {
+    ZIO.succeed {
       val logArgs = pairs.map { case (k, v) =>
         LogArg(Seq(k), v.value, hiddenName = false, v.codec)
       }.toList

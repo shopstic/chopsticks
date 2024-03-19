@@ -31,7 +31,7 @@ object DstreamStateMetricsManager {
   import DstreamStateMetrics._
 
   def live: RLayer[MetricRegistryFactory[DstreamStateMetric], DstreamStateMetricsManager] = {
-    MetricServiceManager.live((registry: MetricRegistry.Service[DstreamStateMetric], config: String) => {
+    MetricServiceManager.live((registry: MetricRegistry[DstreamStateMetric], config: String) => {
       val labels = LabelValues.of(Labels.serviceId -> config)
 
       new DstreamStateMetrics {

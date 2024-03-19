@@ -3,7 +3,6 @@ package dev.chopsticks.kvdb.rocksdb
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{ArrayList => JavaArrayList}
-
 import better.files.File
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.kvdb.rocksdb.RocksdbDatabase.{DEFAULT_COLUMN_NAME, RocksdbDatabaseConfig}
@@ -17,11 +16,9 @@ import dev.chopsticks.kvdb.util.KvdbException.{
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbMaterialization}
 import eu.timepit.refined.auto._
 import org.rocksdb._
-import zio.blocking.{blocking, Blocking}
-import zio.clock.Clock
-import zio.internal.Executor
-import zio.{RIO, Schedule, Task, UIO, ZIO, ZManaged}
+import zio.{durationInt, Executor, RIO, Schedule, Scope, ZIO}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.util.Failure
 
@@ -85,31 +82,32 @@ object RocksdbDatabaseManager {
     }
 
     def obtain(): ZIO[Any, Throwable, RocksdbContext[CF]] = {
-      UIO(isClosed.get)
+      ZIO.succeed(isClosed.get)
         .flatMap { isClosed =>
-          if (isClosed) Task.fail(KvdbClosedException)
+          if (isClosed) ZIO.fail(KvdbClosedException)
           else ZIO.succeed(this)
         }
     }
 
-    def close(): ZIO[Blocking with Clock, Throwable, Unit] = {
-      import zio.duration._
-
+    @nowarn("cat=lint-infer-any")
+    def close(): ZIO[Any, Throwable, Unit] = {
       for {
-        _ <- Task(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
-          Task.fail(KvdbClosedException).unless(isClosed)
+        _ <- ZIO.attempt(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
+          ZIO.fail(KvdbClosedException).unless(isClosed)
         }
-        _ <- Task(dbCloseSignal.tryComplete(Failure(KvdbClosedException)))
-        _ <- Task(dbCloseSignal.hasNoListeners)
+        _ <- ZIO.attempt(dbCloseSignal.tryComplete(Failure(KvdbClosedException)))
+        _ <- ZIO.attempt(dbCloseSignal.hasNoListeners)
           .repeat(Schedule.fixed(100.millis).untilInput(identity))
-        _ <- Task {
-          val dbHandle = txDb.getOrElse(db)
-          stats.close()
-          columnHandleMap.values.foreach { c => dbHandle.flush(new FlushOptions().setWaitForFlush(true), c) }
-          columnHandleMap.foreach(_._2.close())
-          dbHandle.flushWal(true)
-          dbHandle.closeE()
-        }.lock(ioExecutor)
+        _ <- ZIO
+          .attempt {
+            val dbHandle = txDb.getOrElse(db)
+            stats.close()
+            columnHandleMap.values.foreach { c => dbHandle.flush(new FlushOptions().setWaitForFlush(true), c) }
+            columnHandleMap.foreach(_._2.close())
+            dbHandle.flushWal(true)
+            dbHandle.closeE()
+          }
+          .onExecutor(ioExecutor)
       } yield ()
     }
   }
@@ -130,15 +128,15 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
 ) extends StrictLogging {
   type CF = BCF[_, _]
 
-  def managedContext: ZManaged[Blocking with Clock, Throwable, RocksdbContext[CF]] = {
-    ZManaged.make(open())(_.close().orDie)
+  def managedContext: ZIO[Scope, Throwable, RocksdbContext[CF]] = {
+    ZIO.acquireRelease(open())(_.close().orDie)
   }
 
   private def columnFamilyWithName(name: String): Option[CF] =
     materialization.columnFamilySet.value.find(cf => getColumnFamilyName(cf) == name)
 
-  private def readColumnFamilyOptionsFromDisk(dbPath: String): RIO[Blocking, Map[String, Map[String, String]]] = {
-    blocking(Task {
+  private def readColumnFamilyOptionsFromDisk(dbPath: String): RIO[Any, Map[String, Map[String, String]]] = {
+    ZIO.blocking(ZIO.attempt {
       val fileList = File(dbPath).list
       val prefix = "OPTIONS-"
       val optionsFiles = fileList.filter(_.name.startsWith(prefix))
@@ -201,101 +199,102 @@ final class RocksdbDatabaseManager[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_
   }
 
   private def open() = {
-    Task {
-      RocksDB.loadLibrary()
+    ZIO
+      .attempt {
+        RocksDB.loadLibrary()
 
-      val columnOptions: Map[BCF[_, _], ColumnFamilyOptions] = materialization.columnFamilyConfigMap.map
-      val columnNames = columnOptions.keys.map(getColumnFamilyName).toSet
-      val columnOptionsAsList = columnOptions.toList
-      val descriptors = columnOptionsAsList.map {
-        case (cf, colOptions) =>
-          new ColumnFamilyDescriptor(
-            getColumnFamilyName(cf).getBytes(UTF_8),
-            colOptions.setDisableAutoCompactions(config.startWithBulkInserts)
-          )
-      }
-
-      val dbOptions: DBOptions = {
-        val coreCount = Runtime.getRuntime.availableProcessors()
-        val options = new DBOptions()
-
-        val totalWriteBufferSize = columnOptions.values.map(_.writeBufferSize()).sum
-
-        val tunedOptions = options
-          .setIncreaseParallelism(coreCount)
-          .setMaxBackgroundJobs(coreCount)
-          .setMaxSubcompactions(coreCount)
-          .setMaxOpenFiles(-1)
-          .setKeepLogFileNum(3)
-          .setMaxTotalWalSize(totalWriteBufferSize * 8)
-
-        if (config.useDirectIo) {
-          tunedOptions
-            .setUseDirectIoForFlushAndCompaction(true)
-            .setUseDirectReads(true)
-            .setCompactionReadaheadSize(2 * 1024 * 1024)
-            .setWritableFileMaxBufferSize(1024 * 1024)
-        }
-        else tunedOptions
-      }
-
-      val exists = File(config.path + "/CURRENT").exists
-
-      if (!exists && config.readOnly)
-        throw InvalidKvdbArgumentException(s"Opening database at ${config.path} as readyOnly but it doesn't exist")
-
-      def openKvdb() = {
-        val handles = new JavaArrayList[ColumnFamilyHandle]
-
-        val _ = dbOptions
-          .setStatsDumpPeriodSec(60)
-          .setStatistics(new Statistics())
-
-        val db = {
-          if (config.readOnly) RocksDB.openReadOnly(dbOptions, config.path, descriptors.asJava, handles)
-          else
-            OptimisticTransactionDB.open(dbOptions.setCreateIfMissing(true), config.path, descriptors.asJava, handles)
-        }
-
-        val columnHandles = handles.asScala.toList
-
-        val columnHandleMap = columnOptionsAsList.map(_._1).zip(columnHandles).toMap
-
-        (db, columnHandleMap, dbOptions.statistics())
-      }
-
-      def listExistingColumnNames(): List[String] = {
-        RocksDB.listColumnFamilies(new Options(), config.path).asScala.map(byteArrayToString).toList
-      }
-
-      if (!config.readOnly) {
-        if (exists) {
-          val existingColumnNames = listExistingColumnNames().toSet
-
-          if (columnNames != existingColumnNames) {
-            syncColumnFamilies(descriptors, existingColumnNames)
-
-            val doubleCheckingColumnNames = listExistingColumnNames().toSet
-            assert(
-              columnNames == doubleCheckingColumnNames,
-              s"Trying to open with $columnNames but existing columns are $doubleCheckingColumnNames"
+        val columnOptions: Map[BCF[_, _], ColumnFamilyOptions] = materialization.columnFamilyConfigMap.map
+        val columnNames = columnOptions.keys.map(getColumnFamilyName).toSet
+        val columnOptionsAsList = columnOptions.toList
+        val descriptors = columnOptionsAsList.map {
+          case (cf, colOptions) =>
+            new ColumnFamilyDescriptor(
+              getColumnFamilyName(cf).getBytes(UTF_8),
+              colOptions.setDisableAutoCompactions(config.startWithBulkInserts)
             )
+        }
+
+        val dbOptions: DBOptions = {
+          val coreCount = Runtime.getRuntime.availableProcessors()
+          val options = new DBOptions()
+
+          val totalWriteBufferSize = columnOptions.values.map(_.writeBufferSize()).sum
+
+          val tunedOptions = options
+            .setIncreaseParallelism(coreCount)
+            .setMaxBackgroundJobs(coreCount)
+            .setMaxSubcompactions(coreCount)
+            .setMaxOpenFiles(-1)
+            .setKeepLogFileNum(3)
+            .setMaxTotalWalSize(totalWriteBufferSize * 8)
+
+          if (config.useDirectIo) {
+            tunedOptions
+              .setUseDirectIoForFlushAndCompaction(true)
+              .setUseDirectReads(true)
+              .setCompactionReadaheadSize(2 * 1024 * 1024)
+              .setWritableFileMaxBufferSize(1024 * 1024)
+          }
+          else tunedOptions
+        }
+
+        val exists = File(config.path + "/CURRENT").exists
+
+        if (!exists && config.readOnly)
+          throw InvalidKvdbArgumentException(s"Opening database at ${config.path} as readyOnly but it doesn't exist")
+
+        def openKvdb() = {
+          val handles = new JavaArrayList[ColumnFamilyHandle]
+
+          val _ = dbOptions
+            .setStatsDumpPeriodSec(60)
+            .setStatistics(new Statistics())
+
+          val db = {
+            if (config.readOnly) RocksDB.openReadOnly(dbOptions, config.path, descriptors.asJava, handles)
+            else
+              OptimisticTransactionDB.open(dbOptions.setCreateIfMissing(true), config.path, descriptors.asJava, handles)
+          }
+
+          val columnHandles = handles.asScala.toList
+
+          val columnHandleMap = columnOptionsAsList.map(_._1).zip(columnHandles).toMap
+
+          (db, columnHandleMap, dbOptions.statistics())
+        }
+
+        def listExistingColumnNames(): List[String] = {
+          RocksDB.listColumnFamilies(new Options(), config.path).asScala.map(byteArrayToString).toList
+        }
+
+        if (!config.readOnly) {
+          if (exists) {
+            val existingColumnNames = listExistingColumnNames().toSet
+
+            if (columnNames != existingColumnNames) {
+              syncColumnFamilies(descriptors, existingColumnNames)
+
+              val doubleCheckingColumnNames = listExistingColumnNames().toSet
+              assert(
+                columnNames == doubleCheckingColumnNames,
+                s"Trying to open with $columnNames but existing columns are $doubleCheckingColumnNames"
+              )
+            }
+            else {
+              assert(
+                columnNames == existingColumnNames,
+                s"Trying to open with $columnNames but existing columns are $existingColumnNames"
+              )
+            }
           }
           else {
-            assert(
-              columnNames == existingColumnNames,
-              s"Trying to open with $columnNames but existing columns are $existingColumnNames"
-            )
+            syncColumnFamilies(descriptors, Set.empty[String])
           }
         }
-        else {
-          syncColumnFamilies(descriptors, Set.empty[String])
-        }
-      }
 
-      openKvdb()
-    }
-      .lock(ioExecutor)
+        openKvdb()
+      }
+      .onExecutor(ioExecutor)
       .flatMap {
         case (db, columnHandleMap, stats) =>
           readColumnFamilyOptionsFromDisk(config.path)

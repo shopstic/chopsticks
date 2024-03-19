@@ -29,9 +29,10 @@ object GraphQlSerDes {
     selection match {
       case x: SelectionBuilder.Field[_, A] @unchecked => x.fromGraphQL(value)
       case x: SelectionBuilder.Mapping[_, Any, A] @unchecked => x.fromGraphQL(value)
-      case x: SelectionBuilder.Concat[_, Any, Any] @unchecked =>
-        x.fromGraphQL(value).asInstanceOf[Either[DecodingError, A]]
       case SelectionBuilder.Pure(a) => Right(a)
+      case _ =>
+        // todo [migration]
+        ???
     }
   }
 

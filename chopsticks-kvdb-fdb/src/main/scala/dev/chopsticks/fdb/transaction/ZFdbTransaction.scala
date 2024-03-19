@@ -3,8 +3,7 @@ package dev.chopsticks.fdb.transaction
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.ColumnFamily
 import dev.chopsticks.kvdb.fdb.FdbDatabase
-import zio.clock.Clock
-import zio.{Fiber, RIO, ZIO, ZRef}
+import zio.{Fiber, RIO, Ref, Unsafe, ZIO}
 
 import scala.jdk.FutureConverters._
 
@@ -16,21 +15,23 @@ object ZFdbTransaction {
 final class ZFdbTransaction[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](backend: FdbDatabase[BCF, CFS]) {
   def read[R, V](fn: ZFdbReadApi[BCF] => RIO[R, V]): RIO[R, V] = {
     for {
-      innerFibRef <- ZRef.make(Option.empty[Fiber.Runtime[Throwable, V]])
+      innerFibRef <- Ref.make(Option.empty[Fiber.Runtime[Throwable, V]])
       fib <- ZIO
         .runtime[R]
-        .flatMap { env =>
+        .flatMap { rt =>
           backend.uninterruptibleRead(api => {
-            env
-              .unsafeRunToFuture(
-                for {
-                  innerFib <- fn(new ZFdbReadApi[BCF](api)).fork
-                  _ <- innerFibRef.set(Some(innerFib))
-                  ret <- innerFib.join
-                } yield ret
-              )
-              .asJava
-              .toCompletableFuture
+            Unsafe.unsafe { implicit unsafe =>
+              rt
+                .unsafe.runToFuture(
+                  for {
+                    innerFib <- fn(new ZFdbReadApi[BCF](api)).fork
+                    _ <- innerFibRef.set(Some(innerFib))
+                    ret <- innerFib.join
+                  } yield ret
+                )
+                .asJava
+                .toCompletableFuture
+            }
           })
         }
         .fork
@@ -44,12 +45,14 @@ final class ZFdbTransaction[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]](
   def write[R, V](
     fn: ZFdbWriteApi[BCF] => RIO[R, V],
     name: => String = "ZFdbTransaction"
-  ): RIO[IzLogging with Clock with R, V] = {
-    ZIO.runtime[R].flatMap { env =>
+  ): RIO[IzLogging with R, V] = {
+    ZIO.runtime[R].flatMap { rt =>
       backend.write(
         name,
         api => {
-          env.unsafeRunToFuture(fn(new ZFdbWriteApi[BCF](api))).asJava.toCompletableFuture
+          Unsafe.unsafe { implicit unsafe =>
+            rt.unsafe.runToFuture(fn(new ZFdbWriteApi[BCF](api))).asJava.toCompletableFuture
+          }
         }
       )
     }

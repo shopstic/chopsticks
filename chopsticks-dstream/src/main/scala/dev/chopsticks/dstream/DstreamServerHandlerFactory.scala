@@ -1,24 +1,24 @@
 package dev.chopsticks.dstream
 
-import akka.NotUsed
-import akka.grpc.ServiceDescription
-import akka.grpc.scaladsl.Metadata
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.stream.scaladsl.Source
-import zio.{UIO, URIO, URLayer, ZManaged}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.grpc.ServiceDescription
+import org.apache.pekko.grpc.scaladsl.Metadata
+import org.apache.pekko.http.scaladsl.model.{HttpRequest, HttpResponse}
+import org.apache.pekko.stream.scaladsl.Source
+import zio.{UIO, URIO, URLayer, ZIO, ZLayer}
 
 import scala.concurrent.Future
+
+trait DstreamServerHandlerFactory[Assignment, Result] {
+  def create(handle: (Source[Result, NotUsed], Metadata) => Source[Assignment, NotUsed])
+    : UIO[DstreamServerHandlerFactory.DstreamServerPartialHandler]
+}
 
 object DstreamServerHandlerFactory {
   final case class DstreamServerPartialHandler(
     handler: PartialFunction[HttpRequest, Future[HttpResponse]],
     serviceDescription: ServiceDescription
   )
-
-  trait Service[Assignment, Result] {
-    def create(handle: (Source[Result, NotUsed], Metadata) => Source[Assignment, NotUsed])
-      : UIO[DstreamServerPartialHandler]
-  }
 
   final class DstreamServerApiBuilder[Assignment, Result] {
     def apply[R](factory: ((
@@ -31,16 +31,17 @@ object DstreamServerHandlerFactory {
       t1: zio.Tag[Assignment],
       t2: zio.Tag[Result]
     ): URLayer[R, DstreamServerHandlerFactory[Assignment, Result]] = {
-      ZManaged
+      val effect = ZIO
         .environment[R].map { env =>
-          new Service[Assignment, Result] {
+          new DstreamServerHandlerFactory[Assignment, Result] {
             override def create(handle: (Source[Result, NotUsed], Metadata) => Source[Assignment, NotUsed])
               : UIO[DstreamServerPartialHandler] = {
-              factory(handle).provide(env)
+              factory(handle).provideEnvironment(env)
             }
           }
         }
-        .toLayer[Service[Assignment, Result]]
+
+      ZLayer(effect)
     }
   }
 

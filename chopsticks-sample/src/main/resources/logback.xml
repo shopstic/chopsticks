@@ -7,7 +7,7 @@
     <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
       <evaluator>
         <expression>
-          return logger == "akka.util.ManifestInfo" &amp;&amp; message.contains("Detected possible incompatible versions on the classpath");
+          return logger == "org.apache.pekko.util.ManifestInfo" &amp;&amp; message.contains("Detected possible incompatible versions on the classpath");
         </expression>
       </evaluator>
       <OnMismatch>NEUTRAL</OnMismatch>
@@ -16,7 +16,7 @@
     <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
       <evaluator>
         <expression>
-          return logger == "akka.stream.impl.PhasedFusingActorMaterializer" &amp;&amp; message.contains("Fuzzing mode is enabled on this system");
+          return logger == "org.apache.pekko.stream.impl.PhasedFusingActorMaterializer" &amp;&amp; message.contains("Fuzzing mode is enabled on this system");
         </expression>
       </evaluator>
       <OnMismatch>NEUTRAL</OnMismatch>
@@ -35,7 +35,7 @@
   </root>
 
   <logger name="io.netty" level="${log.netty:-inherited}"/>
-  <logger name="akka.actor.CoordinatedShutdown" level="DEBUG"/>
+  <logger name="org.apache.pekko.actor.CoordinatedShutdown" level="DEBUG"/>
   <logger name="io.grpc.netty" level="${log.netty:-inherited}"/>
   <logger name="akka" level="${log.akka:-inherited}" additivity="false">
     <appender-ref ref="STDOUT_AKKA"/>

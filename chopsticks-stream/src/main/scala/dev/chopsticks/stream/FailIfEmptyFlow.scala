@@ -1,10 +1,10 @@
 package dev.chopsticks.stream
 
-import akka.NotUsed
-import akka.stream.ActorAttributes.SupervisionStrategy
-import akka.stream.scaladsl.Flow
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
-import akka.stream._
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.ActorAttributes.SupervisionStrategy
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
+import org.apache.pekko.stream._
 
 import scala.util.control.{NoStackTrace, NonFatal}
 

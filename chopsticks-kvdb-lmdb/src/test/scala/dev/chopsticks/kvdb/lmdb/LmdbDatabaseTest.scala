@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.lmdb
 
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, CounterCf, LookupCf, MaxCf, MinCf, PlainCf}
 import dev.chopsticks.kvdb.codec.little_endian.{longValueSerdes, yearMonthValueSerdes}
@@ -9,8 +9,9 @@ import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest, TestDatabase}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import squants.information.InformationConversions._
-import zio.ZManaged
 import dev.chopsticks.kvdb.codec.primitive._
+import zio.{Scope, ZIO}
+
 import scala.concurrent.duration._
 
 object LmdbDatabaseTest {
@@ -26,7 +27,7 @@ object LmdbDatabaseTest {
     }
   }
 
-  val managedDb: ZManaged[ZAkkaAppEnv with KvdbIoThreadPool, Throwable, TestDatabase.Db] = {
+  val managedDb: ZIO[ZAkkaAppEnv with KvdbIoThreadPool with Scope, Throwable, TestDatabase.Db] = {
     for {
       dir <- KvdbTestSuite.managedTempDir
       db <- LmdbDatabase.manage(

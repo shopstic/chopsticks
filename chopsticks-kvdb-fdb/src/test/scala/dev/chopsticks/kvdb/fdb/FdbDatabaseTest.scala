@@ -1,13 +1,14 @@
 package dev.chopsticks.kvdb.fdb
 
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.TestDatabase.{BaseCf, CfSet, CounterCf, LookupCf, MaxCf, MinCf, PlainCf}
 import dev.chopsticks.kvdb.util.KvdbIoThreadPool
 import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest, TestDatabase}
-import zio.{RManaged, ZIO, ZManaged}
+import zio.{RIO, Scope, ZIO}
 import dev.chopsticks.kvdb.codec.primitive._
 import dev.chopsticks.kvdb.codec.little_endian.{longValueSerdes, yearMonthValueSerdes}
+
 import java.util.UUID
 
 object FdbDatabaseTest {
@@ -27,14 +28,14 @@ object FdbDatabaseTest {
     override val keyspacesWithVersionstampValue = Set.empty
   }
 
-  val managedDb: RManaged[ZAkkaAppEnv with KvdbIoThreadPool, FdbDatabase[
+  val managedDb: RIO[ZAkkaAppEnv with KvdbIoThreadPool with Scope, FdbDatabase[
     TestDatabase.BaseCf,
     TestDatabase.CfSet
   ]] = {
     for {
-      logger <- IzLogging.zioLogger.toManaged_
-      rootDirectoryPath <- ZManaged.succeed(s"chopsticks-test-${UUID.randomUUID()}")
-      _ <- logger.info(s"Using $rootDirectoryPath").toManaged_
+      logger <- IzLogging.zioLogger
+      rootDirectoryPath <- ZIO.succeed(s"chopsticks-test-${UUID.randomUUID()}")
+      _ <- logger.info(s"Using $rootDirectoryPath")
       database <- FdbDatabase.manage(
         dbMaterialization,
         FdbDatabase.FdbDatabaseConfig(
@@ -43,8 +44,8 @@ object FdbDatabaseTest {
           stopNetworkOnClose = false
         )
       )
-      _ <- ZManaged.make(ZIO.succeed(database)) { db =>
-        ZIO.foreachPar_(dbMaterialization.columnFamilySet.value) { column => db.dropColumnFamily(column).orDie }
+      _ <- ZIO.acquireRelease(ZIO.succeed(database)) { db =>
+        ZIO.foreachParDiscard(dbMaterialization.columnFamilySet.value) { column => db.dropColumnFamily(column).orDie }
       }
     } yield database.asInstanceOf[FdbDatabase[TestDatabase.BaseCf, TestDatabase.CfSet]]
   }

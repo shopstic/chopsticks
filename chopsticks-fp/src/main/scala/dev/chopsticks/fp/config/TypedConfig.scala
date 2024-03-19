@@ -7,17 +7,17 @@ import dev.chopsticks.util.config.PureconfigLoader.PureconfigLoadFailure
 import izumi.logstage.api.Log
 import japgolly.microlibs.utils.AsciiTable
 import pureconfig.ConfigReader
-import zio.{RLayer, Task, URIO, ZIO}
+import zio.{RLayer, URIO, ZIO, ZLayer}
 
 import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
-object TypedConfig {
-  trait Service[Cfg] {
-    def config: Cfg
-  }
+trait TypedConfig[Cfg] {
+  def config: Cfg
+}
 
-  def get[Cfg: zio.Tag]: URIO[TypedConfig[Cfg], Cfg] = ZIO.access[TypedConfig[Cfg]](_.get.config)
+object TypedConfig {
+  def get[Cfg: zio.Tag]: URIO[TypedConfig[Cfg], Cfg] = ZIO.serviceWith[TypedConfig[Cfg]](_.config)
 
   def live[Cfg: ConfigReader: zio.Tag](
     configNamespace: String = "app",
@@ -27,7 +27,7 @@ object TypedConfig {
     val effect = for {
       hoconConfig <- HoconConfig.get
       logger <- IzLogging.logger
-      result <- Task.effectSuspend {
+      result <- ZIO.suspend {
         val debugInfo = AsciiTable(
           List("Key", "Value", "Origin") ::
             hoconConfig
@@ -68,11 +68,11 @@ object TypedConfig {
           }
       }
     } yield {
-      new Service[Cfg] {
+      new TypedConfig[Cfg] {
         override val config: Cfg = result
       }
     }
 
-    effect.toLayer
+    ZLayer(effect)
   }
 }

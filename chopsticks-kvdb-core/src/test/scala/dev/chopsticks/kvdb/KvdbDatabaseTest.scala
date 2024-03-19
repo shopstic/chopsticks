@@ -1,12 +1,12 @@
 package dev.chopsticks.kvdb
 
-import akka.actor.{ActorSystem, Status}
-import akka.stream.KillSwitches
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
-import akka.testkit.TestProbe
+import org.apache.pekko.actor.{ActorSystem, Status}
+import org.apache.pekko.stream.KillSwitches
+import org.apache.pekko.stream.scaladsl.{Flow, Keep, Sink, Source}
+import org.apache.pekko.testkit.TestProbe
 import com.google.protobuf.ByteString
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.kvdb.codec.KeyConstraints
 import dev.chopsticks.kvdb.codec.primitive._
@@ -21,7 +21,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
 import org.scalatest.{Assertion, Inside, Succeeded}
 import squants.information.InformationConversions._
-import zio.{RIO, Task, ZManaged}
+import zio.{RIO, Scope, ZIO}
 
 import java.nio.charset.StandardCharsets.UTF_8
 import scala.collection.immutable
@@ -60,7 +60,7 @@ object KvdbDatabaseTest extends Matchers with Inside {
 
   private def collectPairs(
     source: Source[KvdbBatch, Any]
-  ): RIO[AkkaEnv with IzLogging, immutable.Seq[(Array[Byte], Array[Byte])]] = {
+  ): RIO[PekkoEnv with IzLogging, immutable.Seq[(Array[Byte], Array[Byte])]] = {
     source
       .toMat(collectSink)(Keep.right)
       .uninterruptibleRun
@@ -68,7 +68,7 @@ object KvdbDatabaseTest extends Matchers with Inside {
 
   private def collectValues(
     source: Source[KvdbValueBatch, Any]
-  ): RIO[AkkaEnv with IzLogging, immutable.Seq[Array[Byte]]] = {
+  ): RIO[PekkoEnv with IzLogging, immutable.Seq[Array[Byte]]] = {
     source
       .toMat(collectValuesSink)(Keep.right)
       .uninterruptibleRun
@@ -109,24 +109,23 @@ abstract private[kvdb] class KvdbDatabaseTest
     with KvdbTestSuite {
   import KvdbDatabaseTest._
 
-  protected def managedDb: ZManaged[ZAkkaAppEnv with KvdbIoThreadPool, Throwable, TestDatabase.Db]
+  protected def managedDb: ZIO[ZAkkaAppEnv with KvdbIoThreadPool with Scope, Throwable, TestDatabase.Db]
 
   protected def dbMat: TestDatabase.Materialization
 
   private lazy val defaultCf = dbMat.plain
   private lazy val lookupCf = dbMat.lookup
 
-  private lazy val withDb = createTestRunner(managedDb) { effect =>
-    import zio.magic._
-
-    effect.injectSome[ZAkkaAppEnv](
-      KvdbIoThreadPool.live
-    )
+  private lazy val withDb = createTestRunner[ZAkkaAppEnv with KvdbIoThreadPool, TestDatabase.Db](managedDb) {
+    effect =>
+      effect.provideSome[ZAkkaAppEnv](
+        KvdbIoThreadPool.live
+      )
   }
 
   "wrong column family" should {
     "not compile" in withDb { db =>
-      Task {
+      ZIO.attempt {
         val _ = db
         assertDoesNotCompile(
           """
@@ -840,7 +839,7 @@ abstract private[kvdb] class KvdbDatabaseTest
       val maxBatchBytes = 10.kb
 
       for {
-        tx <- Task {
+        tx <- ZIO.attempt {
           (1 to count)
             .foldLeft(db.transactionBuilder()) { (tx, i) =>
               val padded = s"%0${pad}d".format(i)
@@ -1030,7 +1029,7 @@ abstract private[kvdb] class KvdbDatabaseTest
       val maxBatchBytes = 10.kb
 
       for {
-        tx <- Task {
+        tx <- ZIO.attempt {
           (1 to count)
             .foldLeft(db.transactionBuilder()) { (tx, i) =>
               val padded = s"%0${pad}d".format(i)
@@ -1054,7 +1053,7 @@ abstract private[kvdb] class KvdbDatabaseTest
 
     "tail" in withDb { db =>
       for {
-        actorSystem <- AkkaEnv.actorSystem
+        actorSystem <- PekkoEnv.actorSystem
         source = db
           .tailSource(defaultCf, $$(_ ^= "bbbb", _ ^= "bbbb"))
           .collect { case Right(b) => b }
@@ -1071,9 +1070,9 @@ abstract private[kvdb] class KvdbDatabaseTest
             .run()
         }
         _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
-        _ <- Task(probe.expectNoMessage(100.millis))
+        _ <- ZIO.attempt(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "bbbb1", "bbbb1")
-        _ <- Task {
+        _ <- ZIO.attempt {
           val pair = probe.expectMsgPF(3.seconds) {
             case p => p.asInstanceOf[KvdbPair]
           }
@@ -1081,9 +1080,9 @@ abstract private[kvdb] class KvdbDatabaseTest
           byteArrayToString(pair._2) should equal("bbbb1")
         }
         _ <- db.putTask(defaultCf, "cccc1", "cccc1")
-        _ <- Task(probe.expectNoMessage(100.millis))
+        _ <- ZIO.attempt(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "bbbb2", "bbbb2")
-        lastPair <- Task(probe.expectMsgPF(3.seconds) {
+        lastPair <- ZIO.attempt(probe.expectMsgPF(3.seconds) {
           case p => p.asInstanceOf[KvdbPair]
         })
       } yield {
@@ -1096,7 +1095,7 @@ abstract private[kvdb] class KvdbDatabaseTest
 
     "tail last when empty" in withDb { db =>
       for {
-        actorSystem <- AkkaEnv.actorSystem
+        actorSystem <- PekkoEnv.actorSystem
         source = db
           .tailSource(defaultCf, $$(_.last, _.last))
           .collect {
@@ -1114,9 +1113,9 @@ abstract private[kvdb] class KvdbDatabaseTest
             .take(1)
             .runWith(Sink.actorRef(probe.ref, "completed", t => Status.Failure(t)))
         }
-        _ <- Task(probe.expectNoMessage(100.millis))
+        _ <- ZIO.attempt(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "aaaa", "aaaa")
-        pair <- Task {
+        pair <- ZIO.attempt {
           probe.expectMsgPF(1.second) {
             case p => p.asInstanceOf[KvdbPair]
           }
@@ -1159,7 +1158,7 @@ abstract private[kvdb] class KvdbDatabaseTest
 
     "tail" in withDb { db =>
       for {
-        actorSystem <- AkkaEnv.actorSystem
+        actorSystem <- PekkoEnv.actorSystem
         mat = {
           implicit val as: ActorSystem = actorSystem
           val source = db
@@ -1184,16 +1183,16 @@ abstract private[kvdb] class KvdbDatabaseTest
         }
         (probe, ks) = mat
         _ <- db.putTask(defaultCf, "cccc1", "cccc1")
-        _ <- Task(probe.expectNoMessage(100.millis))
+        _ <- ZIO.attempt(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "bbbb1", "bbbb1")
-        _ <- Task {
+        _ <- ZIO.attempt {
           val message = probe.expectMsgPF(3.seconds) {
             case p => p.asInstanceOf[(Int, KvdbPair)]
           }
           message should equal((1, Vector("bbbb1" -> "bbbb1")))
         }
         _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
-        lastMessage <- Task(probe.expectMsgPF(3.seconds) {
+        lastMessage <- ZIO.attempt(probe.expectMsgPF(3.seconds) {
           case p => p.asInstanceOf[(Int, KvdbPair)]
         })
       } yield {
@@ -1207,7 +1206,7 @@ abstract private[kvdb] class KvdbDatabaseTest
   "tailValuesSource" should {
     "tail" in withDb { db =>
       for {
-        actorSystem <- AkkaEnv.actorSystem
+        actorSystem <- PekkoEnv.actorSystem
         mat = {
           implicit val as: ActorSystem = actorSystem
           val source = db
@@ -1226,18 +1225,18 @@ abstract private[kvdb] class KvdbDatabaseTest
         }
         (probe, ks) = mat
         _ <- db.putTask(defaultCf, "aaaa1", "aaaa1")
-        _ <- Task(probe.expectNoMessage(100.millis))
+        _ <- ZIO.attempt(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "bbbb1", "bbbb1")
-        _ <- Task {
+        _ <- ZIO.attempt {
           val value = probe.expectMsgPF(3.seconds) {
             case p => p.asInstanceOf[Array[Byte]]
           }
           byteArrayToString(value) should equal("bbbb1")
         }
         _ <- db.putTask(defaultCf, "cccc1", "cccc1")
-        _ <- Task(probe.expectNoMessage(100.millis))
+        _ <- ZIO.attempt(probe.expectNoMessage(100.millis))
         _ <- db.putTask(defaultCf, "bbbb2", "bbbb2")
-        lastValue <- Task(probe.expectMsgPF(3.seconds) {
+        lastValue <- ZIO.attempt(probe.expectMsgPF(3.seconds) {
           case p => p.asInstanceOf[Array[Byte]]
         })
       } yield {

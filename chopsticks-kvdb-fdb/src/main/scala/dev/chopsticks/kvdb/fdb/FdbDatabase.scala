@@ -1,16 +1,16 @@
 package dev.chopsticks.kvdb.fdb
 
-import akka.stream.Attributes
-import akka.stream.scaladsl.{Merge, Source}
-import akka.util.Timeout
-import akka.{Done, NotUsed}
+import org.apache.pekko.stream.Attributes
+import org.apache.pekko.stream.scaladsl.{Merge, Source}
+import org.apache.pekko.util.Timeout
+import org.apache.pekko.{Done, NotUsed}
 import cats.syntax.show._
 import com.apple.foundationdb._
 import com.apple.foundationdb.directory.DirectoryLayer
 import com.apple.foundationdb.tuple.ByteArrayUtil
 import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.StrictLogging
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.util.TaskUtils
 import dev.chopsticks.fp.zio_ext._
@@ -26,11 +26,7 @@ import dev.chopsticks.kvdb.util.{KvdbCloseSignal, KvdbIoThreadPool}
 import dev.chopsticks.kvdb.{ColumnFamily, KvdbDatabase, KvdbMaterialization}
 import org.reactivestreams.Publisher
 import pureconfig.ConfigConvert
-import zio._
-import zio.blocking.{effectBlocking, Blocking}
-import zio.clock.Clock
-import zio.duration.Duration
-import zio.interop.reactivestreams.Adapters.{createSubscription, demandUnfoldSink}
+import zio.{Exit, RIO, Ref, Schedule, Scope, Task, Unsafe, ZIO}
 
 import java.nio.file.{Files, Paths}
 import java.nio.{ByteBuffer, ByteOrder}
@@ -39,6 +35,7 @@ import java.util
 import java.util.UUID
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
+import scala.annotation.nowarn
 import scala.collection.immutable.ArraySeq
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future, TimeoutException}
@@ -80,21 +77,20 @@ object FdbDatabase {
 
     private val isClosed = new AtomicBoolean(false)
 
-    def close(): ZIO[Blocking with Clock, Throwable, Unit] = {
-      val task = for {
-        _ <- Task(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
-          Task.fail(KvdbAlreadyClosedException("Database was already closed")).unless(isClosed)
+    @nowarn("cat=lint-infer-any")
+    def close(): ZIO[Any, Throwable, Unit] = {
+      for {
+        _ <- ZIO.attempt(isClosed.compareAndSet(false, true)).flatMap { isClosed =>
+          ZIO.fail(KvdbAlreadyClosedException("Database was already closed")).unless(isClosed)
         }
-        _ <- Task(dbCloseSignal.tryComplete(Failure(KvdbAlreadyClosedException("Database was already closed"))))
-        _ <- Task(dbCloseSignal.hasNoListeners)
+        _ <- ZIO.attempt(dbCloseSignal.tryComplete(Failure(KvdbAlreadyClosedException("Database was already closed"))))
+        _ <- ZIO.attempt(dbCloseSignal.hasNoListeners)
           .repeat(
             Schedule
-              .fixed(100.millis)
+              .fixed(zio.Duration.fromMillis(100L))
               .untilInput[Boolean](identity)
           )
       } yield ()
-
-      task
     }
 
     def hasVersionstampKey[CF <: BCF[_, _]](column: CF): Boolean = {
@@ -208,7 +204,7 @@ object FdbDatabase {
     materialization: KvdbMaterialization[BCF, CFS],
     config: FdbDatabaseConfig
   ): Task[Map[BCF[_, _], Array[Byte]]] = {
-    Task.fromCompletionStage[Map[BCF[_, _], Array[Byte]]] {
+    ZIO.fromCompletionStage[Map[BCF[_, _], Array[Byte]]] {
       db.runAsync { tx =>
         val rootDirectoryPath = config.rootDirectoryPath
         val directoryFuture =
@@ -244,33 +240,33 @@ object FdbDatabase {
 
   def fromConfig(
     config: FdbDatabaseConfig
-  ): RManaged[Blocking with IzLogging with Clock with KvdbIoThreadPool, Database] = {
+  ): RIO[IzLogging with Scope with KvdbIoThreadPool, Database] = {
     for {
-      ioThreadPool <- ZManaged.access[KvdbIoThreadPool](_.get)
-      ec = ioThreadPool.executor.asEC
+      ioThreadPool <- ZIO.service[KvdbIoThreadPool]
+      ec = ioThreadPool.executor.asExecutionContext
       executor = new ExecutionContextExecutor {
         override def reportFailure(cause: Throwable): Unit = ec.reportFailure(cause)
         override def execute(command: Runnable): Unit = ec.execute(command)
       }
       clusterFilePath <- config.clusterFilePath match {
         case Some(path) =>
-          ZManaged.make {
-            effectBlocking {
+          ZIO.acquireRelease {
+            ZIO.attemptBlocking {
               Files.writeString(Files.createTempFile("fdb-connection", ".fdb"), Files.readString(Paths.get(path)))
             }
           } { path =>
-            effectBlocking(Files.delete(path)).orDie
+            ZIO.attemptBlocking(Files.delete(path)).orDie
           }
             .map(Option(_))
         case _ =>
-          ZManaged.succeed(None)
+          ZIO.none
       }
-      db <- Managed.make {
-        ZIO.effectSuspend {
+      db <- ZIO.acquireRelease {
+        ZIO.suspend {
           val clientThreadCount =
             math.max(1, sys.env.getOrElse("FDB_NETWORK_OPTION_CLIENT_THREADS_PER_VERSION", "1").toInt)
 
-          effectBlocking {
+          ZIO.attemptBlocking {
             val pool = ArraySeq.tabulate(clientThreadCount)(_ =>
               clusterFilePath.fold(fdb.open(null, executor))(path => fdb.open(path.toString, executor))
             )
@@ -286,7 +282,7 @@ object FdbDatabase {
             .log(s"Open FDB database client_thread_count=$clientThreadCount")
         }
       } { db =>
-        effectBlocking {
+        ZIO.attemptBlocking {
           db.close()
           if (config.stopNetworkOnClose) {
             FDB.instance().stopNetwork()
@@ -301,39 +297,45 @@ object FdbDatabase {
     materialization: KvdbMaterialization[BCF, CFS] with FdbMaterialization[BCF],
     db: Database,
     config: FdbDatabaseConfig
-  ): ZManaged[AkkaEnv with Blocking with IzLogging with Clock, Throwable, KvdbDatabase[BCF, CFS]] = {
+  ): ZIO[PekkoEnv with IzLogging with Scope, Throwable, KvdbDatabase[BCF, CFS]] = {
     for {
-      ctx <- ZManaged
-        .makeInterruptible[AkkaEnv with Blocking with IzLogging with Clock, Throwable, FdbContext[BCF]] {
+      fdbContextRef <- Ref.make(Option.empty[FdbContext[BCF]])
+      ctx <- ZIO
+        .acquireReleaseInterruptible[PekkoEnv with IzLogging, IzLogging, Throwable, FdbContext[BCF]] {
           buildPrefixMap(db, materialization, config)
             .timeoutFail(new TimeoutException("Timed out building directory layer. Check connection to FDB?"))(
               config.initialConnectionTimeout.duration
             )
             .log("Build FDB directory map")
-            .map { prefixMap =>
-              FdbContext[BCF](
+            .flatMap { prefixMap =>
+              val result = FdbContext[BCF](
                 db = db,
                 prefixMap = prefixMap,
                 withVersionstampKeySet = materialization.keyspacesWithVersionstampKey.map(_.keyspace),
                 withVersionstampValueSet = materialization.keyspacesWithVersionstampValue.map(_.keyspace),
                 uuid = UUID.randomUUID()
               )
+              fdbContextRef.set(Some(result)).as(result)
             }
-        } { db =>
-          db.close()
-            .log("Close FDB context")
+        } {
+          fdbContextRef.get
+            .flatMap { db =>
+              db
+                .map(_.close()).getOrElse(ZIO.unit)
+                .log("Close FDB context")
+            }
             .orDie
         }
-      db <- ZManaged.fromEffect(ZIO.runtime[AkkaEnv with IzLogging with Clock].map { implicit rt =>
+      db <- ZIO.runtime[PekkoEnv with IzLogging].map { implicit rt =>
         new FdbDatabase(materialization, config.clientOptions, ctx)
-      })
+      }
     } yield db
   }
 
   def manage[BCF[A, B] <: ColumnFamily[A, B], CFS <: BCF[_, _]](
     materialization: KvdbMaterialization[BCF, CFS] with FdbMaterialization[BCF],
     config: FdbDatabaseConfig
-  ): ZManaged[AkkaEnv with Blocking with IzLogging with Clock with KvdbIoThreadPool, Throwable, KvdbDatabase[
+  ): ZIO[PekkoEnv with IzLogging with Scope with KvdbIoThreadPool, Throwable, KvdbDatabase[
     BCF,
     CFS
   ]] = {
@@ -354,7 +356,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   val clientOptions: KvdbClientOptions,
   val dbContext: FdbContext[BCF],
   ops: FdbOperations[BCF] = new FdbDefaultOperations[BCF]
-)(implicit rt: zio.Runtime[AkkaEnv with IzLogging with Clock])
+)(implicit rt: zio.Runtime[PekkoEnv with IzLogging])
     extends KvdbDatabase[BCF, CFS]
     with StrictLogging {
 
@@ -367,14 +369,14 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     new FdbDatabase[BCF, CFS](materialization, clientOptions, dbContext, modifier(ops))
   }
 
-  override def statsTask: Task[Map[(String, Map[String, String]), Double]] = Task {
+  override def statsTask: Task[Map[(String, Map[String, String]), Double]] = ZIO.attempt {
     Map(
       ("timestamp", Map.empty[String, String]) -> Instant.now.toEpochMilli.toDouble
     )
   }
 
   def uninterruptibleRead[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
-    Task
+    ZIO
       .fromCompletableFuture {
         dbContext.db
           .readAsync { tx =>
@@ -387,17 +389,21 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
   def read[V](fn: FdbReadApi[BCF] => CompletableFuture[V]): Task[V] = {
     for {
-      cancelRef <- ZRef.make(NOOP_CALLBACK)
-      fib <- Task
+      cancelRef <- Ref.make(NOOP_CALLBACK)
+      fib <- ZIO
         .fromCompletableFuture {
           dbContext.db
             .readAsync { tx =>
               val f = ops
                 .read[V](new FdbReadApi[BCF](if (clientOptions.useSnapshotReads) tx.snapshot() else tx, dbContext), fn)
 
-              rt.unsafeRun(cancelRef.set(() => {
-                val _ = f.cancel(true)
-              }))
+              Unsafe.unsafe { implicit unsafe =>
+                rt.unsafe
+                  .run(
+                    cancelRef.set(() => { val _ = f.cancel(true) })
+                  )
+                  .getOrThrowFiberFailure()
+              }
 
               f
             }
@@ -408,10 +414,10 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     } yield ret
   }
 
-  def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[IzLogging with Clock, V] = {
-    Task
-      .bracket(UIO(dbContext.db.createTransaction())) { tx =>
-        UIO(tx.close())
+  def write[V](name: => String, fn: FdbWriteApi[BCF] => CompletableFuture[V]): RIO[IzLogging, V] = {
+    ZIO
+      .acquireReleaseWith(ZIO.succeed(dbContext.db.createTransaction())) { tx =>
+        ZIO.succeed(tx.close())
       } { tx =>
         TaskUtils
           .fromUninterruptibleCompletableFuture(
@@ -441,14 +447,14 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
   ): Source[Option[Array[Byte]], Future[Done]] = {
     val prefixedKey = dbContext.prefixKey(column, key)
 
-    val watchTimeout = zio.duration.Duration.fromScala(clientOptions.watchTimeout)
+    val watchTimeout = zio.Duration.fromScala(clientOptions.watchTimeout)
     val watchMinLatency = clientOptions.watchMinLatency
     val watchMinLatencyNanos = watchMinLatency.toNanos
 
     Source
       .lazySource(() => {
-        val zStream = zio.stream.Stream
-          .repeatEffect {
+        val zStream = zio.stream.ZStream
+          .repeatZIO {
             TaskUtils
               .fromCancellableCompletableFuture(
                 dbContext.db.runAsync { tx =>
@@ -467,7 +473,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
               .unit
 
             val watchTaskWithTimeout = watchTimeout match {
-              case Duration.Infinity => watchTask
+              case zio.Duration.Infinity => watchTask
               case d => watchTask.timeoutTo(())(identity)(d)
             }
 
@@ -491,8 +497,8 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
             zio
               .stream
-              .Stream(Right(maybeValue))
-              .merge(zio.stream.Stream.fromEffect(
+              .ZStream(Right(maybeValue))
+              .merge(zio.stream.ZStream.fromZIO(
                 watchTaskWithRecovery
               ))
           }
@@ -500,28 +506,46 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
           .changes
 
         val promise = scala.concurrent.Promise[Done]()
-        val publisher: Publisher[Option[Array[Byte]]] = subscriber => {
-          if (subscriber == null) {
-            throw new NullPointerException("Subscriber must not be null.")
-          }
-          else {
-            rt.unsafeRunAsync_(
-              for {
-                demand <- Queue.unbounded[Long]
-                _ <- UIO(subscriber.onSubscribe(createSubscription(subscriber, demand, rt)))
-                _ <- zStream
-                  .run(demandUnfoldSink(subscriber, demand))
-                  .catchAll(e => UIO(subscriber.onError(e)))
-                  .onExit { exit: Exit[Throwable, Unit] =>
-                    exit.foldM(
-                      cause => UIO(promise.failure(cause.squash)),
-                      _ => UIO(promise.success(Done))
+        val publisher: Publisher[Option[Array[Byte]]] = {
+//          subscriber => {
+//            if (subscriber == null) {
+//              throw new NullPointerException("Subscriber must not be null.")
+//            }
+//            else {
+//            val pub = zio.interop.reactivestreams.Adapters.streamToPublisher(zStream).map(_.subscribe(subscriber))
+
+          // todo [migration] check if this is enough
+          Unsafe.unsafe { implicit unsafe =>
+            rt.unsafe
+              .run {
+                zio.interop.reactivestreams.Adapters.streamToPublisher {
+                  zStream.ensuringWith { exit: Exit[Throwable, Any] =>
+                    exit.foldZIO(
+                      cause => ZIO.succeed(promise.failure(cause.getCause)),
+                      _ => ZIO.succeed(promise.success(Done))
                     )
                   }
-                  .forkDaemon
-              } yield ()
-            )
+                }
+              }
+              .getOrThrowFiberFailure()
           }
+
+//            rt.unsafeRunAsync_(
+//                for {
+//                  demand <- Queue.unbounded[Long]
+//                  _ <- ZIO.succeed(subscriber.onSubscribe(createSubscription(subscriber, demand, rt)))
+//                  _ <- zStream
+//                    .run(demandUnfoldSink(subscriber, demand))
+//                    .catchAll(e => ZIO.succeed(subscriber.onError(e)))
+//                    .onExit { exit: Exit[Throwable, Unit] =>
+//                      exit.foldZIO(
+//                        cause => ZIO.succeed(promise.failure(cause.squash)),
+//                        _ => ZIO.succeed(promise.success(Done))
+//                      )
+//                    }
+//                    .forkDaemon
+//                } yield ()
+//              )
         }
 
         Source
@@ -559,7 +583,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
   override def batchGetRangeTask[Col <: CF](column: Col, ranges: Seq[KvdbKeyRange]): Task[List[List[KvdbPair]]] = {
     if (!ranges.forall(_.limit > 0)) {
-      Task.fail(
+      ZIO.fail(
         InvalidKvdbArgumentException(s"ranges contains non-positive integers")
       )
     }
@@ -580,7 +604,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     column: Col,
     key: Array[Byte],
     value: Array[Byte]
-  ): RIO[IzLogging with Clock, Unit] = {
+  ): RIO[IzLogging, Unit] = {
     write(
       s"putTask column=${column.id}",
       api => {
@@ -590,7 +614,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     )
   }
 
-  override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[IzLogging with Clock, Unit] = {
+  override def deleteTask[Col <: CF](column: Col, key: Array[Byte]): RIO[IzLogging, Unit] = {
     write(
       s"deleteTask column=${column.id}",
       api => {
@@ -600,7 +624,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     )
   }
 
-  override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[IzLogging with Clock, Long] = {
+  override def deletePrefixTask[Col <: CF](column: Col, prefix: Array[Byte]): RIO[IzLogging, Long] = {
     write(
       s"deletePrefixTask column=${column.id}",
       api => {
@@ -705,7 +729,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
 
   override def transactionTask(
     actions: Seq[TransactionWrite]
-  ): RIO[IzLogging with Clock, Unit] = {
+  ): RIO[IzLogging, Unit] = {
     write(
       "transactionTask",
       api => {
@@ -719,7 +743,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
     reads: List[TransactionGet],
     condition: List[Option[(Array[Byte], Array[Byte])]] => Boolean,
     actions: Seq[TransactionWrite]
-  ): RIO[IzLogging with Clock, Unit] = {
+  ): RIO[IzLogging, Unit] = {
     write(
       "conditionalTransactionTask",
       api => {
@@ -861,7 +885,7 @@ final class FdbDatabase[BCF[A, B] <: ColumnFamily[A, B], +CFS <: BCF[_, _]] priv
       .addAttributes(Attributes.inputBuffer(1, 1))
   }
 
-  override def dropColumnFamily[Col <: CF](column: Col): RIO[IzLogging with Clock, Unit] = {
+  override def dropColumnFamily[Col <: CF](column: Col): RIO[IzLogging, Unit] = {
     write(
       "dropColumnFamily",
       api => {

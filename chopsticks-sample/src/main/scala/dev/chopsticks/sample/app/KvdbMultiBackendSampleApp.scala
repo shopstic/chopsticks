@@ -1,9 +1,9 @@
 package dev.chopsticks.sample.app
 
-import akka.stream.scaladsl.{Sink, Source}
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import dev.chopsticks.fp.ZPekkoApp
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
@@ -16,8 +16,7 @@ import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool}
 import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Definition._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import pureconfig.ConfigReader
-import zio.clock.Clock
-import zio.{ExitCode, Has, RIO, Task, URIO, ZIO}
+import zio.{RIO, Task, URIO, ZIO, ZLayer}
 
 import java.time.Instant
 
@@ -32,7 +31,7 @@ object KvdbMultiBackendSampleAppConfig {
 }
 
 final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
-  def populate: RIO[AkkaEnv with IzLogging with Clock, Int] = {
+  def populate: RIO[PekkoEnv with IzLogging, Int] = {
     Source(1 to 100)
       .flatMapConcat { i =>
         Source(1 to 100)
@@ -48,7 +47,7 @@ final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
       .interruptibleRunWith(Sink.fold(0)((s, b) => s + b.size))
   }
 
-  def scanAndCollect: RIO[AkkaEnv with IzLogging with Clock, Seq[(TestKey, TestValue)]] = {
+  def scanAndCollect: RIO[PekkoEnv with IzLogging, Seq[(TestKey, TestValue)]] = {
     db
       .api
       .columnFamily(db.storage.default)
@@ -67,40 +66,37 @@ final class TestKvdbApi[DBS <: DbService] private (db: DBS) {
 }
 
 object TestKvdbApi {
-  def apply[DBS <: DbService: zio.Tag]: URIO[Has[DBS], TestKvdbApi[DBS]] = {
+  def apply[DBS <: DbService: zio.Tag]: URIO[DBS, TestKvdbApi[DBS]] = {
     ZIO.service[DBS].map(db => new TestKvdbApi(db))
   }
 }
 
-object KvdbMultiBackendSampleApp extends ZAkkaApp {
+object KvdbMultiBackendSampleApp extends ZPekkoApp {
   import dev.chopsticks.sample.kvdb.MultiBackendSampleDb.Backends
 
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    import zio.magic._
-
+  override def run: RIO[ZAkkaAppEnv, Any] = {
     val fdbManaged = for {
-      appConfig <- TypedConfig.get[KvdbMultiBackendSampleAppConfig].toManaged_
+      appConfig <- TypedConfig.get[KvdbMultiBackendSampleAppConfig]
       backend <- FdbDatabase
         .manage(Backends.fdbStorage, appConfig.fdb)
-      api <- KvdbDatabaseApi(backend).toManaged_
+      api <- KvdbDatabaseApi(backend)
     } yield FdbService(api, Backends.fdbStorage)
 
     val rocksdbManaged = for {
-      appConfig <- TypedConfig.get[KvdbMultiBackendSampleAppConfig].toManaged_
+      appConfig <- TypedConfig.get[KvdbMultiBackendSampleAppConfig]
       backend <- RocksdbDatabase
         .manage(Backends.rocksdbStorage, appConfig.rocksdb)
-      api <- KvdbDatabaseApi(backend).toManaged_
+      api <- KvdbDatabaseApi(backend)
     } yield RocksdbService(api, Backends.rocksdbStorage)
 
     app
-      .injectSome[ZAkkaAppEnv](
+      .provideSome[ZAkkaAppEnv](
         TypedConfig.live[KvdbMultiBackendSampleAppConfig](),
         KvdbIoThreadPool.live,
-        KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
-        fdbManaged.toLayer,
-        rocksdbManaged.toLayer
+        KvdbSerdesThreadPool.fromDefaultPekkoDispatcher(),
+        ZLayer.scoped(fdbManaged),
+        ZLayer.scoped(rocksdbManaged)
       )
-      .as(ExitCode(0))
   }
 
   //noinspection TypeAnnotation
@@ -116,7 +112,7 @@ object KvdbMultiBackendSampleApp extends ZAkkaApp {
             .populate
             .logResult("Populate RocksDB", c => s"populated $c pairs")
         )
-      _ <- Task {
+      _ <- ZIO.attempt {
         assert(populated._1 == populated._2)
       }
       collected <- fdbApi
@@ -127,7 +123,7 @@ object KvdbMultiBackendSampleApp extends ZAkkaApp {
             .scanAndCollect
             .logResult("Scan and collect from RocksDB", r => s"collected ${r.size} pairs")
         )
-      _ <- Task {
+      _ <- ZIO.attempt {
         assert(collected._1 == collected._2)
       }
       _ <- fdbApi.lookup(TestKey("item 99", Instant.MIN.plusSeconds(30), 2970))

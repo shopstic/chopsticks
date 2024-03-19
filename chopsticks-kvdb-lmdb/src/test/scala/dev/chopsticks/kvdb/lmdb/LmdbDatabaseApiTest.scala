@@ -6,6 +6,6 @@ import scala.concurrent.duration._
 final class LmdbDatabaseApiTest extends KvdbDatabaseApiTest {
   protected val dbMat = LmdbDatabaseTest.dbMaterialization
   protected val managedDb = LmdbDatabaseTest.managedDb
-    .mapM(KvdbDatabaseApi(_))
+    .flatMap(KvdbDatabaseApi(_))
     .map(_.withOptions(_.copy(tailPollingMaxInterval = 10.millis)))
 }

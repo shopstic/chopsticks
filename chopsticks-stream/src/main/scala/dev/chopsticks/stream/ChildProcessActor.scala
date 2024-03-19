@@ -3,12 +3,19 @@ package dev.chopsticks.stream
 import java.io.File
 import java.lang.{Process => JavaProcess, ProcessBuilder => JavaProcessBuilder}
 
-import akka.actor.{Actor, ActorLogging, NoSerializationVerificationNeeded, Props, Status, SupervisorStrategy}
-import akka.dispatch.MessageDispatcher
-import akka.pattern.pipe
-import akka.stream.scaladsl.{Sink, Source, StreamConverters}
-import akka.stream.{ActorAttributes, IOResult}
-import akka.util.{ByteString, Helpers}
+import org.apache.pekko.actor.{
+  Actor,
+  ActorLogging,
+  NoSerializationVerificationNeeded,
+  Props,
+  Status,
+  SupervisorStrategy
+}
+import org.apache.pekko.dispatch.MessageDispatcher
+import org.apache.pekko.pattern.pipe
+import org.apache.pekko.stream.scaladsl.{Sink, Source, StreamConverters}
+import org.apache.pekko.stream.{ActorAttributes, IOResult}
+import org.apache.pekko.util.{ByteString, Helpers}
 
 import scala.collection.immutable
 import scala.concurrent.Future

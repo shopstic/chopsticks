@@ -15,7 +15,7 @@ object TestMetricRegistry {
   }
 }
 
-final class TestMetricRegistry[C <: MetricGroup] extends MetricRegistry.Service[C] {
+final class TestMetricRegistry[C <: MetricGroup] extends MetricRegistry[C] {
   override def counter(config: CounterConfig[NoLabel] with C): MetricCounter = {
     new PromCounter(
       Counter
