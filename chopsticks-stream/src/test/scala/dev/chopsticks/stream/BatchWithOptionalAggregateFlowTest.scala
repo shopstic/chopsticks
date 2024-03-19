@@ -1,8 +1,8 @@
 package dev.chopsticks.stream
 
-import akka.stream.scaladsl.Keep
-import akka.stream.testkit.scaladsl.{TestSink, TestSource}
-import akka.testkit.ImplicitSender
+import org.apache.pekko.stream.scaladsl.Keep
+import org.apache.pekko.stream.testkit.scaladsl.{TestSink, TestSource}
+import org.apache.pekko.testkit.ImplicitSender
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 
 import scala.concurrent.duration._

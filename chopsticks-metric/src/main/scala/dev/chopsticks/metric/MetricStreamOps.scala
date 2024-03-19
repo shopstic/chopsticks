@@ -1,6 +1,6 @@
 package dev.chopsticks.metric
 
-import akka.stream.scaladsl.{Flow, Source}
+import org.apache.pekko.stream.scaladsl.{Flow, Source}
 
 object MetricStreamOps {
   implicit class AkkaStreamSourceMetricOps[+Elem, +Mat](source: Source[Elem, Mat]) {

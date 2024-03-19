@@ -37,7 +37,7 @@ object DstreamMasterMetricsManager {
   import DstreamMasterMetrics._
 
   def live: RLayer[MetricRegistryFactory[DstreamMasterMetric], DstreamMasterMetricsManager] = {
-    MetricServiceManager.live((registry: MetricRegistry.Service[DstreamMasterMetric], serviceId: String) => {
+    MetricServiceManager.live((registry: MetricRegistry[DstreamMasterMetric], serviceId: String) => {
       new DstreamMasterMetrics {
         override val assignmentsTotal: MetricCounter =
           registry.counterWithLabels(

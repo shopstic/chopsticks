@@ -1,7 +1,7 @@
 package dev.chopsticks.fp
-import zio.{IO, ZIO}
+import zio.{Unsafe, ZIO}
 
-trait AppRuntime[R] extends zio.Runtime[R] {
+trait AppRuntime[R] extends zio.Runtime[R] { self =>
 
   /** The main function of the application, which will be passed the command-line arguments to the program and has to
     * return an `IO` with the errors fully handled.
@@ -13,17 +13,21 @@ trait AppRuntime[R] extends zio.Runtime[R] {
   // $COVERAGE-OFF$ Bootstrap to `Unit`
   final def main(args0: Array[String]): Unit =
     sys.exit(
-      unsafeRun(
-        for {
-          fiber <- run(args0.toList).fork
-          _ <- IO.effectTotal(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
-            override def run(): Unit = {
-              val _ = unsafeRunSync(fiber.interrupt)
-            }
-          }))
-          result <- fiber.join
-        } yield result
-      )
+      Unsafe.unsafe { implicit unsafe =>
+        this.unsafe
+          .run {
+            for {
+              fiber <- run(args0.toList).fork
+              _ <- ZIO.succeed(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
+                override def run(): Unit = {
+                  val _ = self.unsafe.run(fiber.interrupt)
+                }
+              }))
+              result <- fiber.join
+            } yield result
+          }
+          .getOrThrowFiberFailure()
+      }
     )
   // $COVERAGE-ON$
 }

@@ -1,36 +1,39 @@
 package dev.chopsticks.sample.app
 
 import cats.data.NonEmptyList
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.fp.util.Race
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
-import zio.duration._
-import zio.{ExitCode, RIO, Schedule, UIO, ZIO, ZManaged}
+import zio.{durationInt, RIO, Schedule, Scope, ZIO}
 
-object SafeRaceFirstTestApp extends ZAkkaApp {
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    val app = Race(NonEmptyList
-      .fromListUnsafe(List.tabulate(3) { i =>
-        ZIO
-          .effectSuspend(UIO(println(s"Par $i")))
-          .repeat(Schedule.fixed(1.second).whileOutput(_ < 5))
-          .unit
-          .onInterrupt(_ =>
-            UIO(println(s"Par $i interrupting")) *> UIO(println(s"Par $i interrupted")).delay(3.seconds)
-          )
-      }))
+import scala.annotation.nowarn
+
+object SafeRaceFirstTestApp extends ZPekkoApp {
+  @nowarn("cat=lint-infer-any")
+  override def run: RIO[ZAkkaAppEnv with Scope, Any] = {
+    Race(
+      NonEmptyList
+        .fromListUnsafe(List.tabulate(3) { i =>
+          ZIO
+            .suspend(ZIO.succeed(println(s"Par $i")))
+            .repeat(Schedule.fixed(1.second).whileOutput(_ < 5))
+            .unit
+            .onInterrupt(_ =>
+              ZIO.succeed(println(s"Par $i interrupting")) *>
+                ZIO.succeed(println(s"Par $i interrupted")).delay(3.seconds)
+            )
+        })
+    )
       .run()
-      .interruptibleRace(ZManaged
-        .make(UIO(println("acquire"))) { _ =>
-          UIO(println("release"))
+      .interruptibleRace(ZIO
+        .acquireRelease(ZIO.succeed(println("acquire"))) { _ =>
+          ZIO.succeed(println("release"))
         }
-        .use { _ =>
-          ZIO.effectSuspend(UIO(println("In use"))).repeat(Schedule.fixed(1.second).whileOutput(_ < 3))
-            .onExit(e => UIO(println(s"Use exit $e")))
+        .zipRight {
+          ZIO.suspend(ZIO.succeed(println("In use"))).repeat(Schedule.fixed(1.second).whileOutput(_ < 3))
+            .onExit(e => ZIO.succeed(println(s"Use exit $e")))
         }
         .unit)
-    app
-      .as(ExitCode(0))
   }
 }

@@ -2,11 +2,11 @@ package dev.chopsticks.stream
 
 import zio.Schedule.Decision
 import zio.{Chunk, Schedule, UIO, ZIO}
-import zio.clock.Clock
 import zio.stream.ZStream
 
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
+import scala.annotation.nowarn
 
 object ZStreamUtils {
 
@@ -39,17 +39,17 @@ object ZStreamUtils {
     interrupted: Boolean
   )
 
+  @nowarn("cat=lint-infer-any")
   def retry[R, E, V](
     effect: ZIO[R, E, V],
-    retrySchedule: Schedule[Clock, Any, Duration],
+    retrySchedule: Schedule[Any, Any, Duration],
     completionSignal: UIO[Unit]
-  ): ZStream[Clock with R, Nothing, Either[FailedAttempt[E], V]] = {
-    val schedule: Schedule[Clock, E, ((Duration, Long), Duration)] =
-      Schedule.elapsed && Schedule.count && retrySchedule
+  ): ZStream[R, Nothing, Either[FailedAttempt[E], V]] = {
+    val schedule = Schedule.elapsed && Schedule.count && retrySchedule
 
     for {
-      leftQueue <- ZStream.fromEffect(zio.Queue.unbounded[ResultQueueItem[E, V]])
-      rightQueue <- ZStream.fromEffect(zio.Queue.unbounded[StateQueueItem[V]])
+      leftQueue <- ZStream.fromZIO(zio.Queue.unbounded[ResultQueueItem[E, V]])
+      rightQueue <- ZStream.fromZIO(zio.Queue.unbounded[StateQueueItem[V]])
       streamState = new AtomicReference[State](State(isRunning = false, interrupted = false))
       enqueueInterruption = {
         val io: UIO[Unit] = (leftQueue.offer(ResultQueueItem.Interrupted) *>
@@ -57,7 +57,7 @@ object ZStreamUtils {
         io
       }
       // handle interruption
-      fib <- ZStream.fromEffect {
+      fib <- ZStream.fromZIO {
         completionSignal
           .zipRight {
             for {
@@ -71,7 +71,7 @@ object ZStreamUtils {
       }
       ret <- {
         ZStream
-          .fromEffect(
+          .fromZIO(
             {
               val io = {
                 for {
@@ -88,24 +88,26 @@ object ZStreamUtils {
               io
                 .retry {
                   schedule.tapInput((e: E) => leftQueue.offer(ResultQueueItem.Failure(e))).onDecision {
-                    case Decision.Done(((elapsed, count), nextDelay)) =>
-                      // no need to enqueue interruption here, because the stream is done after this
-                      rightQueue.offer(StateQueueItem.Failure(RetryState(
-                        nextDelay,
-                        count,
-                        elapsed,
-                        willContinue = false
-                      )))
-
-                    case Decision.Continue(((elapsed, count), nextDelay), _, _) =>
-                      rightQueue.offer(StateQueueItem.Failure(RetryState(
-                        nextDelay,
-                        count,
-                        elapsed,
-                        willContinue = true
-                      ))) <* {
-                        val state = streamState.updateAndGet(_.copy(isRunning = false))
-                        enqueueInterruption.when(state.interrupted)
+                    case (_, (elapsed, count, nextDelay), decision) =>
+                      decision match {
+                        case Decision.Done =>
+                          // no need to enqueue interruption here, because the stream is done after this
+                          rightQueue.offer(StateQueueItem.Failure(RetryState(
+                            nextDelay,
+                            count,
+                            elapsed,
+                            willContinue = false
+                          )))
+                        case Decision.Continue(_) =>
+                          rightQueue.offer(StateQueueItem.Failure(RetryState(
+                            nextDelay,
+                            count,
+                            elapsed,
+                            willContinue = true
+                          ))) <* {
+                            val state = streamState.updateAndGet(_.copy(isRunning = false))
+                            enqueueInterruption.when(state.interrupted)
+                          }
                       }
                   }
                 }

@@ -1,30 +1,28 @@
 package dev.chopsticks.dstream
 
-import akka.NotUsed
-import akka.stream.scaladsl.{Keep, Source}
-import akka.stream.testkit.scaladsl.{TestSink, TestSource}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.scaladsl.{Keep, Source}
+import org.apache.pekko.stream.testkit.scaladsl.{TestSink, TestSource}
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.test.DstreamSpecEnv.SharedEnv
 import dev.chopsticks.dstream.test.proto.{Assignment, Result}
 import dev.chopsticks.dstream.test.{DstreamSpecEnv, DstreamTestContext, DstreamTestUtils}
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import eu.timepit.refined.auto._
-import zio.blocking.{effectBlocking, effectBlockingInterrupt}
-import zio.clock.Clock
-import zio.duration._
-import zio.magic._
 import zio.test._
-import zio.test.environment.{testEnvironment, TestEnvironment}
+import zio.{durationInt, ZIO}
+
+import scala.annotation.nowarn
 
 //noinspection TypeAnnotation
-object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
+object DstreamClientSpec extends ZIOSpecDefault with DstreamSpecEnv {
   import dev.chopsticks.dstream.test.DstreamTestUtils._
 
-  override def runner: TestRunner[TestEnvironment, Any] = {
-    TestRunner(TestExecutor.default(testEnvironment ++ Clock.live))
-  }
+//  override def runner: TestRunner[TestEnvironment, Any] = {
+//    TestRunner(TestExecutor.default(testEnvironment))
+//  }
 
-  def createSourceProbe[T] = AkkaEnv.actorSystem.map { implicit as =>
+  def createSourceProbe[T] = PekkoEnv.actorSystem.map { implicit as =>
     TestSource.probe[T]
   }
 
@@ -32,7 +30,7 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
     for {
       context <- DstreamTestContext.get[Assignment, Result]
       assignment = Assignment(1)
-      _ <- effectBlocking {
+      _ <- ZIO.attemptBlocking {
         context.masterAssignments.sendNext(assignment)
         context.masterOutputs.request(1)
       }
@@ -44,15 +42,15 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
       (masterInAssignment, masterInResult) = masterIn
       _ <- check(assertTrue(masterInAssignment == assignment))
 
-      masterInProbe <- AkkaEnv.actorSystem.map { implicit as =>
+      masterInProbe <- PekkoEnv.actorSystem.map { implicit as =>
         masterInResult.source.toMat(TestSink.probe)(Keep.right).run()
       }
-      _ <- effectBlockingInterrupt {
+      _ <- ZIO.attemptBlockingInterrupt {
         masterInProbe.requestNext(Result(2))
         masterInProbe.expectComplete()
       }
       _ <- context.masterResponses.offer(masterInAssignment)
-      masterOutputAssignment <- effectBlockingInterrupt {
+      masterOutputAssignment <- ZIO.attemptBlockingInterrupt {
         context.masterOutputs.expectNext()
       }
     } yield assertTrue(masterOutputAssignment == assignment)
@@ -62,10 +60,11 @@ object DstreamClientSpec extends DefaultRunnableSpec with DstreamSpecEnv {
     DstreamMasterConfig(serviceId = "test", parallelism = 1, ordered = true)
   ).forTest
 
+  @nowarn
   override def spec = suite("Dstream basic tests")(
-    testM("should work end to end")(basicTest) @@ timeoutInterrupt(5.seconds)
+    test("should work end to end")(basicTest) @@ timeoutInterrupt(5.seconds)
   )
-    .injectSome[Environment with SharedEnv](
+    .provideSome[Environment with SharedEnv](
       promRegistryLayer,
       stateMetricRegistryFactoryLayer,
       clientMetricRegistryFactoryLayer,

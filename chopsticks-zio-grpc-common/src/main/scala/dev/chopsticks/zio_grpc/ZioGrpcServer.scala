@@ -1,6 +1,6 @@
 package dev.chopsticks.zio_grpc
 
-import akka.util.Timeout
+import org.apache.pekko.util.Timeout
 import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.string.NonEmptyString
 import io.grpc.ServerServiceDefinition

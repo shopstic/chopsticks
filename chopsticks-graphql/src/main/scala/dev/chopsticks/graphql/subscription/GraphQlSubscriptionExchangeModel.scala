@@ -3,8 +3,11 @@ package dev.chopsticks.graphql.subscription
 import caliban.client.GraphQLRequest
 import caliban.client.Operations.RootSubscription
 import caliban.client.{GraphQLResponse, SelectionBuilder}
-import io.circe.{Decoder, Encoder, Json}
-import io.circe.derivation._
+import io.circe.Json
+import com.github.plokhotnyuk.jsoniter_scala.macros._
+import com.github.plokhotnyuk.jsoniter_scala.core._
+
+import java.nio.charset.StandardCharsets
 
 sealed abstract class GraphQlSubscriptionException(message: String, cause: Option[Throwable] = Option.empty)
     extends RuntimeException(message, cause.orNull)
@@ -39,74 +42,112 @@ private[subscription] object GraphQlSubscriptionExchangeModel {
   sealed trait GraphQlSubscriptionProtocolClientMessage extends GraphQlSubscriptionProtocolMessage
   sealed trait GraphQlSubscriptionProtocolServerMessage extends GraphQlSubscriptionProtocolMessage
 
-  object GraphQlSubscriptionProtocolClientMessage {
-    // todo add payload
-    final case class GraphQlSubscriptionConnectionInit private (`type`: String)
-        extends GraphQlSubscriptionProtocolClientMessage
-    object GraphQlSubscriptionConnectionInit {
-      val Type = "connection_init"
-      def apply(): GraphQlSubscriptionConnectionInit = GraphQlSubscriptionConnectionInit(Type)
+  implicit val circeJsonCodec: JsonValueCodec[io.circe.Json] = new JsonValueCodec[io.circe.Json] {
+    import com.github.plokhotnyuk.jsoniter_scala.core._
+    import io.circe.parser._
 
-      implicit lazy val encoder: Encoder[GraphQlSubscriptionConnectionInit] =
-        deriveEncoder[GraphQlSubscriptionConnectionInit]
+    override def decodeValue(in: JsonReader, default: io.circe.Json): io.circe.Json = {
+      // Parse the JSON string into a Circe Json object
+      val jsonString = new String(in.readRawValAsBytes(), StandardCharsets.UTF_8)
+      parse(jsonString).getOrElse(io.circe.Json.Null)
     }
 
-    final case class GraphQlSubscriptionStart private (id: String, `type`: String, payload: Json)
-        extends GraphQlSubscriptionProtocolClientMessage
+    override def encodeValue(x: io.circe.Json, out: JsonWriter): Unit = {
+      // Convert the Circe Json object to a string and write it using JsonWriter
+      out.writeRawVal(x.noSpaces.getBytes("UTF-8"))
+    }
+
+    override def nullValue: io.circe.Json = io.circe.Json.Null
+  }
+
+  object GraphQlSubscriptionProtocolClientMessage {
+    // todo add payload
+    @named("connection_init") final case class GraphQlSubscriptionConnectionInit private (
+      `type`: String = GraphQlSubscriptionConnectionInit.Type
+    ) extends GraphQlSubscriptionProtocolClientMessage
+    object GraphQlSubscriptionConnectionInit {
+      val Type = "connection_init"
+//      def apply(): GraphQlSubscriptionConnectionInit = GraphQlSubscriptionConnectionInit(Type)
+
+      implicit lazy val codec = JsonCodecMaker.makeCirceLike[GraphQlSubscriptionConnectionInit]
+    }
+
+    @named("start") final case class GraphQlSubscriptionStart private (
+      id: String,
+      `type`: String = GraphQlSubscriptionStart.Type,
+      payload: GraphQLRequest
+    ) extends GraphQlSubscriptionProtocolClientMessage
     object GraphQlSubscriptionStart {
       val Type = "start"
       def apply[A](id: String, payload: SelectionBuilder[RootSubscription, A]): GraphQlSubscriptionStart = {
-        val payloadAsJson = implicitly[Encoder[GraphQLRequest]].apply(payload.toGraphQL(useVariables = true))
-        GraphQlSubscriptionStart(id, Type, payloadAsJson)
+//        val payloadAsJson = implicitly[Encoder[GraphQLRequest]].apply(payload.toGraphQL(useVariables = true))
+        GraphQlSubscriptionStart(id = id, payload = payload.toGraphQL(dropNullInputValues = true, useVariables = true))
       }
 
-      implicit lazy val encoder: Encoder[GraphQlSubscriptionStart] = deriveEncoder[GraphQlSubscriptionStart]
+      implicit lazy val codec = JsonCodecMaker.makeCirceLike[GraphQlSubscriptionStart]
     }
 
-    implicit lazy val encoder: Encoder[GraphQlSubscriptionProtocolClientMessage] =
-      Encoder.instance[GraphQlSubscriptionProtocolClientMessage] {
-        x => GraphQlSubscriptionProtocolClientMessage.encoder.apply(x)
-      }
+    implicit lazy val codec = JsonCodecMaker.make[GraphQlSubscriptionProtocolClientMessage](
+      CodecMakerConfig.withDiscriminatorFieldName(Some("type"))
+    )
+    def serialize(msg: GraphQlSubscriptionProtocolClientMessage): String = {
+      writeToString(msg)
+    }
   }
 
   object GraphQlSubscriptionProtocolServerMessage {
-    final case class GraphQlConnectionError(`type`: String, payload: Json)
-        extends GraphQlSubscriptionProtocolServerMessage
+    @named("connection_error") final case class GraphQlConnectionError(
+      `type`: String = GraphQlConnectionError.Type,
+      payload: Json
+    ) extends GraphQlSubscriptionProtocolServerMessage
     object GraphQlConnectionError {
       val Type = "connection_error"
-      implicit lazy val decoder: Decoder[GraphQlConnectionError] = deriveDecoder[GraphQlConnectionError]
+//      implicit lazy val decoder: Decoder[GraphQlConnectionError] = deriveDecoder[GraphQlConnectionError]
+      implicit lazy val codec = JsonCodecMaker.makeCirceLike[GraphQlConnectionError]
     }
 
-    final case class GraphQlConnectionAck(`type`: String) extends GraphQlSubscriptionProtocolServerMessage
+    @named("connection_ack") final case class GraphQlConnectionAck(`type`: String = GraphQlConnectionAck.Type)
+        extends GraphQlSubscriptionProtocolServerMessage
     object GraphQlConnectionAck {
       val Type = "connection_ack"
-      implicit lazy val decoder: Decoder[GraphQlConnectionAck] = deriveDecoder[GraphQlConnectionAck]
+//      implicit lazy val decoder: Decoder[GraphQlConnectionAck] = deriveDecoder[GraphQlConnectionAck]
+      implicit lazy val codec = JsonCodecMaker.makeCirceLike[GraphQlConnectionAck]
     }
 
-    final case class GraphQlConnectionData(id: String, `type`: String, payload: GraphQLResponse)
-        extends GraphQlSubscriptionProtocolServerMessage
+    @named("data") final case class GraphQlConnectionData(
+      id: String,
+      `type`: String = GraphQlConnectionData.Type,
+      payload: GraphQLResponse
+    ) extends GraphQlSubscriptionProtocolServerMessage
     object GraphQlConnectionData {
       val Type = "data"
-      implicit lazy val decoder: Decoder[GraphQlConnectionData] = deriveDecoder[GraphQlConnectionData]
+//      implicit lazy val decoder: Decoder[GraphQlConnectionData] = deriveDecoder[GraphQlConnectionData]
+      implicit lazy val codec = JsonCodecMaker.makeCirceLike[GraphQlConnectionData]
     }
 
-    final case class GraphQlConnectionKeepAlive(`type`: String) extends GraphQlSubscriptionProtocolServerMessage
+    @named("ka") final case class GraphQlConnectionKeepAlive(`type`: String = GraphQlConnectionKeepAlive.Type)
+        extends GraphQlSubscriptionProtocolServerMessage
     object GraphQlConnectionKeepAlive {
       val Type = "ka"
-      implicit lazy val decoder: Decoder[GraphQlConnectionKeepAlive] = deriveDecoder[GraphQlConnectionKeepAlive]
+//      implicit lazy val decoder: Decoder[GraphQlConnectionKeepAlive] = deriveDecoder[GraphQlConnectionKeepAlive]
+      implicit lazy val codec = JsonCodecMaker.makeCirceLike[GraphQlConnectionKeepAlive]
     }
 
-    implicit lazy val decoder: Decoder[GraphQlSubscriptionProtocolServerMessage] = { cursor =>
-      for {
-        tpe <- cursor.downField("type").as[String]
-        result <- tpe match {
-          case GraphQlConnectionError.Type => GraphQlConnectionError.decoder(cursor)
-          case GraphQlConnectionAck.Type => GraphQlConnectionAck.decoder(cursor)
-          case GraphQlConnectionData.Type => GraphQlConnectionData.decoder(cursor)
-          case GraphQlConnectionKeepAlive.Type => GraphQlConnectionKeepAlive.decoder(cursor)
-          case _ => ???
-        }
-      } yield result
-    }
+    implicit lazy val codec = JsonCodecMaker.make[GraphQlSubscriptionProtocolServerMessage](
+      CodecMakerConfig.withDiscriminatorFieldName(Some("type"))
+    )
+
+//    implicit lazy val decoder: Decoder[GraphQlSubscriptionProtocolServerMessage] = { cursor =>
+//      for {
+//        tpe <- cursor.downField("type").as[String]
+//        result <- tpe match {
+//          case GraphQlConnectionError.Type => GraphQlConnectionError.decoder(cursor)
+//          case GraphQlConnectionAck.Type => GraphQlConnectionAck.decoder(cursor)
+//          case GraphQlConnectionData.Type => GraphQlConnectionData.decoder(cursor)
+//          case GraphQlConnectionKeepAlive.Type => GraphQlConnectionKeepAlive.decoder(cursor)
+//          case _ => ???
+//        }
+//      } yield result
+//    }
   }
 }

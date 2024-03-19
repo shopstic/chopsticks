@@ -1,10 +1,10 @@
 package dev.chopsticks.stream
 
-import akka.stream.scaladsl.{Flow, Keep}
-import akka.stream.testkit.scaladsl.{TestSink, TestSource}
-import akka.stream.testkit.{TestPublisher, TestSubscriber}
-import akka.testkit.ImplicitSender
-import akka.util.Timeout
+import org.apache.pekko.stream.scaladsl.{Flow, Keep}
+import org.apache.pekko.stream.testkit.scaladsl.{TestSink, TestSource}
+import org.apache.pekko.stream.testkit.{TestPublisher, TestSubscriber}
+import org.apache.pekko.testkit.ImplicitSender
+import org.apache.pekko.util.Timeout
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import eu.timepit.refined.types.numeric.PosInt
 import eu.timepit.refined.auto._

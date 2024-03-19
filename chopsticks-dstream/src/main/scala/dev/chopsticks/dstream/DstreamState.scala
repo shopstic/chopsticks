@@ -1,22 +1,30 @@
 package dev.chopsticks.dstream
 
-import akka.NotUsed
-import akka.grpc.scaladsl.Metadata
-import akka.stream.scaladsl.Sink.{fromGraph, shape}
-import akka.stream.{ActorAttributes, Attributes, Graph, SinkShape, StreamSubscriptionTimeoutTerminationMode}
-import akka.stream.scaladsl.{Keep, Sink, Source}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.grpc.scaladsl.Metadata
+import org.apache.pekko.stream.scaladsl.Sink.{fromGraph, shape}
+import org.apache.pekko.stream.{ActorAttributes, Attributes, Graph, SinkShape, StreamSubscriptionTimeoutTerminationMode}
+import org.apache.pekko.stream.scaladsl.{Keep, Sink, Source}
 import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.zio_ext.ZIOExtensions
 import dev.chopsticks.stream.FailIfEmptyFlow
 import org.reactivestreams.Publisher
-import zio._
-import zio.clock.Clock
 import zio.stm.{STM, TMap, TQueue}
+import zio.{IO, Schedule, Scope, UIO, URIO, ZIO}
 
 import java.util.concurrent.atomic.AtomicLong
+import scala.annotation.nowarn
 import scala.concurrent.duration.{Duration, DurationInt}
 import scala.jdk.DurationConverters.ScalaDurationOps
+
+trait DstreamState[Req, Res] {
+  def enqueueWorker(in: Source[Res, NotUsed], metadata: Metadata): UIO[Source[Req, NotUsed]]
+  def awaitForWorker(assignmentId: DstreamState.AssignmentId): UIO[DstreamState.WorkResult[Res]]
+  def enqueueAssignment(assignment: Req): UIO[DstreamState.AssignmentId]
+  def report(assignmentId: DstreamState.AssignmentId)
+    : IO[DstreamState.InvalidAssignment, Option[DstreamState.WorkResult[Res]]]
+}
 
 object DstreamState {
   type AssignmentId = Long
@@ -32,15 +40,8 @@ object DstreamState {
 
   final private case class AssignmentItem[Req](assignmentId: AssignmentId, assignment: Req)
 
-  trait Service[Req, Res] {
-    def enqueueWorker(in: Source[Res, NotUsed], metadata: Metadata): UIO[Source[Req, NotUsed]]
-    def awaitForWorker(assignmentId: AssignmentId): UIO[WorkResult[Res]]
-    def enqueueAssignment(assignment: Req): UIO[AssignmentId]
-    def report(assignmentId: AssignmentId): IO[InvalidAssignment, Option[WorkResult[Res]]]
-  }
-
   private lazy val FanoutPublisherSinkCtor =
-    Class.forName("akka.stream.impl.FanoutPublisherSink").getDeclaredConstructors.head
+    Class.forName("org.apache.pekko.stream.impl.FanoutPublisherSink").getDeclaredConstructors.head
 
   private def publisherSinkWithNoSubscriptionTimeout[T]: Sink[T, Publisher[T]] = {
     fromGraph(
@@ -54,22 +55,24 @@ object DstreamState {
     )
   }
 
+  @nowarn("cat=lint-infer-any")
   def manage[Req, Res](serviceId: String)
-    : URManaged[AkkaEnv with Clock with DstreamStateMetricsManager, Service[Req, Res]] = {
+    : URIO[PekkoEnv with DstreamStateMetricsManager with Scope, DstreamState[Req, Res]] = {
     for {
-      akkaService <- ZManaged.access[AkkaEnv](_.get)
-      metrics <- ZManaged.accessManaged[DstreamStateMetricsManager](_.get.manage(serviceId))
+      akkaService <- ZIO.service[PekkoEnv]
+      metrics <- ZIO.serviceWithZIO[DstreamStateMetricsManager](_.manage(serviceId))
       workerGauge = metrics.workerCount
       offersCounter = metrics.offersTotal
       queueSizeGauge = metrics.queueSize
       mapSizeGauge = metrics.mapSize
       assignmentCounter = new AtomicLong(0L)
-      assignmentQueue <- TQueue.unbounded[AssignmentItem[Req]].commit.toManaged_
-      workResultMap <- TMap.empty[Long, WorkItem[Req, Res]].commit.toManaged_
-      _ <- ZManaged.make {
+      assignmentQueue <- TQueue.unbounded[AssignmentItem[Req]].commit
+      workResultMap <- TMap.empty[Long, WorkItem[Req, Res]].commit
+      _ <- ZIO.acquireRelease {
         val updateGaugesTask = for {
-          (queueSize, mapSize) <- assignmentQueue.size.zip(workResultMap.size).commit
-          _ <- UIO {
+          commitResult <- assignmentQueue.size.zip(workResultMap.size).commit
+          (queueSize, mapSize) = commitResult
+          _ <- ZIO.succeed {
             queueSizeGauge.set(queueSize)
             mapSizeGauge.set(mapSize)
           }
@@ -77,11 +80,11 @@ object DstreamState {
 
         updateGaugesTask.repeat(Schedule.fixed(100.millis.toJava)).interruptible.forkDaemon
       }(_.interrupt)
-    } yield new Service[Req, Res] {
+    } yield new DstreamState[Req, Res] {
       import akkaService.{actorSystem, dispatcher}
 
       def enqueueWorker(in: Source[Res, NotUsed], metadata: Metadata): UIO[Source[Req, NotUsed]] = {
-        UIO.effectSuspendTotal {
+        ZIO.suspendSucceed {
           val (inFuture, inPublisher) = in
             .watchTermination() { case (_, f) => f }
             .toMat(publisherSinkWithNoSubscriptionTimeout)(Keep.both)
@@ -104,7 +107,7 @@ object DstreamState {
             }
           } yield Source.single(assignment) ++ Source.futureSource(inFuture.map(_ => Source.empty))
 
-          val workerWatchTask = Task
+          val workerWatchTask = ZIO
             .fromFuture(_ => inFuture)
             .ignore
             .as(Source.empty)
@@ -128,7 +131,7 @@ object DstreamState {
 
       def enqueueAssignment(assignment: Req): UIO[AssignmentId] = {
         for {
-          assignmentId <- UIO(assignmentCounter.incrementAndGet())
+          assignmentId <- ZIO.succeed(assignmentCounter.incrementAndGet())
           _ <- STM.atomically {
             for {
               _ <- assignmentQueue.offer(AssignmentItem(assignmentId, assignment))

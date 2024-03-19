@@ -1,10 +1,10 @@
 package dev.chopsticks.sample.app
 
-import akka.stream.scaladsl.{Keep, Sink, Source}
+import org.apache.pekko.stream.scaladsl.{Keep, Sink, Source}
 import com.apple.foundationdb.tuple.Versionstamp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.fp._
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.config.TypedConfig
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.util.LoggedRace
@@ -19,8 +19,7 @@ import dev.chopsticks.sample.kvdb.SampleDb
 import dev.chopsticks.sample.kvdb.SampleDb.{TestKeyWithVersionstamp, TestValueWithVersionstamp}
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import pureconfig.ConfigConvert
-import zio._
-import zio.clock.Clock
+import zio.{RIO, Schedule, ZIO, ZLayer}
 
 import scala.concurrent.duration._
 
@@ -36,7 +35,7 @@ object FdbTestSampleAppConfig {
   }
 }
 
-object FdbTestSampleApp extends ZAkkaApp {
+object FdbTestSampleApp extends ZPekkoApp {
 
   object sampleDb extends SampleDb.Materialization {
     import dev.chopsticks.kvdb.codec.protobuf_value._
@@ -59,29 +58,28 @@ object FdbTestSampleApp extends ZAkkaApp {
     )
   }
 
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    import zio.magic._
-
-    val dbLayer = (for {
-      appConfig <- TypedConfig.get[FdbTestSampleAppConfig].toManaged_
-      db <- FdbDatabase.manage(sampleDb, appConfig.db)
-    } yield db).toLayer
+  override def run: RIO[ZAkkaAppEnv, Any] = {
+    val dbLayer = ZLayer.scoped {
+      for {
+        appConfig <- TypedConfig.get[FdbTestSampleAppConfig]
+        db <- FdbDatabase.manage(sampleDb, appConfig.db)
+      } yield db
+    }
 
     app
-      .injectSome[ZAkkaAppEnv](
+      .provideSome[ZAkkaAppEnv](
         TypedConfig.live[FdbTestSampleAppConfig](),
         KvdbIoThreadPool.live,
-        KvdbSerdesThreadPool.fromDefaultAkkaDispatcher(),
+        KvdbSerdesThreadPool.fromDefaultPekkoDispatcher(),
         dbLayer
       )
-      .as(ExitCode(0))
   }
 
   def app: RIO[
-    AkkaEnv with IzLogging with IzLogging with Clock with Has[SampleDb.Db] with KvdbSerdesThreadPool,
+    PekkoEnv with IzLogging with IzLogging with SampleDb.Db with KvdbSerdesThreadPool,
     Unit
   ] = for {
-    db <- ZService[SampleDb.Db]
+    db <- ZIO.service[SampleDb.Db]
     dbApi <- KvdbDatabaseApi(db)
     _ <- dbApi
       .columnFamily(sampleDb.default)

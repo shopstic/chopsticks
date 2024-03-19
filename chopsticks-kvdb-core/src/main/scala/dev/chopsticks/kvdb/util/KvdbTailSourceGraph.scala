@@ -2,10 +2,10 @@ package dev.chopsticks.kvdb.util
 
 import java.time.Instant
 
-import akka.actor.Cancellable
-import akka.stream.KillSwitches.KillableGraphStageLogic
-import akka.stream.stage._
-import akka.stream.{ActorAttributes, Attributes, Outlet, SourceShape}
+import org.apache.pekko.actor.Cancellable
+import org.apache.pekko.stream.KillSwitches.KillableGraphStageLogic
+import org.apache.pekko.stream.stage._
+import org.apache.pekko.stream.{ActorAttributes, Attributes, Outlet, SourceShape}
 import dev.chopsticks.kvdb.util.KvdbAliases.{KvdbPair, KvdbTailBatch}
 import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined

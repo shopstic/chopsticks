@@ -2,12 +2,12 @@ package dev.chopsticks.stream
 
 import java.time.Instant
 
-import akka.NotUsed
-import akka.actor.typed._
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.stream.scaladsl.{Balance, Flow, GraphDSL, Keep, Merge, Sink, Source}
-import akka.stream.typed.scaladsl.ActorSource
-import akka.stream.{Attributes, FlowShape, Materializer, OverflowStrategy}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.actor.typed._
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
+import org.apache.pekko.stream.scaladsl.{Balance, Flow, GraphDSL, Keep, Merge, Sink, Source}
+import org.apache.pekko.stream.typed.scaladsl.ActorSource
+import org.apache.pekko.stream.{Attributes, FlowShape, Materializer, OverflowStrategy}
 import org.slf4j.Logger
 
 import scala.collection.immutable

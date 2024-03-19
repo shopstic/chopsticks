@@ -1,16 +1,16 @@
 package dev.chopsticks.fp.iz_logging
 
-import akka.actor.Status
-import akka.stream.scaladsl.{Keep, RestartFlow, Source, Tcp}
-import akka.stream.{
+import org.apache.pekko.actor.Status
+import org.apache.pekko.stream.scaladsl.{Keep, RestartFlow, Source, Tcp}
+import org.apache.pekko.stream.{
   AbruptStageTerminationException,
   CompletionStrategy,
   KillSwitches,
   OverflowStrategy,
   RestartSettings
 }
-import akka.util.ByteString
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import org.apache.pekko.util.ByteString
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.numeric.PosInt
 import eu.timepit.refined.types.string.NonEmptyString
@@ -27,10 +27,10 @@ final class IzLoggingTcpSink(
   renderingPolicy: RenderingPolicy,
   bufferSize: PosInt,
   tcpFlowRestartSettings: RestartSettings,
-  akkaSvc: AkkaEnv.Service
+  pekkoSvc: PekkoEnv
 ) extends LogSink {
-  private val ((sourceActorRef, killSwitch), future) = {
-    import akkaSvc.actorSystem
+  private val ((sourceActorRef, _), future) = {
+    import pekkoSvc.actorSystem
 
     val source = Source.actorRef[String](
       {
@@ -51,12 +51,12 @@ final class IzLoggingTcpSink(
       .map(ByteString.fromString)
       .viaMat(KillSwitches.single)(Keep.both)
       .viaMat(flow)(Keep.left)
-      .toMat(akka.stream.scaladsl.Sink.ignore)(Keep.both)
+      .toMat(org.apache.pekko.stream.scaladsl.Sink.ignore)(Keep.both)
       .run()
   }
 
   locally {
-    import akkaSvc.dispatcher
+    import pekkoSvc.dispatcher
     future.onComplete {
       case Failure(_: AbruptStageTerminationException) =>
       case Failure(exception) =>
@@ -79,7 +79,8 @@ final class IzLoggingTcpSink(
     }
   }
 
-  override def close(): Unit = {
-    killSwitch.shutdown()
-  }
+  // todo this is problematic: there's no close anymore
+//  override def close(): Unit = {
+//    killSwitch.shutdown()
+//  }
 }

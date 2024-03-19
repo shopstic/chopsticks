@@ -1,27 +1,29 @@
 package dev.chopsticks.dstream
 
 import dev.chopsticks.dstream.metric.DstreamStateMetricsManager
-import dev.chopsticks.fp.akka_env.AkkaEnv
-import zio.Tag
-import zio.clock.Clock
-import zio.{UManaged, URLayer, ZManaged}
+import dev.chopsticks.fp.pekko_env.PekkoEnv
+import zio.{Scope, Tag, URIO, URLayer, ZIO, ZLayer}
+
+trait DstreamStateFactory {
+  def manage[Req: Tag, Res: Tag](serviceId: String): URIO[Scope, DstreamState[Req, Res]]
+}
 
 object DstreamStateFactory {
 
-  trait Service {
-    def manage[Req: Tag, Res: Tag](serviceId: String): UManaged[DstreamState.Service[Req, Res]]
-  }
-
-  def live: URLayer[AkkaEnv with Clock with DstreamStateMetricsManager, DstreamStateFactory] = {
-    val managed = ZManaged.environment[AkkaEnv with Clock with DstreamStateMetricsManager].map { env =>
-      new Service {
-        override def manage[Req: Tag, Res: Tag](serviceId: String): UManaged[DstreamState.Service[Req, Res]] = {
-          DstreamState.manage[Req, Res](serviceId).provide(env)
+  def live: URLayer[PekkoEnv with DstreamStateMetricsManager, DstreamStateFactory] = {
+    val managed =
+      for {
+        pekkoSvc <- ZIO.service[PekkoEnv]
+        metricsManager <- ZIO.service[DstreamStateMetricsManager]
+      } yield new DstreamStateFactory {
+        override def manage[Req: Tag, Res: Tag](serviceId: String): URIO[Scope, DstreamState[Req, Res]] = {
+          DstreamState
+            .manage[Req, Res](serviceId)
+            .provideSomeEnvironment[Scope](scopeEnv => scopeEnv.add(pekkoSvc).add(metricsManager))
         }
       }
-    }
 
-    managed.toLayer
+    ZLayer(managed)
   }
 
 }

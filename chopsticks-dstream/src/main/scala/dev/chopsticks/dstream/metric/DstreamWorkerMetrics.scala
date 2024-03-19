@@ -34,7 +34,7 @@ object DstreamClientMetricsManager {
   import DstreamWorkerMetrics._
 
   def live: RLayer[MetricRegistryFactory[DstreamWorkerMetric], DstreamWorkerMetricsManager] = {
-    MetricServiceManager.live((registry: MetricRegistry.Service[DstreamWorkerMetric], workerId: String) => {
+    MetricServiceManager.live((registry: MetricRegistry[DstreamWorkerMetric], workerId: String) => {
       new DstreamWorkerMetrics {
         override val workerStatus: MetricGauge =
           registry.gaugeWithLabels(

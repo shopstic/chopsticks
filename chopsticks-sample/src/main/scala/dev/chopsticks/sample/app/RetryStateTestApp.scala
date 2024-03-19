@@ -1,22 +1,22 @@
 package dev.chopsticks.sample.app
 
-import akka.stream.scaladsl.Sink
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import org.apache.pekko.stream.scaladsl.Sink
+import dev.chopsticks.fp.ZPekkoApp
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.stream.ZAkkaSource.ZStreamToZAkkaSource
 import dev.chopsticks.stream.ZStreamUtils
-import zio.clock.Clock
-import zio.duration._
-import zio.{ExitCode, RIO, Schedule, ZIO}
+import zio.{durationInt, RIO, Schedule, ZIO}
 
 import java.util.concurrent.atomic.AtomicInteger
+import scala.annotation.nowarn
 
-object RetryStateTestApp extends ZAkkaApp {
+object RetryStateTestApp extends ZPekkoApp {
 
-  def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
+  @nowarn("cat=lint-infer-any")
+  def run: RIO[ZAkkaAppEnv, Any] = {
     val schedule = Schedule.recurs(4) *> Schedule.exponential(100.millis)
     val count = new AtomicInteger(0)
-    val task: RIO[Any with Clock, Int] = ZIO.effectSuspend {
+    val task: RIO[Any, Int] = ZIO.suspend {
       val i = count.getAndIncrement()
       println(s"Attempt $i...")
 
@@ -39,8 +39,6 @@ object RetryStateTestApp extends ZAkkaApp {
         println(s"Output: $output")
       })
 
-    app
-      .orDie
-      .as(ExitCode(0))
+    app.orDie
   }
 }

@@ -1,17 +1,16 @@
 package dev.chopsticks.dstream
 
-import akka.grpc.internal.HardcodedServiceDiscovery
+import org.apache.pekko.grpc.internal.HardcodedServiceDiscovery
 import dev.chopsticks.dstream.DstreamWorker.DstreamWorkerConfig
 import dev.chopsticks.dstream.test.DstreamSpecEnv
 import dev.chopsticks.dstream.util.DstreamUtils
 import dev.chopsticks.fp.config.{HoconConfig, TypedConfig}
 import logstage.Log
-import zio.magic._
 import zio.test.Assertion._
-import zio.test.{DefaultRunnableSpec, _}
+import zio.test._
 
 //noinspection TypeAnnotation
-object DstreamUtilsSpec extends DefaultRunnableSpec {
+object DstreamUtilsSpec extends ZIOSpecDefault {
   import dev.chopsticks.dstream.test.DstreamTestUtils.ToTestZLayer
 
   lazy val hoconConfigLayer = HoconConfig.live(Some(getClass)).forTest
@@ -19,7 +18,7 @@ object DstreamUtilsSpec extends DefaultRunnableSpec {
   lazy val typedConfigLayer = DstreamUtils.liveWorkerTypedConfig(logLevel = Log.Level.Debug).forTest
 
   override def spec = suite("DstreamUtils")(
-    testM("liveWorkerTypedConfig") {
+    test("liveWorkerTypedConfig") {
       for {
         workerConfig <- TypedConfig.get[DstreamWorkerConfig]
       } yield {
@@ -29,11 +28,11 @@ object DstreamUtilsSpec extends DefaultRunnableSpec {
         assert(settings.connectionAttempts)(equalTo(None))
       }
     }
-      .inject(
+      .provide(
         hoconConfigLayer,
         DstreamSpecEnv.izLoggingRouterLayer,
         DstreamSpecEnv.izLoggingLayer,
-        DstreamSpecEnv.akkaEnvLayer,
+        DstreamSpecEnv.PekkoEnvLayer,
         typedConfigLayer
       )
   )

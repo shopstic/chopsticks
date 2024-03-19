@@ -1,43 +1,48 @@
 package dev.chopsticks.sample.app
 
-import akka.stream.scaladsl.Sink
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import org.apache.pekko.stream.scaladsl.Sink
+import dev.chopsticks.fp.ZPekkoApp
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.stream.ZAkkaSource.ZStreamToZAkkaSource
-import zio.clock.Clock
-import zio.duration._
 import zio.stream.ZStream
-import zio.{Chunk, ExitCode, RIO, Schedule, UIO, ZIO}
+import zio.{durationInt, Chunk, ExitCode, RIO, Schedule, ZIO}
 
 import java.time.Duration
+import scala.annotation.nowarn
 
-object ZStreamTestApp extends ZAkkaApp {
+object ZStreamTestApp extends ZPekkoApp {
 
   final case class RetryState(exception: Throwable, lastDuration: Duration, count: Long, elapsed: Duration)
 
-  def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    val retrySchedule: Schedule[Clock, Throwable, ((Duration, Long), Duration)] =
+  @nowarn("cat=lint-infer-any")
+  def run: RIO[ZAkkaAppEnv, ExitCode] = {
+    val retrySchedule =
       Schedule.elapsed && Schedule.count && Schedule.exponential(100.millis)
 
-    val action = UIO(println("Start...")) *> ZIO.fail(new IllegalStateException("Test bad")).delay(1.seconds)
+    val action = ZIO.succeed(println("Start...")) *> ZIO.fail(new IllegalStateException("Test bad")).delay(1.seconds)
 
     val stream = for {
-      exceptionQueue <- ZStream.fromEffect(zio.Queue.unbounded[Throwable])
-      retryStateQueue <- ZStream.fromEffect(zio.Queue.unbounded[((Duration, Long), Duration)])
+      exceptionQueue <- ZStream.fromZIO(zio.Queue.unbounded[Throwable])
+      retryStateQueue <- ZStream.fromZIO(zio.Queue.unbounded[(Duration, Long, Duration)])
       ret <- ZStream
-        .fromEffect(
+        .fromZIO(
           action
             .onInterrupt(_ =>
-              UIO(println("Got interrupted! Delaying...")) *> UIO(println("OK now release")).delay(3.seconds)
+              ZIO.succeed(println("Got interrupted! Delaying...")) *>
+                ZIO.succeed(println("OK now release")).delay(3.seconds)
             )
-            .retry(retrySchedule.tapInput(exceptionQueue.offer).tapOutput(retryStateQueue.offer))
+            .tapError(exceptionQueue.offer(_))
+            .retry(
+              retrySchedule
+                .tapOutput(retryStateQueue.offer)
+            )
             .as(Chunk[RetryState]())
         )
         .merge(
           ZStream
             .fromQueue(exceptionQueue)
             .zip(ZStream.fromQueue(retryStateQueue))
-            .map { case (exception, ((elapsed, count), lastDuration)) =>
+            .map { case (exception, (elapsed, count, lastDuration)) =>
               Chunk.single(RetryState(exception, lastDuration, count, elapsed))
             }
         )

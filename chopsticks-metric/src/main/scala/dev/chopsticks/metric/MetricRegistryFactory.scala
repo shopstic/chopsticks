@@ -1,10 +1,8 @@
 package dev.chopsticks.metric
 
 import dev.chopsticks.metric.MetricRegistry.MetricGroup
-import zio.UManaged
+import zio.{Scope, URIO}
 
-object MetricRegistryFactory {
-  trait Service[Grp <: MetricGroup] {
-    def manage: UManaged[MetricRegistry.Service[Grp]]
-  }
+trait MetricRegistryFactory[Grp <: MetricGroup] {
+  def manage: URIO[Scope, MetricRegistry[Grp]]
 }

@@ -3,16 +3,16 @@ package dev.chopsticks.fp.config
 import com.typesafe.config.impl.ConfigImpl
 import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
 import pureconfig.{KebabCase, PascalCase}
-import zio.{Task, URIO, ZIO, ZLayer}
+import zio.{URIO, ZIO, ZLayer}
 
 import java.nio.file.Paths
 
-object HoconConfig {
-  trait Service {
-    def config: Config
-  }
+trait HoconConfig {
+  def config: Config
+}
 
-  def get: URIO[HoconConfig, Config] = ZIO.access[HoconConfig](_.get.config)
+object HoconConfig {
+  def get: URIO[HoconConfig, Config] = ZIO.serviceWith[HoconConfig](_.config)
 
   def unsafeResolveConfig(resourceConfigFile: Option[String] = None): Config = {
     if (scala.sys.props.get("config.file").nonEmpty) {
@@ -58,13 +58,14 @@ object HoconConfig {
   }
 
   def liveWithResourceConfigFile(resourceConfigFile: Option[String]): ZLayer[Any, Throwable, HoconConfig] = {
-    Task(unsafeResolveConfig(resourceConfigFile))
-      .map(cfg =>
-        new Service {
-          override val config: Config = cfg
-        }
-      )
-      .toLayer
+    ZLayer {
+      ZIO.attempt(unsafeResolveConfig(resourceConfigFile))
+        .map(cfg =>
+          new HoconConfig {
+            override val config: Config = cfg
+          }
+        )
+    }
   }
 
   def live(appClass: Option[Class[_]] = None): ZLayer[Any, Throwable, HoconConfig] = {

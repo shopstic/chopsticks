@@ -1,6 +1,6 @@
 package dev.chopsticks.testkit
 
-import akka.testkit.TestKit
+import org.apache.pekko.testkit.TestKit
 import org.scalatest.{BeforeAndAfterAll, Suite}
 
 trait AkkaTestKitAutoShutDown extends BeforeAndAfterAll {
