@@ -1,9 +1,9 @@
 package dev.chopsticks.kvdb.fdb
 
-import akka.actor.ActorRef
-import akka.stream.KillSwitches.KillableGraphStageLogic
-import akka.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
-import akka.stream.{Attributes, Outlet, SourceShape}
+import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.stream.KillSwitches.KillableGraphStageLogic
+import org.apache.pekko.stream.stage.{GraphStage, GraphStageLogic, OutHandler}
+import org.apache.pekko.stream.{Attributes, Outlet, SourceShape}
 import com.apple.foundationdb.{FDBException, KeyValue}
 import com.apple.foundationdb.async.AsyncIterator
 import com.google.protobuf.ByteString

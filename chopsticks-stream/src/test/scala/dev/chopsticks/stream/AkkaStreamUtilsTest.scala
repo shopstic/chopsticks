@@ -1,8 +1,8 @@
 package dev.chopsticks.stream
 
-import akka.stream.scaladsl.Source
-import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.ImplicitSender
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.testkit.scaladsl.TestSink
+import org.apache.pekko.testkit.ImplicitSender
 import dev.chopsticks.testkit.{AkkaTestKit, AkkaTestKitAutoShutDown}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike

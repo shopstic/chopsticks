@@ -1,8 +1,8 @@
 package dev.chopsticks.sample.app.dstream
 
-import akka.NotUsed
-import akka.grpc.GrpcClientSettings
-import akka.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.grpc.GrpcClientSettings
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
 import dev.chopsticks.dstream.DstreamMaster.DstreamMasterConfig
 import dev.chopsticks.dstream.DstreamServer.DstreamServerConfig
 import dev.chopsticks.dstream.DstreamServerHandlerFactory.DstreamServerPartialHandler
@@ -17,12 +17,12 @@ import dev.chopsticks.dstream.metric.{
   DstreamStateMetricsManager,
   DstreamWorkerMetricsManager
 }
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.ZPekkoApp
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.util.LoggedRace
-import dev.chopsticks.fp.zio_ext.ZManagedExtensions
+import dev.chopsticks.fp.zio_ext.ZIOExtensions
 import dev.chopsticks.metric.log.MetricLogger
 import dev.chopsticks.metric.prom.PromMetricRegistryFactory
 import dev.chopsticks.sample.app.dstream.proto._
@@ -30,15 +30,14 @@ import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import io.prometheus.client.CollectorRegistry
-import zio.{ExitCode, RIO, UIO, ZIO, ZLayer, ZManaged}
+import zio.{RIO, Scope, ZIO, ZLayer}
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
 
-object DstreamStateTestApp extends ZAkkaApp {
+object DstreamStateTestApp extends ZPekkoApp {
 
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    import zio.magic._
+  override def run: RIO[ZAkkaAppEnv with Scope, Any] = {
 
     val promRegistry = ZLayer.succeed(CollectorRegistry.defaultRegistry)
 
@@ -50,10 +49,10 @@ object DstreamStateTestApp extends ZAkkaApp {
     val dstreamClientMetricsManager = DstreamClientMetricsManager.live
     val dstreamMasterMetricsManager = DstreamMasterMetricsManager.live
 
-    val dstreamState = DstreamState.manage[Assignment, Result]("test").toLayer
+    val dstreamState = ZLayer.scoped(DstreamState.manage[Assignment, Result]("test"))
     val dstreamServerHandlerFactory = DstreamServerHandlerFactory.live[Assignment, Result] { handle =>
       ZIO
-        .access[AkkaEnv](_.get.actorSystem)
+        .serviceWith[PekkoEnv](_.actorSystem)
         .map { implicit as =>
           DstreamServerPartialHandler(
             DstreamSampleServicePowerApiHandler.partial(handle(_, _)),
@@ -65,7 +64,7 @@ object DstreamStateTestApp extends ZAkkaApp {
     val dstreamClient = DstreamClient
       .live[Assignment, Result] { settings =>
         ZIO
-          .access[AkkaEnv](_.get.actorSystem)
+          .serviceWith[PekkoEnv](_.actorSystem)
           .map { implicit as =>
             DstreamSampleServiceClient(settings)
           }
@@ -79,8 +78,7 @@ object DstreamStateTestApp extends ZAkkaApp {
     val metricLogger = MetricLogger.live()
 
     app
-      .as(ExitCode(1))
-      .injectSome[ZAkkaAppEnv](
+      .provideSome[PekkoEnv with IzLogging with Scope](
         promRegistry,
         stateMetricRegistryFactory,
         workerMetricRegistryFactory,
@@ -111,12 +109,12 @@ object DstreamStateTestApp extends ZAkkaApp {
   private lazy val parallelism: PosInt = 4
 
   private def runMaster = {
-    val managed = for {
-      server <- ZManaged.access[DstreamServer[Assignment, Result]](_.get)
+    for {
+      server <- ZIO.service[DstreamServer[Assignment, Result]]
       _ <- server.manage(DstreamServerConfig(port = 9999))
         .logResult("Dstream server", _.localAddress.toString)
-      master <- ZManaged
-        .access[DstreamMaster[Assignment, Assignment, Result, Result]](_.get)
+      master <- ZIO
+        .service[DstreamMaster[Assignment, Assignment, Result, Result]]
       distributionFlow <- master
         .manageFlow(
           DstreamMasterConfig(serviceId = "test", parallelism = parallelism, ordered = false),
@@ -135,23 +133,20 @@ object DstreamStateTestApp extends ZAkkaApp {
               )
             } yield last
         }((_, task) => task)
-    } yield distributionFlow
-
-    managed.use { distributionFlow =>
-      Source(1 to Int.MaxValue)
+      _ <- Source(1 to Int.MaxValue)
         .initialDelay(1.minute)
         .map(Assignment(_))
         .toZAkkaSource
         .viaZAkkaFlow(distributionFlow)
         .killSwitch
         .interruptibleRunIgnore()
-    }
+    } yield ()
   }
 
   private def runWorker = {
     for {
-      worker <- ZIO.access[DstreamWorker[Assignment, Result, NotUsed]](_.get)
-      clientSettings <- AkkaEnv.actorSystem.map { implicit as =>
+      worker <- ZIO.service[DstreamWorker[Assignment, Result, NotUsed]]
+      clientSettings <- PekkoEnv.actorSystem.map { implicit as =>
         GrpcClientSettings
           .connectToServiceAt("localhost", 9999)
           .withTls(false)
@@ -163,7 +158,7 @@ object DstreamStateTestApp extends ZAkkaApp {
           parallelism = parallelism,
           assignmentTimeout = 10.seconds
         )) { (_, assignment) =>
-          UIO {
+          ZIO.succeed {
             Source(1 to 10)
               .map(v => Result(assignment.valueIn * 10 + v))
 //              .throttle(1, 1.second)
@@ -191,9 +186,9 @@ object DstreamStateTestApp extends ZAkkaApp {
     MetricLogger
       .periodicallyCollect {
         for {
-          stateMetrics <- ZIO.accessM[DstreamStateMetricsManager](_.get.activeSet)
-          masterMetrics <- ZIO.accessM[DstreamMasterMetricsManager](_.get.activeSet)
-          workerMetrics <- ZIO.accessM[DstreamWorkerMetricsManager](_.get.activeSet)
+          stateMetrics <- ZIO.serviceWithZIO[DstreamStateMetricsManager](_.activeSet)
+          masterMetrics <- ZIO.serviceWithZIO[DstreamMasterMetricsManager](_.activeSet)
+          workerMetrics <- ZIO.serviceWithZIO[DstreamWorkerMetricsManager](_.activeSet)
         } yield {
           import MetricLogger.sum
 

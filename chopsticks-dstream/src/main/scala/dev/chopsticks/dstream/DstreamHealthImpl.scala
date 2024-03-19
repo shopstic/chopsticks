@@ -1,7 +1,7 @@
 package dev.chopsticks.dstream
 
-import akka.NotUsed
-import akka.stream.scaladsl.Source
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.scaladsl.Source
 import grpc.health.v1.HealthCheckResponse.ServingStatus
 import grpc.health.v1.{Health, HealthCheckRequest, HealthCheckResponse}
 

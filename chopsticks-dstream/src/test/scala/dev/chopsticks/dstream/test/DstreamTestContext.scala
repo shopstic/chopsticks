@@ -1,14 +1,14 @@
 package dev.chopsticks.dstream.test
 
-import akka.NotUsed
-import akka.http.scaladsl.Http
-import akka.stream.scaladsl.Source
-import akka.stream.testkit.{TestPublisher, TestSubscriber}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.stream.testkit.{TestPublisher, TestSubscriber}
 import dev.chopsticks.dstream.DstreamState.WorkResult
-import zio.{Fiber, Has, URIO, ZIO}
+import zio.{Fiber, URIO, ZIO}
 
 object DstreamTestContext {
-  def get[A: zio.Tag, R: zio.Tag]: URIO[Has[DstreamTestContext[A, R]], DstreamTestContext[A, R]] =
+  def get[A: zio.Tag, R: zio.Tag]: URIO[DstreamTestContext[A, R], DstreamTestContext[A, R]] =
     ZIO.service[DstreamTestContext[A, R]]
 }
 

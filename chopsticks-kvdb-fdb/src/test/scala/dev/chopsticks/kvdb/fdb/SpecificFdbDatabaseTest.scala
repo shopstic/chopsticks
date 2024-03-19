@@ -3,14 +3,14 @@ package dev.chopsticks.kvdb.fdb
 import com.apple.foundationdb.MutationType
 import com.apple.foundationdb.tuple.ByteArrayUtil
 import dev.chopsticks.fdb.transaction.ZFdbTransaction
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
-import dev.chopsticks.kvdb.KvdbDatabaseTest
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
+import dev.chopsticks.kvdb.{KvdbDatabaseTest, TestDatabase}
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestSuite}
 import org.scalatest.Inside
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.{Promise, Task, UIO, ZIO, ZRef}
+import zio.{durationInt, Promise, Ref, Unsafe, ZIO}
 
 import java.nio.charset.StandardCharsets
 import java.time.YearMonth
@@ -31,10 +31,10 @@ final class SpecificFdbDatabaseTest
   private lazy val minCf = dbMat.min
 
   private lazy val withDb =
-    createTestRunner(FdbDatabaseTest.managedDb) { effect =>
-      import zio.magic._
-
-      effect.injectSome[ZAkkaAppEnv](
+    createTestRunner[ZAkkaAppEnv with KvdbIoThreadPool, FdbDatabase[TestDatabase.BaseCf, TestDatabase.CfSet]](
+      FdbDatabaseTest.managedDb
+    ) { effect =>
+      effect.provideSome[ZAkkaAppEnv](
         KvdbIoThreadPool.live
       )
     }
@@ -58,7 +58,9 @@ final class SpecificFdbDatabaseTest
                 .thenCompose { version =>
                   counter.incrementAndGet()
                   api.deletePrefix(defaultCf, Array.emptyByteArray)
-                  rt.unsafeRunToFuture(lock1.succeed(()) *> lock2.await.as(version)).asJava
+                  Unsafe.unsafe { implicit unsafe =>
+                    rt.unsafe.runToFuture(lock1.succeed(()) *> lock2.await.as(version)).asJava
+                  }
                 }
             }
           )
@@ -103,7 +105,9 @@ final class SpecificFdbDatabaseTest
               .result,
             condition = test => {
               val _ = counter.getAndIncrement()
-              rt.unsafeRun(promise.await)
+              Unsafe.unsafe { implicit unsafe =>
+                rt.unsafe.run(promise.await).getOrThrowFiberFailure()
+              }
               test match {
                 case head :: Nil if head.exists(p => KvdbSerdesUtils.byteArrayToString(p._2) == "aaaa") =>
                   true
@@ -134,15 +138,15 @@ final class SpecificFdbDatabaseTest
   "ZIO-based low-level transaction" should {
     "work" in withDb { db =>
       for {
-        transaction <- UIO(ZFdbTransaction(db))
+        transaction <- ZIO.succeed(ZFdbTransaction(db))
         _ <- transaction.write { tx =>
           val cf = tx.keyspace(defaultCf)
 
           for {
-            _ <- cf.get(_.is("foo")).tap(v => Task(v shouldBe empty))
-            _ <- UIO(cf.put("foo", "bar"))
-            _ <- cf.getValue(_.is("foo")).tap(v => Task(v shouldEqual Some("bar")))
-            _ <- UIO(cf.put("foo", "baz"))
+            _ <- cf.get(_.is("foo")).tap(v => ZIO.attempt(v shouldBe empty))
+            _ <- ZIO.succeed(cf.put("foo", "bar"))
+            _ <- cf.getValue(_.is("foo")).tap(v => ZIO.attempt(v shouldEqual Some("bar")))
+            _ <- ZIO.succeed(cf.put("foo", "baz"))
           } yield ()
         }
         _ <- transaction
@@ -150,9 +154,9 @@ final class SpecificFdbDatabaseTest
             val cf = tx.keyspace(defaultCf)
 
             for {
-              _ <- cf.getValue(_.is("foo")).tap(v => Task(v shouldEqual Some("baz")))
-              _ <- UIO(cf.put("foo", "boo"))
-              _ <- Task.fail(new IllegalStateException("Test failure")).unit
+              _ <- cf.getValue(_.is("foo")).tap(v => ZIO.attempt(v shouldEqual Some("baz")))
+              _ <- ZIO.succeed(cf.put("foo", "boo"))
+              _ <- ZIO.fail(new IllegalStateException("Test failure")).unit
             } yield ()
           }
           .ignore
@@ -166,10 +170,9 @@ final class SpecificFdbDatabaseTest
     }
 
     "support read interruption" in withDb { db =>
-      import zio.duration._
       for {
-        transaction <- UIO(ZFdbTransaction(db))
-        ref <- ZRef.make(false)
+        transaction <- ZIO.succeed(ZFdbTransaction(db))
+        ref <- Ref.make(false)
         fib <- transaction.read { tx =>
           tx.keyspace(defaultCf).getValue(_.is("foo")).delay(5.seconds).onInterrupt(ref.set(true))
         }.fork
@@ -184,9 +187,9 @@ final class SpecificFdbDatabaseTest
   "add mutation" should {
     "work with Long value" in withDb { db =>
       for {
-        transaction <- UIO(ZFdbTransaction(db))
+        transaction <- ZIO.succeed(ZFdbTransaction(db))
         _ <- transaction.write { tx =>
-          Task {
+          ZIO.attempt {
             val cf = tx.keyspace(counterCf)
 
             cf.put("foo", Long.MaxValue - 1)
@@ -208,9 +211,9 @@ final class SpecificFdbDatabaseTest
   "min mutation" should {
     "work with YearMonth value" in withDb { db =>
       for {
-        transaction <- UIO(ZFdbTransaction(db))
+        transaction <- ZIO.succeed(ZFdbTransaction(db))
         _ <- transaction.write { tx =>
-          Task {
+          ZIO.attempt {
             val cf = tx.keyspace(minCf)
 
             cf.mutateMin("foo", YearMonth.of(2024, 9))
@@ -238,9 +241,9 @@ final class SpecificFdbDatabaseTest
   "max mutation" should {
     "work with YearMonth value" in withDb { db =>
       for {
-        transaction <- UIO(ZFdbTransaction(db))
+        transaction <- ZIO.succeed(ZFdbTransaction(db))
         _ <- transaction.write { tx =>
-          Task {
+          ZIO.attempt {
             val cf = tx.keyspace(minCf)
 
             cf.mutateMax("foo", YearMonth.of(2024, 9))

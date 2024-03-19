@@ -1,16 +1,20 @@
 package dev.chopsticks.dstream
 
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.settings.ServerSettings
-import akka.util.Timeout
-import dev.chopsticks.fp.ZManageable
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.settings.ServerSettings
+import org.apache.pekko.util.Timeout
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.net.PortNumber
 import eu.timepit.refined.types.string.NonEmptyString
-import zio.{RManaged, Task, URLayer, ZManaged}
+import zio.{RIO, Scope, URLayer, ZIO, ZLayer}
 
 import scala.concurrent.duration._
+
+trait DstreamServer[Assignment, Result] {
+  def manage(config: DstreamServer.DstreamServerConfig)
+    : RIO[DstreamServerHandler[Assignment, Result] with PekkoEnv with Scope, Http.ServerBinding]
+}
 
 object DstreamServer {
   final case class DstreamServerConfig(
@@ -20,53 +24,48 @@ object DstreamServer {
     idleTimeout: Option[Timeout] = None
   )
 
-  trait Service[Assignment, Result] {
-    def manage(config: DstreamServerConfig)
-      : RManaged[DstreamServerHandler[Assignment, Result] with AkkaEnv, Http.ServerBinding]
-  }
-
-  def manage[Assignment: zio.Tag, Result: zio.Tag](
-    config: DstreamServerConfig
-  ): RManaged[DstreamServerHandler[Assignment, Result] with AkkaEnv, Http.ServerBinding] = {
-    for {
-      akkaSvc <- ZManaged.access[AkkaEnv](_.get)
-      handler <- ZManaged.access[DstreamServerHandler[Assignment, Result]](_.get)
-      binding <- ZManaged
-        .make {
-          for {
-            fn <- handler.create
-            binding <- Task
-              .fromFuture { _ =>
-                import akkaSvc.actorSystem
-                val settings = ServerSettings(actorSystem)
-
-                Http()
-                  .newServerAt(interface = config.interface, port = config.port)
-                  .withSettings(
-                    settings
-                      .withPreviewServerSettings(
-                        settings
-                          .withTimeouts(settings.timeouts.withIdleTimeout(
-                            config.idleTimeout.map(_.duration).getOrElse(Duration.Inf)
-                          ))
-                          .previewServerSettings
-                          .withEnableHttp2(true)
-                      )
-                  )
-                  .bind(fn)
-              }
-          } yield binding
-        } { binding =>
-          Task
-            .fromFuture(_ => binding.terminate(config.shutdownTimeout.duration))
-            .orDie
-        }
-    } yield binding
-  }
-
   def live[Assignment: zio.Tag, Result: zio.Tag]
-    : URLayer[DstreamServerHandler[Assignment, Result] with AkkaEnv, DstreamServer[Assignment, Result]] = {
-    ZManageable(manage[Assignment, Result] _)
-      .toLayer(fn => (config: DstreamServerConfig) => fn(config))
+    : URLayer[DstreamServerHandler[Assignment, Result] with PekkoEnv, DstreamServer[Assignment, Result]] = {
+    val effect =
+      for {
+        akkaSvc <- ZIO.service[PekkoEnv]
+        handler <- ZIO.service[DstreamServerHandler[Assignment, Result]]
+      } yield new DstreamServer[Assignment, Result] {
+        override def manage(config: DstreamServerConfig)
+          : RIO[DstreamServerHandler[Assignment, Result] with PekkoEnv with Scope, Http.ServerBinding] = {
+          ZIO
+            .acquireRelease {
+              for {
+                fn <- handler.create
+                binding <- ZIO
+                  .fromFuture { _ =>
+                    import akkaSvc.actorSystem
+                    val settings = ServerSettings(actorSystem)
+
+                    Http()
+                      .newServerAt(interface = config.interface, port = config.port)
+                      .withSettings(
+                        settings
+                          .withPreviewServerSettings(
+                            settings
+                              .withTimeouts(settings.timeouts.withIdleTimeout(
+                                config.idleTimeout.map(_.duration).getOrElse(Duration.Inf)
+                              ))
+                              .previewServerSettings
+                              .withEnableHttp2(true)
+                          )
+                      )
+                      .bind(fn)
+                  }
+              } yield binding
+            } { binding =>
+              ZIO
+                .fromFuture(_ => binding.terminate(config.shutdownTimeout.duration))
+                .orDie
+            }
+        }
+      }
+
+    ZLayer(effect)
   }
 }

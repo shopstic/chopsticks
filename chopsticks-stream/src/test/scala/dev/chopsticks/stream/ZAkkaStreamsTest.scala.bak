@@ -1,12 +1,12 @@
 package dev.chopsticks.stream
 
 import java.util.concurrent.TimeUnit
-import akka.stream.scaladsl.{Keep, Sink, Source}
-import akka.stream.testkit.scaladsl.{TestSink, TestSource}
-import akka.stream.{Attributes, KillSwitches}
+import org.apache.pekko.stream.scaladsl.{Keep, Sink, Source}
+import org.apache.pekko.stream.testkit.scaladsl.{TestSink, TestSource}
+import org.apache.pekko.stream.{Attributes, KillSwitches}
 import com.typesafe.scalalogging.StrictLogging
 import dev.chopsticks.fp.{AkkaDiApp, ZService}
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.akka_env.PekkoEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, IzLoggingRouter}
 import dev.chopsticks.stream.ZAkkaStreams.ops._
 import dev.chopsticks.testkit.ManualTimeAkkaTestKit.ManualClock
@@ -32,11 +32,11 @@ final class ZAkkaStreamsTest
     with AkkaTestKitAutoShutDown
     with ScalaFutures
     with StrictLogging {
-  type Env = AkkaEnv with TestClock with Clock with Blocking
+  type Env = PekkoEnv with TestClock with Clock with Blocking
 
   private def runToFutureWithRuntime(run: ZIO[Env, Throwable, Assertion]): CancelableFuture[Assertion] = {
     val testClock = zio.ZEnv.live >>> (zio.test.environment.Live.default ++ Annotations.live) >>> TestClock.default
-    val env = testClock ++ AkkaEnv.live(system) ++ Blocking.live ++ (IzLoggingRouter.live >>> IzLogging.live(
+    val env = testClock ++ PekkoEnv.live(system) ++ Blocking.live ++ (IzLoggingRouter.live >>> IzLogging.live(
       typesafeConfig
     ))
     val rt = AkkaDiApp.createRuntime(env)
@@ -85,7 +85,7 @@ final class ZAkkaStreamsTest
         ret <- Task.fromFuture(_ => future).either
       } yield {
         ret should matchPattern {
-          case Right(akka.Done) =>
+          case Right(org.apache.pekko.Done) =>
         }
       }
     }
@@ -165,7 +165,7 @@ final class ZAkkaStreamsTest
       }
 
       "cancel the prior source and switch to the new one" in withRuntime { implicit rt =>
-        val akkaService = ZService.get[AkkaEnv.Service](rt.environment)
+        val akkaService = ZService.get[PekkoEnv.Service](rt.environment)
 
         val promise = Promise[Boolean]()
         val (source, sink) = TestSource
@@ -178,7 +178,7 @@ final class ZAkkaStreamsTest
         source.sendNext {
           Source
             .future(
-              akka.pattern
+              org.apache.pekko.pattern
                 .after(3.seconds, akkaService.actorSystem.scheduler)(Future.successful(1))(akkaService.dispatcher)
             )
             .watchTermination() { (_, f) =>

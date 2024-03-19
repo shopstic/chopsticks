@@ -1,25 +1,25 @@
 package dev.chopsticks.dstream
 
-import akka.NotUsed
-import akka.grpc.GrpcClientSettings
-import akka.grpc.scaladsl.{AkkaGrpcClient, Metadata, StreamResponseRequestBuilder}
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.http.scaladsl.settings.ServerSettings
-import akka.stream.KillSwitches
-import akka.stream.scaladsl.{Keep, Sink, Source}
-import akka.util.Timeout
+import org.apache.pekko.NotUsed
+import org.apache.pekko.grpc.GrpcClientSettings
+import org.apache.pekko.grpc.scaladsl.{Metadata, PekkoGrpcClient, StreamResponseRequestBuilder}
+import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.model.{HttpRequest, HttpResponse}
+import org.apache.pekko.http.scaladsl.settings.ServerSettings
+import org.apache.pekko.stream.KillSwitches
+import org.apache.pekko.stream.scaladsl.{Keep, Sink, Source}
+import org.apache.pekko.util.Timeout
 import dev.chopsticks.dstream.DstreamState.WorkResult
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
 import eu.timepit.refined.types.string.NonEmptyString
 import eu.timepit.refined.auto._
 import io.grpc.{Status, StatusRuntimeException}
-import zio._
-import zio.clock.Clock
+import zio.{RIO, Schedule, Scope, Tag, URIO, Unsafe, ZIO}
 
+import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise, TimeoutException}
 import scala.util.{Failure, Success}
@@ -49,14 +49,14 @@ object Dstreams {
   }
 
   def manageServer[R](config: DstreamServerConfig)(makeHandler: URIO[R, HttpRequest => Future[HttpResponse]])
-    : RManaged[R with AkkaEnv with IzLogging with Clock, Http.ServerBinding] = {
+    : RIO[R with PekkoEnv with IzLogging with Scope, Http.ServerBinding] = {
     for {
-      akkaSvc <- ZManaged.access[AkkaEnv](_.get)
-      binding <- ZManaged
-        .make {
+      akkaSvc <- ZIO.service[PekkoEnv]
+      binding <- ZIO
+        .acquireRelease {
           for {
             handler <- makeHandler
-            binding <- Task
+            binding <- ZIO
               .fromFuture { _ =>
                 import akkaSvc.actorSystem
                 val settings = ServerSettings(actorSystem)
@@ -72,7 +72,7 @@ object Dstreams {
               }
           } yield binding
         } { binding =>
-          Task
+          ZIO
             .fromFuture(_ => binding.terminate(config.shutdownTimeout.duration))
             .log("Dstream server shutdown")
             .orDie
@@ -80,12 +80,12 @@ object Dstreams {
     } yield binding
   }
 
-  def manageClientFromConfig[R, E, Client <: AkkaGrpcClient](
+  def manageClientFromConfig[R, E, Client <: PekkoGrpcClient](
     config: DstreamClientConfig
-  )(make: GrpcClientSettings => ZIO[R, E, Client]): ZManaged[R with AkkaEnv with IzLogging with Clock, E, Client] = {
+  )(make: GrpcClientSettings => ZIO[R, E, Client]): ZIO[R with PekkoEnv with IzLogging with Scope, E, Client] = {
     for {
-      akkaSvc <- ZManaged.access[AkkaEnv](_.get)
-      clientSettings <- ZManaged.effectTotal {
+      akkaSvc <- ZIO.service[PekkoEnv]
+      clientSettings <- ZIO.succeed {
         import akkaSvc.actorSystem
         GrpcClientSettings
           .connectToServiceAt(config.serverHost, config.serverPort)
@@ -95,12 +95,12 @@ object Dstreams {
     } yield client
   }
 
-  def manageClient[R, E, Client <: AkkaGrpcClient](
+  def manageClient[R, E, Client <: PekkoGrpcClient](
     make: ZIO[R, E, Client]
-  ): ZManaged[R with IzLogging with Clock, E, Client] = {
-    ZManaged
-      .make(make) { client =>
-        Task
+  ): ZIO[R with IzLogging with Scope, E, Client] = {
+    ZIO
+      .acquireRelease(make) { client =>
+        ZIO
           .fromFuture(_ => client.close())
           .orDie
       }
@@ -108,22 +108,24 @@ object Dstreams {
 
   def distribute[Req: Tag, Res: Tag, R0, R1, A](
     makeAssignment: RIO[R0, Req]
-  )(run: WorkResult[Res] => RIO[R1, A]): RIO[R0 with R1 with DstreamState[Req, Res] with AkkaEnv, A] = {
+  )(run: WorkResult[Res] => RIO[R1, A]): RIO[R0 with R1 with DstreamState[Req, Res] with PekkoEnv, A] = {
     for {
-      stateSvc <- ZIO.access[DstreamState[Req, Res]](_.get)
-      akkaSvc <- ZIO.access[AkkaEnv](_.get)
+      stateSvc <- ZIO.service[DstreamState[Req, Res]]
+      akkaSvc <- ZIO.service[PekkoEnv]
       assignment <- makeAssignment
       result <- {
-        ZIO.bracket(stateSvc.enqueueAssignment(assignment)) { assignmentId =>
+        ZIO.acquireReleaseWith(stateSvc.enqueueAssignment(assignment)) { assignmentId =>
           stateSvc
             .report(assignmentId)
             .flatMap {
               case None => ZIO.unit
               case Some(worker) =>
-                UIO {
-                  import akkaSvc.actorSystem
-                  worker.source.runWith(Sink.cancelled)
-                }.ignore
+                ZIO
+                  .succeed {
+                    import akkaSvc.actorSystem
+                    worker.source.runWith(Sink.cancelled)
+                  }
+                  .ignore
             }
             .orDie
         } { assignmentId =>
@@ -135,13 +137,13 @@ object Dstreams {
     } yield result
   }
 
-  def work[R <: Has[_], Req, Res](
+  def work[R, Req, Res](
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req],
     initialTimeout: FiniteDuration = 5.seconds,
     retryPolicy: Schedule[Any, Throwable, Any] = DefaultWorkRetryPolicy
-  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[AkkaEnv with IzLogging with Clock with R, Unit] = {
+  )(makeSource: Req => RIO[R, Source[Res, NotUsed]]): RIO[PekkoEnv with IzLogging with R, Unit] = {
     val task = for {
-      promise <- UIO(Promise[Source[Res, NotUsed]]())
+      promise <- ZIO.succeed(Promise[Source[Res, NotUsed]]())
       result <- requestBuilder
         .invoke(Source.futureSource(promise.future).mapMaterializedValue(_ => NotUsed))
         .toZAkkaSource
@@ -151,7 +153,7 @@ object Dstreams {
           assignment =>
             makeSource(assignment)
               .map(s => promise.success(s))
-              .zipRight(Task.fromFuture(_ => promise.future))
+              .zipRight(ZIO.fromFuture(_ => promise.future))
         }
         .interruptibleRunIgnore()
     } yield result
@@ -159,12 +161,13 @@ object Dstreams {
     task.retry(retryPolicy)
   }
 
-  def workPool[Req, Res, R <: AkkaEnv](
+  @nowarn("cat=lint-infer-any")
+  def workPool[Req, Res, R <: PekkoEnv](
     config: DstreamWorkerConfig,
     requestBuilder: => StreamResponseRequestBuilder[Source[Res, NotUsed], Req]
   )(
     makeSource: Req => RIO[R, Source[Res, NotUsed]]
-  ): RIO[R with IzLogging with Clock, Unit] = {
+  ): RIO[R with IzLogging, Unit] = {
     ZIO
       .foreachPar((1 to config.poolSize).toList) { id =>
         work(requestBuilder.addHeader(WORKER_ID_HEADER, id.toString).addHeader(WORKER_NODE_HEADER, config.nodeId))(
@@ -172,23 +175,25 @@ object Dstreams {
         ).logResult(s"dstream-worker-$id", _.toString)
           .forever
           .retry(Schedule.exponential(100.millis) || Schedule.fixed(1.second))
-      }(List)
+      }(List, implicitly[zio.Trace])
       .unit
   }
 
   def handle[Req, Res](
-    stateService: DstreamState.Service[Req, Res],
+    stateService: DstreamState[Req, Res],
     in: Source[Res, NotUsed],
     metadata: Metadata
-  )(implicit rt: zio.Runtime[AkkaEnv]): Source[Req, NotUsed] = {
-    val akkaSvc = rt.environment.get
-    import akkaSvc.{actorSystem, dispatcher}
+  )(implicit rt: zio.Runtime[PekkoEnv]): Source[Req, NotUsed] = {
+    val pekkoSvc = rt.environment.get
+    import pekkoSvc.{actorSystem, dispatcher}
 
     val (ks, inSource) = in
       .viaMat(KillSwitches.single)(Keep.right)
       .preMaterialize()
 
-    val futureSource = rt.unsafeRunToFuture(stateService.enqueueWorker(inSource, metadata))
+    val futureSource = Unsafe.unsafe { implicit unsafe =>
+      rt.unsafe.runToFuture(stateService.enqueueWorker(inSource, metadata))
+    }
 
     Source
       .futureSource(futureSource)

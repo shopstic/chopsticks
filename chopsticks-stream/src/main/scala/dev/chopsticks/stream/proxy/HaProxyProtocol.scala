@@ -1,12 +1,12 @@
 package dev.chopsticks.stream.proxy
 
-import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
+import org.apache.pekko.stream.{Attributes, FlowShape, Inlet, Outlet}
 
 import java.nio.ByteOrder
 import java.util.Base64
-import akka.stream.scaladsl.{BidiFlow, Flow, Keep}
-import akka.stream.stage.{GraphStageLogic, GraphStageWithMaterializedValue, InHandler, OutHandler}
-import akka.util.{ByteIterator, ByteString}
+import org.apache.pekko.stream.scaladsl.{BidiFlow, Flow, Keep}
+import org.apache.pekko.stream.stage.{GraphStageLogic, GraphStageWithMaterializedValue, InHandler, OutHandler}
+import org.apache.pekko.util.{ByteIterator, ByteString}
 import dev.chopsticks.stream.proxy.HaProxyProtocol.HaProxyMessage
 
 import java.net.InetAddress

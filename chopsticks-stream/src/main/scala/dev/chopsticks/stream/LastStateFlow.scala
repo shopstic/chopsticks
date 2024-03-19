@@ -1,8 +1,8 @@
 package dev.chopsticks.stream
 
-import akka.Done
-import akka.stream.stage.{GraphStageLogic, GraphStageWithMaterializedValue, InHandler, OutHandler}
-import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
+import org.apache.pekko.Done
+import org.apache.pekko.stream.stage.{GraphStageLogic, GraphStageWithMaterializedValue, InHandler, OutHandler}
+import org.apache.pekko.stream.{Attributes, FlowShape, Inlet, Outlet}
 
 import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success, Try}

@@ -1,13 +1,13 @@
 package dev.chopsticks.sample.util
 
-import akka.Done
-import akka.stream.scaladsl.{Sink, Source}
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import org.apache.pekko.Done
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.stream.ZAkkaSource.SourceToZAkkaSource
-import zio.clock.Clock
 import zio.{RIO, ZIO}
 
+import scala.annotation.nowarn
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
@@ -20,11 +20,13 @@ object MiscUtils {
       .mkString("")
   }
 
+  // todo [migration]
+  @nowarn("cat=deprecation")
   def logRates(interval: FiniteDuration)(collect: => ListMap[String, Double])(implicit
     logCtx: LogCtx
-  ): RIO[AkkaEnv with IzLogging with Clock, Done] = {
+  ): RIO[PekkoEnv with IzLogging, Done] = {
     for {
-      logger <- ZIO.access[IzLogging](_.get.logger)
+      logger <- ZIO.serviceWith[IzLogging](_.logger)
       ret <- Source
         .tick(Duration.Zero, interval, ())
         .map { _ => collect }

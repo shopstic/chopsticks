@@ -33,7 +33,7 @@ object Build {
     "-Wmacros:after",
     "-Xlint:-byname-implicit,_", // Enable all linting options except lint-byname-implicit
     "-Wconf:any:wv",
-    "-Wconf:src=akka-grpc/.*:silent",
+    "-Wconf:src=pekko-grpc/.*:silent",
     "-Wconf:src=src_managed/.*:silent",
     "-Ypatmat-exhaust-depth",
     "40"
@@ -79,7 +79,7 @@ object Build {
 //          Wart.Product
         ),
         wartremoverExcluded += sourceManaged.value,
-        wartremoverExcluded += baseDirectory.value / "target" / "scala-2.13" / "akka-grpc",
+        wartremoverExcluded += baseDirectory.value / "target" / "scala-2.13" / "pekko-grpc",
         dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
         libraryDependencies ++= Dependencies.scalatestDeps
 //        ossPublishSettings

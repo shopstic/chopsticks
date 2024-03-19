@@ -1,29 +1,28 @@
 package dev.chopsticks.kvdb.api
 
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.DbApi
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesThreadPool, KvdbTestSuite}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.{Task, UIO, ZManaged}
+import zio.{Scope, ZIO}
 
 abstract class KvdbDatabaseApiTest
     extends AsyncWordSpecLike
     with Matchers
     with KvdbTestSuite {
-  protected def managedDb: ZManaged[ZAkkaAppEnv with KvdbIoThreadPool with KvdbSerdesThreadPool, Throwable, DbApi]
+  protected def managedDb: ZIO[ZAkkaAppEnv with KvdbIoThreadPool with KvdbSerdesThreadPool with Scope, Throwable, DbApi]
   protected def dbMat: TestDatabase.Materialization
 //  protected def anotherCf: AnotherCf1
 
-  private lazy val withDb = createTestRunner(managedDb) { effect =>
-    import zio.magic._
-
-    effect.injectSome[ZAkkaAppEnv](
-      KvdbIoThreadPool.live,
-      KvdbSerdesThreadPool.fromDefaultAkkaDispatcher()
-    )
-  }
+  private lazy val withDb =
+    createTestRunner[ZAkkaAppEnv with KvdbIoThreadPool with KvdbSerdesThreadPool, DbApi](managedDb) { effect =>
+      effect.provideSome[ZAkkaAppEnv](
+        KvdbIoThreadPool.live,
+        KvdbSerdesThreadPool.fromDefaultPekkoDispatcher()
+      )
+    }
 
 //  "open" should {
 //    "work" in withDb { db =>
@@ -34,7 +33,7 @@ abstract class KvdbDatabaseApiTest
 
   "withOptions" should {
     "update options of the underlying db clientOptions" in withDb { db =>
-      Task {
+      ZIO.attempt {
         import scala.concurrent.duration._
         val newDb = db.withOptions(_.copy(watchTimeout = 123.seconds))
         newDb.options.watchTimeout shouldBe 123.seconds
@@ -45,7 +44,7 @@ abstract class KvdbDatabaseApiTest
 
   "KvdbColumnFamilyApi withOptions" should {
     "update options of the underlying db clientOptions" in withDb { db =>
-      Task {
+      ZIO.attempt {
         import scala.concurrent.duration._
         val api = db.columnFamily(dbMat.plain).withOptions(_.copy(watchTimeout = 123.seconds))
         api.options.watchTimeout shouldBe 123.seconds
@@ -68,7 +67,7 @@ abstract class KvdbDatabaseApiTest
 
       "work with cf" in withDb { db =>
         for {
-          cf <- UIO {
+          cf <- ZIO.succeed {
             db.columnFamily(dbMat.plain)
           }
           _ <- cf.putTask("foo", "bar")

@@ -3,38 +3,37 @@ import sbt._
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
   val SCALA_VERSION = "2.13.10"
-  // The last Apache 2.0 licensed Akka
-  val AKKA_VERSION = "2.6.20"
-  val AKKA_HTTP_VERSION = "10.2.10"
-  val ZIO_VERSION = "1.0.18"
-  val IZUMI_VERSION = "1.0.10"
+  val PEKKO_VERSION = "1.0.2"
+  val PEKKO_HTTP_VERSION = "1.0.1"
+  val ZIO_VERSION = "2.0.21"
+  val IZUMI_VERSION = "1.2.6"
   val REFINED_VERSION = "0.9.29"
   val CIRCE_VERSION = "0.14.3"
-  val CALIBAN_VERSION = "1.3.3"
+  val CALIBAN_VERSION = "2.5.3"
 
-  val akkaSlf4jDeps = Seq(
-    "com.typesafe.akka" %% "akka-slf4j" % AKKA_VERSION
+  val pekkoSlf4jDeps = Seq(
+    "org.apache.pekko" %% "pekko-slf4j" % PEKKO_VERSION
   )
 
-  val akkaStreamDeps = Seq(
-    "akka-stream",
-    "akka-stream-typed"
-  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
+  val pekkoStreamDeps = Seq(
+    "pekko-stream",
+    "pekko-stream-typed"
+  ).map { p => "org.apache.pekko" %% p % PEKKO_VERSION }
 
-  val akkaActorDeps = Seq(
-    "akka-actor",
-    "akka-actor-typed"
-  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
+  val pekkoActorDeps = Seq(
+    "pekko-actor",
+    "pekko-actor-typed"
+  ).map { p => "org.apache.pekko" %% p % PEKKO_VERSION }
 
-  val akkaDiscoveryOverrideDeps = Seq(
-    "akka-discovery"
-  ).map { p => "com.typesafe.akka" %% p % AKKA_VERSION }
+  val pekkoDiscoveryOverrideDeps = Seq(
+    "pekko-discovery"
+  ).map { p => "org.apache.pekko" %% p % PEKKO_VERSION }
 
-  val akkaHttpDeps = Seq("akka-http-core", "akka-http").map(p => "com.typesafe.akka" %% p % AKKA_HTTP_VERSION)
+  val pekkoHttpDeps = Seq("pekko-http-core", "pekko-http").map(p => "org.apache.pekko" %% p % PEKKO_HTTP_VERSION)
 
   val zioCoreDeps = Seq(
     // Override izumi-reflect to 2.3.7 which solves the dreaded "Defect in zio.Has" bug again
-    "dev.zio" %% "izumi-reflect" % "2.3.7",
+    "dev.zio" %% "izumi-reflect" % "2.3.8",
     "dev.zio" %% "zio" % ZIO_VERSION
   )
 
@@ -43,7 +42,7 @@ object Dependencies {
   )
 
   lazy val zioInteropReactivestreamsDeps = Seq(
-    "dev.zio" %% "zio-interop-reactivestreams" % "1.3.12"
+    "dev.zio" %% "zio-interop-reactivestreams" % "2.0.2"
   )
 
   val zioTestDeps = Seq(
@@ -66,19 +65,19 @@ object Dependencies {
     "io.prometheus" % "simpleclient_common" % "0.16.0"
   )
 
-  val akkaGrpcRuntimeDeps = Seq(
-    "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.1.6"
+  val pekkoGrpcRuntimeDeps = Seq(
+    "org.apache.pekko" %% "pekko-grpc-runtime" % "1.0.0"
   )
 
   val catsCoreDeps = Seq(
     "org.typelevel" %% "cats-core" % "2.8.0"
   )
 
-  val pureconfigDeps = Seq("pureconfig", "pureconfig-akka")
-    .map(p => "com.github.pureconfig" %% p % "0.17.4")
+  val pureconfigDeps = Seq("pureconfig", "pureconfig-pekko")
+    .map(p => "com.github.pureconfig" %% p % "0.17.6")
 
-  val akkaTestDeps = Seq("akka-testkit", "akka-stream-testkit", "akka-actor-testkit-typed")
-    .map(p => "com.typesafe.akka" %% p % AKKA_VERSION)
+  val pekkoTestDeps = Seq("pekko-testkit", "pekko-stream-testkit", "pekko-actor-testkit-typed")
+    .map(p => "org.apache.pekko" %% p % PEKKO_VERSION)
 
   val nameofDeps = Seq(
     "com.github.dwickern" %% "scala-nameof" % "4.0.0" % Provided
@@ -173,6 +172,15 @@ object Dependencies {
     "com.sleepycat" % "je" % "18.3.12"
   )
 
+  val pekkoConnectorUdpDeps = Seq(
+    "org.apache.pekko" %% "pekko-connectors-udp" % "1.0.2"
+  )
+
+  val jsoniterDeps = Seq(
+    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.28.4",
+    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.28.4" % Provided
+  )
+
   val magnoliaDeps = Seq(
     "com.propensive" %% "magnolia" % "0.17.0"
   )
@@ -191,9 +199,9 @@ object Dependencies {
     Seq(
       "com.github.ghostdogpr" %% "caliban",
       "com.github.ghostdogpr" %% "caliban-client",
-      "com.github.ghostdogpr" %% "caliban-akka-http"
+      "com.github.ghostdogpr" %% "caliban-pekko-http"
     )
-      .map(c => (c % CALIBAN_VERSION).exclude("com.typesafe.akka", "akka-serialization-jackson_2.13"))
+      .map(c => (c % CALIBAN_VERSION).exclude("org.apache.pekko", "pekko-serialization-jackson_2.13"))
 
   val sourcecodeDeps = Seq(
     "com.lihaoyi" %% "sourcecode" % "0.3.0"
@@ -222,14 +230,13 @@ object Dependencies {
   val commonsText = Seq("org.apache.commons" % "commons-text" % "1.11.0")
 
   lazy val tapirDeps = {
-    val tapirVersion = "0.19.4"
+    val tapirVersion = "1.9.10"
     Seq(
       "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
-      "com.softwaremill.sttp.tapir" %% "tapir-json-zio" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-cats" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-enumeratum" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
-      "com.softwaremill.sttp.tapir" %% "tapir-openapi-circe-yaml" % tapirVersion,
+//      "com.softwaremill.sttp.tapir" %% "tapir-openapi-circe-yaml" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-refined" % tapirVersion
     )

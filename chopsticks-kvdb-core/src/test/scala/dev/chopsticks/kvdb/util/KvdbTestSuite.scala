@@ -2,23 +2,21 @@ package dev.chopsticks.kvdb.util
 
 import better.files.File
 import dev.chopsticks.fp.ZScalatestSuite
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.fp.iz_logging.IzLogging
 import dev.chopsticks.fp.zio_ext._
 import dev.chopsticks.kvdb.TestDatabase
 import dev.chopsticks.kvdb.TestDatabase.BaseCf
 import org.scalatest.{Assertion, Suite}
-import zio.blocking.{blocking, Blocking}
-import zio.clock.Clock
-import zio.{RIO, Task, ZManaged}
+import zio.{RIO, Scope, Unsafe, ZIO}
 
 import scala.concurrent.Future
 
 object KvdbTestSuite {
-  def managedTempDir: ZManaged[Blocking, Throwable, File] = {
-    ZManaged.make {
-      blocking(Task(File.newTemporaryDirectory().deleteOnExit()))
-    } { f => blocking(Task(f.delete())).orDie }
+  def managedTempDir: ZIO[Scope, Throwable, File] = {
+    ZIO.acquireRelease {
+      ZIO.attemptBlocking(File.newTemporaryDirectory().deleteOnExit())
+    } { f => ZIO.attemptBlocking(f.delete()).orDie }
   }
 }
 
@@ -26,16 +24,20 @@ trait KvdbTestSuite extends ZScalatestSuite {
   this: Suite =>
 
   def createTestRunner[R <: ZAkkaAppEnv, Db](
-    managedDb: ZManaged[R, Throwable, Db]
+    managedDb: ZIO[R with Scope, Throwable, Db]
   )(inject: RIO[R, Assertion] => RIO[ZAkkaAppEnv, Assertion]): (Db => RIO[R, Assertion]) => Future[Assertion] = {
     (testCode: Db => RIO[R, Assertion]) =>
       {
-        bootstrapRuntime
-          .unsafeRunToFuture(
-            inject(managedDb
-              .use(testCode(_).interruptAllChildrenPar))
-              .provide(appEnv)
-          )
+        Unsafe.unsafe { implicit unsafe =>
+          bootstrapRuntime.unsafe.runToFuture {
+            inject(
+              ZIO.scoped[R] {
+                managedDb
+                  .flatMap(db => testCode(db).interruptAllChildrenPar)
+              }
+            ).provideEnvironment(appEnv)
+          }
+        }
       }
   }
 
@@ -43,7 +45,7 @@ trait KvdbTestSuite extends ZScalatestSuite {
     db: TestDatabase.Db,
     column: CF,
     pairs: Seq[(K, V)]
-  ): RIO[IzLogging with Clock, Unit] = {
+  ): RIO[IzLogging, Unit] = {
     val batch = pairs
       .foldLeft(db.transactionBuilder()) {
         case (tx, (k, v)) =>

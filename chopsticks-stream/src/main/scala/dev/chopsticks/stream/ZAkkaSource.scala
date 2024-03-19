@@ -1,11 +1,10 @@
 package dev.chopsticks.stream
 
-import akka.NotUsed
-import akka.actor.Status
-import akka.stream._
-import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Sink, Source}
-import dev.chopsticks.fp.ZRunnable
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import org.apache.pekko.NotUsed
+import org.apache.pekko.actor.Status
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl.{Flow, Keep, RunnableGraph, Sink, Source}
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.iz_logging.{IzLogging, LogCtx}
 import dev.chopsticks.fp.zio_ext.TaskExtensions
 import dev.chopsticks.stream.ZAkkaGraph._
@@ -13,12 +12,12 @@ import eu.timepit.refined.types.numeric.PosInt
 import org.reactivestreams.Publisher
 import shapeless.<:!<
 import zio.stream.ZStream
-import zio.{Exit, IO, NeedsEnv, Queue, RIO, Task, UIO, URIO, ZIO}
+import zio.{RIO, URIO, Unsafe, ZIO}
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
-import zio.interop.reactivestreams.Adapters.{createSubscription, demandUnfoldSink}
+import zio.interop.reactivestreams.Adapters.streamToPublisher
 import eu.timepit.refined.auto._
 
 object ZAkkaSource {
@@ -30,13 +29,13 @@ object ZAkkaSource {
   ]) {
     def interruptibleRunIgnore(graceful: Boolean = true)(implicit
       ctx: LogCtx
-    ): RIO[IzLogging with AkkaEnv with R, Unit] = {
+    ): RIO[IzLogging with PekkoEnv with R, Unit] = {
       interruptibleRunWith(Sink.ignore, graceful).unit
     }
 
     def interruptibleRunWith[Out](sink: => Graph[SinkShape[V], Future[Out]], graceful: Boolean = true)(implicit
       ctx: LogCtx
-    ): RIO[IzLogging with AkkaEnv with R, Out] = {
+    ): RIO[IzLogging with PekkoEnv with R, Out] = {
       zSource.to(sink).flatMap(_.interruptibleRun(graceful))
     }
   }
@@ -44,11 +43,11 @@ object ZAkkaSource {
   implicit final class UninterruptibleZAkkaSourceOps[-R, +V, +Mat](zSource: => ZAkkaSource[R, Throwable, V, Mat])(
     implicit notKillSwitch: Mat <:!< KillSwitch
   ) {
-    def uninterruptibleRunIgnore: ZIO[AkkaEnv with R, Throwable, Unit] = {
+    def uninterruptibleRunIgnore: ZIO[PekkoEnv with R, Throwable, Unit] = {
       uninterruptibleRunWith(Sink.ignore).unit
     }
 
-    def uninterruptibleRunWith[Out](sink: => Graph[SinkShape[V], Future[Out]]): RIO[AkkaEnv with R, (Mat, Out)] = {
+    def uninterruptibleRunWith[Out](sink: => Graph[SinkShape[V], Future[Out]]): RIO[PekkoEnv with R, (Mat, Out)] = {
       zSource.to(sink).flatMap(_.uninterruptibleRun)
     }
   }
@@ -60,47 +59,33 @@ object ZAkkaSource {
   }
 
   implicit class ZStreamToZAkkaSource[R, E <: Throwable, O](stream: ZStream[R, E, O]) {
-    def toZAkkaSource(bufferSize: PosInt = 1): ZAkkaSource[R, Nothing, O, Future[NotUsed]] = new ZAkkaSource(scope =>
-      ZIO.runtime[R].map { runtime =>
-        Source
-          .lazySource(() => {
-            val publisher: Publisher[O] = subscriber => {
-              runtime.unsafeRunAsync_(scope.fork(for {
-                demand <- Queue.unbounded[Long]
-                _ <- UIO(subscriber.onSubscribe(createSubscription(subscriber, demand, runtime)))
-                _ <- stream
-                  .run(demandUnfoldSink(subscriber, demand))
-                  .race(demand.awaitShutdown)
-                  .onExit {
-                    case Exit.Success(_) => UIO(subscriber.onComplete())
-                    case Exit.Failure(cause) => UIO(subscriber.onError(cause.squash))
-                  }
-              } yield ()))
-            }
-
-            Source
-              .fromPublisher(publisher)
-              .addAttributes(Attributes.inputBuffer(bufferSize.value, bufferSize.value))
-          })
+    // todo [migration] check if this impl is enough or should we bring back the previous one (we probably need to include the scope here)
+    def toZAkkaSource(bufferSize: PosInt = 1): ZAkkaSource[R, Nothing, O, Future[NotUsed]] = new ZAkkaSource(
+      make = (_: ZAkkaScope) => {
+        streamToPublisher(stream).map { publisher: Publisher[O] =>
+          Source.lazySource { () =>
+            Source.fromPublisher(publisher).addAttributes(Attributes.inputBuffer(bufferSize.value, bufferSize.value))
+          }
+        }
       }
     )
   }
 
   def interruptibleLazySource[R, V](
     effect: RIO[R, V]
-  ): URIO[AkkaEnv with R, Source[V, Future[NotUsed]]] = {
-    ZIO.runtime[AkkaEnv with R].map { implicit rt =>
+  ): URIO[PekkoEnv with R, Source[V, Future[NotUsed]]] = {
+    ZIO.runtime[PekkoEnv with R].map { implicit rt =>
       val env = rt.environment
-      val akkaSvc = env.get[AkkaEnv.Service]
-      import akkaSvc._
+      val pekkoSvc = env.get[PekkoEnv]
+      import pekkoSvc._
 
       Source
         .lazySource(() => {
           val completionPromise = scala.concurrent.Promise[Either[Throwable, V]]()
-          val task = effect.either race Task.fromFuture(_ => completionPromise.future)
+          val task = effect.either race ZIO.fromFuture(_ => completionPromise.future)
 
           Source
-            .future(task.flatMap(Task.fromEither(_)).unsafeRunToFuture)
+            .future(task.flatMap(ZIO.fromEither(_)).unsafeRunToFuture)
             .watchTermination() { (_, f) =>
               f.onComplete { _ =>
                 val _ =
@@ -114,11 +99,11 @@ object ZAkkaSource {
 
   def recursiveSource[R, Out, State](seed: => RIO[R, State], nextState: (State, Out) => State)(
     makeSource: State => Source[Out, NotUsed]
-  ): URIO[AkkaEnv with R, Source[Out, NotUsed]] = {
-    ZIO.runtime[AkkaEnv with R].map { implicit rt =>
+  ): URIO[PekkoEnv with R, Source[Out, NotUsed]] = {
+    ZIO.runtime[PekkoEnv with R].map { implicit rt =>
       val env = rt.environment
-      val akkaSvc = env.get[AkkaEnv.Service]
-      import akkaSvc.{actorSystem, dispatcher}
+      val pekkoSvc = env.get[PekkoEnv]
+      import pekkoSvc.{actorSystem, dispatcher}
 
       Source
         .lazyFuture(() => {
@@ -165,14 +150,14 @@ object ZAkkaSource {
   }
 
   def unfoldAsyncWithScope[S, R, O](seed: S)(runTask: (S, ZAkkaScope) => RIO[R, Option[(S, O)]])
-    : ZAkkaSource[R with AkkaEnv, Nothing, O, NotUsed] = {
+    : ZAkkaSource[R with PekkoEnv, Nothing, O, NotUsed] = {
     new ZAkkaSource(scope => {
       for {
-        runtime <- ZIO.runtime[R with AkkaEnv]
+        runtime <- ZIO.runtime[R with PekkoEnv]
         promise <- zio.Promise.make[Nothing, Unit]
       } yield {
-        implicit val rt: zio.Runtime[R with AkkaEnv] = runtime
-        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+        implicit val rt: zio.Runtime[R with PekkoEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[PekkoEnv].dispatcher
 
         Source
           .unfoldAsync(seed) { state =>
@@ -185,7 +170,11 @@ object ZAkkaSource {
             task.unsafeRunToFuture
           }
           .watchTermination() { (mat, future) =>
-            future.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            future.onComplete(_ =>
+              Unsafe.unsafe { implicit unsafe =>
+                rt.unsafe.run(promise.succeed(())).getOrThrowFiberFailure()
+              }
+            )
             mat
           }
       }
@@ -193,7 +182,7 @@ object ZAkkaSource {
   }
 
   def unfoldAsync[S, R, O](seed: S)(runTask: S => RIO[R, Option[(S, O)]])
-    : ZAkkaSource[R with AkkaEnv, Nothing, O, NotUsed] = {
+    : ZAkkaSource[R with PekkoEnv, Nothing, O, NotUsed] = {
     unfoldAsyncWithScope(seed) { (state, _) =>
       runTask(state)
     }
@@ -205,41 +194,47 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   E,
   Source[Out, Mat]
 ]) {
-  def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaSource[Any, E, Out, Mat]] = {
-    toZIO.provide(r)
-  }
+  // todo [migration]
+//  def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaSource[Any, E, Out, Mat]] = {
+//    toZIO.provide(r)
+//  }
 
   def toZIO: ZIO[R, E, ZAkkaSource[Any, E, Out, Mat]] = {
-    ZRunnable(make).toZIO.map(new ZAkkaSource(_))
+    ZIO.environmentWith[R] { env =>
+      val newMake = (scope: ZAkkaScope) => make(scope).provideEnvironment(env)
+      new ZAkkaSource(newMake)
+    }
   }
 
   def toMat[Ret, Mat2, Mat3](sink: Graph[SinkShape[Out], Mat2])(combine: (Mat, Mat2) => (Mat3, Future[Ret]))
-    : ZIO[R with AkkaEnv, E, RunnableGraph[(Mat3, Future[Ret])]] = {
+    : ZIO[R with PekkoEnv, E, RunnableGraph[(Mat3, Future[Ret])]] = {
     for {
       scope <- ZAkkaScope.make
-      runtime <- ZIO.runtime[AkkaEnv]
+      runtime <- ZIO.runtime[PekkoEnv]
       source <- make(scope)
     } yield {
       source
         .toMat(sink) { (mat, mat2) =>
-          implicit val rt: zio.Runtime[AkkaEnv] = runtime
-          implicit val ec: ExecutionContextExecutor = runtime.environment.get[AkkaEnv.Service].dispatcher
+          implicit val rt: zio.Runtime[PekkoEnv] = runtime
+          implicit val ec: ExecutionContextExecutor = runtime.environment.get[PekkoEnv].dispatcher
 
           val (mat3, future) = combine(mat, mat2)
           mat3 -> future
             .transformWith { result =>
-              rt.unsafeRunToFuture(scope.close()).transform(_.flatMap(_ => result))
+              Unsafe.unsafe { implicit unsafe =>
+                rt.unsafe.runToFuture(scope.close()).transform(_.flatMap(_ => result))
+              }
             }
         }
     }
   }
 
-  def to[Ret](sink: Graph[SinkShape[Out], Future[Ret]]): ZIO[R with AkkaEnv, E, RunnableGraph[(Mat, Future[Ret])]] = {
+  def to[Ret](sink: Graph[SinkShape[Out], Future[Ret]]): ZIO[R with PekkoEnv, E, RunnableGraph[(Mat, Future[Ret])]] = {
     toMat(sink)(Keep.both)
   }
 
   def scanAsync[R1 <: R, Next](zero: Next)(runTask: (Next, Out) => RIO[R1, Next])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
@@ -251,7 +246,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def scanAsyncWithScope[R1 <: R, Next](zero: Next)(runTask: (Next, Out, ZAkkaScope) => RIO[R1, Next])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
@@ -263,7 +258,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def foldAsync[R1 <: R, Next](zero: Next)(runTask: (Next, Out) => RIO[R1, Next])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
@@ -275,7 +270,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def foldAsyncWithScope[R1 <: R, Next](zero: Next)(runTask: (Next, Out, ZAkkaScope) => RIO[R1, Next])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
@@ -287,7 +282,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
@@ -299,7 +294,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def mapAsyncWithScope[R1 <: R, Next](parallelism: Int)(runTask: (Out, ZAkkaScope) => RIO[R1, Next])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
@@ -311,7 +306,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def mapAsyncUnordered[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
@@ -323,7 +318,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def mapAsyncUnorderedWithScope[R1 <: R, Next](parallelism: Int)(runTask: (Out, ZAkkaScope) => RIO[R1, Next])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)
@@ -335,7 +330,7 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def switchFlatMapConcat[R1 <: R, Next](runTask: Out => RIO[R1, Graph[SourceShape[Next], Any]])
-    : ZAkkaSource[R1 with AkkaEnv, E, Next, Mat] = {
+    : ZAkkaSource[R1 with PekkoEnv, E, Next, Mat] = {
     new ZAkkaSource(scope => {
       for {
         source <- make(scope)

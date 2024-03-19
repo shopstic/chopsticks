@@ -1,39 +1,42 @@
 package dev.chopsticks.sample.app
 
-import akka.actor.{Actor, Props}
-import dev.chopsticks.fp.ZAkkaApp
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
-import dev.chopsticks.fp.akka_env.AkkaEnv
-import zio.{ExitCode, RIO, Task, UIO, ZIO, ZManaged}
+import org.apache.pekko.actor.{Actor, Props}
+import dev.chopsticks.fp.ZPekkoApp
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
+import zio.{RIO, Scope, ZIO}
 
-object TopLevelActorCrashTestApp extends ZAkkaApp {
+object TopLevelActorCrashTestApp extends ZPekkoApp {
   final class TestActor extends Actor {
     override def receive: Receive = {
       case _ => throw new IllegalStateException("Test unexpected death")
     }
   }
 
-  override def run(args: List[String]): RIO[ZAkkaAppEnv, ExitCode] = {
-    app.as(ExitCode(0))
+  override def run: RIO[ZAkkaAppEnv with Scope, Any] = {
+    app
   }
 
   //noinspection TypeAnnotation
   def app = {
-    val managed = ZManaged.make(UIO("foo")) { _ =>
-      UIO(println("This release should still be invoked even when the actor system is terminated unexpectedly"))
-    }
-
-    managed.use { _ =>
-      for {
-        akkaSvc <- ZIO.access[AkkaEnv](_.get)
-        actor <- Task {
-          akkaSvc.actorSystem.actorOf(Props(new TestActor))
-        }
-        _ <- Task {
-          actor ! "foo"
-        }.delay(java.time.Duration.ofSeconds(2))
-        _ <- Task.never.unit
-      } yield ()
-    }
+    ZIO
+      .acquireRelease(ZIO.succeed("foo")) { _ =>
+        ZIO.succeed(
+          println("This release should still be invoked even when the actor system is terminated unexpectedly")
+        )
+      }
+      .zipRight {
+        for {
+          akkaSvc <- ZIO.service[PekkoEnv]
+          actor <- ZIO.attempt {
+            akkaSvc.actorSystem.actorOf(Props(new TestActor))
+          }
+          _ <- ZIO
+            .attempt {
+              actor ! "foo"
+            }.delay(java.time.Duration.ofSeconds(2))
+          _ <- ZIO.never.unit
+        } yield ()
+      }
   }
 }

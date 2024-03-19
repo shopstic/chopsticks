@@ -1,6 +1,6 @@
 package dev.chopsticks.kvdb.rocksdb
 
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
 import dev.chopsticks.kvdb.KvdbDatabase.KvdbClientOptions
 import dev.chopsticks.kvdb.TestDatabase._
 import dev.chopsticks.kvdb.codec.primitive._
@@ -11,7 +11,7 @@ import dev.chopsticks.kvdb.{ColumnFamilySet, KvdbDatabaseTest}
 import eu.timepit.refined.auto._
 import eu.timepit.refined.types.string.NonEmptyString
 import squants.information.InformationConversions._
-import zio.ZManaged
+import zio.{Scope, ZIO}
 
 import scala.concurrent.duration._
 
@@ -78,7 +78,7 @@ object RocksdbDatabaseTest {
       ColumnFamilySet[BaseCf].of(plain).and(lookup).and(counter).and(min).and(max)
   }
 
-  val managedDb: ZManaged[ZAkkaAppEnv with KvdbIoThreadPool, Throwable, Db] = {
+  val managedDb: ZIO[ZAkkaAppEnv with KvdbIoThreadPool with Scope, Throwable, Db] = {
     for {
       dir <- KvdbTestSuite.managedTempDir
       db <- RocksdbDatabase.manage(

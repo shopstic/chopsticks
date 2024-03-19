@@ -1,13 +1,13 @@
 package dev.chopsticks.kvdb.rocksdb
 
-import dev.chopsticks.fp.ZAkkaApp.ZAkkaAppEnv
-import dev.chopsticks.kvdb.KvdbDatabaseTest
+import dev.chopsticks.fp.ZPekkoApp.ZAkkaAppEnv
+import dev.chopsticks.kvdb.{KvdbDatabaseTest, TestDatabase}
 import dev.chopsticks.kvdb.util.KvdbException.ConditionalTransactionFailedException
 import dev.chopsticks.kvdb.util.{KvdbIoThreadPool, KvdbSerdesUtils, KvdbTestSuite}
 import org.scalatest.Inside
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpecLike
-import zio.{Promise, ZIO}
+import zio.{Promise, Unsafe, ZIO}
 
 final class SpecificRocksdbDatabaseTest
     extends AsyncWordSpecLike
@@ -20,13 +20,12 @@ final class SpecificRocksdbDatabaseTest
 
   private lazy val defaultCf = dbMat.plain
 
-  private lazy val withDb = createTestRunner(RocksdbDatabaseTest.managedDb) { effect =>
-    import zio.magic._
-
-    effect.injectSome[ZAkkaAppEnv](
-      KvdbIoThreadPool.live
-    )
-  }
+  private lazy val withDb =
+    createTestRunner[ZAkkaAppEnv with KvdbIoThreadPool, TestDatabase.Db](RocksdbDatabaseTest.managedDb) { effect =>
+      effect.provideSome[ZAkkaAppEnv](
+        KvdbIoThreadPool.live
+      )
+    }
 
   "conditionalTransactionTask" should {
     "fail upon conflict" in withDb { db =>
@@ -41,8 +40,10 @@ final class SpecificRocksdbDatabaseTest
               .get(defaultCf, "aaaa")
               .result,
             test => {
-              rt.unsafeRun(conflictStart.succeed(()))
-              rt.unsafeRun(conflictEnd.await)
+              Unsafe.unsafe { implicit unsafe =>
+                rt.unsafe.run(conflictStart.succeed(())).getOrThrowFiberFailure()
+                rt.unsafe.run(conflictEnd.await).getOrThrowFiberFailure()
+              }
 
               test match {
                 case head :: Nil if head.exists(p => KvdbSerdesUtils.byteArrayToString(p._2) == "aaaa") => true

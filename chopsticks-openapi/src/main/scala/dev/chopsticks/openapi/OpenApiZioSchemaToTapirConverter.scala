@@ -3,7 +3,7 @@ package dev.chopsticks.openapi
 import dev.chopsticks.openapi.OpenApiParsedAnnotations.extractAnnotations
 import sttp.tapir.{FieldName, Schema => TapirSchema, SchemaType}
 import sttp.tapir.Schema.SName
-import sttp.tapir.SchemaType.{SDiscriminator, SOption, SRef}
+import sttp.tapir.SchemaType.{SDiscriminator, SOption, SRef, SchemaWithValue}
 import zio.schema.{FieldSet, Schema => ZioSchema, StandardType}
 import zio.Chunk
 
@@ -343,7 +343,7 @@ object OpenApiZioSchemaToTapirConverter {
               }
               i += 1
             }
-            result
+            result.map(s => SchemaWithValue(s.asInstanceOf[TapirSchema[Any]], a.asInstanceOf[Any]))
           }
         ),
         enumAnnotations

@@ -1,8 +1,8 @@
 package dev.chopsticks.stream.proxy
 
-import akka.stream.scaladsl.{Keep, Sink, Source}
-import akka.testkit.ImplicitSender
-import akka.util.ByteString
+import org.apache.pekko.stream.scaladsl.{Keep, Sink, Source}
+import org.apache.pekko.testkit.ImplicitSender
+import org.apache.pekko.util.ByteString
 import dev.chopsticks.stream.proxy.HaProxyProtocol.{
   HaProxyAddresses,
   HaProxyMessage,

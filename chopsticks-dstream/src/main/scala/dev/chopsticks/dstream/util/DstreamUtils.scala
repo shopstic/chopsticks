@@ -1,27 +1,27 @@
 package dev.chopsticks.dstream.util
 
-import akka.grpc.GrpcClientSettings
+import org.apache.pekko.grpc.GrpcClientSettings
 import dev.chopsticks.dstream.DstreamWorker.DstreamWorkerConfig
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.config.{HoconConfig, TypedConfig}
 import dev.chopsticks.fp.iz_logging.IzLogging
 import izumi.logstage.api.Log
 import pureconfig.ConfigReader
 import pureconfig.error.ExceptionThrown
-import zio.{RLayer, URIO}
+import zio.{RLayer, URIO, ZLayer}
 
 import scala.util.Try
 
 object DstreamUtils {
-  def grpcClientSettingsConfigReader: URIO[AkkaEnv, ConfigReader[GrpcClientSettings]] =
-    AkkaEnv.actorSystem.map { implicit as =>
+  def grpcClientSettingsConfigReader: URIO[PekkoEnv, ConfigReader[GrpcClientSettings]] =
+    PekkoEnv.actorSystem.map { implicit as =>
       ConfigReader.configConfigReader.emap { config =>
         Try {
           GrpcClientSettings
             .fromConfig(
               config
                 .withFallback(as.settings.config
-                  .getConfig("akka.grpc.client")
+                  .getConfig("pekko.grpc.client")
                   .getConfig("\"*\""))
             )
         }.fold(
@@ -34,17 +34,17 @@ object DstreamUtils {
   def liveWorkerTypedConfig(
     configNamespace: String = "app",
     logLevel: Log.Level = Log.Level.Info
-  ): RLayer[IzLogging with HoconConfig with AkkaEnv, TypedConfig[DstreamWorkerConfig]] = {
-    grpcClientSettingsConfigReader
-      .toManaged_
+  ): RLayer[IzLogging with HoconConfig with PekkoEnv, TypedConfig[DstreamWorkerConfig]] = {
+    val effect = grpcClientSettingsConfigReader
       .flatMap { implicit settingsConfigReader: ConfigReader[GrpcClientSettings] =>
         //noinspection TypeAnnotation
         implicit val configReader = {
           import dev.chopsticks.util.config.PureconfigConverters._
           ConfigReader[DstreamWorkerConfig]
         }
-        TypedConfig.live[DstreamWorkerConfig](configNamespace, logLevel).build
+        TypedConfig.live[DstreamWorkerConfig](configNamespace, logLevel).build.map(_.get)
       }
-      .toLayerMany
+
+    ZLayer.scoped(effect)
   }
 }

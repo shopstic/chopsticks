@@ -1,13 +1,13 @@
 package dev.chopsticks.stream
 
-import akka.NotUsed
-import akka.stream._
-import akka.stream.scaladsl.{Flow, Keep, Source}
-import dev.chopsticks.fp.ZRunnable
-import dev.chopsticks.fp.akka_env.AkkaEnv
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl.{Flow, Keep, Source}
+import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.zio_ext.TaskExtensions
-import zio.{IO, NeedsEnv, RIO, ZIO}
+import zio.{RIO, Unsafe, ZIO}
 
+import scala.annotation.nowarn
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
@@ -26,26 +26,30 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   E,
   Flow[In, Out, Mat]
 ]) {
-  def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
-    toZIO.provide(r)
-  }
+  // todo [migration]
+//  def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
+//    toZIO.provide(r)
+//  }
 
   def toZIO: ZIO[R, E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
-    ZRunnable(make).toZIO.map(new ZAkkaFlow(_))
+    ZIO.environmentWith[R] { env =>
+      val newMake = (scope: ZAkkaScope) => make(scope).provideEnvironment(env)
+      new ZAkkaFlow(newMake)
+    }
   }
 
   private def mapAsync_[R1 <: R, Next](runTask: (Out, ZAkkaScope) => RIO[R1, Next])(createFlow: (
     Flow[In @uncheckedVariance, Out @uncheckedVariance, Mat],
     Out @uncheckedVariance => Future[Next]
-  ) => Flow[In @uncheckedVariance, Next, Mat @uncheckedVariance]): ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+  ) => Flow[In @uncheckedVariance, Next, Mat @uncheckedVariance]): ZAkkaFlow[R1 with PekkoEnv, E, In, Next, Mat] = {
     new ZAkkaFlow(scope => {
       for {
         flow <- make(scope)
-        runtime <- ZIO.runtime[R1 with AkkaEnv]
+        runtime <- ZIO.runtime[R1 with PekkoEnv]
         promise <- zio.Promise.make[Nothing, Unit]
       } yield {
-        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
-        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+        implicit val rt: zio.Runtime[R1 with PekkoEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[PekkoEnv].dispatcher
 
         createFlow(
           flow,
@@ -60,7 +64,11 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
           }
         )
           .watchTermination() { (mat, future) =>
-            future.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            future.onComplete(_ =>
+              Unsafe.unsafe { implicit unsafe =>
+                rt.unsafe.run(promise.succeed(())).getOrThrowFiberFailure()
+              }
+            )
             mat
           }
       }
@@ -68,15 +76,15 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   private def foldAsync_[R1 <: R, S](zero: S)(runTask: (S, Out, ZAkkaScope) => RIO[R1, S])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, S, Mat] = {
     new ZAkkaFlow(scope => {
       for {
         flow <- make(scope)
-        runtime <- ZIO.runtime[R1 with AkkaEnv]
+        runtime <- ZIO.runtime[R1 with PekkoEnv]
         promise <- zio.Promise.make[Nothing, Unit]
       } yield {
-        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
-        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+        implicit val rt: zio.Runtime[R1 with PekkoEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[PekkoEnv].dispatcher
 
         flow
           .foldAsync(zero) { (state, item) =>
@@ -89,7 +97,11 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
             task.unsafeRunToFuture
           }
           .watchTermination() { (mat, future) =>
-            future.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            future.onComplete(_ =>
+              Unsafe.unsafe { implicit unsafe =>
+                rt.unsafe.run(promise.succeed(())).getOrThrowFiberFailure()
+              }
+            )
             mat
           }
       }
@@ -97,15 +109,15 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   private def scanAsync_[R1 <: R, S](zero: S)(runTask: (S, Out, ZAkkaScope) => RIO[R1, S])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, S, Mat] = {
     new ZAkkaFlow(scope => {
       for {
         flow <- make(scope)
-        runtime <- ZIO.runtime[R1 with AkkaEnv]
+        runtime <- ZIO.runtime[R1 with PekkoEnv]
         promise <- zio.Promise.make[Nothing, Unit]
       } yield {
-        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
-        implicit val ec: ExecutionContextExecutor = rt.environment.get[AkkaEnv.Service].dispatcher
+        implicit val rt: zio.Runtime[R1 with PekkoEnv] = runtime
+        implicit val ec: ExecutionContextExecutor = rt.environment.get[PekkoEnv].dispatcher
 
         flow
           .scanAsync(zero) { (state, item) =>
@@ -118,33 +130,37 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
             task.unsafeRunToFuture
           }
           .watchTermination() { (mat, future) =>
-            future.onComplete(_ => rt.unsafeRun(promise.succeed(())))
+            future.onComplete(_ =>
+              Unsafe.unsafe { implicit unsafe =>
+                rt.unsafe.run(promise.succeed(())).getOrThrowFiberFailure()
+              }
+            )
             mat
           }
       }
     })
   }
 
-  def scanAsync[R1 <: R, S](zero: S)(runTask: (S, Out) => RIO[R1, S]): ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+  def scanAsync[R1 <: R, S](zero: S)(runTask: (S, Out) => RIO[R1, S]): ZAkkaFlow[R1 with PekkoEnv, E, In, S, Mat] = {
     scanAsync_(zero)((state, item, _) => runTask(state, item))
   }
 
   def scanAsyncWithScope[R1 <: R, S](zero: S)(runTask: (S, Out, ZAkkaScope) => RIO[R1, S])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, S, Mat] = {
     scanAsync_(zero)((state, item, scope) => runTask(state, item, scope))
   }
 
-  def foldAsync[R1 <: R, S](zero: S)(runTask: (S, Out) => RIO[R1, S]): ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+  def foldAsync[R1 <: R, S](zero: S)(runTask: (S, Out) => RIO[R1, S]): ZAkkaFlow[R1 with PekkoEnv, E, In, S, Mat] = {
     foldAsync_(zero)((state, item, _) => runTask(state, item))
   }
 
   def foldAsyncWithScope[R1 <: R, S](zero: S)(runTask: (S, Out, ZAkkaScope) => RIO[R1, S])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, S, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, S, Mat] = {
     foldAsync_(zero)((state, item, scope) => runTask(state, item, scope))
   }
 
   def mapAsync[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, Next, Mat] = {
     mapAsync_((item, _) => runTask(item)) { (flow, runFuture) =>
       flow
         .mapAsync(parallelism)(runFuture)
@@ -152,7 +168,7 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def mapAsyncWithScope[R1 <: R, Next](parallelism: Int)(runTask: (Out, ZAkkaScope) => RIO[R1, Next])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, Next, Mat] = {
     mapAsync_(runTask) { (flow, runFuture) =>
       flow
         .mapAsync(parallelism)(runFuture)
@@ -160,34 +176,37 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   }
 
   def mapAsyncUnordered[R1 <: R, Next](parallelism: Int)(runTask: Out => RIO[R1, Next])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, Next, Mat] = {
     mapAsync_((item, _) => runTask(item)) { (flow, runFuture) =>
       flow
         .mapAsyncUnordered(parallelism)(runFuture)
     }
   }
   def mapAsyncUnorderedWithScope[R1 <: R, Next](parallelism: Int)(runTask: (Out, ZAkkaScope) => RIO[R1, Next])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, Next, Mat] = {
     mapAsync_(runTask) { (flow, runFuture) =>
       flow
         .mapAsyncUnordered(parallelism)(runFuture)
     }
   }
 
+  // todo [migration]
+  @nowarn("cat=deprecation")
   def switchFlatMapConcat[R1 <: R, Next](f: Out => RIO[R1, Graph[SourceShape[Next], Any]])
-    : ZAkkaFlow[R1 with AkkaEnv, E, In, Next, Mat] = {
+    : ZAkkaFlow[R1 with PekkoEnv, E, In, Next, Mat] = {
     new ZAkkaFlow(scope => {
       for {
         flow <- make(scope)
-        runtime <- ZIO.runtime[R1 with AkkaEnv]
+        runtime <- ZIO.runtime[R1 with PekkoEnv]
       } yield {
-        implicit val rt: zio.Runtime[R1 with AkkaEnv] = runtime
+        implicit val rt: zio.Runtime[R1 with PekkoEnv] = runtime
 
         val env = rt.environment
-        val akkaService = env.get[AkkaEnv.Service]
+        val akkaService = env.get[PekkoEnv]
         import akkaService.actorSystem
 
         flow
+          // todo [migration] deprecated https://github.com/apache/incubator-pekko/issues/601
           .statefulMapConcat(() => {
             var currentKillSwitch = Option.empty[KillSwitch]
 
@@ -195,7 +214,11 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
               currentKillSwitch.foreach(_.shutdown())
 
               val (ks, s) = Source
-                .fromGraph(rt.unsafeRun(f(in)))
+                .fromGraph {
+                  Unsafe.unsafe { implicit unsafe =>
+                    rt.unsafe.run(f(in)).getOrThrowFiberFailure()
+                  }
+                }
                 .viaMat(KillSwitches.single)(Keep.right)
                 .preMaterialize()
 
