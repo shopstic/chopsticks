@@ -12,7 +12,7 @@ import eu.timepit.refined.types.numeric.PosInt
 import org.reactivestreams.Publisher
 import shapeless.<:!<
 import zio.stream.ZStream
-import zio.{RIO, URIO, Unsafe, ZIO}
+import zio.{IO, RIO, URIO, Unsafe, ZEnvironment, ZIO}
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -194,10 +194,13 @@ final class ZAkkaSource[-R, +E, +Out, +Mat](val make: ZAkkaScope => ZIO[
   E,
   Source[Out, Mat]
 ]) {
-  // todo [migration]
-//  def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaSource[Any, E, Out, Mat]] = {
-//    toZIO.provide(r)
-//  }
+  def provideEnvironment(r: => ZEnvironment[R]): IO[E, ZAkkaSource[Any, E, Out, Mat]] = {
+    toZIO.provideEnvironment(r)
+  }
+
+  def provideSomeEnvironment[R0](f: ZEnvironment[R0] => ZEnvironment[R]): ZIO[R0, E, ZAkkaSource[Any, E, Out, Mat]] = {
+    toZIO.provideSomeEnvironment(f)
+  }
 
   def toZIO: ZIO[R, E, ZAkkaSource[Any, E, Out, Mat]] = {
     ZIO.environmentWith[R] { env =>

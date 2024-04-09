@@ -132,23 +132,32 @@ package object zio_ext {
 
     private def measurementHandleInterruption[R1, E2, A2](name: String, startTime: Long)(io: ZIO[R1, E2, A2])(implicit
       ctx: LogCtx
-    ) = {
-      ZIO
-        .acquireReleaseExitWith(io.interruptible.fork) { (fib, exit: Exit[Any, Any]) =>
-          val log = for {
-            elapse <- nanoTime.map(endTime => endTime - startTime)
-            elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
-            _ <- IzLogging.loggerWithContext(ctx).map {
-              _
-                .withCustomContext("task" -> name, "elapsed" -> elapsed)
-                .log(ctx.level)("interrupting...")
-            }
-          } yield ()
-
-          log.when(exit.isInterrupted) *> fib.interrupt
-        } { fib =>
-          fib.join
-        }
+    ): ZIO[R1 with IzLogging, E2, A2] = {
+      // impl adopted from zio.ReleaseExit, with the exception that the `io` is also within the `restore` block
+      ZIO.uninterruptibleMask { restore =>
+        for {
+          fib <- restore(io).fork
+          exit <- restore(fib.join).exit
+          ret <- {
+            ZIO
+              .when(exit.isInterrupted) {
+                for {
+                  elapse <- nanoTime.map(endTime => endTime - startTime)
+                  elapsed = Nanoseconds(elapse).inBestUnit.rounded(2)
+                  _ <- IzLogging.loggerWithContext(ctx).map {
+                    _
+                      .withCustomContext("task" -> name, "elapsed" -> elapsed)
+                      .log(ctx.level)("interrupting...")
+                  }
+                } yield ()
+              }
+              .zipRight(fib.interrupt)
+          }.foldCauseZIO(
+            cause2 => ZIO.refailCause(exit.foldExit(_ ++ cause2, _ => cause2)),
+            _ => ZIO.done(exit)
+          )
+        } yield ret
+      }
     }
   }
 

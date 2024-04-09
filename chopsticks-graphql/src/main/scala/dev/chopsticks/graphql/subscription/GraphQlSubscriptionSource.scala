@@ -27,7 +27,6 @@ import dev.chopsticks.graphql.subscription.GraphQlSubscriptionExchangeModel.{
 }
 import dev.chopsticks.graphql.subscription.GraphQlSubscriptionExchangeModel.GraphQlSubscriptionProtocolServerMessage.GraphQlConnectionData
 import dev.chopsticks.stream.GraphStageWithActorLogic
-import io.circe.Printer
 
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}

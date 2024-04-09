@@ -5,7 +5,7 @@ import org.apache.pekko.stream._
 import org.apache.pekko.stream.scaladsl.{Flow, Keep, Source}
 import dev.chopsticks.fp.pekko_env.PekkoEnv
 import dev.chopsticks.fp.zio_ext.TaskExtensions
-import zio.{RIO, Unsafe, ZIO}
+import zio.{IO, RIO, Unsafe, ZEnvironment, ZIO}
 
 import scala.annotation.nowarn
 import scala.annotation.unchecked.uncheckedVariance
@@ -26,10 +26,14 @@ final class ZAkkaFlow[-R, +E, -In, +Out, +Mat](val make: ZAkkaScope => ZIO[
   E,
   Flow[In, Out, Mat]
 ]) {
-  // todo [migration]
-//  def provide(r: R)(implicit ev: NeedsEnv[R]): IO[E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
-//    toZIO.provide(r)
-//  }
+  def provideEnvironment(r: => ZEnvironment[R]): IO[E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
+    toZIO.provideEnvironment(r)
+  }
+
+  def provideSomeEnvironment[R0](f: ZEnvironment[R0] => ZEnvironment[R])
+    : ZIO[R0, E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
+    toZIO.provideSomeEnvironment(f)
+  }
 
   def toZIO: ZIO[R, E, ZAkkaFlow[Any, E, In, Out, Mat]] = {
     ZIO.environmentWith[R] { env =>
