@@ -82,7 +82,7 @@ object OpenApiZioSchemaToTapirConverter {
                 case Right(value) => value
               }
             }
-          addAnnotations(baseSchema, typedAnnotations)
+          addAnnotations(baseSchema, typedAnnotations, skipName = true)
 
         case ZioSchema.Tuple(_, _, _) =>
           ???
@@ -352,10 +352,11 @@ object OpenApiZioSchemaToTapirConverter {
 
     private def addAnnotations[A](
       baseSchema: TapirSchema[A],
-      metadata: OpenApiParsedAnnotations[A]
+      metadata: OpenApiParsedAnnotations[A],
+      skipName: Boolean = false
     ): TapirSchema[A] = {
       var result = baseSchema
-      if (metadata.entityName.isDefined) {
+      if (metadata.entityName.isDefined && !skipName) {
         result = baseSchema.copy(name = metadata.entityName.map(schemaName))
       }
       if (metadata.description.isDefined) {
