@@ -186,7 +186,7 @@ object Dependencies {
   )
 
   val pprintDeps = Seq(
-    "com.lihaoyi" %% "pprint" % "0.8.1"
+    "com.lihaoyi" %% "pprint" % "0.9.0"
   )
 
   val logstageDeps = Seq(
