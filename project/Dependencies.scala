@@ -243,8 +243,8 @@ object Dependencies {
   }
 
   lazy val zioSchemaDeps = {
-    val zioSchemaOrganization = "dev.chopsticks"
-    val zioSchemaVersion = "0.1.12"
+    val zioSchemaOrganization = "dev.zio"
+    val zioSchemaVersion = "1.1.0"
     Seq(
       zioSchemaOrganization %% "zio-schema" % zioSchemaVersion,
       zioSchemaOrganization %% "zio-schema-json" % zioSchemaVersion,

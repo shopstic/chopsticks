@@ -5,16 +5,16 @@ import eu.timepit.refined.types.all.NonNegInt
 import eu.timepit.refined.types.numeric.{NonNegLong, PosInt, PosLong}
 import eu.timepit.refined.types.string.NonEmptyString
 import sttp.tapir.Validator
-import zio.schema.{DefaultJavaTimeSchemas, Schema}
+import zio.schema.Schema
 import zio.schema.internal.SourceLocation
 import zio.Chunk
 
-object OpenApiZioSchemas extends DefaultJavaTimeSchemas {
+object OpenApiZioSchemas {
   implicit class ZioSchemaOps[A](val schema: Schema[A]) extends AnyVal {
     def named(name: String): Schema[A] = {
       schema.annotate(OpenApiAnnotations.entityName(name))
     }
-    def validate(validator: Validator[A]): Schema[A] = {
+    def validated(validator: Validator[A]): Schema[A] = {
       schema.annotate(OpenApiAnnotations.validate[A](validator))
     }
     def description(description: String): Schema[A] = {
@@ -49,32 +49,32 @@ object OpenApiZioSchemas extends DefaultJavaTimeSchemas {
 
   implicit val nonEmptyStringSchema: Schema[NonEmptyString] =
     Schema[String]
-      .validate(Validators.nonEmptyStringValidator)
+      .validated(Validators.nonEmptyStringValidator)
       .transformWithoutAnnotations[NonEmptyString](NonEmptyString.from, _.value)
 
   implicit val posIntSchema: Schema[PosInt] =
     Schema[Int]
-      .validate(Validators.posIntValidator)
+      .validated(Validators.posIntValidator)
       .transformWithoutAnnotations[PosInt](PosInt.from, _.value)
 
   implicit val nonNegIntSchema: Schema[NonNegInt] =
     Schema[Int]
-      .validate(Validators.nonNegIntValidator)
+      .validated(Validators.nonNegIntValidator)
       .transformWithoutAnnotations[NonNegInt](NonNegInt.from, _.value)
 
   implicit val posLongSchema: Schema[PosLong] =
     Schema[Long]
-      .validate(Validators.posLongValidator)
+      .validated(Validators.posLongValidator)
       .transformWithoutAnnotations[PosLong](PosLong.from, _.value)
 
   implicit val nonNegLongSchema: Schema[NonNegLong] =
     Schema[Long]
-      .validate(Validators.nonNegLongValidator)
+      .validated(Validators.nonNegLongValidator)
       .transformWithoutAnnotations[NonNegLong](NonNegLong.from, _.value)
 
   implicit def nonEmptyListSchema[A: Schema]: Schema[NonEmptyList[A]] =
     Schema[List[A]]
-      .validate(Validators.nonEmptyCollectionValidator)
+      .validated(Validators.nonEmptyCollectionValidator[A, List])
       .transformWithoutAnnotations(
         xs => {
           NonEmptyList.fromList(xs) match {

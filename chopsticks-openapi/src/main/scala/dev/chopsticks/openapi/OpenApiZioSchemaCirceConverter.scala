@@ -2,11 +2,12 @@ package dev.chopsticks.openapi
 
 import cats.data.{NonEmptyList, Validated}
 import dev.chopsticks.openapi.OpenApiParsedAnnotations.extractAnnotations
+import dev.chopsticks.openapi.common.{ConverterCache, OpenApiConverterUtils}
 import io.circe.{Decoder, DecodingFailure, Encoder, HCursor, Json, JsonObject}
 import io.circe.Decoder.{AccumulatingResult, Result}
 import io.circe.Encoder.AsObject
 import sttp.tapir.Validator
-import zio.schema.{FieldSet, Schema => ZioSchema, StandardType}
+import zio.schema.{FieldSet, Schema => ZioSchema, StandardType, TypeId}
 import zio.Chunk
 
 import java.math.BigInteger
@@ -31,11 +32,10 @@ import scala.collection.mutable.ListBuffer
 import scala.language.existentials
 
 object OpenApiZioSchemaCirceConverter {
-  final private case class CacheKey(entityName: String, annotationsHash: Int)
 
   object Decoder {
     def convert[A](zioSchema: ZioSchema[A]): Decoder[A] = {
-      new Converter(scala.collection.mutable.Map.empty).convert(zioSchema)
+      new Converter().convert(zioSchema)
     }
 
     // allows non-empty objects and arrays to be decoded as Unit
@@ -50,34 +50,23 @@ object OpenApiZioSchemaCirceConverter {
       )
     }
 
-    final private[openapi] class LazyDecoder[A]() extends io.circe.Decoder[A] {
-      private var _decoder: io.circe.Decoder[A] = _
-      private[Decoder] def set(encoder: io.circe.Decoder[A]): Unit =
-        this._decoder = encoder
-      private def get: io.circe.Decoder[A] =
-        if (_decoder == null) throw new RuntimeException("LazyDecoder has not yet been initialized")
-        else _decoder
+    private def decodeCaseClass0[A](construct: () => A): Decoder[A] = {
+      decodeUnit.map(_ => construct())
+    }
+
+    final private[openapi] class LazyDecoder[A] extends ConverterCache.Lazy[io.circe.Decoder[A]]
+        with io.circe.Decoder[A] {
       override def apply(c: HCursor): Result[A] = get(c)
     }
 
-    private class Converter(cache: scala.collection.mutable.Map[CacheKey, LazyDecoder[_]]) {
-
-      private def convertUsingCache[A](annotations: OpenApiParsedAnnotations[A])(convert: => Decoder[A]): Decoder[A] = {
-        annotations.entityName match {
-          case Some(name) =>
-            val cacheKey = CacheKey(name, annotations.hashCode())
-            cache.get(cacheKey) match {
-              case Some(value) => value.asInstanceOf[io.circe.Decoder[A]]
-              case None =>
-                val lazyDec = new LazyDecoder[A]()
-                val _ = cache.addOne(cacheKey -> lazyDec)
-                val result = convert
-                lazyDec.set(result)
-                result
-            }
-          case None =>
-            convert
-        }
+    private class Converter(
+      cache: ConverterCache[io.circe.Decoder] = new ConverterCache[io.circe.Decoder]()
+    ) {
+      private def convertUsingCache[A](
+        typeId: TypeId,
+        annotations: OpenApiParsedAnnotations[A]
+      )(convert: => Decoder[A]): Decoder[A] = {
+        cache.convertUsingCache(typeId, annotations)(convert)(() => new LazyDecoder[A])
       }
 
       def convert[A](zioSchema: ZioSchema[A]): Decoder[A] = {
@@ -92,10 +81,10 @@ object OpenApiZioSchemaCirceConverter {
               extractAnnotations(annotations)
             )
 
-          case ZioSchema.MapSchema(_, _, _) =>
+          case ZioSchema.Map(_, _, _) =>
             ???
 
-          case ZioSchema.SetSchema(schema, annotation) =>
+          case ZioSchema.Set(schema, annotation) =>
             addAnnotations(
               io.circe.Decoder.decodeSet(convert(schema)),
               extractAnnotations(annotation)
@@ -106,7 +95,7 @@ object OpenApiZioSchemaCirceConverter {
             val baseDecoder = convert(schema).emap(f)
             addAnnotations(baseDecoder, typedAnnotations)
 
-          case ZioSchema.Tuple(_, _, _) =>
+          case ZioSchema.Tuple2(_, _, _) =>
             ???
 
           case ZioSchema.Optional(schema, annotations) =>
@@ -118,763 +107,704 @@ object OpenApiZioSchemaCirceConverter {
           case ZioSchema.Fail(_, _) =>
             ???
 
-          case ZioSchema.GenericRecord(fieldSet, annotations) =>
-            genericRecordConverter(fieldSet, annotations)
+          case ZioSchema.GenericRecord(id, fieldSet, annotations) =>
+            genericRecordConverter(id, fieldSet, annotations)
 
-          case either @ ZioSchema.EitherSchema(_, _, _) =>
+          case either @ ZioSchema.Either(_, _, _) =>
             convert(either.toEnum).asInstanceOf[Decoder[A]]
 
           case l @ ZioSchema.Lazy(_) =>
             convert(l.schema)
 
-          case ZioSchema.Meta(_, _) =>
-            ???
-
-          case ZioSchema.CaseClass1(f1, construct, _, annotations) =>
+          case ZioSchema.CaseClass0(id, construct, annotations) =>
             val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val baseDecoder = io.circe.Decoder.forProduct1(parsed.transformJsonLabel(f1.label))(construct)(decoder1)
+            convertUsingCache(id, parsed) {
+              val baseDecoder = decodeCaseClass0(construct)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass2(f1, f2, construct, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
+          case s @ ZioSchema.CaseClass1(_, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field.schema), extractAnnotations(s.field.annotations))
+              val baseDecoder = io.circe.Decoder.forProduct1(parsed.transformJsonLabel(s.field.name.toString))(s.defaultConstruct)(decoder1)
+              addAnnotations(baseDecoder, parsed)
+            }
+
+          case s @ ZioSchema.CaseClass2(_, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val baseDecoder = io.circe.Decoder.forProduct2(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label)
-              )(construct)(decoder1, decoder2)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString)
+              )(s.construct)(decoder1, decoder2)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass3(f1, f2, f3, construct, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
+          case s @ ZioSchema.CaseClass3(_, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
               val baseDecoder = io.circe.Decoder.forProduct3(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label)
-              )(construct)(decoder1, decoder2, decoder3)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass4(f1, f2, f3, f4, construct, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
+          case s @ ZioSchema.CaseClass4(_, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
               val baseDecoder = io.circe.Decoder.forProduct4(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass5(f1, f2, f3, f4, f5, construct, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
+          case s @ ZioSchema.CaseClass5(_, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
               val baseDecoder = io.circe.Decoder.forProduct5(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass6(f1, f2, f3, f4, f5, f6, construct, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
+          case s @ ZioSchema.CaseClass6(_, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
               val baseDecoder = io.circe.Decoder.forProduct6(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass7(f1, f2, f3, f4, f5, f6, f7, construct, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
+          case s @ ZioSchema.CaseClass7(_, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
               val baseDecoder = io.circe.Decoder.forProduct7(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass8(f1, f2, f3, f4, f5, f6, f7, f8, construct, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
+          case s @ ZioSchema.CaseClass8(_, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
               val baseDecoder = io.circe.Decoder.forProduct8(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass9(f1, f2, f3, f4, f5, f6, f7, f8, f9, construct, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
+          case s @ ZioSchema.CaseClass9(_, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
               val baseDecoder = io.circe.Decoder.forProduct9(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass10(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, construct, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
+          case s @ ZioSchema.CaseClass10(_, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
               val baseDecoder = io.circe.Decoder.forProduct10(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass11(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, construct, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
+          case s @ ZioSchema.CaseClass11(_, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
               val baseDecoder = io.circe.Decoder.forProduct11(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass12(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, construct, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
+          case s @ ZioSchema.CaseClass12(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
               val baseDecoder = io.circe.Decoder.forProduct12(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass13(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
+          case s @ ZioSchema.CaseClass13(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
               val baseDecoder = io.circe.Decoder.forProduct13(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass14(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
+          case s @ ZioSchema.CaseClass14(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
               val baseDecoder = io.circe.Decoder.forProduct14(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass15(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
+          case s @ ZioSchema.CaseClass15(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val decoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
               val baseDecoder = io.circe.Decoder.forProduct15(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass16(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
+          case s @ ZioSchema.CaseClass16(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val decoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val decoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
               val baseDecoder = io.circe.Decoder.forProduct16(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass17(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
+          case s @ ZioSchema.CaseClass17(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val decoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val decoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val decoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
               val baseDecoder = io.circe.Decoder.forProduct17(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass18(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val decoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
+          case s @ ZioSchema.CaseClass18(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val decoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val decoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val decoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val decoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
               val baseDecoder = io.circe.Decoder.forProduct18(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass19(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val decoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val decoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
+          case s @ ZioSchema.CaseClass19(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val decoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val decoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val decoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val decoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
+              val decoder19 = addAnnotations(convert(s.field19.schema), extractAnnotations(s.field19.annotations))
               val baseDecoder = io.circe.Decoder.forProduct19(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label),
-                parsed.transformJsonLabel(f19.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString),
+                parsed.transformJsonLabel(s.field19.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass20(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val decoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val decoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
-              val decoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
+          case s @ ZioSchema.CaseClass20(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val decoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val decoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val decoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val decoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
+              val decoder19 = addAnnotations(convert(s.field19.schema), extractAnnotations(s.field19.annotations))
+              val decoder20 = addAnnotations(convert(s.field20.schema), extractAnnotations(s.field20.annotations))
               val baseDecoder = io.circe.Decoder.forProduct20(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label),
-                parsed.transformJsonLabel(f19.label),
-                parsed.transformJsonLabel(f20.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString),
+                parsed.transformJsonLabel(s.field19.name.toString),
+                parsed.transformJsonLabel(s.field20.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass21(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val decoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val decoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
-              val decoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
-              val decoder21 = addAnnotations(convert(f21.schema), extractAnnotations(f21.annotations))
+          case s @ ZioSchema.CaseClass21(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val decoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val decoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val decoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val decoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
+              val decoder19 = addAnnotations(convert(s.field19.schema), extractAnnotations(s.field19.annotations))
+              val decoder20 = addAnnotations(convert(s.field20.schema), extractAnnotations(s.field20.annotations))
+              val decoder21 = addAnnotations(convert(s.field21.schema), extractAnnotations(s.field21.annotations))
               val baseDecoder = io.circe.Decoder.forProduct21(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label),
-                parsed.transformJsonLabel(f19.label),
-                parsed.transformJsonLabel(f20.label),
-                parsed.transformJsonLabel(f21.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20, decoder21)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString),
+                parsed.transformJsonLabel(s.field19.name.toString),
+                parsed.transformJsonLabel(s.field20.name.toString),
+                parsed.transformJsonLabel(s.field21.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20, decoder21)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.CaseClass22(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, construct, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val decoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val decoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val decoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val decoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val decoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val decoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val decoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val decoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val decoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val decoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val decoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val decoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val decoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val decoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val decoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val decoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val decoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val decoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
-              val decoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
-              val decoder21 = addAnnotations(convert(f21.schema), extractAnnotations(f21.annotations))
-              val decoder22 = addAnnotations(convert(f22.schema), extractAnnotations(f22.annotations))
+          case s @ ZioSchema.CaseClass22(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val decoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val decoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val decoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val decoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val decoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val decoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val decoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val decoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val decoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val decoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val decoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val decoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val decoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val decoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val decoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
+              val decoder19 = addAnnotations(convert(s.field19.schema), extractAnnotations(s.field19.annotations))
+              val decoder20 = addAnnotations(convert(s.field20.schema), extractAnnotations(s.field20.annotations))
+              val decoder21 = addAnnotations(convert(s.field21.schema), extractAnnotations(s.field21.annotations))
+              val decoder22 = addAnnotations(convert(s.field22.schema), extractAnnotations(s.field22.annotations))
               val baseDecoder = io.circe.Decoder.forProduct22(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label),
-                parsed.transformJsonLabel(f19.label),
-                parsed.transformJsonLabel(f20.label),
-                parsed.transformJsonLabel(f21.label),
-                parsed.transformJsonLabel(f22.label)
-              )(construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20, decoder21, decoder22)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString),
+                parsed.transformJsonLabel(s.field19.name.toString),
+                parsed.transformJsonLabel(s.field20.name.toString),
+                parsed.transformJsonLabel(s.field21.name.toString),
+                parsed.transformJsonLabel(s.field22.name.toString)
+              )(s.construct)(decoder1, decoder2, decoder3, decoder4, decoder5, decoder6, decoder7, decoder8, decoder9, decoder10, decoder11, decoder12, decoder13, decoder14, decoder15, decoder16, decoder17, decoder18, decoder19, decoder20, decoder21, decoder22)
               addAnnotations(baseDecoder, parsed)
             }
 
-          case ZioSchema.Enum1(c1, annotations) =>
-            convertEnum[A](annotations, c1)
-
-          case ZioSchema.Enum2(c1, c2, annotations) =>
-            convertEnum[A](annotations, c1, c2)
-
-          case ZioSchema.Enum3(c1, c2, c3, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3)
-
-          case ZioSchema.Enum4(c1, c2, c3, c4, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4)
-
-          case ZioSchema.Enum5(c1, c2, c3, c4, c5, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5)
-
-          case ZioSchema.Enum6(c1, c2, c3, c4, c5, c6, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6)
-
-          case ZioSchema.Enum7(c1, c2, c3, c4, c5, c6, c7, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7)
-
-          case ZioSchema.Enum8(c1, c2, c3, c4, c5, c6, c7, c8, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8)
-
-          case ZioSchema.Enum9(c1, c2, c3, c4, c5, c6, c7, c8, c9, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9)
-
-          case ZioSchema.Enum10(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)
-
-          case ZioSchema.Enum11(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11)
-
-          case ZioSchema.Enum12(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)
-
-          case ZioSchema.Enum13(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)
-
-          case ZioSchema.Enum14(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14)
-
-          case ZioSchema.Enum15(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15)
-
-          case ZioSchema.Enum16(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16)
-
-          case ZioSchema.Enum17(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17)
-
-          case ZioSchema.Enum18(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18)
-
-          case ZioSchema.Enum19(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
-
-          case ZioSchema.Enum20(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20)
-
-          case ZioSchema.Enum21(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)
-
-          case ZioSchema.Enum22(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22)
+          case s: ZioSchema.Enum[A] =>
+            convertEnum[A](s.annotations, s.cases: _*)
 
           case _ =>
             ???
@@ -884,18 +814,18 @@ object OpenApiZioSchemaCirceConverter {
 
       private def convertEnum[A](
         annotations: Chunk[Any],
-        cases: ZioSchema.Case[_, A]*
+        cases: ZioSchema.Case[A, _]*
       ): Decoder[A] = {
         val enumAnnotations = extractAnnotations[A](annotations)
         val decodersByName = cases.iterator
           .map { c =>
             val cAnn = extractAnnotations(c.annotations)
             val decoder = addAnnotations(
-              convert(c.codec),
+              convert(c.schema),
               extractAnnotations(c.annotations)
             ).asInstanceOf[io.circe.Decoder[Any]]
-            val entityName = cAnn.entityName.getOrElse(throw new RuntimeException(
-              s"Subtype of ${enumAnnotations.entityName.getOrElse("-")} must have entityName defined to derive an io.circe.Decoder. Received annotations: $cAnn"
+            val entityName = OpenApiConverterUtils.getCaseEntityName(c, cAnn).getOrElse(throw new RuntimeException(
+              s"Subtype of ${enumAnnotations.entityName.getOrElse("-")} must have entityName defined or be a case class to derive an io.circe.Decoder. Received annotations: $cAnn"
             ))
             entityName -> decoder
           }
@@ -936,13 +866,17 @@ object OpenApiZioSchemaCirceConverter {
         addAnnotations(decoder, enumAnnotations)
       }
 
-      private def genericRecordConverter(fieldSet: FieldSet, annotations: Chunk[Any]): Decoder[ListMap[String, _]] = {
+      private def genericRecordConverter(
+        id: TypeId,
+        fieldSet: FieldSet,
+        annotations: Chunk[Any]
+      ): Decoder[ListMap[String, _]] = {
         val parsed = extractAnnotations[ListMap[String, _]](annotations)
-        convertUsingCache(parsed) {
+        convertUsingCache(id, parsed) {
           val fieldDecoders = fieldSet.toChunk.iterator
             .map { field =>
               val fieldDecoder = addAnnotations(convert(field.schema), extractAnnotations(field.annotations))
-              parsed.transformJsonLabel(field.label) -> (field.label, fieldDecoder)
+              parsed.transformJsonLabel(field.name.toString) -> (field.name.toString, fieldDecoder)
             }
             .toMap
           val baseDecoder = new Decoder[ListMap[String, _]] {
@@ -997,6 +931,7 @@ object OpenApiZioSchemaCirceConverter {
           case StandardType.UnitType => decodeUnit
           case StandardType.StringType => io.circe.Decoder[String]
           case StandardType.BoolType => io.circe.Decoder[Boolean]
+          case StandardType.ByteType => io.circe.Decoder[Byte]
           case StandardType.ShortType => io.circe.Decoder[Short]
           case StandardType.IntType => io.circe.Decoder[Int]
           case StandardType.LongType => io.circe.Decoder[Long]
@@ -1009,18 +944,18 @@ object OpenApiZioSchemaCirceConverter {
           case StandardType.UUIDType => io.circe.Decoder[UUID]
           case StandardType.DayOfWeekType => io.circe.Decoder[Int] // todo add validation
           case StandardType.DurationType => io.circe.Decoder[String]
-          case StandardType.InstantType(_) => io.circe.Decoder[Instant]
-          case StandardType.LocalDateType(_) => io.circe.Decoder[LocalDate]
-          case StandardType.LocalDateTimeType(_) => io.circe.Decoder[LocalDateTime]
-          case StandardType.LocalTimeType(_) => io.circe.Decoder[LocalTime]
+          case StandardType.InstantType => io.circe.Decoder[Instant]
+          case StandardType.LocalDateType => io.circe.Decoder[LocalDate]
+          case StandardType.LocalDateTimeType => io.circe.Decoder[LocalDateTime]
+          case StandardType.LocalTimeType => io.circe.Decoder[LocalTime]
           case StandardType.MonthType => io.circe.Decoder[String] // todo add validation
           case StandardType.MonthDayType => io.circe.Decoder[String] // todo add validation
-          case StandardType.OffsetDateTimeType(_) => io.circe.Decoder[OffsetDateTime]
-          case StandardType.OffsetTimeType(_) => io.circe.Decoder[OffsetTime]
+          case StandardType.OffsetDateTimeType => io.circe.Decoder[OffsetDateTime]
+          case StandardType.OffsetTimeType => io.circe.Decoder[OffsetTime]
           case StandardType.PeriodType => io.circe.Decoder[Period]
           case StandardType.YearType => io.circe.Decoder[Year]
           case StandardType.YearMonthType => io.circe.Decoder[YearMonth]
-          case StandardType.ZonedDateTimeType(_) => io.circe.Decoder[ZonedDateTime]
+          case StandardType.ZonedDateTimeType => io.circe.Decoder[ZonedDateTime]
           case StandardType.ZoneIdType => io.circe.Decoder[ZoneId]
           case StandardType.ZoneOffsetType => io.circe.Decoder[ZoneOffset]
         }
@@ -1048,38 +983,28 @@ object OpenApiZioSchemaCirceConverter {
 
   object Encoder {
     def convert[A](zioSchema: ZioSchema[A]): Encoder[A] = {
-      new Converter(scala.collection.mutable.Map.empty).convert(zioSchema)
+      new Converter().convert(zioSchema)
     }
 
-    final private[openapi] class LazyEncoder[A]() extends io.circe.Encoder[A] {
-      private var _encoder: io.circe.Encoder[A] = _
-      private[Encoder] def set(encoder: io.circe.Encoder[A]): Unit =
-        this._encoder = encoder
-      private def get: io.circe.Encoder[A] =
-        if (_encoder == null) throw new RuntimeException("LazyEncoder has not yet been initialized")
-        else _encoder
+    private val emptyJson = Json.obj()
+    private val _caseClass0Encoder = new Encoder[Any] {
+      override def apply(a: Any): Json = emptyJson
+    }
+
+    def caseClass0Encoder[A] = _caseClass0Encoder.asInstanceOf[Encoder[A]]
+
+    final private[openapi] class LazyEncoder[A] extends ConverterCache.Lazy[io.circe.Encoder[A]]
+        with io.circe.Encoder[A] {
       override def apply(a: A): Json = get(a)
     }
 
-    private class Converter(cache: scala.collection.mutable.Map[CacheKey, LazyEncoder[_]]) {
+    private class Converter(cache: ConverterCache[io.circe.Encoder] = new ConverterCache[io.circe.Encoder]()) {
 
-      private def convertUsingCache[A](annotations: OpenApiParsedAnnotations[A])(convert: => io.circe.Encoder[A])
-        : io.circe.Encoder[A] = {
-        annotations.entityName match {
-          case Some(name) =>
-            val cacheKey = CacheKey(name, annotations.hashCode())
-            cache.get(cacheKey) match {
-              case Some(value) => value.asInstanceOf[io.circe.Encoder[A]]
-              case None =>
-                val lazyEnc = new LazyEncoder[A]()
-                val _ = cache.addOne(cacheKey -> lazyEnc)
-                val result = convert
-                lazyEnc.set(result)
-                result
-            }
-          case None =>
-            convert
-        }
+      private def convertUsingCache[A](
+        typeId: TypeId,
+        annotations: OpenApiParsedAnnotations[A]
+      )(convert: => io.circe.Encoder[A]): io.circe.Encoder[A] = {
+        cache.convertUsingCache(typeId, annotations)(convert)(() => new LazyEncoder[A])
       }
 
       def convert[A](zioSchema: ZioSchema[A]): io.circe.Encoder[A] = {
@@ -1094,10 +1019,10 @@ object OpenApiZioSchemaCirceConverter {
               extractAnnotations(annotations)
             )
 
-          case ZioSchema.MapSchema(_, _, _) =>
+          case ZioSchema.Map(_, _, _) =>
             ???
 
-          case ZioSchema.SetSchema(schema, annotation) =>
+          case ZioSchema.Set(schema, annotation) =>
             addAnnotations(
               io.circe.Encoder.encodeSet(convert(schema)).asInstanceOf[Encoder[A]],
               extractAnnotations(annotation)
@@ -1114,7 +1039,7 @@ object OpenApiZioSchemaCirceConverter {
               }
             addAnnotations(baseSchema, typedAnnotations)
 
-          case ZioSchema.Tuple(_, _, _) =>
+          case ZioSchema.Tuple2(_, _, _) =>
             ???
 
           case ZioSchema.Optional(schema, annotations) =>
@@ -1126,9 +1051,9 @@ object OpenApiZioSchemaCirceConverter {
           case ZioSchema.Fail(_, _) =>
             ???
 
-          case ZioSchema.GenericRecord(fieldSet, annotations) =>
+          case ZioSchema.GenericRecord(id, fieldSet, annotations) =>
             val recordAnnotations: OpenApiParsedAnnotations[A] = extractAnnotations[A](annotations)
-            convertUsingCache(recordAnnotations) {
+            convertUsingCache(id, recordAnnotations) {
               val fieldEncoders = fieldSet.toChunk
                 .map { field =>
                   addAnnotations(convert(field.schema), extractAnnotations(field.annotations))
@@ -1146,760 +1071,703 @@ object OpenApiZioSchemaCirceConverter {
               addAnnotations(baseEncoder, recordAnnotations)
             }
 
-          case either @ ZioSchema.EitherSchema(_, _, _) =>
+          case either @ ZioSchema.Either(_, _, _) =>
             convert(either.toEnum).asInstanceOf[Encoder[A]]
 
           case l @ ZioSchema.Lazy(_) =>
             convert(l.schema)
 
-          case ZioSchema.Meta(_, _) =>
-            ???
-
-          case ZioSchema.CaseClass1(f1, _, ext1, annotations) =>
+          case ZioSchema.CaseClass0(id, _, annotations) =>
             val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val baseEncoder = io.circe.Encoder.forProduct1(parsed.transformJsonLabel(f1.label))(ext1)(encoder1)
+            convertUsingCache(id, parsed) {
+              val baseEncoder = caseClass0Encoder[A]
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass2(f1, f2, _, ext1, ext2, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
+          case s @ ZioSchema.CaseClass1(_, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field.schema), extractAnnotations(s.field.annotations))
+              val baseEncoder = io.circe.Encoder.forProduct1(
+                parsed.transformJsonLabel(s.field.name.toString)
+              )((a: A) => (s.field.get(a)))(encoder1)
+              addAnnotations(baseEncoder, parsed)
+            }
+
+          case s @ ZioSchema.CaseClass2(_, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val baseEncoder = io.circe.Encoder.forProduct2(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label)
-              )((a: A) => (ext1(a), ext2(a)))(encoder1, encoder2)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a)))(encoder1, encoder2)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass3(f1, f2, f3, _, ext1, ext2, ext3, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
+          case s @ ZioSchema.CaseClass3(_, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
               val baseEncoder = io.circe.Encoder.forProduct3(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a)))(encoder1, encoder2, encoder3)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a)))(encoder1, encoder2, encoder3)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass4(f1, f2, f3, f4, _, ext1, ext2, ext3, ext4, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
+          case s @ ZioSchema.CaseClass4(_, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
               val baseEncoder = io.circe.Encoder.forProduct4(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a)))(encoder1, encoder2, encoder3, encoder4)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a)))(encoder1, encoder2, encoder3, encoder4)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass5(f1, f2, f3, f4, f5, _, ext1, ext2, ext3, ext4, ext5, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
+          case s @ ZioSchema.CaseClass5(_, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
               val baseEncoder = io.circe.Encoder.forProduct5(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a)))(encoder1, encoder2, encoder3, encoder4, encoder5)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass6(f1, f2, f3, f4, f5, f6, _, ext1, ext2, ext3, ext4, ext5, ext6, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
+          case s @ ZioSchema.CaseClass6(_, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
               val baseEncoder = io.circe.Encoder.forProduct6(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass7(f1, f2, f3, f4, f5, f6, f7, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
+          case s @ ZioSchema.CaseClass7(_, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
               val baseEncoder = io.circe.Encoder.forProduct7(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass8(f1, f2, f3, f4, f5, f6, f7, f8, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
+          case s @ ZioSchema.CaseClass8(_, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
               val baseEncoder = io.circe.Encoder.forProduct8(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass9(f1, f2, f3, f4, f5, f6, f7, f8, f9, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
+          case s @ ZioSchema.CaseClass9(_, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
               val baseEncoder = io.circe.Encoder.forProduct9(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass10(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
+          case s @ ZioSchema.CaseClass10(_, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
               val baseEncoder = io.circe.Encoder.forProduct10(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass11(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
+          case s @ ZioSchema.CaseClass11(_, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
               val baseEncoder = io.circe.Encoder.forProduct11(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass12(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
+          case s @ ZioSchema.CaseClass12(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
               val baseEncoder = io.circe.Encoder.forProduct12(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass13(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
+          case s @ ZioSchema.CaseClass13(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
               val baseEncoder = io.circe.Encoder.forProduct13(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass14(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
+          case s @ ZioSchema.CaseClass14(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
               val baseEncoder = io.circe.Encoder.forProduct14(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass15(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
+          case s @ ZioSchema.CaseClass15(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val encoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
               val baseEncoder = io.circe.Encoder.forProduct15(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a), s.field15.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass16(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, ext16, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
+          case s @ ZioSchema.CaseClass16(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val encoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val encoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
               val baseEncoder = io.circe.Encoder.forProduct16(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a), s.field15.get(a), s.field16.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass17(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, ext16, ext17, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
+          case s @ ZioSchema.CaseClass17(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val encoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val encoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val encoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
               val baseEncoder = io.circe.Encoder.forProduct17(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a), s.field15.get(a), s.field16.get(a), s.field17.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass18(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, ext16, ext17, ext18, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val encoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
+          case s @ ZioSchema.CaseClass18(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val encoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val encoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val encoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val encoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
               val baseEncoder = io.circe.Encoder.forProduct18(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a), s.field15.get(a), s.field16.get(a), s.field17.get(a), s.field18.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass19(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, ext16, ext17, ext18, ext19, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val encoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val encoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
+          case s @ ZioSchema.CaseClass19(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val encoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val encoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val encoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val encoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
+              val encoder19 = addAnnotations(convert(s.field19.schema), extractAnnotations(s.field19.annotations))
               val baseEncoder = io.circe.Encoder.forProduct19(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label),
-                parsed.transformJsonLabel(f19.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString),
+                parsed.transformJsonLabel(s.field19.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a), s.field15.get(a), s.field16.get(a), s.field17.get(a), s.field18.get(a), s.field19.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass20(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, ext16, ext17, ext18, ext19, ext20, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val encoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val encoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
-              val encoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
+          case s @ ZioSchema.CaseClass20(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val encoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val encoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val encoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val encoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
+              val encoder19 = addAnnotations(convert(s.field19.schema), extractAnnotations(s.field19.annotations))
+              val encoder20 = addAnnotations(convert(s.field20.schema), extractAnnotations(s.field20.annotations))
               val baseEncoder = io.circe.Encoder.forProduct20(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label),
-                parsed.transformJsonLabel(f19.label),
-                parsed.transformJsonLabel(f20.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString),
+                parsed.transformJsonLabel(s.field19.name.toString),
+                parsed.transformJsonLabel(s.field20.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a), s.field15.get(a), s.field16.get(a), s.field17.get(a), s.field18.get(a), s.field19.get(a), s.field20.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass21(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, ext16, ext17, ext18, ext19, ext20, ext21, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val encoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val encoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
-              val encoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
-              val encoder21 = addAnnotations(convert(f21.schema), extractAnnotations(f21.annotations))
+          case s @ ZioSchema.CaseClass21(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val encoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val encoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val encoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val encoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
+              val encoder19 = addAnnotations(convert(s.field19.schema), extractAnnotations(s.field19.annotations))
+              val encoder20 = addAnnotations(convert(s.field20.schema), extractAnnotations(s.field20.annotations))
+              val encoder21 = addAnnotations(convert(s.field21.schema), extractAnnotations(s.field21.annotations))
               val baseEncoder = io.circe.Encoder.forProduct21(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label),
-                parsed.transformJsonLabel(f19.label),
-                parsed.transformJsonLabel(f20.label),
-                parsed.transformJsonLabel(f21.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a), ext21(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20, encoder21)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString),
+                parsed.transformJsonLabel(s.field19.name.toString),
+                parsed.transformJsonLabel(s.field20.name.toString),
+                parsed.transformJsonLabel(s.field21.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a), s.field15.get(a), s.field16.get(a), s.field17.get(a), s.field18.get(a), s.field19.get(a), s.field20.get(a), s.field21.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20, encoder21)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.CaseClass22(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, _, ext1, ext2, ext3, ext4, ext5, ext6, ext7, ext8, ext9, ext10, ext11, ext12, ext13, ext14, ext15, ext16, ext17, ext18, ext19, ext20, ext21, ext22, annotations) =>
-            val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(parsed) {
-              val encoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
-              val encoder2 = addAnnotations(convert(f2.schema), extractAnnotations(f2.annotations))
-              val encoder3 = addAnnotations(convert(f3.schema), extractAnnotations(f3.annotations))
-              val encoder4 = addAnnotations(convert(f4.schema), extractAnnotations(f4.annotations))
-              val encoder5 = addAnnotations(convert(f5.schema), extractAnnotations(f5.annotations))
-              val encoder6 = addAnnotations(convert(f6.schema), extractAnnotations(f6.annotations))
-              val encoder7 = addAnnotations(convert(f7.schema), extractAnnotations(f7.annotations))
-              val encoder8 = addAnnotations(convert(f8.schema), extractAnnotations(f8.annotations))
-              val encoder9 = addAnnotations(convert(f9.schema), extractAnnotations(f9.annotations))
-              val encoder10 = addAnnotations(convert(f10.schema), extractAnnotations(f10.annotations))
-              val encoder11 = addAnnotations(convert(f11.schema), extractAnnotations(f11.annotations))
-              val encoder12 = addAnnotations(convert(f12.schema), extractAnnotations(f12.annotations))
-              val encoder13 = addAnnotations(convert(f13.schema), extractAnnotations(f13.annotations))
-              val encoder14 = addAnnotations(convert(f14.schema), extractAnnotations(f14.annotations))
-              val encoder15 = addAnnotations(convert(f15.schema), extractAnnotations(f15.annotations))
-              val encoder16 = addAnnotations(convert(f16.schema), extractAnnotations(f16.annotations))
-              val encoder17 = addAnnotations(convert(f17.schema), extractAnnotations(f17.annotations))
-              val encoder18 = addAnnotations(convert(f18.schema), extractAnnotations(f18.annotations))
-              val encoder19 = addAnnotations(convert(f19.schema), extractAnnotations(f19.annotations))
-              val encoder20 = addAnnotations(convert(f20.schema), extractAnnotations(f20.annotations))
-              val encoder21 = addAnnotations(convert(f21.schema), extractAnnotations(f21.annotations))
-              val encoder22 = addAnnotations(convert(f22.schema), extractAnnotations(f22.annotations))
+          case s @ ZioSchema.CaseClass22(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
+            val parsed = extractAnnotations[A](s.annotations)
+            convertUsingCache(s.id, parsed) {
+              val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
+              val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
+              val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
+              val encoder4 = addAnnotations(convert(s.field4.schema), extractAnnotations(s.field4.annotations))
+              val encoder5 = addAnnotations(convert(s.field5.schema), extractAnnotations(s.field5.annotations))
+              val encoder6 = addAnnotations(convert(s.field6.schema), extractAnnotations(s.field6.annotations))
+              val encoder7 = addAnnotations(convert(s.field7.schema), extractAnnotations(s.field7.annotations))
+              val encoder8 = addAnnotations(convert(s.field8.schema), extractAnnotations(s.field8.annotations))
+              val encoder9 = addAnnotations(convert(s.field9.schema), extractAnnotations(s.field9.annotations))
+              val encoder10 = addAnnotations(convert(s.field10.schema), extractAnnotations(s.field10.annotations))
+              val encoder11 = addAnnotations(convert(s.field11.schema), extractAnnotations(s.field11.annotations))
+              val encoder12 = addAnnotations(convert(s.field12.schema), extractAnnotations(s.field12.annotations))
+              val encoder13 = addAnnotations(convert(s.field13.schema), extractAnnotations(s.field13.annotations))
+              val encoder14 = addAnnotations(convert(s.field14.schema), extractAnnotations(s.field14.annotations))
+              val encoder15 = addAnnotations(convert(s.field15.schema), extractAnnotations(s.field15.annotations))
+              val encoder16 = addAnnotations(convert(s.field16.schema), extractAnnotations(s.field16.annotations))
+              val encoder17 = addAnnotations(convert(s.field17.schema), extractAnnotations(s.field17.annotations))
+              val encoder18 = addAnnotations(convert(s.field18.schema), extractAnnotations(s.field18.annotations))
+              val encoder19 = addAnnotations(convert(s.field19.schema), extractAnnotations(s.field19.annotations))
+              val encoder20 = addAnnotations(convert(s.field20.schema), extractAnnotations(s.field20.annotations))
+              val encoder21 = addAnnotations(convert(s.field21.schema), extractAnnotations(s.field21.annotations))
+              val encoder22 = addAnnotations(convert(s.field22.schema), extractAnnotations(s.field22.annotations))
               val baseEncoder = io.circe.Encoder.forProduct22(
-                parsed.transformJsonLabel(f1.label),
-                parsed.transformJsonLabel(f2.label),
-                parsed.transformJsonLabel(f3.label),
-                parsed.transformJsonLabel(f4.label),
-                parsed.transformJsonLabel(f5.label),
-                parsed.transformJsonLabel(f6.label),
-                parsed.transformJsonLabel(f7.label),
-                parsed.transformJsonLabel(f8.label),
-                parsed.transformJsonLabel(f9.label),
-                parsed.transformJsonLabel(f10.label),
-                parsed.transformJsonLabel(f11.label),
-                parsed.transformJsonLabel(f12.label),
-                parsed.transformJsonLabel(f13.label),
-                parsed.transformJsonLabel(f14.label),
-                parsed.transformJsonLabel(f15.label),
-                parsed.transformJsonLabel(f16.label),
-                parsed.transformJsonLabel(f17.label),
-                parsed.transformJsonLabel(f18.label),
-                parsed.transformJsonLabel(f19.label),
-                parsed.transformJsonLabel(f20.label),
-                parsed.transformJsonLabel(f21.label),
-                parsed.transformJsonLabel(f22.label)
-              )((a: A) => (ext1(a), ext2(a), ext3(a), ext4(a), ext5(a), ext6(a), ext7(a), ext8(a), ext9(a), ext10(a), ext11(a), ext12(a), ext13(a), ext14(a), ext15(a), ext16(a), ext17(a), ext18(a), ext19(a), ext20(a), ext21(a), ext22(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20, encoder21, encoder22)
+                parsed.transformJsonLabel(s.field1.name.toString),
+                parsed.transformJsonLabel(s.field2.name.toString),
+                parsed.transformJsonLabel(s.field3.name.toString),
+                parsed.transformJsonLabel(s.field4.name.toString),
+                parsed.transformJsonLabel(s.field5.name.toString),
+                parsed.transformJsonLabel(s.field6.name.toString),
+                parsed.transformJsonLabel(s.field7.name.toString),
+                parsed.transformJsonLabel(s.field8.name.toString),
+                parsed.transformJsonLabel(s.field9.name.toString),
+                parsed.transformJsonLabel(s.field10.name.toString),
+                parsed.transformJsonLabel(s.field11.name.toString),
+                parsed.transformJsonLabel(s.field12.name.toString),
+                parsed.transformJsonLabel(s.field13.name.toString),
+                parsed.transformJsonLabel(s.field14.name.toString),
+                parsed.transformJsonLabel(s.field15.name.toString),
+                parsed.transformJsonLabel(s.field16.name.toString),
+                parsed.transformJsonLabel(s.field17.name.toString),
+                parsed.transformJsonLabel(s.field18.name.toString),
+                parsed.transformJsonLabel(s.field19.name.toString),
+                parsed.transformJsonLabel(s.field20.name.toString),
+                parsed.transformJsonLabel(s.field21.name.toString),
+                parsed.transformJsonLabel(s.field22.name.toString)
+              )((a: A) => (s.field1.get(a), s.field2.get(a), s.field3.get(a), s.field4.get(a), s.field5.get(a), s.field6.get(a), s.field7.get(a), s.field8.get(a), s.field9.get(a), s.field10.get(a), s.field11.get(a), s.field12.get(a), s.field13.get(a), s.field14.get(a), s.field15.get(a), s.field16.get(a), s.field17.get(a), s.field18.get(a), s.field19.get(a), s.field20.get(a), s.field21.get(a), s.field22.get(a)))(encoder1, encoder2, encoder3, encoder4, encoder5, encoder6, encoder7, encoder8, encoder9, encoder10, encoder11, encoder12, encoder13, encoder14, encoder15, encoder16, encoder17, encoder18, encoder19, encoder20, encoder21, encoder22)
               addAnnotations(baseEncoder, parsed)
             }
 
-          case ZioSchema.Enum1(c1, annotations) =>
-            convertEnum[A](annotations, c1)
-
-          case ZioSchema.Enum2(c1, c2, annotations) =>
-            convertEnum[A](annotations, c1, c2)
-
-          case ZioSchema.Enum3(c1, c2, c3, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3)
-
-          case ZioSchema.Enum4(c1, c2, c3, c4, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4)
-
-          case ZioSchema.Enum5(c1, c2, c3, c4, c5, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5)
-
-          case ZioSchema.Enum6(c1, c2, c3, c4, c5, c6, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6)
-
-          case ZioSchema.Enum7(c1, c2, c3, c4, c5, c6, c7, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7)
-
-          case ZioSchema.Enum8(c1, c2, c3, c4, c5, c6, c7, c8, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8)
-
-          case ZioSchema.Enum9(c1, c2, c3, c4, c5, c6, c7, c8, c9, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9)
-
-          case ZioSchema.Enum10(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)
-
-          case ZioSchema.Enum11(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11)
-
-          case ZioSchema.Enum12(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)
-
-          case ZioSchema.Enum13(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)
-
-          case ZioSchema.Enum14(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14)
-
-          case ZioSchema.Enum15(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15)
-
-          case ZioSchema.Enum16(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16)
-
-          case ZioSchema.Enum17(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17)
-
-          case ZioSchema.Enum18(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18)
-
-          case ZioSchema.Enum19(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
-
-          case ZioSchema.Enum20(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20)
-
-          case ZioSchema.Enum21(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)
-
-          case ZioSchema.Enum22(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, annotations) =>
-            convertEnum[A](annotations, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22)
+          case s: ZioSchema.Enum[A] =>
+            convertEnum[A](s.annotations, s.cases: _*)
 
           case _ =>
             ???
@@ -1909,19 +1777,21 @@ object OpenApiZioSchemaCirceConverter {
 
       private def convertEnum[A](
         annotations: Chunk[Any],
-        cases: ZioSchema.Case[_, A]*
+        cases: ZioSchema.Case[A, _]*
       ): Encoder[A] = {
         val enumAnnotations = extractAnnotations[A](annotations)
         val encodersByName = cases.iterator
           .map { c =>
             val cAnn = extractAnnotations(c.annotations)
             val encoder = addAnnotations(
-              convert(c.codec),
+              convert(c.schema),
               extractAnnotations(c.annotations)
             ).asInstanceOf[io.circe.Encoder[Any]]
-            val entityName = cAnn.entityName.getOrElse(throw new RuntimeException(
-              s"Subtype of ${enumAnnotations.entityName.getOrElse("-")} must have entityName defined to derive an io.circe.Encoder. Received annotations: $cAnn"
-            ))
+            val entityName = OpenApiConverterUtils.getCaseEntityName(c, cAnn).getOrElse(
+              throw new RuntimeException(
+                s"Subtype of ${enumAnnotations.entityName.getOrElse("-")} must have entityName defined or be a case class to derive an io.circe.Encoder. Received annotations: $cAnn"
+              )
+            )
             entityName -> (encoder, c)
           }
           .toMap
@@ -1942,7 +1812,7 @@ object OpenApiZioSchemaCirceConverter {
               override def apply(a: A): Json = {
                 val discValue = discriminator.discriminatorValue(a)
                 val (enc, c) = encodersByName(discriminator.mapping(discValue))
-                val json = enc(c.unsafeDeconstruct(a).asInstanceOf[Any])
+                val json = enc(c.deconstruct(a).asInstanceOf[Any])
                 json.mapObject { o =>
                   o.add(discriminator.discriminatorFieldName, Json.fromString(discValue))
                 }
@@ -1957,6 +1827,7 @@ object OpenApiZioSchemaCirceConverter {
           case StandardType.UnitType => io.circe.Encoder[Unit]
           case StandardType.StringType => io.circe.Encoder[String]
           case StandardType.BoolType => io.circe.Encoder[Boolean]
+          case StandardType.ByteType => io.circe.Encoder[Byte]
           case StandardType.ShortType => io.circe.Encoder[Short]
           case StandardType.IntType => io.circe.Encoder[Int]
           case StandardType.LongType => io.circe.Encoder[Long]
@@ -1969,18 +1840,18 @@ object OpenApiZioSchemaCirceConverter {
           case StandardType.UUIDType => io.circe.Encoder[UUID]
           case StandardType.DayOfWeekType => io.circe.Encoder[Int] // todo add validation
           case StandardType.DurationType => io.circe.Encoder[String]
-          case StandardType.InstantType(_) => io.circe.Encoder[Instant]
-          case StandardType.LocalDateType(_) => io.circe.Encoder[LocalDate]
-          case StandardType.LocalDateTimeType(_) => io.circe.Encoder[LocalDateTime]
-          case StandardType.LocalTimeType(_) => io.circe.Encoder[LocalTime]
+          case StandardType.InstantType => io.circe.Encoder[Instant]
+          case StandardType.LocalDateType => io.circe.Encoder[LocalDate]
+          case StandardType.LocalDateTimeType => io.circe.Encoder[LocalDateTime]
+          case StandardType.LocalTimeType => io.circe.Encoder[LocalTime]
           case StandardType.MonthType => io.circe.Encoder[String] // todo add validation
           case StandardType.MonthDayType => io.circe.Encoder[String] // todo add validation
-          case StandardType.OffsetDateTimeType(_) => io.circe.Encoder[OffsetDateTime]
-          case StandardType.OffsetTimeType(_) => io.circe.Encoder[OffsetTime]
+          case StandardType.OffsetDateTimeType => io.circe.Encoder[OffsetDateTime]
+          case StandardType.OffsetTimeType => io.circe.Encoder[OffsetTime]
           case StandardType.PeriodType => io.circe.Encoder[Period]
           case StandardType.YearType => io.circe.Encoder[Year]
           case StandardType.YearMonthType => io.circe.Encoder[YearMonth]
-          case StandardType.ZonedDateTimeType(_) => io.circe.Encoder[ZonedDateTime]
+          case StandardType.ZonedDateTimeType => io.circe.Encoder[ZonedDateTime]
           case StandardType.ZoneIdType => io.circe.Encoder[ZoneId]
           case StandardType.ZoneOffsetType => io.circe.Encoder[ZoneOffset]
         }

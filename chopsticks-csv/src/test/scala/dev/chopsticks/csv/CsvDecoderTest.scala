@@ -31,7 +31,7 @@ object CsvDecoderTest {
   object CsvDecoderTestName extends OpenApiModel[CsvDecoderTestName] {
     implicit override lazy val zioSchema: Schema[CsvDecoderTestName] =
       Schema[String]
-        .validate(Validator.all(Validator.minLength(1), Validator.maxLength(100)))
+        .validated(Validator.all(Validator.minLength(1), Validator.maxLength(100)))
         .mapBoth(CsvDecoderTestName(_), _.value)
   }
 
@@ -39,7 +39,7 @@ object CsvDecoderTest {
   object CsvDecoderTestAddressList extends OpenApiModel[CsvDecoderTestAddressList] {
     implicit override lazy val zioSchema: Schema[CsvDecoderTestAddressList] =
       Schema[List[CsvDecoderTestAddress]]
-        .validate(Validator.minSize(1))
+        .validated(Validator.minSize(1))
         .mapBoth(CsvDecoderTestAddressList(_), _.value)
   }
 
