@@ -229,6 +229,8 @@ object Dependencies {
 
   val commonsText = Seq("org.apache.commons" % "commons-text" % "1.11.0")
 
+  val scalaXml = Seq("org.scala-lang.modules" %% "scala-xml" % "1.3.0")
+
   lazy val tapirDeps = {
     val tapirVersion = "1.9.10"
     Seq(
