@@ -1,7 +1,8 @@
 package dev.chopsticks.xml
 
-import dev.chopsticks.openapi.common.ConverterCache
-import dev.chopsticks.openapi.OpenApiValidation
+import dev.chopsticks.openapi.common.{ConverterCache, OpenApiConverterUtils}
+import dev.chopsticks.openapi.{OpenApiSumTypeSerDeStrategy, OpenApiValidation}
+import dev.chopsticks.util.Hex
 import dev.chopsticks.xml.XmlAnnotations.extractAnnotations
 import sttp.tapir.Validator
 import zio.schema.{Schema, StandardType, TypeId}
@@ -24,7 +25,7 @@ import java.time.{
 import java.util.UUID
 import scala.collection.mutable.ListBuffer
 import scala.util.control.NonFatal
-import scala.xml.NodeSeq
+import scala.xml.{Elem, NodeSeq, Text}
 
 final case class XmlDecoderError(message: String, private[chopsticks] val reversedPath: List[String]) {
 //  def format: String = {
@@ -216,6 +217,15 @@ object XmlDecoder {
 
   private val stringDecoder: XmlDecoder[String] = createPrimitive((value, _) => Right(value))
 
+  private val binaryViaHexDecoder: XmlDecoder[Chunk[Byte]] = createPrimitive { (hexString, x) =>
+    if (hexString.length % 2 != 0) {
+      Left(List(XmlDecoderError(s"Cannot parse hexBinary. Received a string with an odd number of characters.", x)))
+    }
+    else {
+      Right(Chunk.fromArray(Hex.decode(hexString)))
+    }
+  }
+
   private val instantDecoder: XmlDecoder[Instant] = {
     createPrimitiveFromThrowing(Instant.parse, s"Cannot parse timestamp; it must be in ISO-8601 format.")
   }
@@ -311,14 +321,27 @@ object XmlDecoder {
     new XmlDecoder[Chunk[A]] {
       final override def isOptional: Boolean = false
       override def parse(node: NodeSeq, path: List[String]): Either[List[XmlDecoderError], Chunk[A]] = {
-        val children = node.iterator.filter(_.label == nodeName).map(_.child)
+        val children = node.iterator.filter(_.label == nodeName)
+          .map {
+            _.child
+              .map {
+                case Text(data) => Text(data.trim)
+                case other => other
+              }
+              .filter {
+                case Text(data) => data.nonEmpty
+                case _ => true
+              }
+          }
+          .filter(_.nonEmpty)
+
         val errorBuilder = ListBuffer[XmlDecoderError]()
         val chunkBuilder = Chunk.newBuilder[A]
 
         var i = 0
         for (child <- children) {
           // XPath starts with 1
-          underlying.parse(child, s"[${i + 1}]" :: path) match {
+          underlying.parse(child, s"[${i + 1}]" :: nodeName :: path) match {
             case Right(value) =>
               val _ = chunkBuilder += value
             case Left(errors) =>
@@ -328,7 +351,7 @@ object XmlDecoder {
         }
 
         if (errorBuilder.isEmpty) Right(chunkBuilder.result())
-        else Left(errorBuilder.toList)
+        else Left(errorBuilder.toList);
       }
     }
 
@@ -349,17 +372,17 @@ object XmlDecoder {
       cache.convertUsingCache(typeId, annotations.openApiAnnotations)(convert)(() => new LazyDecoder[A]())
     }
 
-    def convert[A](schema: Schema[A], xmlSeqNodeName: Option[String]): XmlDecoder[A] = {
+    def convert[A](schema: Schema[A], fieldName: Option[String]): XmlDecoder[A] = {
       schema match {
         case Primitive(standardType, annotations) =>
           primitiveConverter(standardType, annotations)
 
         case Schema.Sequence(schemaA, fromChunk, _, annotations, _) =>
           val parsed = extractAnnotations[A](annotations)
-          val nodeName = parsed.xmlSeqNodeName
-            .orElse(xmlSeqNodeName)
+          val nodeName = parsed.xmlFieldName
+            .orElse(fieldName)
             .getOrElse {
-              throw new RuntimeException("Sequence must have xmlSeqNodeName annotation")
+              throw new RuntimeException("Sequence must have xmlFieldName annotation")
             }
           addAnnotations(
             decodeChunk(convert(schemaA, Some(nodeName)), nodeName).map(fromChunk),
@@ -371,25 +394,91 @@ object XmlDecoder {
 
         case Schema.Transform(schema, f, _, annotations, _) =>
           val parsed = extractAnnotations[A](annotations)
-          val baseDecoder = convert(schema, parsed.xmlSeqNodeName).emap(f)
+          val baseDecoder = convert(schema, parsed.xmlFieldName.orElse(fieldName)).emap(f)
           addAnnotations(baseDecoder, parsed)
 
         case Schema.Optional(schema, annotations) =>
           val parsed = extractAnnotations[A](annotations)
           addAnnotations[A](
-            baseDecoder = decodeOption(convert(schema, parsed.xmlSeqNodeName)),
+            baseDecoder = decodeOption(convert(schema, parsed.xmlFieldName.orElse(fieldName))),
             metadata = parsed
           )
 
         case l @ Schema.Lazy(_) =>
-          convert(l.schema, xmlSeqNodeName)
+          convert(l.schema, fieldName)
 
         case record: Schema.Record[A] =>
           convertRecord(record)
 
+        case s: Schema.Enum[A] =>
+          convertEnum(s)
+
         case _ =>
           ???
       }
+    }
+
+    private def convertEnum[A](schema: Schema.Enum[A]): XmlDecoder[A] = {
+      val enumAnnotations = extractAnnotations[A](schema.annotations)
+      val serDeStrategy = enumAnnotations.openApiAnnotations.sumTypeSerDeStrategy
+        .getOrElse {
+          throw new RuntimeException(
+            s"Discriminator must be defined to derive an XmlDecoder. Received annotations: $enumAnnotations"
+          )
+        }
+
+      serDeStrategy match {
+        case OpenApiSumTypeSerDeStrategy.Discriminator(discriminator) =>
+          val reversedDiscriminator = discriminator.mapping.map(_.swap)
+          if (reversedDiscriminator.size != discriminator.mapping.size) {
+            throw new RuntimeException(
+              s"Cannot derive XmlDecoder for ${schema.id.name}, because discriminator mapping is not unique."
+            )
+          }
+
+          val decoderByDiscType = schema.cases.iterator
+            .map { c =>
+              val decoder = addAnnotations(
+                convert(c.schema, None),
+                extractAnnotations(c.annotations)
+              )
+              reversedDiscriminator(c.caseName) -> (decoder, c)
+            }
+            .toMap
+
+          convertUsingCache(schema.id, enumAnnotations) {
+            val baseDecoder = new XmlDecoder[A] {
+              final override def isOptional: Boolean = false
+              override def parse(node: NodeSeq, path: List[String]): Either[List[XmlDecoderError], A] = {
+                val nodes = node.collect { case e: Elem => e }
+                if (nodes.size != 1) {
+                  if (nodes.isEmpty) {
+                    Left(List(XmlDecoderError(s"Expected single node, but none found.", path)))
+                  }
+                  else {
+                    Left(List(XmlDecoderError(
+                      s"Expected single node, but the following nodes instead: ${node.map(_.label).mkString(", ")}.",
+                      path
+                    )))
+                  }
+                }
+                else {
+                  val e = nodes.head
+                  decoderByDiscType.get(e.label) match {
+                    case None => Left(List(XmlDecoderError(
+                        s"Unrecognized object type: ${e.label}. Valid object types are: ${reversedDiscriminator.keys.mkString(", ")}.",
+                        path
+                      )))
+                    case Some((decoder, _)) =>
+                      decoder.parse(e.child, e.label :: path).asInstanceOf[Either[List[XmlDecoderError], A]]
+                  }
+                }
+              }
+            }
+            addAnnotations(baseDecoder, enumAnnotations)
+          }
+      }
+
     }
 
     private def convertRecord[A](record: Schema.Record[A]): XmlDecoder[A] = {
@@ -399,11 +488,15 @@ object XmlDecoder {
           .map { field =>
             val fieldAnnotations = extractAnnotations[Any](field.annotations)
             addAnnotations[Any](
-              convert[Any](field.schema.asInstanceOf[Schema[Any]], fieldAnnotations.xmlSeqNodeName),
+              convert[Any](
+                field.schema.asInstanceOf[Schema[Any]],
+                fieldAnnotations.xmlFieldName.orElse(Some(field.name))
+              ),
               fieldAnnotations
             )
           }
         val fieldNames = record.fields.map { field => extractAnnotations[Any](field.annotations).xmlFieldName }
+        val isFieldSeq = record.fields.map { field => OpenApiConverterUtils.isSeq(field.schema) }
         val baseDecoder = new XmlDecoder[A] {
           final override def isOptional: Boolean = false
           override def parse(node: NodeSeq, path: List[String]): Either[List[XmlDecoderError], A] = {
@@ -414,21 +507,47 @@ object XmlDecoder {
               val field = record.fields(i)
               val fieldName = fieldNames(i).getOrElse(field.name)
               val fieldDecoder = fieldDecoders(i)
+              val isSeq = isFieldSeq(i)
               val childNodeIndex = node.indexWhere(_.label == fieldName)
-              if (childNodeIndex == -1 && fieldDecoder.isOptional) {
-                val _ = argsBuilder += None
-              }
-              else if (childNodeIndex == -1) {
-                val _ = errorBuilder += XmlDecoderError(s"Expected field '$fieldName', but it was not found.", path)
+              if (childNodeIndex == -1) {
+                if (isSeq) {
+                  fieldDecoder.parse(NodeSeq.Empty, path) match {
+                    case Right(value) =>
+                      val _ = argsBuilder += value
+                    case Left(errors) =>
+                      val _ = errorBuilder ++= errors
+                  }
+                }
+                else if (fieldDecoder.isOptional) {
+                  fieldDecoder.parse(NodeSeq.Empty, path) match {
+                    case Right(value) =>
+                      val _ = argsBuilder += value
+                    case Left(errors) =>
+                      val _ = errorBuilder ++= errors
+                  }
+                }
+                else {
+                  val _ = errorBuilder += XmlDecoderError(s"Expected field '$fieldName', but it was not found.", path)
+                }
               }
               else {
-                val fieldNodes = node(childNodeIndex).child
-                val result = fieldDecoder.parse(fieldNodes, fieldName :: path)
-                result match {
-                  case Right(value) =>
-                    val _ = argsBuilder += value
-                  case Left(errors) =>
-                    val _ = errorBuilder ++= errors
+                if (isSeq) {
+                  fieldDecoder.parse(node, path) match {
+                    case Right(value) =>
+                      val _ = argsBuilder += value
+                    case Left(errors) =>
+                      val _ = errorBuilder ++= errors
+                  }
+                }
+                else {
+                  val fieldNodes = node(childNodeIndex).child
+                  val result = fieldDecoder.parse(fieldNodes, fieldName :: path)
+                  result match {
+                    case Right(value) =>
+                      val _ = argsBuilder += value
+                    case Left(errors) =>
+                      val _ = errorBuilder ++= errors
+                  }
                 }
               }
               i += 1
@@ -471,7 +590,7 @@ object XmlDecoder {
         case StandardType.LongType => longDecoder
         case StandardType.FloatType => floatDecoder
         case StandardType.DoubleType => doubleDecoder
-        case StandardType.BinaryType => notSupported("BinaryType")
+        case StandardType.BinaryType => binaryViaHexDecoder
         case StandardType.CharType => charDecoder
         case StandardType.UUIDType => uuidDecoder
         case StandardType.BigDecimalType => bigDecimalDecoder

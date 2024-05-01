@@ -19,17 +19,15 @@ final class XmlDecoderTest extends AnyWordSpecLike with Assertions with Matchers
       val xml = {
         <name>John</name>
         <age>30</age>
-        <addressData>
-          <address>
-            <city>NY</city>
-            <street>1st street</street>
-          </address>
-          <address>
-            <city>LA</city>
-            <street>2nd street</street>
-            <zip>12345</zip>
-          </address>
-        </addressData>
+        <address>
+          <city>NY</city>
+          <street>1st street</street>
+        </address>
+        <address>
+          <city>LA</city>
+          <street>2nd street</street>
+          <zip>12345</zip>
+        </address>
       }
       val expected = XmlTestPerson(
         name = "John",
@@ -43,5 +41,44 @@ final class XmlDecoderTest extends AnyWordSpecLike with Assertions with Matchers
       val decoded = XmlTestPerson.xmlDecoder.parse(xml)
       assert(decoded == Right(expected))
     }
+
+    "decode a nested case class with a single element list" in {
+      val xml = {
+        <name>John</name>
+        <age>30</age>
+        <address>
+          <city>NY</city>
+          <street>1st street</street>
+        </address>
+      }
+      val expected = XmlTestPerson(
+        name = "John",
+        age = Some(30),
+        nickname = None,
+        addresses = List(
+          XmlTestAddress("NY", "1st street", None)
+        )
+      )
+      val decoded = XmlTestPerson.xmlDecoder.parse(xml)
+      assert(decoded == Right(expected))
+    }
+
+    "decode a nested case class with an empty list" in {
+      val xml = {
+        <name>John</name>
+        <age>30</age>
+        <address>
+        </address>
+      }
+      val expected = XmlTestPerson(
+        name = "John",
+        age = Some(30),
+        nickname = None,
+        addresses = List.empty
+      )
+      val decoded = XmlTestPerson.xmlDecoder.parse(xml)
+      assert(decoded == Right(expected))
+    }
+
   }
 }

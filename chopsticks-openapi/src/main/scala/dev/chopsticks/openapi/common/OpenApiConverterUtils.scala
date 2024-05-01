@@ -47,4 +47,25 @@ object OpenApiConverterUtils {
       }
     }
   }
+
+  private[chopsticks] def isSeq(schema: Schema[_]): Boolean = {
+    schema match {
+      case _: Schema.Sequence[_, _, _] => true
+      case _: Schema.Set[_] => true
+      case _: Schema.Primitive[_] => false
+      case o: Schema.Optional[_] => isSeq(o.schema)
+      case t: Schema.Transform[_, _, _] => isSeq(t.schema)
+      case l: Schema.Lazy[_] => isSeq(l.schema)
+      case _: Schema.Record[_] => false
+      case _: Schema.Enum[_] => false
+      case _: Schema.Map[_, _] => false
+      case _: Schema.Either[_, _] => false
+      case _: Schema.Tuple2[_, _] => false
+      case _: Schema.Fail[_] => false
+      case _: Schema.Fallback[_, _] =>
+        throw new IllegalArgumentException("Fallback schema is not supported")
+      case _: Schema.Dynamic =>
+        throw new IllegalArgumentException("Dynamic schema is not supported")
+    }
+  }
 }

@@ -33,17 +33,15 @@ final class XmlEncoderTest extends AnyWordSpecLike with Assertions with Matchers
       val expected = {
         <name>John</name>
         <age>30</age>
-        <addressData>
-          <address>
-            <city>NY</city>
-            <street>1st street</street>
-          </address>
-          <address>
-            <city>LA</city>
-            <street>2nd street</street>
-            <zip>12345</zip>
-          </address>
-        </addressData>
+        <address>
+          <city>NY</city>
+          <street>1st street</street>
+        </address>
+        <address>
+          <city>LA</city>
+          <street>2nd street</street>
+          <zip>12345</zip>
+        </address>
       }
       val expectedEncoded = renderAsXml(expected)
       assert(expectedEncoded == encoded)

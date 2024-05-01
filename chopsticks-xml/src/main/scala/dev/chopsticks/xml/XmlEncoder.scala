@@ -1,6 +1,8 @@
 package dev.chopsticks.xml
 
-import dev.chopsticks.openapi.common.ConverterCache
+import dev.chopsticks.openapi.common.{ConverterCache, OpenApiConverterUtils}
+import dev.chopsticks.openapi.OpenApiSumTypeSerDeStrategy
+import dev.chopsticks.util.Hex
 import dev.chopsticks.xml.XmlAnnotations.extractAnnotations
 
 import java.time.{
@@ -17,7 +19,7 @@ import java.time.{
   ZonedDateTime
 }
 import java.util.UUID
-import scala.xml.{NodeSeq, TopScope}
+import scala.xml.{Elem, NodeSeq, TopScope}
 import zio.Chunk
 import zio.schema.{Schema, StandardType, TypeId}
 import zio.schema.Schema.{Field, Primitive}
@@ -56,6 +58,8 @@ object XmlEncoder {
   private val doubleEncoder: XmlEncoder[Double] = createPrimitiveEncoder(x => scala.xml.Text(x.toString))
   private val stringEncoder: XmlEncoder[String] = createPrimitiveEncoder(x => scala.xml.Text(x))
   private val charEncoder: XmlEncoder[Char] = createPrimitiveEncoder(x => scala.xml.Text(String.valueOf(x)))
+  private val binaryViaHexEncoder: XmlEncoder[Chunk[Byte]] =
+    createPrimitiveEncoder(x => scala.xml.Text(Hex.encode(x.toArray)))
   private val instantEncoder: XmlEncoder[Instant] = createPrimitiveEncoder(x => scala.xml.Text(x.toString))
   private val offsetDateTimeEncoder: XmlEncoder[OffsetDateTime] =
     createPrimitiveEncoder(x => scala.xml.Text(x.toString))
@@ -114,17 +118,17 @@ object XmlEncoder {
     }
 
     // scalafmt: { maxColumn = 800, optIn.configStyleArguments = false }
-    def convert[A](schema: Schema[A], xmlSeqNodeName: Option[String]): XmlEncoder[A] = {
+    def convert[A](schema: Schema[A], fieldName: Option[String]): XmlEncoder[A] = {
       schema match {
         case Primitive(standardType, annotations) =>
           primitiveConverter(standardType, annotations)
 
         case Schema.Sequence(schemaA, _, toChunk, annotations, _) =>
           val parsed = extractAnnotations[A](annotations)
-          val nodeName = parsed.xmlSeqNodeName
-            .orElse(xmlSeqNodeName)
+          val nodeName = parsed.xmlFieldName
+            .orElse(fieldName)
             .getOrElse {
-              throw new RuntimeException("Sequence must have xmlSeqNodeName annotation")
+              throw new RuntimeException("Sequence must have xmlFieldName annotation")
             }
           addAnnotations(
             None,
@@ -137,7 +141,7 @@ object XmlEncoder {
 
         case Schema.Transform(schema, _, g, annotations, _) =>
           val typedAnnotations = extractAnnotations[A](annotations)
-          val baseEncoder = convert(schema, typedAnnotations.xmlSeqNodeName.orElse(xmlSeqNodeName)).contramap[A] { x =>
+          val baseEncoder = convert(schema, typedAnnotations.xmlFieldName.orElse(fieldName)).contramap[A] { x =>
             g(x) match {
               case Right(v) => v
               case Left(error) => throw new RuntimeException(s"Couldn't transform schema: $error")
@@ -149,24 +153,81 @@ object XmlEncoder {
           val parsed = extractAnnotations[A](annotations)
           addAnnotations[A](
             None,
-            // todo remove asInstanceOf if possible
-            baseEncoder = encodeOption(convert(schema, parsed.xmlSeqNodeName.orElse(xmlSeqNodeName))).asInstanceOf[XmlEncoder[A]],
+            baseEncoder = encodeOption(convert(schema, parsed.xmlFieldName.orElse(fieldName))).asInstanceOf[XmlEncoder[A]],
             metadata = extractAnnotations(annotations)
           )
 
         case l @ Schema.Lazy(_) =>
-          convert(l.schema, xmlSeqNodeName)
+          convert(l.schema, fieldName)
 
         case s: Schema.Record[A] =>
           convertRecord[A](s.id, s.annotations, s.fields)
 
-//        case s: Schema.Enum[A] =>
-//          convertEnum[A](s.id, s.annotations, s.cases)
+        case s: Schema.Enum[A] =>
+          convertEnum[A](s)
 
         case _ =>
           ???
 
       }
+    }
+
+    private def convertEnum[A](schema: Schema.Enum[A]): XmlEncoder[A] = {
+      val enumAnnotations = extractAnnotations[A](schema.annotations)
+      val serDeStrategy = enumAnnotations.openApiAnnotations.sumTypeSerDeStrategy
+        .getOrElse {
+          throw new RuntimeException(
+            s"Discriminator must be defined to derive an XmlEncoder. Received annotations: $enumAnnotations"
+          )
+        }
+
+      serDeStrategy match {
+        case OpenApiSumTypeSerDeStrategy.Discriminator(discriminator) =>
+          if (discriminator.mapping.size != schema.cases.size) {
+            throw new RuntimeException(
+              s"Cannot derive XmlEncoder for ${schema.id.name}, because discriminator mapping has different length than the number of cases. Discriminator mapping length = ${discriminator.mapping.size}, possible cases: ${schema.cases.map(_.caseName).mkString(", ")}."
+            )
+          }
+          val reversedDiscriminator = discriminator.mapping.map(_.swap)
+          if (reversedDiscriminator.size != discriminator.mapping.size) {
+            throw new RuntimeException(
+              s"Cannot derive XmlEncoder for ${schema.id.name}, because discriminator mapping is not unique."
+            )
+          }
+          val encoderByDiscValue = {
+            schema.cases.iterator
+              .map { c =>
+                val encoder = addAnnotations(
+                  None,
+                  convert(c.schema, None),
+                  extractAnnotations(c.annotations)
+                ).asInstanceOf[XmlEncoder[Any]]
+                reversedDiscriminator(c.caseName) -> encoder
+              }
+              .toMap
+          }
+
+          convertUsingCache(schema.id, enumAnnotations) {
+            val baseDecoder = new XmlEncoder[A] {
+              final override def isOptional: Boolean = false
+              override def encode(a: A): NodeSeq = {
+                val discriminatorValue = discriminator.discriminatorValue(a)
+                val encoder = encoderByDiscValue(discriminatorValue)
+                Elem(
+                  null,
+                  discriminatorValue,
+                  scala.xml.Null,
+                  TopScope,
+                  minimizeEmpty = true,
+                  encoder.encode(a): _*
+                )
+              }
+            }
+            addAnnotations(Some(schema.id), baseDecoder, enumAnnotations)
+          }
+
+      }
+
     }
 
     private def convertRecord[A](id: TypeId, annotations: Chunk[Any], fields: Chunk[Field[A, _]]): XmlEncoder[A] = {
@@ -175,9 +236,17 @@ object XmlEncoder {
         val fieldEncoders = fields
           .map { field =>
             val fieldAnnotations = extractAnnotations[Any](field.annotations)
-            addAnnotations[Any](None, convert[Any](field.schema.asInstanceOf[Schema[Any]], fieldAnnotations.xmlSeqNodeName), fieldAnnotations)
+            addAnnotations[Any](
+              None,
+              convert[Any](
+                field.schema.asInstanceOf[Schema[Any]],
+                fieldAnnotations.xmlFieldName.orElse(Some(field.name))
+              ),
+              fieldAnnotations
+            )
           }
         val fieldNames = fields.map { field => extractAnnotations[Any](field.annotations).xmlFieldName }
+        val isFieldSeq = fields.map { field => OpenApiConverterUtils.isSeq(field.schema) }
         val baseEncoder = new XmlEncoder[A] {
           final override def isOptional: Boolean = false
           override def encode(value: A): NodeSeq = {
@@ -186,20 +255,26 @@ object XmlEncoder {
             while (i < fields.length) {
               val field = fields(i)
               val encoder = fieldEncoders(i)
+              val isSeq = isFieldSeq(i)
               val childNodes = encoder
                 .asInstanceOf[XmlEncoder[Any]]
                 .encode(field.get(value))
               if (!(childNodes.isEmpty && encoder.isOptional)) {
-                val fieldName = fieldNames(i).getOrElse(field.name)
-                val newElem = scala.xml.Elem(
-                  null,
-                  fieldName,
-                  scala.xml.Null,
-                  TopScope,
-                  minimizeEmpty = true,
-                  childNodes: _*
-                )
-                val _ = builder.addOne(newElem)
+                if (!isSeq) {
+                  val fieldName = fieldNames(i).getOrElse(field.name)
+                  val newElem = scala.xml.Elem(
+                    null,
+                    fieldName,
+                    scala.xml.Null,
+                    TopScope,
+                    minimizeEmpty = true,
+                    childNodes: _*
+                  )
+                  val _ = builder.addOne(newElem)
+                }
+                else {
+                  val _ = builder.addAll(childNodes)
+                }
               }
               i += 1
             }
@@ -276,7 +351,7 @@ object XmlEncoder {
         case StandardType.LongType => longEncoder
         case StandardType.FloatType => floatEncoder
         case StandardType.DoubleType => doubleEncoder
-        case StandardType.BinaryType => notSupported("BinaryType")
+        case StandardType.BinaryType => binaryViaHexEncoder
         case StandardType.CharType => charEncoder
         case StandardType.UUIDType => uuidEncoder
         case StandardType.BigDecimalType => bigDecimalEncoder

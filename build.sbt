@@ -276,6 +276,12 @@ lazy val xml = Build
   )
   .dependsOn(openapi)
 
+lazy val soap = Build
+  .defineProject("soap")
+  .settings(
+  )
+  .dependsOn(xml)
+
 lazy val root = (project in file("."))
   .settings(
     name := "chopsticks",
@@ -301,6 +307,7 @@ lazy val root = (project in file("."))
     openapi,
     csv,
     xml,
+    soap,
     alertmanager,
     prometheus,
     zioGrpcCommon,

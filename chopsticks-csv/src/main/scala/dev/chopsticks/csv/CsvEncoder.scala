@@ -443,7 +443,7 @@ object CsvEncoder {
           val diff = discriminator.mapping.values.toSet.diff(encodersByName.keySet)
           if (diff.nonEmpty) {
             throw new RuntimeException(
-              s"Cannot derive CsvEncoder for ${enumAnnotations.entityName.getOrElse("-")}, because mapping and decoders don't match. Diff=$diff."
+              s"Cannot derive CsvEncoder for ${id.name}, because mapping and decoders don't match. Diff=$diff."
             )
           }
           new CsvEncoder[A] {

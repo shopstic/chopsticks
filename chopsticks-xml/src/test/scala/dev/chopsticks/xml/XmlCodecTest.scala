@@ -1,14 +1,13 @@
 package dev.chopsticks.xml
 
-import dev.chopsticks.xml.XmlAnnotations.{xmlFieldName, xmlSeqNodeName}
+import dev.chopsticks.xml.XmlAnnotations.xmlFieldName
 import zio.schema.{DeriveSchema, Schema}
 
 final case class XmlTestPerson(
   name: String,
   age: Option[Int],
   nickname: Option[String],
-  @xmlFieldName("addressData")
-  @xmlSeqNodeName("address")
+  @xmlFieldName("address")
   addresses: List[XmlTestAddress]
 )
 object XmlTestPerson extends XmlModel[XmlTestPerson] {
