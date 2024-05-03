@@ -4,7 +4,7 @@ import dev.chopsticks.openapi.{OpenApiParsedAnnotations, OpenApiSumTypeSerDeStra
 import dev.chopsticks.openapi.common.{ConverterCache, OpenApiConverterUtils}
 import org.apache.commons.text.StringEscapeUtils
 import zio.schema.{Schema, StandardType, TypeId}
-import zio.{Chunk, ChunkBuilder}
+import zio.Chunk
 import zio.schema.Schema.{Field, Primitive}
 
 import java.time.{
@@ -58,27 +58,6 @@ final case class CsvEncodingResult(headers: Chunk[String], rows: Chunk[Chunk[Str
 
 trait CsvEncoder[A] {
   self =>
-  def encodeSeq(values: Iterable[A]): CsvEncodingResult = {
-    val encodedValues = Chunk.fromIterable(values).map(v => encode(v))
-    val headers = encodedValues
-      .foldLeft(mutable.SortedSet.empty[String]) { case (acc, next) =>
-        acc ++ next.keys
-      }
-    val singleRowBuilder = ChunkBuilder.make[String](headers.size)
-    val rows = encodedValues
-      .foldLeft(ChunkBuilder.make[Chunk[String]](values.size)) { case (acc, next) =>
-        singleRowBuilder.clear()
-        val row = headers
-          .foldLeft(singleRowBuilder) { case (rowBuilder, header) =>
-            rowBuilder += next.getOrElse(header, "")
-          }
-          .result()
-        acc += row
-      }
-      .result()
-
-    CsvEncodingResult(Chunk.fromIterable(headers), Chunk.fromIterable(rows))
-  }
 
   def encode(value: A): mutable.LinkedHashMap[String, String] =
     encode(value, columnName = None, mutable.LinkedHashMap.empty)
@@ -464,7 +443,7 @@ object CsvEncoder {
           val diff = discriminator.mapping.values.toSet.diff(encodersByName.keySet)
           if (diff.nonEmpty) {
             throw new RuntimeException(
-              s"Cannot derive CsvEncoder for ${enumAnnotations.entityName.getOrElse("-")}, because mapping and decoders don't match. Diff=$diff."
+              s"Cannot derive CsvEncoder for ${id.name}, because mapping and decoders don't match. Diff=$diff."
             )
           }
           new CsvEncoder[A] {
