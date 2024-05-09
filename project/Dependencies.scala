@@ -33,7 +33,7 @@ object Dependencies {
 
   val zioCoreDeps = Seq(
     // Override izumi-reflect to 2.3.7 which solves the dreaded "Defect in zio.Has" bug again
-    "dev.zio" %% "izumi-reflect" % "2.3.8",
+    "dev.zio" %% "izumi-reflect" % "2.3.9",
     "dev.zio" %% "zio" % ZIO_VERSION
   )
 
