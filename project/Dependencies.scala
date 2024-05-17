@@ -118,7 +118,7 @@ object Dependencies {
   )
 
   val shapelessDeps = Seq(
-    "com.chuusai" %% "shapeless" % "2.3.9"
+    "com.chuusai" %% "shapeless" % "2.3.11"
   )
 
   val scalapbRuntimeDeps = Seq(
@@ -215,7 +215,7 @@ object Dependencies {
   val avro4sDirectDeps = {
     val Json4sVersion = "4.0.5"
     val RefinedVersion = "0.9.29"
-    val ShapelessVersion = "2.3.9"
+    val ShapelessVersion = "2.3.11"
     val MagnoliaVersion = "0.17.0"
 
     // https://github.com/sksamuel/avro4s/blob/release/4.0.x/build.sbt
