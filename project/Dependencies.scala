@@ -9,7 +9,7 @@ object Dependencies {
   val IZUMI_VERSION = "1.2.6"
   val REFINED_VERSION = "0.9.29"
   val CIRCE_VERSION = "0.14.3"
-  val CALIBAN_VERSION = "2.5.3"
+  val CALIBAN_VERSION = "2.7.0"
 
   val pekkoSlf4jDeps = Seq(
     "org.apache.pekko" %% "pekko-slf4j" % PEKKO_VERSION
