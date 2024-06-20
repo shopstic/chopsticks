@@ -66,7 +66,7 @@ object Dependencies {
   )
 
   val pekkoGrpcRuntimeDeps = Seq(
-    "org.apache.pekko" %% "pekko-grpc-runtime" % "1.0.0"
+    "org.apache.pekko" %% "pekko-grpc-runtime" % "1.0.2"
   )
 
   val catsCoreDeps = Seq(
