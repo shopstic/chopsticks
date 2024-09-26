@@ -2,7 +2,7 @@ import sbt._
 
 //noinspection ScalaUnusedSymbol,TypeAnnotation
 object Dependencies {
-  val SCALA_VERSION = "2.13.10"
+  val SCALA_VERSION = "2.13.15"
   val PEKKO_VERSION = "1.0.2"
   val PEKKO_HTTP_VERSION = "1.0.1"
   val ZIO_VERSION = "2.0.21"
