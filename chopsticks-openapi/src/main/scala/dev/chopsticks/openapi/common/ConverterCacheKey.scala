@@ -1,24 +1,20 @@
 package dev.chopsticks.openapi.common
 
-import dev.chopsticks.openapi.OpenApiParsedAnnotations
-import zio.schema.TypeId
-
-final private[chopsticks] case class ConverterCacheKey(entityName: String, annotationsHash: Int)
+final private[chopsticks] case class ConverterCacheKey(entityName: String, schema: zio.schema.Schema[_])
 
 final private[chopsticks] class ConverterCache[C[_]](
   cache: scala.collection.mutable.Map[ConverterCacheKey, C[_] with ConverterCache.Lazy[C[_]]] =
     scala.collection.mutable.Map.empty[ConverterCacheKey, C[_] with ConverterCache.Lazy[C[_]]]
 ) {
   private[chopsticks] def convertUsingCache[A](
-    typeId: TypeId,
-    annotations: OpenApiParsedAnnotations[A]
+    schema: zio.schema.Schema[A]
   )(convert: => C[A])(
     initLazy: () => C[A] with ConverterCache.Lazy[C[A]]
   ): C[A] = {
-    val entityName = OpenApiConverterUtils.getEntityName(Some(typeId), annotations)
+    val entityName = OpenApiConverterUtils.getEntityName(schema)
     entityName match {
       case Some(name) =>
-        val cacheKey = ConverterCacheKey(name, annotations.hashCode())
+        val cacheKey = ConverterCacheKey(name, schema)
         cache.get(cacheKey) match {
           case Some(value) => value.asInstanceOf[C[A]]
           case None =>

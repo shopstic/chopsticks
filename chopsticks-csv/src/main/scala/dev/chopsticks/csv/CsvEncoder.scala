@@ -5,7 +5,7 @@ import dev.chopsticks.openapi.common.{ConverterCache, OpenApiConverterUtils}
 import org.apache.commons.text.StringEscapeUtils
 import zio.schema.{Schema, StandardType, TypeId}
 import zio.{Chunk, ChunkBuilder}
-import zio.schema.Schema.{Field, Primitive}
+import zio.schema.Schema.Primitive
 
 import java.time.{
   DayOfWeek,
@@ -346,10 +346,9 @@ object CsvEncoder {
     cache: ConverterCache[CsvEncoder] = new ConverterCache[CsvEncoder]()
   ) {
     private def convertUsingCache[A](
-      typeId: TypeId,
-      annotations: OpenApiParsedAnnotations[A]
+      schema: Schema[A]
     )(convert: => CsvEncoder[A]): CsvEncoder[A] = {
-      cache.convertUsingCache(typeId, annotations)(convert)(() => new LazyEncoder[A]())
+      cache.convertUsingCache(schema)(convert)(() => new LazyEncoder[A]())
     }
 
     // scalafmt: { maxColumn = 800, optIn.configStyleArguments = false }
@@ -389,7 +388,7 @@ object CsvEncoder {
           convert(l.schema)
 
         case s: Schema.Record[A] =>
-          convertRecord[A](s.id, s.annotations, s.fields)
+          convertRecord[A](s)
 
         case s: Schema.Enum[A] =>
           convertEnum[A](s.id, s.annotations, s.cases)
@@ -401,12 +400,13 @@ object CsvEncoder {
     // scalafmt: { maxColumn = 120, optIn.configStyleArguments = true }
 
     private def convertRecord[A](
-      id: TypeId,
-      annotations: Chunk[Any],
-      fields: Chunk[Field[A, _]]
+      record: Schema.Record[A]
     ): CsvEncoder[A] = {
+      val id = record.id
+      val annotations = record.annotations
+      val fields = record.fields
       val recordAnnotations: OpenApiParsedAnnotations[A] = extractAnnotations[A](annotations)
-      convertUsingCache(id, recordAnnotations) {
+      convertUsingCache(record) {
         val fieldEncoders = fields
           .map { field =>
             addAnnotations(None, convert(field.schema), extractAnnotations(field.annotations))
