@@ -3,7 +3,7 @@ package dev.chopsticks.csv
 import dev.chopsticks.openapi.{OpenApiParsedAnnotations, OpenApiSumTypeSerDeStrategy, OpenApiValidation}
 import dev.chopsticks.openapi.common.{ConverterCache, OpenApiConverterUtils}
 import sttp.tapir.Validator
-import zio.schema.{FieldSet, Schema, StandardType, TypeId}
+import zio.schema.{Schema, StandardType}
 import zio.Chunk
 import zio.schema.Schema.Primitive
 
@@ -448,10 +448,9 @@ object CsvDecoder extends CsvProductDecoders {
     cache: ConverterCache[CsvDecoder] = new ConverterCache[CsvDecoder]()
   ) {
     private def convertUsingCache[A](
-      typeId: TypeId,
-      annotations: OpenApiParsedAnnotations[A]
+      schema: Schema[A]
     )(convert: => CsvDecoder[A]): CsvDecoder[A] = {
-      cache.convertUsingCache(typeId, annotations)(convert)(() => new LazyDecoder[A]())
+      cache.convertUsingCache(schema)(convert)(() => new LazyDecoder[A]())
     }
 
     // scalafmt: { maxColumn = 800, optIn.configStyleArguments = false }
@@ -483,19 +482,19 @@ object CsvDecoder extends CsvProductDecoders {
         case l @ Schema.Lazy(_) =>
           convert(l.schema)
 
-        case Schema.GenericRecord(id, fieldSet, annotations) =>
-          genericRecordConverter(id, fieldSet, annotations)
+        case s @ Schema.GenericRecord(_, _, _) =>
+          genericRecordConverter(s)
 
-        case Schema.CaseClass0(id, construct, annotations) =>
+        case Schema.CaseClass0(_, construct, annotations) =>
           val parsed = extractAnnotations[A](annotations)
-          convertUsingCache(id, parsed) {
+          convertUsingCache(schema) {
             val baseDecoder = caseClass0Decoder(construct)
             addAnnotations(baseDecoder, parsed)
           }
 
-        case Schema.CaseClass1(id, f1, construct, annotations) =>
+        case Schema.CaseClass1(_, f1, construct, annotations) =>
           val parsed = extractAnnotations[A](annotations)
-          convertUsingCache(id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(f1.schema), extractAnnotations(f1.annotations))
             val baseDecoder = forProduct1(
               options = options,
@@ -507,7 +506,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass2(_, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val baseDecoder = forProduct2(
@@ -523,7 +522,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass3(_, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -541,7 +540,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass4(_, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -561,7 +560,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass5(_, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -583,7 +582,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass6(_, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -607,7 +606,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass7(_, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -633,7 +632,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass8(_, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -661,7 +660,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass9(_, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -691,7 +690,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass10(_, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -723,7 +722,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass11(_, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -757,7 +756,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass12(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -793,7 +792,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass13(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -831,7 +830,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass14(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -871,7 +870,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass15(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -913,7 +912,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass16(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -957,7 +956,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass17(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1003,7 +1002,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass18(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1051,7 +1050,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass19(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1101,7 +1100,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass20(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1153,7 +1152,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass21(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1207,7 +1206,7 @@ object CsvDecoder extends CsvProductDecoders {
 
         case s @ Schema.CaseClass22(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
           val parsed = extractAnnotations[A](s.annotations)
-          convertUsingCache(s.id, parsed) {
+          convertUsingCache(schema) {
             val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
             val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
             val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1356,12 +1355,12 @@ object CsvDecoder extends CsvProductDecoders {
 
     @SuppressWarnings(Array("org.wartremover.warts.JavaSerializable"))
     private def genericRecordConverter(
-      id: TypeId,
-      fieldSet: FieldSet,
-      annotations: Chunk[Any]
+      recordSchema: Schema.GenericRecord
     ): CsvDecoder[ListMap[String, _]] = {
+      val fieldSet = recordSchema.fieldSet
+      val annotations = recordSchema.annotations
       val parsed = extractAnnotations[ListMap[String, _]](annotations)
-      convertUsingCache(id, parsed) {
+      convertUsingCache(recordSchema) {
         val fieldDecoders = fieldSet.toChunk.iterator
           .map { field =>
             val fieldDecoder = addAnnotations(convert(field.schema), extractAnnotations(field.annotations))

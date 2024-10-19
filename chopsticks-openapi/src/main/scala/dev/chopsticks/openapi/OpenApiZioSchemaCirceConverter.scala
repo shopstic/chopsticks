@@ -7,7 +7,7 @@ import io.circe.{Decoder, DecodingFailure, Encoder, HCursor, Json, JsonObject}
 import io.circe.Decoder.{AccumulatingResult, Result}
 import io.circe.Encoder.AsObject
 import sttp.tapir.Validator
-import zio.schema.{FieldSet, Schema => ZioSchema, StandardType, TypeId}
+import zio.schema.{Schema => ZioSchema, StandardType}
 import zio.Chunk
 
 import java.math.BigInteger
@@ -62,11 +62,8 @@ object OpenApiZioSchemaCirceConverter {
     private class Converter(
       cache: ConverterCache[io.circe.Decoder] = new ConverterCache[io.circe.Decoder]()
     ) {
-      private def convertUsingCache[A](
-        typeId: TypeId,
-        annotations: OpenApiParsedAnnotations[A]
-      )(convert: => Decoder[A]): Decoder[A] = {
-        cache.convertUsingCache(typeId, annotations)(convert)(() => new LazyDecoder[A])
+      private def convertUsingCache[A](schema: ZioSchema[A])(convert: => Decoder[A]): Decoder[A] = {
+        cache.convertUsingCache(schema)(convert)(() => new LazyDecoder[A])
       }
 
       def convert[A](zioSchema: ZioSchema[A]): Decoder[A] = {
@@ -107,8 +104,8 @@ object OpenApiZioSchemaCirceConverter {
           case ZioSchema.Fail(_, _) =>
             ???
 
-          case ZioSchema.GenericRecord(id, fieldSet, annotations) =>
-            genericRecordConverter(id, fieldSet, annotations)
+          case s @ ZioSchema.GenericRecord(_, _, _) =>
+            genericRecordConverter(s)
 
           case either @ ZioSchema.Either(_, _, _) =>
             convert(either.toEnum).asInstanceOf[Decoder[A]]
@@ -116,16 +113,16 @@ object OpenApiZioSchemaCirceConverter {
           case l @ ZioSchema.Lazy(_) =>
             convert(l.schema)
 
-          case ZioSchema.CaseClass0(id, construct, annotations) =>
+          case ZioSchema.CaseClass0(_, construct, annotations) =>
             val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(id, parsed) {
+            convertUsingCache(zioSchema) {
               val baseDecoder = decodeCaseClass0(construct)
               addAnnotations(baseDecoder, parsed)
             }
 
           case s @ ZioSchema.CaseClass1(_, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field.schema), extractAnnotations(s.field.annotations))
               val baseDecoder = io.circe.Decoder.forProduct1(parsed.transformJsonLabel(s.field.name.toString))(s.defaultConstruct)(decoder1)
               addAnnotations(baseDecoder, parsed)
@@ -133,7 +130,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass2(_, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val baseDecoder = io.circe.Decoder.forProduct2(
@@ -145,7 +142,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass3(_, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -159,7 +156,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass4(_, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -175,7 +172,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass5(_, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -193,7 +190,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass6(_, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -213,7 +210,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass7(_, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -235,7 +232,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass8(_, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -259,7 +256,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass9(_, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -285,7 +282,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass10(_, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -313,7 +310,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass11(_, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -343,7 +340,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass12(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -375,7 +372,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass13(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -409,7 +406,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass14(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -445,7 +442,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass15(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -483,7 +480,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass16(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -523,7 +520,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass17(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -565,7 +562,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass18(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -609,7 +606,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass19(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -655,7 +652,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass20(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -703,7 +700,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass21(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -753,7 +750,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass22(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val decoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val decoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val decoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -867,12 +864,12 @@ object OpenApiZioSchemaCirceConverter {
       }
 
       private def genericRecordConverter(
-        id: TypeId,
-        fieldSet: FieldSet,
-        annotations: Chunk[Any]
+        schema: ZioSchema.GenericRecord
       ): Decoder[ListMap[String, _]] = {
+        val annotations = schema.annotations
+        val fieldSet = schema.fieldSet
         val parsed = extractAnnotations[ListMap[String, _]](annotations)
-        convertUsingCache(id, parsed) {
+        convertUsingCache(schema) {
           val fieldDecoders = fieldSet.toChunk.iterator
             .map { field =>
               val fieldDecoder = addAnnotations(convert(field.schema), extractAnnotations(field.annotations))
@@ -1000,11 +997,8 @@ object OpenApiZioSchemaCirceConverter {
 
     private class Converter(cache: ConverterCache[io.circe.Encoder] = new ConverterCache[io.circe.Encoder]()) {
 
-      private def convertUsingCache[A](
-        typeId: TypeId,
-        annotations: OpenApiParsedAnnotations[A]
-      )(convert: => io.circe.Encoder[A]): io.circe.Encoder[A] = {
-        cache.convertUsingCache(typeId, annotations)(convert)(() => new LazyEncoder[A])
+      private def convertUsingCache[A](schema: ZioSchema[A])(convert: => io.circe.Encoder[A]): io.circe.Encoder[A] = {
+        cache.convertUsingCache(schema)(convert)(() => new LazyEncoder[A])
       }
 
       def convert[A](zioSchema: ZioSchema[A]): io.circe.Encoder[A] = {
@@ -1051,9 +1045,9 @@ object OpenApiZioSchemaCirceConverter {
           case ZioSchema.Fail(_, _) =>
             ???
 
-          case ZioSchema.GenericRecord(id, fieldSet, annotations) =>
+          case ZioSchema.GenericRecord(_, fieldSet, annotations) =>
             val recordAnnotations: OpenApiParsedAnnotations[A] = extractAnnotations[A](annotations)
-            convertUsingCache(id, recordAnnotations) {
+            convertUsingCache(zioSchema) {
               val fieldEncoders = fieldSet.toChunk
                 .map { field =>
                   addAnnotations(convert(field.schema), extractAnnotations(field.annotations))
@@ -1077,16 +1071,16 @@ object OpenApiZioSchemaCirceConverter {
           case l @ ZioSchema.Lazy(_) =>
             convert(l.schema)
 
-          case ZioSchema.CaseClass0(id, _, annotations) =>
+          case ZioSchema.CaseClass0(_, _, annotations) =>
             val parsed = extractAnnotations[A](annotations)
-            convertUsingCache(id, parsed) {
+            convertUsingCache(zioSchema) {
               val baseEncoder = caseClass0Encoder[A]
               addAnnotations(baseEncoder, parsed)
             }
 
           case s @ ZioSchema.CaseClass1(_, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field.schema), extractAnnotations(s.field.annotations))
               val baseEncoder = io.circe.Encoder.forProduct1(
                 parsed.transformJsonLabel(s.field.name.toString)
@@ -1096,7 +1090,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass2(_, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val baseEncoder = io.circe.Encoder.forProduct2(
@@ -1108,7 +1102,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass3(_, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1122,7 +1116,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass4(_, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1138,7 +1132,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass5(_, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1156,7 +1150,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass6(_, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1176,7 +1170,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass7(_, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1198,7 +1192,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass8(_, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1222,7 +1216,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass9(_, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1248,7 +1242,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass10(_, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1276,7 +1270,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass11(_, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1306,7 +1300,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass12(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1338,7 +1332,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass13(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1372,7 +1366,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass14(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1408,7 +1402,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass15(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1446,7 +1440,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass16(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1486,7 +1480,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass17(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1528,7 +1522,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass18(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1572,7 +1566,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass19(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1618,7 +1612,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass20(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1666,7 +1660,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass21(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
@@ -1716,7 +1710,7 @@ object OpenApiZioSchemaCirceConverter {
 
           case s @ ZioSchema.CaseClass22(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =>
             val parsed = extractAnnotations[A](s.annotations)
-            convertUsingCache(s.id, parsed) {
+            convertUsingCache(zioSchema) {
               val encoder1 = addAnnotations(convert(s.field1.schema), extractAnnotations(s.field1.annotations))
               val encoder2 = addAnnotations(convert(s.field2.schema), extractAnnotations(s.field2.annotations))
               val encoder3 = addAnnotations(convert(s.field3.schema), extractAnnotations(s.field3.annotations))
