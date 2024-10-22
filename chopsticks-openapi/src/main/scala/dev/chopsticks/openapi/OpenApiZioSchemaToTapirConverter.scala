@@ -136,7 +136,7 @@ object OpenApiZioSchemaToTapirConverter {
       val caseClassAnnotations = extractAnnotations[A](annotations)
       convertUsingCache(id, caseClassAnnotations) {
         val tapirFields: List[SchemaType.SProductField[A]] = fields.iterator
-          .map { case field =>
+          .map { field =>
             val schema = addAnnotations(
               typeId = None,
               convert(field.schema).asInstanceOf[TapirSchema[Any]],
@@ -165,7 +165,7 @@ object OpenApiZioSchemaToTapirConverter {
     ): TapirSchema[A] = {
       val enumAnnotations = extractAnnotations[A](annotations)
       val schemas = cases.iterator
-        .map(c => addAnnotations(typeId = None, convert(c.schema), extractAnnotations(c.annotations)))
+        .map { c => convert(c.schema) }
         .to(ArraySeq)
       addAnnotations(
         typeId = Some(typeId),
