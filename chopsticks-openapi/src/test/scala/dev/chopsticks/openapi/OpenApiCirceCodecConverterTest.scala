@@ -71,8 +71,8 @@ object OpenApiCirceCodecConverterTest {
   object ECommerceData extends OpenApiModel[ECommerceData] {
     implicit override lazy val zioSchema: Schema[ECommerceData] = DeriveSchema.gen
   }
-
 }
+
 final class OpenApiCirceCodecConverterTest extends AnyWordSpecLike with Assertions with Matchers {
   import io.circe.syntax._
   import io.circe.parser._
