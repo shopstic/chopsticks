@@ -5,8 +5,8 @@ object Dependencies {
   val SCALA_VERSION = "2.13.10"
   val PEKKO_VERSION = "1.0.2"
   val PEKKO_HTTP_VERSION = "1.0.1"
-  val ZIO_VERSION = "2.0.21"
-  val IZUMI_VERSION = "1.2.6"
+  val ZIO_VERSION = "2.1.11"
+  val IZUMI_VERSION = "1.2.10"
   val REFINED_VERSION = "0.9.29"
   val CIRCE_VERSION = "0.14.3"
   val CALIBAN_VERSION = "2.5.3"
@@ -114,7 +114,7 @@ object Dependencies {
   )
 
   val fdbDeps = Seq(
-    "org.foundationdb" % "fdb-java" % "7.1.53"
+    "org.foundationdb" % "fdb-java" % "7.1.59"
   )
 
   val shapelessDeps = Seq(
@@ -244,7 +244,7 @@ object Dependencies {
 
   lazy val zioSchemaDeps = {
     val zioSchemaOrganization = "dev.zio"
-    val zioSchemaVersion = "1.1.0"
+    val zioSchemaVersion = "1.5.0"
     Seq(
       zioSchemaOrganization %% "zio-schema" % zioSchemaVersion,
       zioSchemaOrganization %% "zio-schema-json" % zioSchemaVersion,

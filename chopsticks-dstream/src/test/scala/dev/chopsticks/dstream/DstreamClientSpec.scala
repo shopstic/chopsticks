@@ -12,8 +12,6 @@ import eu.timepit.refined.auto._
 import zio.test._
 import zio.{durationInt, ZIO}
 
-import scala.annotation.nowarn
-
 //noinspection TypeAnnotation
 object DstreamClientSpec extends ZIOSpecDefault with DstreamSpecEnv {
   import dev.chopsticks.dstream.test.DstreamTestUtils._
@@ -60,7 +58,6 @@ object DstreamClientSpec extends ZIOSpecDefault with DstreamSpecEnv {
     DstreamMasterConfig(serviceId = "test", parallelism = 1, ordered = true)
   ).forTest
 
-  @nowarn
   override def spec = suite("Dstream basic tests")(
     test("should work end to end")(basicTest) @@ timeoutInterrupt(5.seconds)
   )
