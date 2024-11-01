@@ -501,6 +501,7 @@ object CsvEncoder {
         case StandardType.FloatType => floatEncoder
         case StandardType.DoubleType => doubleEncoder
         case StandardType.BinaryType => notSupported("BinaryType")
+        case StandardType.CurrencyType => notSupported("CurrencyType")
         case StandardType.CharType => charEncoder
         case StandardType.UUIDType => uuidEncoder
         case StandardType.BigDecimalType => bigDecimalEncoder

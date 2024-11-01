@@ -1435,6 +1435,7 @@ object CsvDecoder extends CsvProductDecoders {
         case StandardType.FloatType => floatDecoder
         case StandardType.DoubleType => doubleDecoder
         case StandardType.BinaryType => notSupported("BinaryType")
+        case StandardType.CurrencyType => notSupported("CurrencyType")
         case StandardType.CharType => charDecoder
         case StandardType.UUIDType => uuidDecoder
         case StandardType.BigDecimalType => bigDecimalDecoder

@@ -257,6 +257,7 @@ object OpenApiZioSchemaToTapirConverter {
         case StandardType.ZonedDateTimeType => SchemaType.SDateTime()
         case StandardType.ZoneIdType => SchemaType.SString()
         case StandardType.ZoneOffsetType => SchemaType.SString()
+        case StandardType.CurrencyType => SchemaType.SString()
       }
       addAnnotations(typeId = None, TapirSchema[A](schemaType = schemaType), extractAnnotations(annotations))
     }

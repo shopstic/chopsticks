@@ -935,6 +935,7 @@ object OpenApiZioSchemaCirceConverter {
           case StandardType.FloatType => io.circe.Decoder[Float]
           case StandardType.DoubleType => io.circe.Decoder[Double]
           case StandardType.BinaryType => ???
+          case StandardType.CurrencyType => ???
           case StandardType.CharType => io.circe.Decoder[String]
           case StandardType.BigIntegerType => io.circe.Decoder[BigInteger]
           case StandardType.BigDecimalType => io.circe.Decoder[java.math.BigDecimal]
@@ -1828,6 +1829,7 @@ object OpenApiZioSchemaCirceConverter {
           case StandardType.FloatType => io.circe.Encoder[Float]
           case StandardType.DoubleType => io.circe.Encoder[Double]
           case StandardType.BinaryType => ???
+          case StandardType.CurrencyType => ???
           case StandardType.CharType => io.circe.Encoder[String]
           case StandardType.BigIntegerType => io.circe.Encoder[BigInteger]
           case StandardType.BigDecimalType => io.circe.Encoder[java.math.BigDecimal]
