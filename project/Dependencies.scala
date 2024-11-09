@@ -7,7 +7,7 @@ object Dependencies {
   val PEKKO_HTTP_VERSION = "1.0.1"
   val ZIO_VERSION = "2.1.11"
   val IZUMI_VERSION = "1.2.10"
-  val REFINED_VERSION = "0.9.29"
+  val REFINED_VERSION = "0.11.2"
   val CIRCE_VERSION = "0.14.3"
   val CALIBAN_VERSION = "2.5.3"
 
@@ -214,7 +214,7 @@ object Dependencies {
 
   val avro4sDirectDeps = {
     val Json4sVersion = "4.0.5"
-    val RefinedVersion = "0.9.29"
+    val RefinedVersion = "0.11.2"
     val ShapelessVersion = "2.3.9"
     val MagnoliaVersion = "0.17.0"
 
