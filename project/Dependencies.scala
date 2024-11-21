@@ -70,7 +70,7 @@ object Dependencies {
   )
 
   val catsCoreDeps = Seq(
-    "org.typelevel" %% "cats-core" % "2.8.0"
+    "org.typelevel" %% "cats-core" % "2.12.0"
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-pekko")
