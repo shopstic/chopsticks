@@ -15,6 +15,8 @@ object OpenApiConverterUtils {
         getEntityName(Some(r.id), parsed)
       case r: Schema.Lazy[_] =>
         getEntityName(r.schema)
+      case r: zio.schema.Schema.Transform[_, _, _] =>
+        getEntityName(r.schema)
       case other =>
         OpenApiParsedAnnotations.extractAnnotations(other.annotations).entityName
     }
@@ -33,6 +35,8 @@ object OpenApiConverterUtils {
         getEntityName(Some(r.id), parsed)
       case r: Schema.Lazy[_] =>
         getEntityName(r.schema, parsed)
+      case r: zio.schema.Schema.Transform[_, _, _] =>
+        getEntityName(r.schema)
       case _ =>
         parsed.entityName
     }
