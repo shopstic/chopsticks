@@ -11,6 +11,6 @@ libraryDependencies ++= Seq(
 addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "1.0.2")
 addSbtPlugin("com.github.sbt" % "sbt-release" % "1.1.0")
 addDependencyTreePlugin
-addSbtPlugin("com.github.sbt" % "sbt-pgp" % "2.1.2")
+addSbtPlugin("com.github.sbt" % "sbt-pgp" % "2.3.1")
 addSbtPlugin("org.xerial.sbt" % "sbt-sonatype" % "3.9.12")
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "1.2.0")
