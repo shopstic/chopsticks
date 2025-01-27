@@ -177,8 +177,8 @@ object Dependencies {
   )
 
   val jsoniterDeps = Seq(
-    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.28.4",
-    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.28.4" % Provided
+    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.28.5",
+    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.28.5" % Provided
   )
 
   val magnoliaDeps = Seq(
