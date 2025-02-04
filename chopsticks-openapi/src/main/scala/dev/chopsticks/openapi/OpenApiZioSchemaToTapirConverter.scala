@@ -220,7 +220,7 @@ object OpenApiZioSchemaToTapirConverter {
       result = metadata.default.fold(result) { case (default, encodedDefault) =>
         result.default(default, encodedDefault)
       }
-      result
+      metadata.tapirSchema.getOrElse(result)
     }
 
     private def schemaName(entityName: String): SName = SName(entityName)

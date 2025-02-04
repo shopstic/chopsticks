@@ -26,7 +26,6 @@ import java.time.{
   ZonedDateTime
 }
 import java.util.UUID
-import scala.annotation.nowarn
 import scala.collection.immutable.ListMap
 import scala.collection.mutable.ListBuffer
 import scala.language.existentials
@@ -973,9 +972,8 @@ object OpenApiZioSchemaCirceConverter {
             validator(a).map(OpenApiValidation.errorMessage)
           }
         }
-        decoder
+        metadata.jsonDecoder.getOrElse(decoder)
       }
-
     }
   }
 
@@ -1854,12 +1852,11 @@ object OpenApiZioSchemaCirceConverter {
         addAnnotations(baseEncoder.asInstanceOf[Encoder[A]], extractAnnotations(annotations))
       }
 
-      @nowarn
       private def addAnnotations[A](
         baseEncoder: Encoder[A],
         metadata: OpenApiParsedAnnotations[A]
       ): Encoder[A] = {
-        baseEncoder
+        metadata.jsonEncoder.getOrElse(baseEncoder)
       }
     }
   }
