@@ -39,7 +39,7 @@ start_ephemeral_fdb_server() {
   chmod 700 "$data_dir/data" "$data_dir/trace"
 
   local fdb_port=4500
-  while ! { echo >/dev/tcp/127.0.0.1/"$fdb_port"; } 2>/dev/null; do
+  while { echo >/dev/tcp/127.0.0.1/"$fdb_port"; } 2>/dev/null; do
     echo "Port $fdb_port is in use, trying another port..." >&2
     fdb_port=$((fdb_port + 1))
   done
@@ -81,7 +81,7 @@ start_ephemeral_fdb_server() {
   pid=$!
   echo "FDB server process pid=$pid" >&2
 
-  if ! timeout 15 fdbcli --exec "status" >&2; then
+  if ! timeout 1 fdbcli --exec "status" >&2; then
     echo "Failed checking for FDB status" >&2
     exit 1
   fi
