@@ -23,18 +23,18 @@ start_ephemeral_fdb_server() {
 
   if [[ -z "${FDB_CLUSTER_FILE:-}" ]]; then
     echo "Error: FDB_CLUSTER_FILE environment variable not set" >&2
-    return 1
+    exit 1
   fi
 
   data_dir="$(mktemp -d)" || {
     echo "Error: Failed to create temporary directory" >&2
-    return 1
+    exit 1
   }
   chmod 700 "$data_dir"
 
   mkdir -p "$data_dir/data" "$data_dir/trace" || {
     echo "Error: Failed to create data directories" >&2
-    return 1
+    exit 1
   }
   chmod 700 "$data_dir/data" "$data_dir/trace"
 
@@ -53,7 +53,7 @@ start_ephemeral_fdb_server() {
   cluster_dir="$(dirname "$FDB_CLUSTER_FILE")"
   mkdir -p "$cluster_dir" || {
     echo "Error: Failed to create cluster file directory" >&2
-    return 1
+    exit 1
   }
 
   local connection_string="t17x3130g3ju1xwxnnwaal6e029grtel:o7q2o6qe@127.0.0.1:$available_port"
@@ -76,7 +76,7 @@ start_ephemeral_fdb_server() {
     echo "macOS detected, requesting sudo access..." >&2
     if ! sudo -v; then
       echo "Error: Failed to validate sudo access" >&2
-      return 1
+      exit 1
     fi
     sudo "${cmd[@]}" >&2 &
   else
@@ -86,15 +86,15 @@ start_ephemeral_fdb_server() {
   pid=$!
   echo "FDB server process pid=$pid" >&2
 
-  if ! timeout 15 fdbcli --exec "status" >&2; then
+  if ! timeout 1 fdbcli --exec "status" >&2; then
     echo "Failed checking for FDB status" >&2
-    return 1
+    exit 1
   fi
 
   echo "Configuring the cluster.." >&2
   if ! fdbcli --exec "configure new single ssd-2" >&2; then
     echo "Error: Failed to configure cluster" >&2
-    return 1
+    exit 1
   fi
 
   echo "FDB server started successfully (PID: $pid)" >&2
