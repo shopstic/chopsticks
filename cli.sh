@@ -81,8 +81,8 @@ start_ephemeral_fdb_server() {
   pid=$!
   echo "FDB server process pid=$pid" >&2
 
-  if ! timeout 1 fdbcli --exec "status" >&2; then
-    echo "Failed checking for FDB status" >&2
+  if ! timeout 15 fdbcli --exec "status" >&2; then
+    echo "Timed out after 15s checking for FDB status" >&2
     exit 1
   fi
 
