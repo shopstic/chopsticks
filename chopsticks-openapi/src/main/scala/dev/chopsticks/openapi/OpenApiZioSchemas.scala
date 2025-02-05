@@ -34,7 +34,12 @@ object OpenApiZioSchemas {
       schema.annotate(OpenApiAnnotations.jsonCaseConverter(from, to))
     def withSnakeCaseJsonFields: Schema[A] =
       withJsonFieldsCaseConverter(OpenApiNamingConvention.OpenApiCamelCase, OpenApiNamingConvention.OpenApiSnakeCase)
-
+    def withJsonEncoder(encoder: io.circe.Encoder[A]): Schema[A] =
+      schema.annotate(OpenApiAnnotations.jsonEncoder(encoder))
+    def withJsonDecoder(decoder: io.circe.Decoder[A]): Schema[A] =
+      schema.annotate(OpenApiAnnotations.jsonDecoder(decoder))
+    def withTapirSchema(tapirSchema: sttp.tapir.Schema[A]): Schema[A] =
+      schema.annotate(OpenApiAnnotations.tapirSchema(tapirSchema))
   }
 
   object Validators {

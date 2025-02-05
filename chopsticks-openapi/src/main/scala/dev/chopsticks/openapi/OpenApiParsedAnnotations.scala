@@ -10,7 +10,10 @@ final private[chopsticks] case class OpenApiParsedAnnotations[A](
   validator: Option[Validator[A]] = None,
   default: Option[(A, Option[Any])] = None,
   sumTypeSerDeStrategy: Option[OpenApiSumTypeSerDeStrategy[A]] = None,
-  jsonCaseConverter: Option[jsonCaseConverter] = None
+  jsonCaseConverter: Option[jsonCaseConverter] = None,
+  jsonEncoder: Option[io.circe.Encoder[A]] = None,
+  jsonDecoder: Option[io.circe.Decoder[A]] = None,
+  tapirSchema: Option[sttp.tapir.Schema[A]] = None
 ) {
   def transformJsonLabel(label: String): String = {
     jsonCaseConverter match {
@@ -31,6 +34,9 @@ object OpenApiParsedAnnotations {
         case a: default[A @unchecked] => typed.copy(default = Some((a.value, a.encodedValue)))
         case a: sumTypeSerDeStrategy[A @unchecked] => typed.copy(sumTypeSerDeStrategy = Some(a.value))
         case a: jsonCaseConverter => typed.copy(jsonCaseConverter = Some(a))
+        case a: jsonEncoder[A @unchecked] => typed.copy(jsonEncoder = Some(a.value))
+        case a: jsonDecoder[A @unchecked] => typed.copy(jsonDecoder = Some(a.value))
+        case a: tapirSchema[A @unchecked] => typed.copy(tapirSchema = Some(a.value))
         case _ => typed
       }
     }
