@@ -38,15 +38,10 @@ start_ephemeral_fdb_server() {
   }
   chmod 700 "$data_dir/data" "$data_dir/trace"
 
-  local available_port=4500
-  while :; do
-    if ! { echo >/dev/tcp/127.0.0.1/"$available_port"; } 2>/dev/null; then
-      echo "Found available port: $available_port" >&2
-      break
-    else
-      echo "Port $available_port is in use, trying another port..." >&2
-    fi
-    available_port=$((available_port + 1))
+  local fdb_port=4500
+  while ! { echo >/dev/tcp/127.0.0.1/"$fdb_port"; } 2>/dev/null; do
+    echo "Port $fdb_port is in use, trying another port..." >&2
+    fdb_port=$((fdb_port + 1))
   done
 
   local cluster_dir
@@ -56,7 +51,7 @@ start_ephemeral_fdb_server() {
     exit 1
   }
 
-  local connection_string="t17x3130g3ju1xwxnnwaal6e029grtel:o7q2o6qe@127.0.0.1:$available_port"
+  local connection_string="t17x3130g3ju1xwxnnwaal6e029grtel:o7q2o6qe@127.0.0.1:$fdb_port"
   echo "Generated connection string: $connection_string" >&2
   echo "$connection_string" >"$FDB_CLUSTER_FILE"
   chmod 600 "$FDB_CLUSTER_FILE"
@@ -68,8 +63,8 @@ start_ephemeral_fdb_server() {
     --cluster_file "$FDB_CLUSTER_FILE"
     --datadir "$data_dir/data"
     --logdir "$data_dir/trace"
-    --listen_address "127.0.0.1:$available_port"
-    --public_address "127.0.0.1:$available_port"
+    --listen_address "127.0.0.1:$fdb_port"
+    --public_address "127.0.0.1:$fdb_port"
   )
 
   if [[ "$(uname -s)" =~ [dD]arwin ]]; then
@@ -86,7 +81,7 @@ start_ephemeral_fdb_server() {
   pid=$!
   echo "FDB server process pid=$pid" >&2
 
-  if ! timeout 1 fdbcli --exec "status" >&2; then
+  if ! timeout 15 fdbcli --exec "status" >&2; then
     echo "Failed checking for FDB status" >&2
     exit 1
   fi
