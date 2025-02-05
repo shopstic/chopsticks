@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-shopt -s extglob globstar
 
-readonly SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-export FDB_CLUSTER_FILE="${FDB_CLUSTER_FILE:-"${SCRIPT_DIR}/.fdb/cluster.file"}"
+export FDB_CLUSTER_FILE="${FDB_CLUSTER_FILE:-"$(dirname "$(realpath "$0")")/.fdb/cluster.file"}"
 
 start_ephemeral_fdb_server() {
   local background=${1:-"background"}
@@ -40,16 +38,28 @@ start_ephemeral_fdb_server() {
   }
   chmod 700 "$data_dir/data" "$data_dir/trace"
 
-  if [[ ! -f "${FDB_CLUSTER_FILE}" ]]; then
-    local cluster_dir
-    cluster_dir="$(dirname "$FDB_CLUSTER_FILE")"
-    mkdir -p "$cluster_dir" || {
-      echo "Error: Failed to create cluster file directory" >&2
-      return 1
-    }
-    echo "${FDB_CLUSTER_STRING:-t17x3130g3ju1xwxnnwaal6e029grtel:o7q2o6qe@127.0.0.1:4500}" >"$FDB_CLUSTER_FILE"
-    chmod 600 "$FDB_CLUSTER_FILE"
-  fi
+  local available_port=4500
+  while :; do
+    if ! { echo >/dev/tcp/127.0.0.1/"$available_port"; } 2>/dev/null; then
+      echo "Found available port: $available_port" >&2
+      break
+    else
+      echo "Port $available_port is in use, trying another port..." >&2
+    fi
+    available_port=$((available_port + 1))
+  done
+
+  local cluster_dir
+  cluster_dir="$(dirname "$FDB_CLUSTER_FILE")"
+  mkdir -p "$cluster_dir" || {
+    echo "Error: Failed to create cluster file directory" >&2
+    return 1
+  }
+
+  local connection_string="t17x3130g3ju1xwxnnwaal6e029grtel:o7q2o6qe@127.0.0.1:$available_port"
+  echo "Generated connection string: $connection_string" >&2
+  echo "$connection_string" >"$FDB_CLUSTER_FILE"
+  chmod 600 "$FDB_CLUSTER_FILE"
 
   local fdbserver_path
   fdbserver_path="$(command -v fdbserver)"
@@ -58,8 +68,8 @@ start_ephemeral_fdb_server() {
     --cluster_file "$FDB_CLUSTER_FILE"
     --datadir "$data_dir/data"
     --logdir "$data_dir/trace"
-    --listen_address "127.0.0.1:4500"
-    --public_address "127.0.0.1:4500"
+    --listen_address "127.0.0.1:$available_port"
+    --public_address "127.0.0.1:$available_port"
   )
 
   if [[ "$(uname -s)" =~ [dD]arwin ]]; then
@@ -76,11 +86,12 @@ start_ephemeral_fdb_server() {
   pid=$!
   echo "FDB server process pid=$pid" >&2
 
-  if ! timeout 10 fdbcli --exec "status" >&2; then
+  if ! timeout 15 fdbcli --exec "status" >&2; then
     echo "Failed checking for FDB status" >&2
     return 1
   fi
 
+  echo "Configuring the cluster.." >&2
   if ! fdbcli --exec "configure new single ssd-2" >&2; then
     echo "Error: Failed to configure cluster" >&2
     return 1
