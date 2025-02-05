@@ -9,7 +9,7 @@ defaults:
 jobs:
   build:
     name: Build
-    runs-on: [ self-hosted, nix, chopsticks, amd64-linux, medium ]
+    runs-on: [ self-hosted, nix, amd64-linux, medium ]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -17,9 +17,12 @@ jobs:
 
       - name: Set environment variables
         run: |
+          XDG_CACHE_HOME=${XDG_CACHE_HOME:-"$HOME/.cache"}
           echo "PROTOC_CACHE=${XDG_CACHE_HOME}/protoc_cache" >> "${GITHUB_ENV}"
           echo "COURSIER_CACHE=${XDG_CACHE_HOME}/coursier" >> "${GITHUB_ENV}"
           echo "SBT_OPTS=-Dsbt.global.base=${XDG_CACHE_HOME}/sbt -Dsbt.ivy.home=${XDG_CACHE_HOME}/ivy -Xmx4g -Xss6m -XX:-UseContainerSupport" >> "${GITHUB_ENV}"
+          echo "FDB_CLUSTER_FILE=$PWD/.fdb/cluster.file" >> "${GITHUB_ENV}"
+          
 
       - name: Check code quality
         run: |
@@ -37,7 +40,10 @@ jobs:
       #          trap : TERM INT; sleep infinity & wait
 
       - name: Test
-        run: sbt --client test
+        run: |
+          FDBSERVER_PID=$(./cli.sh start_ephemeral_fdb_server) || exit $?
+          trap "kill -15 $FDBSERVER_PID" EXIT
+          sbt --client test
 
       - name: Publish
         if: github.ref == 'refs/heads/master'

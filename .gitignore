@@ -10,3 +10,4 @@ metals.sbt
 /.dev-sdks
 /.env
 /result
+/.fdb

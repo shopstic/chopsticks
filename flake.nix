@@ -5,28 +5,29 @@
     hotPot.url = "github:shopstic/nix-hot-pot";
     nixpkgs.follows = "hotPot/nixpkgs";
     flakeUtils.follows = "hotPot/flakeUtils";
-    fdb.follows = "hotPot/fdbPkg";
+    fdbPkg.follows = "hotPot/fdbPkg";
   };
 
-  outputs = { self, nixpkgs, flakeUtils, hotPot, fdb }:
+  outputs = { self, nixpkgs, flakeUtils, hotPot, fdbPkg }:
     flakeUtils.lib.eachDefaultSystem
       (system:
         let
           pkgs = import nixpkgs {
             inherit system;
-            overlays = [
-              (final: prev: {
-                maven = prev.maven.override {
-                  jdk = prev.jdk11;
-                };
-              })
-            ];
+#            overlays = [
+#              (final: prev: {
+#                maven = prev.maven.override {
+#                  jdk = prev.jdk11;
+#                };
+#              })
+#            ];
           };
           hotPotPkgs = hotPot.packages.${system};
+          hotPotLib = hotPot.lib.${system};
           chopsticksSystem = if system == "aarch64-linux" then "x86_64-linux" else system;
           chopsticksPkgs = import nixpkgs { system = chopsticksSystem; };
-
-          fdbLib = fdb.packages.${system}.fdb_7.lib;
+          fdb = fdbPkg.packages.${system}.fdb_7;
+          fdbLib = fdb.lib;
           jdkArgs = [
             "--set DYLD_LIBRARY_PATH ${fdbLib}"
             "--set LD_LIBRARY_PATH ${fdbLib}"
@@ -36,7 +37,7 @@
 #            "--set FDB_NETWORK_OPTION_TRACE_ENABLE /Users/nktpro/Downloads/fdb7"
             ''--set JDK_JAVA_OPTIONS "-DFDB_LIBRARY_PATH_FDB_JAVA=${fdbLib}/libfdb_java.${if pkgs.stdenv.isDarwin then "jnilib" else "so"}"''
           ];
-          jdk = pkgs.callPackage hotPot.lib.wrapJdk {
+          jdk = pkgs.callPackage hotPotLib.wrapJdk {
             jdk = pkgs.jdk11;
             args = pkgs.lib.concatStringsSep " " (jdkArgs ++ [''--run "if [[ -f ./.env ]]; then source ./.env; fi"'']);
           };
@@ -86,7 +87,7 @@
             '';
             buildInputs = builtins.attrValues
               {
-                inherit jdk sbt;
+                inherit fdb jdk sbt;
                 inherit (pkgs)
                   jq
                   parallel
