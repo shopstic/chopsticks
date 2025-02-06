@@ -45,7 +45,7 @@ jobs:
           sbt --client test
 
       - name: Publish
-        if: github.ref_name == master
+        if: github.ref_name == 'master'
         env:
           PGP_SIGNING_KEY: ${{ secrets.PGP_SIGNING_KEY }}
           PGP_SIGNING_KEY_FP: ${{ secrets.PGP_SIGNING_KEY_FP }}
