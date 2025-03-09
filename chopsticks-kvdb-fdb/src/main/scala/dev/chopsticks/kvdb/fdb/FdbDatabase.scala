@@ -190,6 +190,7 @@ object FdbDatabase {
     stopNetworkOnClose: Boolean = true,
     apiVersion: Int = 710,
     initialConnectionTimeout: Timeout = Timeout(5.seconds),
+    initialConnectionRetryCount: Option[Int] = Some(2),
     clientOptions: KvdbClientOptions = KvdbClientOptions()
   )
 
@@ -307,6 +308,7 @@ object FdbDatabase {
               config.initialConnectionTimeout.duration
             )
             .log("Build FDB directory map")
+            .retryN(config.initialConnectionRetryCount.getOrElse(0))
             .flatMap { prefixMap =>
               val result = FdbContext[BCF](
                 db = db,
