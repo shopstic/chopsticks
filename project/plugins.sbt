@@ -8,7 +8,7 @@ libraryDependencies ++= Seq(
   "com.thesamet.scalapb" %% "compilerplugin" % "0.11.13",
   "com.thesamet.scalapb.zio-grpc" %% "zio-grpc-codegen" % "0.5.3"
 )
-addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "1.0.2")
+addSbtPlugin("com.github.sbt" % "sbt-git" % "2.1.0")
 addSbtPlugin("com.github.sbt" % "sbt-release" % "1.1.0")
 addDependencyTreePlugin
 addSbtPlugin("com.github.sbt" % "sbt-pgp" % "2.1.2")
