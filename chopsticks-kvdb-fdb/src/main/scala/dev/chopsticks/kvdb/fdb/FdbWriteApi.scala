@@ -5,6 +5,8 @@ import dev.chopsticks.kvdb.ColumnFamily
 import dev.chopsticks.kvdb.KvdbWriteTransactionBuilder._
 import dev.chopsticks.kvdb.fdb.FdbDatabase.FdbContext
 
+import java.util.concurrent.CompletableFuture
+
 final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
   override val tx: Transaction,
   dbContext: FdbContext[BCF],
@@ -66,6 +68,12 @@ final class FdbWriteApi[BCF[A, B] <: ColumnFamily[A, B]](
 
   def deleteRangePrefix[Col <: CF](column: Col, from: Array[Byte], to: Array[Byte]): Unit = {
     deleteRangeByColumnId(column.id, from, to)
+  }
+
+  def watch[Col <: CF](column: Col, key: Array[Byte]): CompletableFuture[Unit] = {
+    if (disableWriteConflictChecking) tx.options().setNextWriteNoWriteConflictRange()
+    val prefixedKey = dbContext.prefixKey(column.id, key)
+    tx.watch(prefixedKey).thenApply(_ => ())
   }
 
   def transact(actions: Seq[TransactionWrite]): Unit = {
