@@ -134,7 +134,7 @@ object Dependencies {
   )
 
   val enumeratumDeps = Seq(
-    "com.beachape" %% "enumeratum" % "1.7.0"
+    "com.beachape" %% "enumeratum" % "1.7.6"
   )
 
   val enumeratumCirceDeps = Seq(
