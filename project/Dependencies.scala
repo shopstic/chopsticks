@@ -236,7 +236,7 @@ object Dependencies {
       "com.softwaremill.sttp.tapir" %% "tapir-cats" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-enumeratum" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
-      "com.softwaremill.sttp.apispec" %% "openapi-circe-yaml" % "0.7.4",
+      "com.softwaremill.sttp.apispec" %% "openapi-circe-yaml" % "0.11.9",
       "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-refined" % tapirVersion
     )
