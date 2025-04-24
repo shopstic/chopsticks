@@ -74,7 +74,7 @@ object Dependencies {
   )
 
   val pureconfigDeps = Seq("pureconfig", "pureconfig-pekko")
-    .map(p => "com.github.pureconfig" %% p % "0.17.6")
+    .map(p => "com.github.pureconfig" %% p % "0.17.9")
 
   val pekkoTestDeps = Seq("pekko-testkit", "pekko-stream-testkit", "pekko-actor-testkit-typed")
     .map(p => "org.apache.pekko" %% p % PEKKO_VERSION)
