@@ -98,7 +98,7 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % "3.2.10",
     "org.scalatestplus" %% "scalacheck-1-15" % "3.2.10.0",
     "org.scalacheck" %% "scalacheck" % "1.15.4",
-    "org.scalamock" %% "scalamock" % "5.2.0"
+    "org.scalamock" %% "scalamock" % "7.3.2"
   )
 
   val hamstersDeps = Seq(
