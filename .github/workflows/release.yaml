@@ -17,7 +17,7 @@ defaults:
 jobs:
   build:
     name: Release ${{ github.event.inputs.releaseVersion }}
-    runs-on: [self-hosted, nix, chopsticks, amd64-linux, medium]
+    runs-on: [self-hosted, nix, amd64-linux, medium]
     steps:
       - uses: actions/checkout@v4
 
