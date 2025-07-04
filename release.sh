@@ -38,11 +38,17 @@ publish() {
   RELEASE_VERSION=$("$0" get_release_version) || exit $?
 
   sbt --client "set ThisBuild / version := \"${RELEASE_VERSION}\""
-  sbt --client 'set ThisBuild / publishTo := sonatypePublishToBundle.value'
-  sbt --client 'set ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"'
-  sbt --client "set ThisBuild / credentials += Credentials(\"Sonatype Nexus Repository Manager\", \"s01.oss.sonatype.org\", \"${SONATYPE_USERNAME}\", \"${SONATYPE_PASSWORD}\")"
+  sbt --client 'set ThisBuild / sonatypeCredentialHost := Sonatype.sonatypeCentralHost'
+  sbt --client "set ThisBuild / credentials += Credentials(\"Sonatype Nexus Repository Manager\", \"central.sonatype.com\", \"${SONATYPE_USERNAME}\", \"${SONATYPE_PASSWORD}\")"
   sbt --client "set Global / pgpSigningKey := Some(\"${PGP_SIGNING_KEY_FP}\")"
-  sbt --client sonatypeBundleClean
+
+  if [[ $RELEASE_VERSION =~ -SNAPSHOT$ ]]; then
+    sbt --client 'set ThisBuild / publishTo := Some("central-snapshots" at "https://central.sonatype.com/repository/maven-snapshots/")'
+  else
+    sbt --client 'set ThisBuild / publishTo := sonatypePublishToBundle.value'
+    sbt --client sonatypeBundleClean
+  fi
+
   sbt --client publishSigned
 
   if [[ ! $RELEASE_VERSION =~ -SNAPSHOT$ ]]; then
